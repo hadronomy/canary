@@ -1,16 +1,23 @@
-import { createCliRenderer, TextAttributes } from "@opentui/core";
+import { Command } from "@effect/cli";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
+import { Effect } from "effect";
 
-function App() {
-  return (
-    <box alignItems="center" justifyContent="center" flexGrow={1}>
-      <box justifyContent="center" alignItems="flex-end">
-        <ascii-font font="tiny" text="Canary" />
-        <text attributes={TextAttributes.DIM}>What will you search?</text>
-      </box>
-    </box>
-  );
+import { App } from "./app";
+
+async function runTui() {
+  const renderer = await createCliRenderer();
+  createRoot(renderer).render(<App />);
 }
 
-const renderer = await createCliRenderer();
-createRoot(renderer).render(<App />);
+const canary = Command.make("canary", {}, () => {
+  return Effect.tryPromise(runTui);
+});
+
+const cli = Command.run(canary, {
+  name: "canary",
+  version: "1.0.0",
+});
+
+cli(process.argv).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain);

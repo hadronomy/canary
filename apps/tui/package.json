@@ -7,6 +7,9 @@
     "dev": "bun run --watch src/index.tsx"
   },
   "dependencies": {
+    "@effect/cli": "^0.73.0",
+    "@effect/platform": "^0.94.1",
+    "@effect/platform-bun": "^0.87.0",
     "@opentui/core": "^0.1.72",
     "@opentui/react": "^0.1.72",
     "react": "^19.2.3"
