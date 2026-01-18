@@ -1,0 +1,62 @@
+{
+  "name": "canary",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "dotenv": "^17.2.2",
+      "zod": "^4.1.13",
+      "typescript": "^5",
+      "@types/bun": "^1.3.4"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @canary/db db:push",
+    "db:studio": "turbo -F @canary/db db:studio",
+    "db:generate": "turbo -F @canary/db db:generate",
+    "db:migrate": "turbo -F @canary/db db:migrate",
+    "db:start": "turbo -F @canary/db db:start",
+    "db:watch": "turbo -F @canary/db db:watch",
+    "db:stop": "turbo -F @canary/db db:stop",
+    "db:down": "turbo -F @canary/db db:down",
+    "check": "oxlint && oxfmt --write",
+    "prepare": "husky && effect-language-service patch"
+  },
+  "dependencies": {
+    "@canary/env": "workspace:*",
+    "@effect/cli": "^0.73.0",
+    "@effect/platform": "^0.94.1",
+    "@effect/platform-bun": "^0.87.0",
+    "dotenv": "catalog:",
+    "effect": "^3.19.14",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@canary/config": "workspace:*",
+    "@effect/language-service": "^0.69.1",
+    "@types/bun": "catalog:",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "oxfmt": "^0.19.0",
+    "oxlint": "^1.34.0",
+    "turbo": "^2.6.3",
+    "typescript": "catalog:"
+  },
+  "lint-staged": {
+    "*": [
+      "oxlint",
+      "oxfmt --write"
+    ]
+  },
+  "packageManager": "bun@1.3.0"
+}
