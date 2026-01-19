@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
-import type { Theme } from "../theme";
+import type { Theme } from "~/app/theme";
 
 type ResultItem = {
   title: string;

@@ -1,8 +1,18 @@
-export { defineShortcuts, shortcut } from "./api";
-export { useShortcuts, useShortcutRegistry, useShortcutList, getShortcutRegistry } from "./hooks";
-export { formatKeyCombo, parseKeyCombo, normalizeCombo, stringifyComboList } from "./helpers";
-export type { UserRemapping, RemappingValidationResult } from "./remap";
-export { RemappingRegistry } from "./remap";
+export { defineShortcuts, shortcut } from "~/app/shortcuts/api";
+export {
+  useShortcuts,
+  useShortcutRegistry,
+  useShortcutList,
+  getShortcutRegistry,
+} from "~/app/shortcuts/hooks";
+export {
+  formatKeyCombo,
+  parseKeyCombo,
+  normalizeCombo,
+  stringifyComboList,
+} from "~/app/shortcuts/helpers";
+export type { UserRemapping, RemappingValidationResult } from "~/app/shortcuts/remap";
+export { RemappingRegistry } from "~/app/shortcuts/remap";
 export type {
   KeyBinding,
   KeyCombo,
@@ -13,4 +23,4 @@ export type {
   ShortcutContext,
   ShortcutGroup,
   ShortcutScope,
-} from "./types";
+} from "~/app/shortcuts/types";

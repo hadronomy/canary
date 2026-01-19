@@ -2,19 +2,19 @@ import { KeyEvent } from "@opentui/core";
 import { useEffect, useMemo, useRef } from "react";
 import { useAtom } from "@effect-atom/atom-react";
 
-import { Branding } from "./components/Branding";
-import { FooterHints } from "./components/FooterHints";
-import { ResultsList } from "./components/ResultsList";
-import { SearchBar } from "./components/SearchBar";
-import { ShortcutDebugToast } from "./components/ShortcutDebugToast";
-import { useShortcutList, useShortcutRegistry, useShortcuts } from "./shortcuts";
-import { CommandPalette } from "./shortcuts/components/CommandPalette";
-import { ShortcutsHelp } from "./shortcuts/components/ShortcutsHelp";
-import { createGlobalShortcuts } from "./shortcuts/definitions/global";
-import { createHelpShortcuts } from "./shortcuts/definitions/help";
-import { createSearchShortcuts } from "./shortcuts/definitions/search";
-import { createViewShortcuts } from "./shortcuts/definitions/view";
-import { catppuccinMocha } from "./theme";
+import { Branding } from "~/app/components/Branding";
+import { FooterHints } from "~/app/components/FooterHints";
+import { ResultsList } from "~/app/components/ResultsList";
+import { SearchBar } from "~/app/components/SearchBar";
+import { ShortcutDebugToast } from "~/app/components/ShortcutDebugToast";
+import { useShortcutList, useShortcutRegistry, useShortcuts } from "~/app/shortcuts";
+import { CommandPalette } from "~/app/shortcuts/components/CommandPalette";
+import { ShortcutsHelp } from "~/app/shortcuts/components/ShortcutsHelp";
+import { createGlobalShortcuts } from "~/app/shortcuts/definitions/global";
+import { createHelpShortcuts } from "~/app/shortcuts/definitions/help";
+import { createSearchShortcuts } from "~/app/shortcuts/definitions/search";
+import { createViewShortcuts } from "~/app/shortcuts/definitions/view";
+import { catppuccinMocha } from "~/app/theme";
 import {
   cmdkOpenAtom,
   cmdkQueryAtom,
@@ -23,7 +23,7 @@ import {
   debugToastVisibleAtom,
   helpOpenAtom,
   queryAtom,
-} from "./state";
+} from "~/app/state";
 
 const PLACEHOLDER_RESULTS = [
   {

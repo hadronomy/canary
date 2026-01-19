@@ -1,7 +1,8 @@
 import { TextAttributes } from "@opentui/core";
-import type { Theme } from "../../theme";
-import type { Shortcut } from "../types";
-import { formatKeyCombo } from "../helpers";
+
+import { formatKeyCombo } from "~/app/shortcuts/helpers";
+import type { Shortcut } from "~/app/shortcuts/types";
+import type { Theme } from "~/app/theme";
 
 type ShortcutsHelpProps = {
   theme: Theme;
@@ -10,7 +11,7 @@ type ShortcutsHelpProps = {
   onClose: () => void;
 };
 
-export function ShortcutsHelp({ theme, open, shortcuts, onClose }: ShortcutsHelpProps) {
+export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
   const { palette } = theme;
 
   if (!open) {

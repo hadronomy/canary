@@ -1,8 +1,8 @@
 import type { KeyEvent } from "@opentui/core";
 
-import { isMatch, parseComboList } from "./helpers";
-import type { KeyCombo, Shortcut, ShortcutContext, ShortcutScope } from "./types";
-import { RemappingRegistry } from "./remap";
+import { isMatch, parseComboList } from "~/app/shortcuts/helpers";
+import type { KeyCombo, Shortcut, ShortcutContext, ShortcutScope } from "~/app/shortcuts/types";
+import { RemappingRegistry } from "~/app/shortcuts/remap";
 
 const SCOPES: ShortcutScope[] = ["component", "view", "global"];
 

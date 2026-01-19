@@ -1,5 +1,5 @@
 import { TextAttributes } from "@opentui/core";
-import type { Theme } from "../theme";
+import type { Theme } from "~/app/theme";
 
 type ShortcutDebugToastProps = {
   theme: Theme;

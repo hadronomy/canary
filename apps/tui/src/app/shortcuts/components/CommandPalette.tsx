@@ -2,9 +2,9 @@ import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Theme } from "../../theme";
-import { formatKeyCombo } from "../helpers";
-import type { Shortcut } from "../types";
+import type { Theme } from "~/app/theme";
+import { formatKeyCombo } from "~/app/shortcuts/helpers";
+import type { Shortcut } from "~/app/shortcuts/types";
 
 export type CommandPaletteProps = {
   theme: Theme;
