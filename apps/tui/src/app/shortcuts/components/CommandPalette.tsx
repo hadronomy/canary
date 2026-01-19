@@ -3,8 +3,8 @@ import { useKeyboard } from "@opentui/react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { Theme } from "../../theme";
-import type { Shortcut } from "../types";
 import { formatKeyCombo } from "../helpers";
+import type { Shortcut } from "../types";
 
 export type CommandPaletteProps = {
   theme: Theme;
@@ -66,12 +66,12 @@ export function CommandPalette({
 
     const currentIndex = flattened.findIndex((item) => item.id === selectedId);
     if (key.name === "down") {
-      const next = currentIndex >= 0 ? (currentIndex + 1) % flattened.length : 0;
+      const next = currentIndex > 0 ? currentIndex - 1 : flattened.length - 1;
       const nextItem = flattened[next];
       if (nextItem) setSelectedId(nextItem.id);
     }
     if (key.name === "up") {
-      const next = currentIndex > 0 ? currentIndex - 1 : flattened.length - 1;
+      const next = currentIndex >= 0 ? (currentIndex + 1) % flattened.length : 0;
       const nextItem = flattened[next];
       if (nextItem) setSelectedId(nextItem.id);
     }
@@ -100,13 +100,15 @@ export function CommandPalette({
     >
       <box
         style={{
-          width: "60%",
-          height: 14,
+          width: "50%",
+          height: "80%",
           border: true,
           borderStyle: "rounded",
           borderColor: palette.mauve,
           backgroundColor: palette.base,
-          padding: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
+          paddingTop: 1,
           flexDirection: "column",
           gap: 1,
         }}

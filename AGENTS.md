@@ -25,3 +25,9 @@ details when the documentation isn't enough.
 The opentui repository is cloned to `~/code/opensource/opentui` for reference.
 Use this to explore APIs, find usage examples, and understand implementation
 details when the documentation isn't enough.
+
+## Effect-Atom best practices and state management
+
+The effect-atom repository is cloned to `~/code/opensource/effect-atom` for reference.
+Use this to explore APIs, find usage examples, and understand implementation
+details when the documentation isn't enough.
