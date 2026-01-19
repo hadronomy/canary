@@ -138,9 +138,10 @@ type MatchEvent = {
 
 export function isMatch(binding: KeyBinding, event: MatchEvent): boolean {
   const option = event.option ?? event.alt;
+  const name = event.name.toLowerCase();
 
   return (
-    binding.key === event.name &&
+    binding.key === name &&
     !!binding.ctrl === !!event.ctrl &&
     !!binding.shift === !!event.shift &&
     !!binding.meta === !!event.meta &&

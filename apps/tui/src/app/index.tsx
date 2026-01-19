@@ -1,8 +1,8 @@
 import { KeyEvent } from "@opentui/core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useAtom } from "@effect-atom/atom-react";
 
 import { Branding } from "./components/Branding";
-import { CmdkMenu } from "./components/CmdkMenu";
 import { FooterHints } from "./components/FooterHints";
 import { ResultsList } from "./components/ResultsList";
 import { SearchBar } from "./components/SearchBar";
@@ -15,6 +15,15 @@ import { createHelpShortcuts } from "./shortcuts/definitions/help";
 import { createSearchShortcuts } from "./shortcuts/definitions/search";
 import { createViewShortcuts } from "./shortcuts/definitions/view";
 import { catppuccinMocha } from "./theme";
+import {
+  cmdkOpenAtom,
+  cmdkQueryAtom,
+  debugModeAtom,
+  debugToastAtom,
+  debugToastVisibleAtom,
+  helpOpenAtom,
+  queryAtom,
+} from "./state";
 
 const PLACEHOLDER_RESULTS = [
   {
@@ -43,36 +52,14 @@ const PLACEHOLDER_RESULTS = [
   },
 ];
 
-const PLACEHOLDER_COMMANDS = [
-  {
-    name: "Search regulations",
-    description: "Focus the search field",
-    value: "search",
-  },
-  {
-    name: "Open recent query",
-    description: "Jump back to previous searches",
-    value: "recent",
-  },
-  {
-    name: "View saved results",
-    description: "Show bookmarked regulations",
-    value: "saved",
-  },
-  {
-    name: "Open help",
-    description: "See keyboard shortcuts",
-    value: "help",
-  },
-];
-
 export function App() {
-  const [query, setQuery] = useState("");
-  const [cmdkOpen, setCmdkOpen] = useState(false);
-  const [cmdkQuery, setCmdkQuery] = useState("");
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [debugToast, setDebugToast] = useState("");
-  const [debugToastVisible, setDebugToastVisible] = useState(false);
+  const [query, setQuery] = useAtom(queryAtom);
+  const [cmdkOpen, setCmdkOpen] = useAtom(cmdkOpenAtom);
+  const [cmdkQuery, setCmdkQuery] = useAtom(cmdkQueryAtom);
+  const [helpOpen, setHelpOpen] = useAtom(helpOpenAtom);
+  const [debugMode, setDebugMode] = useAtom(debugModeAtom);
+  const [debugToast, setDebugToast] = useAtom(debugToastAtom);
+  const [debugToastVisible, setDebugToastVisible] = useAtom(debugToastVisibleAtom);
 
   const results = useMemo(() => {
     if (!query.trim()) {
@@ -85,7 +72,7 @@ export function App() {
 
   const shortcuts = useMemo(() => {
     const globalShortcuts = createGlobalShortcuts({
-      toggleCommandPalette: () => setCmdkOpen((open) => !open),
+      toggleCommandPalette: () => setCmdkOpen((open: boolean) => !open),
       clearSearch: () => setQuery(""),
     });
 
@@ -101,30 +88,50 @@ export function App() {
     });
 
     const helpShortcuts = createHelpShortcuts({
-      toggleHelp: () => setHelpOpen((open) => !open),
+      toggleHelp: () => setHelpOpen((open: boolean) => !open),
     });
 
-    return [...globalShortcuts, ...viewShortcuts, ...searchShortcuts, ...helpShortcuts];
-  }, [cmdkOpen, helpOpen]);
+    const debugShortcuts = [
+      {
+        id: "debug.toggle",
+        scope: "global" as const,
+        bindings: [] as (typeof globalShortcuts)[number]["bindings"],
+        description: debugMode ? "Disable debug mode" : "Enable debug mode",
+        category: "Developer",
+        action: () => setDebugMode((value: boolean) => !value),
+      },
+    ];
+
+    return [
+      ...globalShortcuts,
+      ...viewShortcuts,
+      ...searchShortcuts,
+      ...helpShortcuts,
+      ...debugShortcuts,
+    ];
+  }, [cmdkOpen, helpOpen, debugMode]);
+
+  const isMountedRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+    },
+    [],
+  );
 
   const showDebugToast = (message: string) => {
+    if (!debugMode || !isMountedRef.current) return;
     setDebugToast(message);
     setDebugToastVisible(true);
-    setTimeout(() => setDebugToastVisible(false), 1200);
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        setDebugToastVisible(false);
+      }
+    }, 1200);
   };
 
   useShortcuts(shortcuts);
-
-  const commandOptions = useMemo(() => {
-    const needle = cmdkQuery.trim().toLowerCase();
-    if (!needle) {
-      return PLACEHOLDER_COMMANDS;
-    }
-
-    return PLACEHOLDER_COMMANDS.filter((command) =>
-      `${command.name} ${command.description}`.toLowerCase().includes(needle),
-    );
-  }, [cmdkQuery]);
 
   const shortcutContext = {
     currentView: cmdkOpen ? "cmdk" : helpOpen ? "help" : "main",
@@ -174,18 +181,22 @@ export function App() {
           focused={!cmdkOpen && !helpOpen}
           inputId="search-input"
         />
-        {showResults ? <ResultsList theme={theme} query={query} results={results} /> : null}
+        {showResults ? (
+          <ResultsList
+            theme={theme}
+            query={query}
+            results={results}
+            active={!cmdkOpen && !helpOpen}
+            onSelect={(item) => {
+              if (debugMode) {
+                showDebugToast(`Selected: ${item.title}`);
+              }
+            }}
+          />
+        ) : null}
       </box>
 
       <FooterHints theme={theme} />
-
-      <CmdkMenu
-        theme={theme}
-        open={cmdkOpen}
-        query={cmdkQuery}
-        options={commandOptions}
-        onQueryChange={setCmdkQuery}
-      />
 
       <CommandPalette
         theme={theme}

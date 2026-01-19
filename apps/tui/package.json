@@ -7,6 +7,8 @@
     "dev": "bun run --watch src/index.tsx"
   },
   "dependencies": {
+    "@effect-atom/atom": "^0.4.13",
+    "@effect-atom/atom-react": "^0.4.5",
     "@effect/cli": "^0.73.0",
     "@effect/platform": "^0.94.1",
     "@effect/platform-bun": "^0.87.0",
