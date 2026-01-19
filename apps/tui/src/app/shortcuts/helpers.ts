@@ -1,4 +1,4 @@
-import type { BaseKey, KeyBinding, KeyCombo, Modifier, ModifierOrder } from "./types";
+import type { BaseKey, KeyBinding, KeyCombo, Modifier, ModifierOrder } from "~/app/shortcuts/types";
 
 const MODIFIER_ORDER: ModifierOrder = ["ctrl", "meta", "super", "shift", "alt"];
 

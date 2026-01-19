@@ -1,4 +1,4 @@
-import type { KeyCombo, Shortcut, ShortcutCondition, ShortcutScope } from "./types";
+import type { KeyCombo, Shortcut, ShortcutCondition, ShortcutScope } from "~/app/shortcuts/types";
 
 export type ShortcutDefinition = {
   scope: ShortcutScope;

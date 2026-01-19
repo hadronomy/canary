@@ -1,4 +1,4 @@
-import type { Theme } from "../theme";
+import type { Theme } from "~/app/theme";
 
 type SearchBarProps = {
   theme: Theme;

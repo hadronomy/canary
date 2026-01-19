@@ -1,5 +1,5 @@
-import type { KeyCombo, Shortcut, ShortcutScope } from "./types";
-import { normalizeCombo } from "./helpers";
+import type { KeyCombo, Shortcut, ShortcutScope } from "~/app/shortcuts/types";
+import { normalizeCombo } from "~/app/shortcuts/helpers";
 
 export type UserRemapping = {
   shortcutId: string;

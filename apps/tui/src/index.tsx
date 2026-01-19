@@ -5,7 +5,7 @@ import { createRoot } from "@opentui/react";
 import { RegistryProvider } from "@effect-atom/atom-react";
 import { Effect } from "effect";
 
-import { App } from "./app";
+import { App } from "~/app";
 import {
   cmdkOpenAtom,
   cmdkQueryAtom,
@@ -14,7 +14,7 @@ import {
   debugToastVisibleAtom,
   helpOpenAtom,
   queryAtom,
-} from "./app/state";
+} from "~/app/state";
 
 async function runTui() {
   const renderer = await createCliRenderer();

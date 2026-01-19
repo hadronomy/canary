@@ -1,5 +1,5 @@
-import type { Shortcut } from "../types";
-import { defineShortcuts, shortcut } from "../api";
+import type { Shortcut } from "~/app/shortcuts/types";
+import { defineShortcuts, shortcut } from "~/app/shortcuts/api";
 
 type HelpHandlers = {
   toggleHelp: () => void;

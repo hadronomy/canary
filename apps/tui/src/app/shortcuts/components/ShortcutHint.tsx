@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core";
-import type { KeyCombo } from "../types";
-import { formatKeyCombo } from "../helpers";
-import type { Theme } from "../../theme";
+import type { KeyCombo } from "~/app/shortcuts/types";
+import { formatKeyCombo } from "~/app/shortcuts/helpers";
+import type { Theme } from "~/app/theme";
 
 type ShortcutHintProps = {
   theme: Theme;

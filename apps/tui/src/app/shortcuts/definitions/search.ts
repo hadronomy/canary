@@ -1,5 +1,5 @@
-import { defineShortcuts, shortcut } from "../api";
-import type { Shortcut } from "../types";
+import { defineShortcuts, shortcut } from "~/app/shortcuts/api";
+import type { Shortcut } from "~/app/shortcuts/types";
 
 type SearchHandlers = {
   focusSearch: () => void;
