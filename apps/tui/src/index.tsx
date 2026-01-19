@@ -13,7 +13,7 @@ async function runTui() {
 
 const canary = Command.make("canary", {}, () => {
   return Effect.tryPromise(runTui);
-});
+}).pipe(Command.withDescription("Search all the canary islands laws and regulations"));
 
 const cli = Command.run(canary, {
   name: "canary",
