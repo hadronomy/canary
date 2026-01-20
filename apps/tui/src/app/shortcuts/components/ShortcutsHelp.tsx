@@ -49,7 +49,9 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
           borderStyle: "rounded",
           borderColor: palette.mauve,
           backgroundColor: palette.base,
-          padding: 1,
+          paddingTop: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
           flexDirection: "column",
           gap: 1,
         }}

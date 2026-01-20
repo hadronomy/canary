@@ -23,6 +23,9 @@ export function SearchBar({ theme, onQueryChange, focused, inputId }: SearchBarP
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: palette.surface0,
+        borderStyle: "heavy",
+        border: ["left"],
+        borderColor: palette.surface2,
       }}
     >
       <text content=">" style={{ fg: palette.mauve, marginRight: 1, height: 1 }} />
