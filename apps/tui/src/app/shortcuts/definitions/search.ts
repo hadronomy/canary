@@ -11,7 +11,7 @@ export function createSearchShortcuts(handlers: SearchHandlers): Shortcut[] {
     category: "Search",
     shortcuts: [
       shortcut("search.focus", "Focus search", ["/"], () => handlers.focusSearch(), {
-        condition: { disabledIn: ["cmdk"] },
+        condition: { disabledIn: ["cmdk", "dashboard"] },
       }),
     ],
   });
