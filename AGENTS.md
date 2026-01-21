@@ -31,3 +31,8 @@ details when the documentation isn't enough.
 The effect-atom repository is cloned to `~/code/opensource/effect-atom` for reference.
 Use this to explore APIs, find usage examples, and understand implementation
 details when the documentation isn't enough.
+
+## Opencode reference and Opentui best practices
+
+The opencode repository is cloned to `~/code/opensource/opencode/src/cli/cmd/tui` for reference.
+Use this as an important reference implementation with opentui best practices.

@@ -1,4 +1,7 @@
 import { TextAttributes } from "@opentui/core";
+import type { TextareaRenderable } from "@opentui/core";
+import { useEffect, useRef } from "react";
+
 import type { Theme } from "~/app/theme";
 
 type CommandOption = {
@@ -17,6 +20,16 @@ type CmdkMenuProps = {
 
 export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMenuProps) {
   const { palette } = theme;
+  const inputRef = useRef<TextareaRenderable | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!inputRef.current) return;
+    if (inputRef.current.plainText !== query) {
+      inputRef.current.setText(query);
+      inputRef.current.gotoLineEnd();
+    }
+  }, [open, query]);
 
   if (!open) {
     return null;
@@ -38,47 +51,61 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
       <box
         style={{
           width: "60%",
-          height: 14,
+          height: "60%",
           border: true,
           borderStyle: "rounded",
           borderColor: palette.mauve,
           backgroundColor: palette.base,
           padding: 1,
           flexDirection: "column",
-          gap: 1,
         }}
       >
-        <text
-          content="Command Palette"
-          style={{ fg: palette.text, attributes: TextAttributes.BOLD }}
-        />
+        <box
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            paddingLeft: 1,
+            paddingRight: 1,
+            marginBottom: 1,
+          }}
+        >
+          <text
+            content="Command Palette"
+            style={{ fg: palette.text, attributes: TextAttributes.BOLD }}
+          />
+          <text content="esc" style={{ fg: palette.subtext0 }} />
+        </box>
 
         <box
           style={{
-            height: 3,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: palette.surface2,
+            height: 1,
             paddingLeft: 1,
             paddingRight: 1,
-            paddingTop: 0,
-            paddingBottom: 0,
+            marginBottom: 1,
             flexDirection: "row",
             alignItems: "center",
-            backgroundColor: palette.base,
           }}
         >
-          <text content=">" style={{ fg: palette.mauve, marginRight: 1, height: 1 }} />
-          <input
+          <textarea
             placeholder="Type a command..."
-            onInput={onQueryChange}
+            initialValue={query}
+            onContentChange={() => {
+              if (!inputRef.current) return;
+              onQueryChange(inputRef.current.plainText);
+            }}
+            ref={(instance: TextareaRenderable) => {
+              inputRef.current = instance;
+            }}
             focused
+            height={1}
             style={{
               flexGrow: 1,
               height: 1,
               focusedBackgroundColor: palette.base,
-              placeholderColor: palette.overlay0,
+              cursorColor: palette.mauve,
               textColor: palette.text,
+              selectionBg: palette.surface2,
+              selectionFg: palette.text,
             }}
           />
         </box>
@@ -92,18 +119,32 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
             backgroundColor: "transparent",
             textColor: palette.text,
             descriptionColor: palette.subtext0,
-            focusedBackgroundColor: palette.surface0,
-            focusedTextColor: palette.blue,
+            focusedBackgroundColor: palette.surface1,
+            focusedTextColor: palette.mauve,
             selectedBackgroundColor: palette.surface1,
             selectedTextColor: palette.mauve,
-            selectedDescriptionColor: palette.lavender,
+            selectedDescriptionColor: palette.subtext0,
           }}
         />
 
-        <text
-          content="Enter to run · Esc to close"
-          style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
-        />
+        <box
+          style={{
+            marginTop: 1,
+            paddingLeft: 1,
+            paddingRight: 1,
+            flexDirection: "row",
+            gap: 2,
+          }}
+        >
+          <text
+            content="↑/↓ to navigate"
+            style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
+          />
+          <text
+            content="Enter to run"
+            style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
+          />
+        </box>
       </box>
     </box>
   );
