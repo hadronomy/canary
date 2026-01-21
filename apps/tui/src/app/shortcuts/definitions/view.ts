@@ -6,6 +6,8 @@ type ViewHandlers = {
   closeHelp: () => void;
   isCmdkOpen: () => boolean;
   isHelpOpen: () => boolean;
+  closeDashboard: () => void;
+  isDashboardOpen: () => boolean;
 };
 
 export function createViewShortcuts(handlers: ViewHandlers): Shortcut[] {
@@ -19,6 +21,15 @@ export function createViewShortcuts(handlers: ViewHandlers): Shortcut[] {
       shortcut("help.close", "Close shortcuts help", ["escape"], () => handlers.closeHelp(), {
         condition: { when: () => handlers.isHelpOpen() },
       }),
+      shortcut(
+        "dashboard.close",
+        "Close control center",
+        ["escape"],
+        () => handlers.closeDashboard(),
+        {
+          condition: { when: () => handlers.isDashboardOpen() },
+        },
+      ),
     ],
   });
 }

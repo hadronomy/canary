@@ -7,3 +7,4 @@ export const helpOpenAtom = Atom.make(false).pipe(Atom.withLabel("app.helpOpen")
 export const debugModeAtom = Atom.make(false).pipe(Atom.withLabel("app.debugMode"));
 export const debugToastAtom = Atom.make("").pipe(Atom.withLabel("app.debugToast"));
 export const debugToastVisibleAtom = Atom.make(false).pipe(Atom.withLabel("app.debugToastVisible"));
+export const activeViewAtom = Atom.make("main").pipe(Atom.withLabel("app.activeView"));

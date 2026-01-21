@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useAtom } from "@effect-atom/atom-react";
 
 import { Branding } from "~/app/components/Branding";
+import { DashboardView } from "~/app/components/DashboardView";
 import { FooterHints } from "~/app/components/FooterHints";
 import { ResultsList } from "~/app/components/ResultsList";
 import { SearchBar } from "~/app/components/SearchBar";
@@ -16,6 +17,7 @@ import { createSearchShortcuts } from "~/app/shortcuts/definitions/search";
 import { createViewShortcuts } from "~/app/shortcuts/definitions/view";
 import { catppuccinMocha } from "~/app/theme";
 import {
+  activeViewAtom,
   cmdkOpenAtom,
   cmdkQueryAtom,
   debugModeAtom,
@@ -60,6 +62,7 @@ export function App() {
   const [debugMode, setDebugMode] = useAtom(debugModeAtom);
   const [debugToast, setDebugToast] = useAtom(debugToastAtom);
   const [debugToastVisible, setDebugToastVisible] = useAtom(debugToastVisibleAtom);
+  const [activeView, setActiveView] = useAtom(activeViewAtom);
 
   const results = useMemo(() => {
     if (!query.trim()) {
@@ -74,6 +77,17 @@ export function App() {
     const globalShortcuts = createGlobalShortcuts({
       toggleCommandPalette: () => setCmdkOpen((open: boolean) => !open),
       clearSearch: () => setQuery(""),
+      openDashboard: () => {
+        setActiveView("dashboard");
+        setCmdkOpen(false);
+        setHelpOpen(false);
+      },
+      openMain: () => {
+        setActiveView("main");
+        setCmdkOpen(false);
+        setHelpOpen(false);
+      },
+      isDashboardOpen: () => activeView === "dashboard",
     });
 
     const viewShortcuts = createViewShortcuts({
@@ -81,10 +95,15 @@ export function App() {
       closeHelp: () => setHelpOpen(false),
       isCmdkOpen: () => cmdkOpen,
       isHelpOpen: () => helpOpen,
+      closeDashboard: () => setActiveView("main"),
+      isDashboardOpen: () => activeView === "dashboard",
     });
 
     const searchShortcuts = createSearchShortcuts({
-      focusSearch: () => setCmdkOpen(false),
+      focusSearch: () => {
+        setActiveView("main");
+        setCmdkOpen(false);
+      },
     });
 
     const helpShortcuts = createHelpShortcuts({
@@ -109,7 +128,7 @@ export function App() {
       ...helpShortcuts,
       ...debugShortcuts,
     ];
-  }, [cmdkOpen, helpOpen, debugMode]);
+  }, [cmdkOpen, helpOpen, debugMode, activeView]);
 
   const isMountedRef = useRef(true);
 
@@ -134,9 +153,9 @@ export function App() {
   useShortcuts(shortcuts);
 
   const shortcutContext = {
-    currentView: cmdkOpen ? "cmdk" : helpOpen ? "help" : "main",
-    focusedComponentId: "search-input",
-    appState: { cmdkOpen, helpOpen, query },
+    currentView: cmdkOpen ? "cmdk" : helpOpen ? "help" : activeView,
+    focusedComponentId: activeView === "main" ? "search-input" : undefined,
+    appState: { cmdkOpen, helpOpen, query, activeView },
     onShortcutFired: (id: string, combo: string) => {
       showDebugToast(`${id} → ${combo}`);
     },
@@ -153,6 +172,8 @@ export function App() {
 
   const showResults = query.trim().length > 0;
   const theme = catppuccinMocha;
+  const mainActive = activeView === "main";
+  const dashboardActive = activeView === "dashboard";
 
   return (
     <box
@@ -163,38 +184,52 @@ export function App() {
         backgroundColor: theme.palette.base,
       }}
     >
-      <box
-        style={{
-          flexGrow: 1,
-          flexDirection: "column",
-          justifyContent: showResults ? "flex-start" : "center",
-          alignItems: "center",
-          padding: 2,
-          gap: 2,
-        }}
-      >
-        <Branding theme={theme} />
-        <SearchBar
-          theme={theme}
-          query={query}
-          onQueryChange={setQuery}
-          focused={!cmdkOpen && !helpOpen}
-          inputId="search-input"
-        />
-        {showResults ? (
-          <ResultsList
+      {mainActive ? (
+        <box
+          style={{
+            flexGrow: 1,
+            flexDirection: "column",
+            justifyContent: showResults ? "flex-start" : "center",
+            alignItems: "center",
+            padding: 2,
+            gap: 2,
+          }}
+        >
+          <Branding theme={theme} />
+          <SearchBar
             theme={theme}
             query={query}
-            results={results}
-            active={!cmdkOpen && !helpOpen}
-            onSelect={(item) => {
-              if (debugMode) {
-                showDebugToast(`Selected: ${item.title}`);
-              }
-            }}
+            onQueryChange={setQuery}
+            focused={!cmdkOpen && !helpOpen}
+            inputId="search-input"
           />
-        ) : null}
-      </box>
+          {showResults ? (
+            <ResultsList
+              theme={theme}
+              query={query}
+              results={results}
+              active={!cmdkOpen && !helpOpen}
+              onSelect={(item) => {
+                if (debugMode) {
+                  showDebugToast(`Selected: ${item.title}`);
+                }
+              }}
+            />
+          ) : null}
+        </box>
+      ) : null}
+
+      {dashboardActive ? (
+        <box
+          style={{
+            flexGrow: 1,
+            flexDirection: "column",
+            padding: 1,
+          }}
+        >
+          <DashboardView theme={theme} />
+        </box>
+      ) : null}
 
       <FooterHints theme={theme} />
 
