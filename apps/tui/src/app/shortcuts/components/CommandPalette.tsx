@@ -1,6 +1,7 @@
 import { TextAttributes } from "@opentui/core";
+import type { TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Theme } from "~/app/theme";
 import { formatKeyCombo } from "~/app/shortcuts/helpers";
@@ -25,20 +26,32 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const { palette } = theme;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const inputRef = useRef<TextareaRenderable | null>(null);
 
   useEffect(() => {
     if (!open) {
       setSelectedId(null);
+      return;
     }
-  }, [open]);
+    if (!inputRef.current) return;
+    if (inputRef.current.plainText !== query) {
+      inputRef.current.setText(query);
+      inputRef.current.gotoLineEnd();
+    }
+  }, [open, query]);
+
+  const paletteShortcuts = useMemo(
+    () => shortcuts.filter((shortcut) => shortcut.id !== "cmdk.close"),
+    [shortcuts],
+  );
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return shortcuts;
+    if (!query.trim()) return paletteShortcuts;
     const needle = query.trim().toLowerCase();
-    return shortcuts.filter((shortcut) =>
+    return paletteShortcuts.filter((shortcut) =>
       `${shortcut.description} ${shortcut.category ?? ""}`.toLowerCase().includes(needle),
     );
-  }, [query, shortcuts]);
+  }, [query, paletteShortcuts]);
 
   const grouped = useMemo(() => {
     return filtered.reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
@@ -49,7 +62,10 @@ export function CommandPalette({
   }, [filtered]);
 
   const sortedCategories = useMemo(() => Object.keys(grouped).sort(), [grouped]);
-  const flattened = useMemo(() => filtered, [filtered]);
+  const flattened = useMemo(
+    () => sortedCategories.flatMap((category) => grouped[category] ?? []),
+    [sortedCategories, grouped],
+  );
 
   useEffect(() => {
     if (!flattened.length) return;
@@ -60,20 +76,28 @@ export function CommandPalette({
     }
   }, [flattened, selectedId]);
 
+  const moveTo = (index: number) => {
+    const next = flattened[index];
+    if (next) setSelectedId(next.id);
+  };
+
+  const move = (delta: number) => {
+    if (!flattened.length) return;
+    const currentIndex = flattened.findIndex((item) => item.id === selectedId);
+    const startIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (startIndex + delta + flattened.length) % flattened.length;
+    moveTo(nextIndex);
+  };
+
   useKeyboard((key) => {
     if (!open) return;
     if (!flattened.length) return;
 
-    const currentIndex = flattened.findIndex((item) => item.id === selectedId);
-    if (key.name === "down") {
-      const next = currentIndex > 0 ? currentIndex - 1 : flattened.length - 1;
-      const nextItem = flattened[next];
-      if (nextItem) setSelectedId(nextItem.id);
+    if (key.name === "down" || (key.ctrl && key.name === "n")) {
+      move(1);
     }
-    if (key.name === "up") {
-      const next = currentIndex >= 0 ? (currentIndex + 1) % flattened.length : 0;
-      const nextItem = flattened[next];
-      if (nextItem) setSelectedId(nextItem.id);
+    if (key.name === "up" || (key.ctrl && key.name === "p")) {
+      move(-1);
     }
     if (key.name === "enter" || key.name === "return") {
       const selected = flattened.find((item) => item.id === selectedId);
@@ -100,45 +124,62 @@ export function CommandPalette({
     >
       <box
         style={{
-          width: "50%",
-          height: "80%",
+          width: "60%",
+          height: "60%",
           border: true,
           borderStyle: "rounded",
           borderColor: palette.mauve,
           backgroundColor: palette.base,
-          paddingLeft: 1,
-          paddingRight: 1,
-          paddingTop: 1,
+          padding: 1,
           flexDirection: "column",
-          gap: 1,
         }}
       >
         <box
           style={{
-            height: 3,
-            border: true,
-            borderStyle: "rounded",
-            borderColor: palette.surface2,
+            flexDirection: "row",
+            justifyContent: "space-between",
             paddingLeft: 1,
             paddingRight: 1,
-            paddingTop: 0,
-            paddingBottom: 0,
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: palette.base,
+            marginBottom: 1,
           }}
         >
-          <text content=">" style={{ fg: palette.mauve, marginRight: 1, height: 1 }} />
-          <input
+          <text
+            content="Command Palette"
+            style={{ fg: palette.text, attributes: TextAttributes.BOLD }}
+          />
+          <text content="esc" style={{ fg: palette.subtext0 }} />
+        </box>
+
+        <box
+          style={{
+            height: 1,
+            paddingLeft: 1,
+            paddingRight: 1,
+            marginBottom: 1,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <textarea
             placeholder="Search actions..."
-            onInput={onQueryChange}
+            initialValue={query}
+            onContentChange={() => {
+              if (!inputRef.current) return;
+              onQueryChange(inputRef.current.plainText);
+            }}
+            ref={(instance: TextareaRenderable) => {
+              inputRef.current = instance;
+            }}
             focused
+            height={1}
             style={{
               flexGrow: 1,
               height: 1,
               focusedBackgroundColor: palette.base,
-              placeholderColor: palette.overlay0,
+              cursorColor: palette.mauve,
               textColor: palette.text,
+              selectionBg: palette.surface2,
+              selectionFg: palette.text,
             }}
           />
         </box>
@@ -151,62 +192,86 @@ export function CommandPalette({
             viewportOptions: { backgroundColor: palette.base },
             contentOptions: { backgroundColor: palette.base, flexDirection: "column" },
             scrollbarOptions: {
-              showArrows: false,
-              trackOptions: {
-                foregroundColor: palette.lavender,
-                backgroundColor: palette.surface0,
-              },
+              visible: false,
             },
           }}
         >
-          {sortedCategories.map((category) => (
-            <box
-              key={category}
-              style={{
-                flexDirection: "column",
-                width: "100%",
-                marginBottom: 1,
-              }}
-            >
-              <text
-                content={category.toUpperCase()}
-                style={{
-                  fg: palette.overlay0,
-                  attributes: TextAttributes.BOLD,
-                  marginBottom: 0,
-                }}
-              />
-              {(grouped[category] ?? []).map((shortcut) => {
-                const isSelected = shortcut.id === selectedId;
-                return (
-                  <box
-                    key={shortcut.id}
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      height: 1,
-                      paddingRight: 2,
-                      backgroundColor: isSelected ? palette.surface1 : "transparent",
-                    }}
-                  >
-                    <text content={shortcut.description} style={{ fg: palette.text }} />
-                    {shortcut.bindings.length ? (
-                      <text
-                        content={shortcut.bindings.map(formatKeyCombo).join(" ")}
-                        style={{ fg: palette.lavender }}
-                      />
-                    ) : null}
-                  </box>
-                );
-              })}
+          {flattened.length === 0 ? (
+            <box paddingLeft={2} paddingTop={1}>
+              <text content="No results found" style={{ fg: palette.subtext0 }} />
             </box>
-          ))}
+          ) : (
+            sortedCategories.map((category) => (
+              <box
+                key={category}
+                style={{
+                  flexDirection: "column",
+                  width: "100%",
+                }}
+              >
+                <box paddingLeft={2} paddingTop={1} paddingBottom={0}>
+                  <text
+                    content={category}
+                    style={{
+                      fg: palette.mauve,
+                      attributes: TextAttributes.BOLD,
+                    }}
+                  />
+                </box>
+                {(grouped[category] ?? []).map((shortcut) => {
+                  const isSelected = shortcut.id === selectedId;
+                  return (
+                    <box
+                      key={shortcut.id}
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        height: 1,
+                        paddingLeft: 2,
+                        paddingRight: 2,
+                        backgroundColor: isSelected ? palette.surface1 : "transparent",
+                      }}
+                    >
+                      <text
+                        content={shortcut.description}
+                        style={{
+                          fg: isSelected ? palette.mauve : palette.text,
+                          attributes: isSelected ? TextAttributes.BOLD : undefined,
+                        }}
+                      />
+                      {shortcut.bindings.length ? (
+                        <text
+                          content={shortcut.bindings.map(formatKeyCombo).join(" ")}
+                          style={{ fg: isSelected ? palette.mauve : palette.subtext0 }}
+                        />
+                      ) : null}
+                    </box>
+                  );
+                })}
+              </box>
+            ))
+          )}
         </scrollbox>
-        <text
-          content="Type to filter · Enter to run · Esc to close"
-          style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
-        />
+
+        <box
+          style={{
+            marginTop: 1,
+            paddingLeft: 1,
+            paddingRight: 1,
+            flexDirection: "row",
+            gap: 2,
+          }}
+        >
+          <text
+            content="↑/↓ to navigate"
+            style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
+          />
+          <text
+            content="Enter to select"
+            style={{ fg: palette.subtext0, attributes: TextAttributes.DIM }}
+          />
+        </box>
       </box>
     </box>
   );
