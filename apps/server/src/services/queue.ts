@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer, Config } from "effect";
+import { Context, Data, Effect, Layer, Config, Runtime } from "effect";
 import { Queue, Worker, type Job } from "bullmq";
 
 export class QueueError extends Data.TaggedError("QueueError")<{
@@ -17,7 +17,7 @@ export class QueueService extends Context.Tag("QueueService")<
   }
 >() {}
 
-export const QueueServiceLive = Layer.effect(
+export const QueueServiceLive = Layer.scoped(
   QueueService,
   Effect.gen(function* () {
     const connection = {
@@ -65,27 +65,27 @@ export const QueueServiceTest = Layer.succeed(
 );
 
 // Worker Helper
-export const makeWorker = <T>(
+export const makeWorker = Effect.fn(function* <T>(
   queueName: string,
   processor: (job: Job<T>) => Effect.Effect<void, Error>,
-) =>
-  Effect.gen(function* () {
-    const connection = {
-      host: yield* Config.string("REDIS_HOST").pipe(Config.withDefault("localhost")),
-      port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
-    };
+) {
+  const connection = {
+    host: yield* Config.string("REDIS_HOST").pipe(Config.withDefault("localhost")),
+    port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
+  };
+  const runtime = yield* Effect.runtime<never>();
 
-    return yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        const worker = new Worker(
-          queueName,
-          async (job) => {
-            return await Effect.runPromise(processor(job));
-          },
-          { connection },
-        );
-        return worker;
-      }),
-      (worker) => Effect.promise(() => worker.close()),
-    );
-  });
+  return yield* Effect.acquireRelease(
+    Effect.sync(() => {
+      const worker = new Worker(
+        queueName,
+        async (job) => {
+          return await Runtime.runPromise(runtime)(processor(job));
+        },
+        { connection },
+      );
+      return worker;
+    }),
+    (worker) => Effect.promise(() => worker.close()),
+  );
+});
