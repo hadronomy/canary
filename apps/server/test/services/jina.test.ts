@@ -7,7 +7,7 @@ describe("JinaService", () => {
     const mockFetch = spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
-          data: [{ embedding: [0.1, 0.2] }],
+          data: [{ embedding: [0.1, 0.2], multi_vector: [[0.3, 0.4]] }],
         }),
       ),
     );
@@ -23,9 +23,11 @@ describe("JinaService", () => {
     const result = await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
 
     expect(mockFetch).toHaveBeenCalled();
-    const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>;
+    const headers = mockFetch.mock.calls[0]![1]?.headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer test-key");
     expect(result.full).toEqual([0.1, 0.2]);
+    expect(result.scout).toEqual([0.1, 0.2]);
+    expect(result.multi).toEqual([[0.3, 0.4]]);
 
     mockFetch.mockRestore();
   });
@@ -52,6 +54,6 @@ describe("JinaService", () => {
     const result = await Effect.runPromise(runnable);
 
     expect(result.length).toBe(2);
-    expect(result[0].relevance_score).toBeGreaterThan(0);
+    expect(result[0]!.relevance_score).toBeGreaterThan(0);
   });
 });
