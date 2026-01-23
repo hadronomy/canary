@@ -19,6 +19,38 @@ export interface RerankResult {
   };
 }
 
+export interface JinaEmbeddingItem {
+  readonly embedding: number[];
+  readonly multi_vector?: number[][];
+  readonly index: number;
+}
+
+export interface JinaEmbeddingResponse {
+  readonly model: string;
+  readonly data: JinaEmbeddingItem[];
+  readonly usage: {
+    readonly total_tokens: number;
+    readonly prompt_tokens: number;
+  };
+}
+
+export interface JinaRerankItem {
+  readonly index: number;
+  readonly relevance_score: number;
+  readonly document: {
+    readonly text: string;
+  };
+}
+
+export interface JinaRerankResponse {
+  readonly model: string;
+  readonly results: JinaRerankItem[];
+  readonly usage: {
+    readonly total_tokens: number;
+    readonly prompt_tokens: number;
+  };
+}
+
 export class JinaService extends Context.Tag("JinaService")<
   JinaService,
   {
@@ -58,13 +90,17 @@ export const JinaServiceLive = Layer.effect(
             });
           }
 
-          const data = (await response.json()) as any;
+          const data = (await response.json()) as JinaEmbeddingResponse;
           const item = data.data[0];
+
+          if (!item) {
+            throw new JinaError({ message: "No embedding returned" });
+          }
 
           return {
             full: item.embedding,
-            multi: undefined,
-            scout: undefined,
+            multi: item.multi_vector,
+            scout: item.embedding?.slice(0, 256),
           } as EmbeddedResult;
         },
         catch: (error) =>
@@ -95,8 +131,8 @@ export const JinaServiceLive = Layer.effect(
             });
           }
 
-          const data = (await response.json()) as any;
-          return data.results.map((r: any) => ({
+          const data = (await response.json()) as JinaRerankResponse;
+          return data.results.map((r) => ({
             index: r.index,
             relevance_score: r.relevance_score,
             document: r.document,
