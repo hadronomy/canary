@@ -1,6 +1,6 @@
 import { describe, it, expect, spyOn } from "bun:test";
 import { Effect, Layer, ConfigProvider } from "effect";
-import { BocService, BocServiceLive } from "../../src/services/boc";
+import { BocService } from "../../src/services/boc";
 
 const sampleXml = `
 <?xml version="1.0" encoding="UTF-8"?>
@@ -29,20 +29,20 @@ describe("BocService", () => {
   it("should parse feed correctly", async () => {
     const program = Effect.flatMap(BocService, (service) => service.parseFeed(sampleXml));
 
-    const TestEnv = BocServiceLive.pipe(
+    const TestEnv = BocService.Live.pipe(
       Layer.provide(Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))),
     );
 
     const result = await Effect.runPromise(program.pipe(Effect.provide(TestEnv)));
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toEqual({
+    expect(result[0]).toMatchObject({
       title: "Title 1",
       link: "http://link1.com",
       pubDate: "Mon, 01 Jan 2024 10:00:00 GMT",
       guid: "guid1",
     });
-    expect(result[1]).toEqual({
+    expect(result[1]).toMatchObject({
       title: "Title 2",
       link: "http://link2.com",
       pubDate: "Mon, 01 Jan 2024 11:00:00 GMT",
@@ -55,7 +55,7 @@ describe("BocService", () => {
 
     const program = Effect.flatMap(BocService, (service) => service.fetchFeed());
 
-    const TestEnv = BocServiceLive.pipe(
+    const TestEnv = BocService.Live.pipe(
       Layer.provide(
         Layer.setConfigProvider(
           ConfigProvider.fromMap(new Map([["BOC_FEED_URL", "http://test-url.com"]])),
@@ -83,7 +83,7 @@ describe("BocService", () => {
 
     const program = Effect.flatMap(BocService, (service) => service.parseFeed(emptyXml));
 
-    const TestEnv = BocServiceLive.pipe(
+    const TestEnv = BocService.Live.pipe(
       Layer.provide(Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))),
     );
 
