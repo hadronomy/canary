@@ -14,8 +14,8 @@ export class SeederDaemon extends Context.Tag("SeederDaemon")<
         startYear: number;
         endYear: number;
       },
-      schedule: Schedule.Schedule<number, unknown>,
-    ) => Effect.Effect<number, QueueError | BocArchiveError>;
+      schedule: Schedule.Schedule<unknown, void>,
+    ) => Effect.Effect<void, QueueError | BocArchiveError>;
   }
 >() {
   static readonly Live = Layer.effect(
@@ -23,15 +23,18 @@ export class SeederDaemon extends Context.Tag("SeederDaemon")<
     Effect.gen(function* () {
       const seederWorkflow = yield* SeederWorkflow;
 
-      const runOnce = Effect.fn(function* (options: { startYear: number; endYear: number }) {
+      const runOnce = Effect.fn("SeederDaemon.runOnce")(function* (options: {
+        startYear: number;
+        endYear: number;
+      }) {
         yield* seederWorkflow.runSeeder(options);
       });
 
-      const runScheduled = Effect.fn(function* (
+      const runScheduled = Effect.fn("SeederDaemon.runScheduled")(function* (
         options: { startYear: number; endYear: number },
-        schedule: Schedule.Schedule<number, unknown>,
+        schedule: Schedule.Schedule<unknown, void>,
       ) {
-        return yield* Effect.repeat(runOnce(options), schedule);
+        yield* Effect.repeat(runOnce(options), schedule);
       });
 
       return { runOnce, runScheduled };

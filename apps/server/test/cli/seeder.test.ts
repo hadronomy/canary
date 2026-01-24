@@ -13,15 +13,8 @@ describe("Seeder CLI", () => {
     const SeederDaemonTest = Layer.succeed(
       SeederDaemon,
       SeederDaemon.of({
-        runOnce: Effect.fn(function* (options: { startYear: number; endYear: number }) {
-          yield* Ref.set(optionsRef, options);
-        }),
-        runScheduled: Effect.fn(function* (
-          _options: { startYear: number; endYear: number },
-          _schedule,
-        ) {
-          return 0;
-        }),
+        runOnce: (options: { startYear: number; endYear: number }) => Ref.set(optionsRef, options),
+        runScheduled: (_options: { startYear: number; endYear: number }, _schedule) => Effect.void,
       }),
     );
 
@@ -33,7 +26,7 @@ describe("Seeder CLI", () => {
       "1983",
       "--endYear",
       "2024",
-    ]).pipe(Effect.provide(Layer.mergeAll(SeederDaemonTest, BunContext.layer)));
+    ]).pipe(Effect.provide(Layer.merge(SeederDaemonTest, BunContext.layer)));
 
     await Effect.runPromise(program);
 

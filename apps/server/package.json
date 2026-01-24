@@ -12,6 +12,9 @@
   "dependencies": {
     "@canary/db": "workspace:*",
     "@canary/env": "workspace:*",
+    "@effect/cli": "^0.73.0",
+    "@effect/platform": "^0.94.1",
+    "@effect/platform-bun": "^0.87.0",
     "@elysiajs/cors": "^1.4.1",
     "bullmq": "^5.66.7",
     "dotenv": "catalog:",
