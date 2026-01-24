@@ -37,25 +37,23 @@ export const QueueServiceLive = Layer.scoped(
       return queues.get(name)!;
     };
 
-    const add = <Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>>(
-      queueDescriptor: Q,
-      payload: QueuePayload<Q>,
-    ): Effect.Effect<Job<QueuePayload<Q>>, QueueError> =>
-      Schema.decodeUnknown(queueDescriptor.schema)(payload).pipe(
+    const add = Effect.fn("QueueService.add")(function* <
+      Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>,
+    >(queueDescriptor: Q, payload: QueuePayload<Q>) {
+      const decoded = yield* Schema.decodeUnknown(queueDescriptor.schema)(payload).pipe(
         Effect.mapError(
           (error) => new QueueError({ message: "Invalid queue payload", cause: error }),
         ),
-        Effect.flatMap((decoded) =>
-          Effect.tryPromise({
-            try: async () => {
-              const queue = getQueue(queueDescriptor.name);
-              return await queue.add(queueDescriptor.name, decoded);
-            },
-            catch: (error) =>
-              new QueueError({ message: "Failed to add job to queue", cause: error }),
-          }),
-        ),
       );
+
+      return yield* Effect.tryPromise({
+        try: async () => {
+          const queue = getQueue(queueDescriptor.name);
+          return await queue.add(queueDescriptor.name, decoded);
+        },
+        catch: (error) => new QueueError({ message: "Failed to add job to queue", cause: error }),
+      });
+    });
 
     yield* Effect.addFinalizer(() =>
       Effect.promise(async () => {
