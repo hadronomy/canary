@@ -11,7 +11,7 @@ export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
   cause: Schema.optional(Schema.Defect),
 }) {}
 
-export class QueueService extends Context.Tag("QueueService")<
+export class QueueService extends Context.Tag("@canary/QueueService")<
   QueueService,
   {
     readonly add: <Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>>(
