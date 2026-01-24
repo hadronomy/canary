@@ -57,7 +57,7 @@ export type JinaInput =
   | Blob
   | { text?: string; image?: string | Uint8Array | Blob; url?: string };
 
-export const normalizeInput = Effect.fn(function* (input: JinaInput) {
+export const normalizeInput = Effect.fn("normalizeInput")(function* (input: JinaInput) {
   if (typeof input === "string") {
     const isUrl = /^(http|https):\/\/[^ "]+$/.test(input);
     return isUrl ? { url: input } : { text: input };
@@ -102,7 +102,9 @@ export const normalizeInput = Effect.fn(function* (input: JinaInput) {
 export class JinaService extends Context.Tag("JinaService")<
   JinaService,
   {
-    readonly embed: (input: JinaInput | JinaInput[]) => Effect.Effect<EmbeddedResult, JinaError>;
+    readonly embed: (
+      input: JinaInput | JinaInput[],
+    ) => Effect.Effect<EmbeddedResult | EmbeddedResult[], JinaError>;
     readonly rerank: (
       query: string,
       docs: string[],
@@ -115,7 +117,7 @@ export const JinaServiceLive = Layer.effect(
   Effect.gen(function* () {
     const apiKey = yield* Config.string("JINA_API_KEY");
 
-    const embed = Effect.fn(function* (input: JinaInput | JinaInput[]) {
+    const embed = Effect.fn("JinaService.embed")(function* (input: JinaInput | JinaInput[]) {
       const inputs = Array.isArray(input) ? input : [input];
       const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
 
@@ -128,7 +130,7 @@ export const JinaServiceLive = Layer.effect(
               Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-              model: "jina-embeddings-v3",
+              model: "jina-embeddings-v4",
               input: normalizedInputs,
               late_chunking: true,
               return_multivector: true,
@@ -205,15 +207,18 @@ export const JinaServiceLive = Layer.effect(
 export const JinaServiceTest = Layer.succeed(
   JinaService,
   JinaService.of({
-    embed: (_input) =>
-      Effect.succeed({
+    embed: (input) => {
+      const isArray = Array.isArray(input);
+      const mockResult = {
         scout: [0.1, 0.2, 0.3],
         full: [0.1, 0.2, 0.3],
         multi: [
           [0.1, 0.2],
           [0.3, 0.4],
         ],
-      }),
+      };
+      return Effect.succeed(isArray ? [mockResult] : mockResult);
+    },
     rerank: (_query, docs) =>
       Effect.succeed(
         docs.map((doc, index) => ({

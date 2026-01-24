@@ -17,6 +17,7 @@
     "dotenv": "catalog:",
     "effect": "^3.19.15",
     "elysia": "^1.4.21",
+    "fast-xml-parser": "^5.3.3",
     "zod": "catalog:"
   },
   "devDependencies": {
