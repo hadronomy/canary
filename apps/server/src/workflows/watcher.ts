@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, Schedule } from "effect";
+import { Queues } from "../queues/index.js";
 import { BocService } from "../services/boc.js";
 import { QueueService } from "../services/queue.js";
 
@@ -20,11 +21,9 @@ export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
 
         yield* Effect.logInfo(`Watcher fetched ${items.length} items`);
 
-        yield* Effect.forEach(
-          items,
-          (item) => queueService.add("refinery-queue", "process-boc-item", item),
-          { concurrency: 5 },
-        );
+        yield* Effect.forEach(items, (item) => queueService.add(Queues.refinery, item), {
+          concurrency: 5,
+        });
 
         yield* Effect.logInfo(`Watcher queued ${items.length} items`);
       });
