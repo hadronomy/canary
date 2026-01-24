@@ -139,4 +139,38 @@ describe("JinaService", () => {
 
     mockFetch.mockRestore();
   });
+
+  it("should handle mixed input array", async () => {
+    const mockFetch = spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ embedding: [0.1], index: 0 }],
+        }),
+      ),
+    );
+
+    const inputs = ["text", new Uint8Array([1, 2, 3]), { url: "https://example.com" }];
+
+    const program = Effect.flatMap(JinaService, (service) => service.embed(inputs));
+
+    const LiveEnv = JinaServiceLive.pipe(
+      Layer.provide(
+        Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
+      ),
+    );
+
+    await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
+
+    expect(mockFetch).toHaveBeenCalled();
+    const body = JSON.parse(mockFetch.mock.calls[0]![1]?.body as string);
+
+    expect(body.input).toHaveLength(3);
+    expect(body.input[0]).toEqual({ text: "text" });
+    expect(body.input[1]).toEqual({ image: Buffer.from([1, 2, 3]).toString("base64") });
+    expect(body.input[2]).toEqual({ url: "https://example.com" });
+
+    expect(body.model).toBe("jina-embeddings-v4");
+
+    mockFetch.mockRestore();
+  });
 });
