@@ -3,9 +3,9 @@ import type { TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Theme } from "~/app/theme";
 import { formatKeyCombo } from "~/app/shortcuts/helpers";
 import type { Shortcut } from "~/app/shortcuts/types";
+import type { Theme } from "~/app/theme";
 
 export type CommandPaletteProps = {
   theme: Theme;

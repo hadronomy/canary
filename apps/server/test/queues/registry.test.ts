@@ -1,5 +1,7 @@
 import { describe, it, expect } from "bun:test";
+
 import { Schema } from "effect";
+
 import { defineQueue, defineQueues } from "~/queues/registry";
 
 describe("queue registry", () => {

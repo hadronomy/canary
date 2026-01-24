@@ -1,8 +1,9 @@
-import { env } from "@canary/env/server";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { cors } from "@elysiajs/cors";
 import { Effect, Layer } from "effect";
 import { Elysia } from "elysia";
+
+import { env } from "@canary/env/server";
 import { runSeederCli, SeederCliLiveLayer } from "~/cli/seeder";
 
 if (process.argv[2] === "seeder") {

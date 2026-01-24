@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
-import { useKeyboard } from "@opentui/react";
-
 import type { KeyEvent } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
+import { useEffect, useMemo, useRef } from "react";
+
 import { ShortcutRegistry } from "~/app/shortcuts/registry";
 import type { Shortcut, ShortcutContext } from "~/app/shortcuts/types";
 

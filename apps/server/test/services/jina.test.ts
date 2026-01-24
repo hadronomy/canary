@@ -1,5 +1,7 @@
 import { describe, it, expect, spyOn } from "bun:test";
+
 import { Effect, Layer, ConfigProvider } from "effect";
+
 import { JinaService, JinaServiceTest, JinaServiceLive, normalizeInput } from "~/services/jina";
 
 describe("JinaService", () => {
