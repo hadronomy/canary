@@ -5,9 +5,9 @@ import type { FileSystem } from "@effect/platform/FileSystem";
 import type { Path } from "@effect/platform/Path";
 import type { Terminal } from "@effect/platform/Terminal";
 import { Effect, Layer, Schedule } from "effect";
-import { QueueError, QueueServiceLive } from "../services/queue.js";
-import { SeederDaemon } from "../workflows/seeder-daemon.js";
-import { BocArchiveError, BocArchiveService, SeederWorkflow } from "../workflows/seeder.js";
+import { QueueError, QueueServiceLive } from "~/services/queue";
+import { SeederDaemon } from "~/workflows/seeder-daemon";
+import { BocArchiveError, BocArchiveService, SeederWorkflow } from "~/workflows/seeder";
 
 const startYear = Options.integer("startYear").pipe(
   Options.withDescription("First year to seed from the archive"),

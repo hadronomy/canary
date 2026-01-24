@@ -34,10 +34,7 @@ export const chunks = pgTable(
     fullVector: vector("full_vector", { dimensions: 1024 }),
     multiVector: jsonb("multi_vector"),
   },
-  (table) => ({
-    scoutVectorIndex: index("scout_vector_index").using(
-      "hnsw",
-      sql`${table.scoutVector} vector_cosine_ops`,
-    ),
-  }),
+  (table) => [
+    index("scout_vector_index").using("hnsw", sql`${table.scoutVector} vector_cosine_ops`),
+  ],
 );

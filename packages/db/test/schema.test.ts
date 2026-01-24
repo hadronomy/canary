@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import * as schema from "../src/schema";
+import * as schema from "~/schema";
 
 describe("Database Schema", () => {
   it("should export legislation table", () => {

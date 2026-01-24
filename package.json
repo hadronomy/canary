@@ -34,21 +34,22 @@
   },
   "dependencies": {
     "@canary/env": "workspace:*",
-    "@effect/cli": "^0.73.0",
-    "@effect/platform": "^0.94.1",
-    "@effect/platform-bun": "^0.87.0",
+    "@effect/cli": "^0.73.1",
+    "@effect/platform": "^0.94.2",
+    "@effect/platform-bun": "^0.87.1",
     "dotenv": "catalog:",
     "effect": "^3.19.15",
+    "tsdown": "^0.20.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "@effect/language-service": "^0.69.1",
+    "@effect/language-service": "^0.69.2",
     "@types/bun": "catalog:",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
     "oxfmt": "^0.24.0",
-    "oxlint": "^1.34.0",
+    "oxlint": "^1.41.0",
     "turbo": "^2.6.3",
     "typescript": "catalog:"
   },

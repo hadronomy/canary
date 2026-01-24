@@ -1,6 +1,6 @@
 import { Config, Context, Effect, Layer, Runtime, Schema } from "effect";
 import { Queue, Worker, type Job } from "bullmq";
-import type { QueueDescriptor } from "../queues/registry.js";
+import type { QueueDescriptor } from "~/queues/registry";
 
 type QueuePayload<Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>> =
   Schema.Schema.Type<Q["schema"]>;
@@ -83,12 +83,13 @@ export const QueueServiceTest = Layer.succeed(
 
 export const makeWorker = Effect.fn(function* <
   Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>,
->(queueDescriptor: Q, processor: (job: Job<QueuePayload<Q>>) => Effect.Effect<void, Error>) {
+  R,
+>(queueDescriptor: Q, processor: (job: Job<QueuePayload<Q>>) => Effect.Effect<void, Error, R>) {
   const connection = {
     host: yield* Config.string("REDIS_HOST").pipe(Config.withDefault("localhost")),
     port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
   };
-  const runtime = yield* Effect.runtime<never>();
+  const runtime = yield* Effect.runtime<R>();
 
   return yield* Effect.acquireRelease(
     Effect.sync(() => {

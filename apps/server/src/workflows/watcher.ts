@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Schedule } from "effect";
-import { Queues } from "../queues/index.js";
-import { BocError, BocService } from "../services/boc.js";
-import { QueueError, QueueService } from "../services/queue.js";
+import { Queues } from "~/queues/index";
+import { BocError, BocService } from "~/services/boc";
+import { QueueError, QueueService } from "~/services/queue";
 
 export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
   WatcherWorkflow,
@@ -21,11 +21,13 @@ export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
 
         yield* Effect.logInfo(`Watcher fetched ${items.length} items`);
 
-        yield* Effect.forEach(items, (item) => queueService.add(Queues.refinery, item), {
+        const newItems = items;
+
+        yield* Effect.forEach(newItems, (item) => queueService.add(Queues.refinery, item), {
           concurrency: 5,
         });
 
-        yield* Effect.logInfo(`Watcher queued ${items.length} items`);
+        yield* Effect.logInfo(`Watcher queued ${newItems.length} items`);
       });
 
       const runWatcherScheduled = Effect.repeat(runWatcher, Schedule.fixed("15 minutes"));

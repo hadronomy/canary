@@ -3,7 +3,7 @@ import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { cors } from "@elysiajs/cors";
 import { Effect, Layer } from "effect";
 import { Elysia } from "elysia";
-import { runSeederCli, SeederCliLiveLayer } from "./cli/seeder.js";
+import { runSeederCli, SeederCliLiveLayer } from "~/cli/seeder";
 
 if (process.argv[2] === "seeder") {
   const cliLayer = Layer.merge(SeederCliLiveLayer, BunContext.layer);
@@ -24,4 +24,4 @@ if (process.argv[2] === "seeder") {
     });
 }
 
-export { SeederDaemon } from "./workflows/seeder-daemon.js";
+export { SeederDaemon } from "~/workflows/seeder-daemon";
