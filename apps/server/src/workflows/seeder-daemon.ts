@@ -3,7 +3,7 @@ import { Context, Effect, Layer, Schedule } from "effect";
 import { QueueError } from "~/services/queue";
 import { BocArchiveError, SeederWorkflow } from "~/workflows/seeder";
 
-export class SeederDaemon extends Context.Tag("SeederDaemon")<
+export class SeederDaemon extends Context.Tag("@canary/SeederDaemon")<
   SeederDaemon,
   {
     readonly runOnce: (options: {

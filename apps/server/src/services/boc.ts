@@ -13,7 +13,7 @@ export class BocError extends Schema.TaggedError<BocError>()("BocError", {
   cause: Schema.optional(Schema.Defect),
 }) {}
 
-export class BocService extends Context.Tag("BocService")<
+export class BocService extends Context.Tag("@canary/BocService")<
   BocService,
   {
     readonly fetchFeed: () => Effect.Effect<readonly BocItem[], BocError>;

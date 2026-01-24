@@ -4,11 +4,11 @@ import { Queues } from "~/queues/index";
 import { BocError, BocService } from "~/services/boc";
 import { QueueError, QueueService } from "~/services/queue";
 
-export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
+export class WatcherWorkflow extends Context.Tag("@canary/WatcherWorkflow")<
   WatcherWorkflow,
   {
     readonly runWatcher: Effect.Effect<void, BocError | QueueError>;
-    readonly runWatcherScheduled: Effect.Effect<number, BocError | QueueError>;
+    readonly runWatcherScheduled: Effect.Effect<void, BocError | QueueError>;
   }
 >() {
   static readonly Live = Layer.effect(
@@ -17,7 +17,7 @@ export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
       const bocService = yield* BocService;
       const queueService = yield* QueueService;
 
-      const runWatcher = Effect.gen(function* () {
+      const runWatcher = Effect.fn("WatcherWorkflow.runWatcher")(function* () {
         const items = yield* bocService.fetchFeed();
 
         yield* Effect.logInfo(`Watcher fetched ${items.length} items`);
@@ -31,9 +31,11 @@ export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
         yield* Effect.logInfo(`Watcher queued ${newItems.length} items`);
       });
 
-      const runWatcherScheduled = Effect.repeat(runWatcher, Schedule.fixed("15 minutes"));
+      const runWatcherScheduled = Effect.repeat(runWatcher(), {
+        schedule: Schedule.fixed("15 minutes"),
+      }).pipe(Effect.asVoid);
 
-      return { runWatcher, runWatcherScheduled };
+      return { runWatcher: runWatcher(), runWatcherScheduled };
     }),
   );
 }
