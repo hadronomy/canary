@@ -1,6 +1,12 @@
 import { describe, it, expect, mock } from "bun:test";
-import { Effect } from "effect";
-import { QueueService, QueueServiceLive, makeWorker } from "../../src/services/queue.js";
+import { Effect, Schema } from "effect";
+import {
+  QueueError,
+  QueueService,
+  QueueServiceLive,
+  makeWorker,
+} from "../../src/services/queue.js";
+import { defineQueue, defineQueues } from "../../src/queues/registry.js";
 
 // Mock BullMQ
 mock.module("bullmq", () => {
@@ -28,9 +34,14 @@ mock.module("bullmq", () => {
 
 describe("QueueService", () => {
   it("should add a job to the queue", async () => {
+    const payloadSchema = Schema.Struct({ foo: Schema.String });
+    const queues = defineQueues({
+      test: defineQueue("test-queue", payloadSchema),
+    });
+
     const program = Effect.gen(function* () {
       const service = yield* QueueService;
-      const job = yield* service.add("test-queue", "test-job", { foo: "bar" });
+      const job = yield* service.add(queues.test, { foo: "bar" });
       expect(job.id).toBe("123");
     });
 
@@ -38,6 +49,27 @@ describe("QueueService", () => {
     // Wrapping in Effect.scoped ensures any scope requirements are met.
     const runnable = Effect.scoped(Effect.provide(program, QueueServiceLive));
     await Effect.runPromise(runnable);
+  });
+
+  it("should reject invalid payloads", async () => {
+    const payloadSchema = Schema.Struct({ id: Schema.String });
+    const queues = defineQueues({
+      refinery: defineQueue("refinery-queue", payloadSchema),
+    });
+    const badPayload = { id: 123 } as unknown as Schema.Schema.Type<typeof payloadSchema>;
+
+    const program = Effect.gen(function* () {
+      const service = yield* QueueService;
+      yield* service.add(queues.refinery, badPayload);
+    });
+
+    const runnable = Effect.scoped(Effect.provide(program, QueueServiceLive));
+    const result = await Effect.runPromise(Effect.either(runnable));
+
+    expect(result._tag).toBe("Left");
+    if (result._tag === "Left") {
+      expect(result.left).toBeInstanceOf(QueueError);
+    }
   });
 });
 
@@ -49,7 +81,12 @@ describe("makeWorker", () => {
         processed = true;
       });
 
-    const workerEffect = makeWorker("test-worker-queue", processor);
+    const workerSchema = Schema.Struct({ id: Schema.String });
+    const queues = defineQueues({
+      worker: defineQueue("test-worker-queue", workerSchema),
+    });
+
+    const workerEffect = makeWorker(queues.worker, processor);
 
     await Effect.runPromise(
       Effect.scoped(
