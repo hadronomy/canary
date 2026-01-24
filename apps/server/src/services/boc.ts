@@ -32,74 +32,69 @@ export class BocService extends Context.Tag("BocService")<
         isArray: (name) => name === "item",
       });
 
-      const parseFeed = (xml: string) =>
-        Effect.gen(function* () {
-          const itemsArray = yield* Effect.try({
-            try: () => {
-              const result = parser.parse(xml);
-              const channel = result?.rss?.channel;
+      const parseFeed = Effect.fn(function* (xml: string) {
+        const itemsArray = yield* Effect.try({
+          try: () => {
+            const result = parser.parse(xml);
+            const channel = result?.rss?.channel;
 
-              if (!channel || !channel.item) {
-                return [];
-              }
-
-              return Array.isArray(channel.item) ? channel.item : [channel.item];
-            },
-            catch: (error) => new BocError({ message: "Failed to parse BOC feed", cause: error }),
-          });
-
-          const validItems: BocItem[] = [];
-
-          for (const item of itemsArray) {
-            const guid =
-              typeof item.guid === "object" && item.guid !== null && "#text" in item.guid
-                ? item.guid["#text"]
-                : item.guid;
-
-            const title = item.title;
-            const link = item.link;
-
-            if (!guid || !title || !link) {
-              yield* Effect.logWarning("Skipping invalid BOC item", { guid, title, link });
-              continue;
+            if (!channel || !channel.item) {
+              return [];
             }
 
-            validItems.push(
-              new BocItem({
-                title: String(title),
-                link: String(link),
-                pubDate: String(item.pubDate ?? ""),
-                guid: String(guid),
-              }),
-            );
-          }
-
-          return validItems;
+            return Array.isArray(channel.item) ? channel.item : [channel.item];
+          },
+          catch: (error) => new BocError({ message: "Failed to parse BOC feed", cause: error }),
         });
 
-      const fetchFeed = () =>
-        Effect.gen(function* () {
-          const response = yield* Effect.tryPromise({
-            try: () => fetch(feedUrl),
-            catch: (error) => new BocError({ message: "Network Error", cause: error }),
-          });
+        const validItems: BocItem[] = [];
 
-          if (!response.ok) {
-            return yield* Effect.fail(
-              new BocError({
-                message: `Failed to fetch feed: ${response.status} ${response.statusText}`,
-              }),
-            );
+        for (const item of itemsArray) {
+          const guid =
+            typeof item.guid === "object" && item.guid !== null && "#text" in item.guid
+              ? item.guid["#text"]
+              : item.guid;
+
+          const title = item.title;
+          const link = item.link;
+
+          if (!guid || !title || !link) {
+            yield* Effect.logWarning("Skipping invalid BOC item", { guid, title, link });
+            continue;
           }
 
-          const text = yield* Effect.tryPromise({
-            try: () => response.text(),
-            catch: (error) =>
-              new BocError({ message: "Failed to read response text", cause: error }),
-          });
+          validItems.push(
+            new BocItem({
+              title: String(title),
+              link: String(link),
+              pubDate: String(item.pubDate ?? ""),
+              guid: String(guid),
+            }),
+          );
+        }
 
-          return yield* parseFeed(text);
+        return validItems;
+      });
+
+      const fetchFeed = Effect.fn(function* () {
+        const response = yield* Effect.tryPromise({
+          try: () => fetch(feedUrl),
+          catch: (error) => new BocError({ message: "Network Error", cause: error }),
         });
+
+        if (!response.ok) {
+          return yield* new BocError({
+            message: `Failed to fetch feed: ${response.status} ${response.statusText}`,
+          });
+        }
+
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (error) => new BocError({ message: "Failed to read response text", cause: error }),
+        });
+
+        return yield* parseFeed(text);
+      });
 
       return { fetchFeed, parseFeed };
     }),
