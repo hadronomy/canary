@@ -1,0 +1,43 @@
+import { describe, expect, it } from "bun:test";
+import { BunContext } from "@effect/platform-bun";
+import { Effect, Layer, Ref } from "effect";
+import { runSeederCli } from "../../src/cli/seeder.js";
+import { SeederDaemon } from "../../src/workflows/seeder-daemon.js";
+
+describe("Seeder CLI", () => {
+  it("runs seeder in run mode", async () => {
+    const optionsRef = await Effect.runPromise(
+      Ref.make<{ startYear: number; endYear: number } | null>(null),
+    );
+
+    const SeederDaemonTest = Layer.succeed(
+      SeederDaemon,
+      SeederDaemon.of({
+        runOnce: Effect.fn(function* (options: { startYear: number; endYear: number }) {
+          yield* Ref.set(optionsRef, options);
+        }),
+        runScheduled: Effect.fn(function* (
+          _options: { startYear: number; endYear: number },
+          _schedule,
+        ) {
+          return 0;
+        }),
+      }),
+    );
+
+    const program = runSeederCli([
+      "bun",
+      "seeder",
+      "run",
+      "--startYear",
+      "1983",
+      "--endYear",
+      "2024",
+    ]).pipe(Effect.provide(Layer.mergeAll(SeederDaemonTest, BunContext.layer)));
+
+    await Effect.runPromise(program);
+
+    const options = await Effect.runPromise(Ref.get(optionsRef));
+    expect(options).toEqual({ startYear: 1983, endYear: 2024 });
+  });
+});
