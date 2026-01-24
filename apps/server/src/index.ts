@@ -1,16 +1,13 @@
 import { env } from "@canary/env/server";
-import { cors } from "@elysiajs/cors";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Effect } from "effect";
+import { cors } from "@elysiajs/cors";
+import { Effect, Layer } from "effect";
 import { Elysia } from "elysia";
 import { runSeederCli, SeederCliLiveLayer } from "./cli/seeder.js";
 
-if (process.argv.includes("seeder")) {
-  runSeederCli(process.argv).pipe(
-    Effect.provide(SeederCliLiveLayer),
-    Effect.provide(BunContext.layer),
-    BunRuntime.runMain,
-  );
+if (process.argv[2] === "seeder") {
+  const cliLayer = Layer.merge(SeederCliLiveLayer, BunContext.layer);
+  runSeederCli(process.argv).pipe(Effect.provide(cliLayer), BunRuntime.runMain);
 } else {
   // @ts-ignore 6133
   // oxlint-disable-next-line no-unused-vars

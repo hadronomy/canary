@@ -1,14 +1,14 @@
-import { Config, Context, Data, Effect, Layer, Runtime, Schema } from "effect";
+import { Config, Context, Effect, Layer, Runtime, Schema } from "effect";
 import { Queue, Worker, type Job } from "bullmq";
 import type { QueueDescriptor } from "../queues/registry.js";
 
 type QueuePayload<Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>> =
   Schema.Schema.Type<Q["schema"]>;
 
-export class QueueError extends Data.TaggedError("QueueError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {}
 
 export class QueueService extends Context.Tag("QueueService")<
   QueueService,
@@ -28,7 +28,6 @@ export const QueueServiceLive = Layer.scoped(
       port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
     };
 
-    // Cache for queues to ensure we reuse connections and can close them
     const queues = new Map<string, Queue>();
 
     const getQueue = (name: string) => {
@@ -58,7 +57,6 @@ export const QueueServiceLive = Layer.scoped(
         ),
       );
 
-    // Ensure we close all queues when the layer is released
     yield* Effect.addFinalizer(() =>
       Effect.promise(async () => {
         await Promise.all(Array.from(queues.values()).map((q) => q.close()));
@@ -85,7 +83,6 @@ export const QueueServiceTest = Layer.succeed(
   }),
 );
 
-// Worker Helper
 export const makeWorker = Effect.fn(function* <
   Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>,
 >(queueDescriptor: Q, processor: (job: Job<QueuePayload<Q>>) => Effect.Effect<void, Error>) {

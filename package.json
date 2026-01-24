@@ -38,7 +38,7 @@
     "@effect/platform": "^0.94.1",
     "@effect/platform-bun": "^0.87.0",
     "dotenv": "catalog:",
-    "effect": "^3.19.14",
+    "effect": "^3.19.15",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -1,13 +1,13 @@
 import { Context, Effect, Layer, Schedule } from "effect";
 import { Queues } from "../queues/index.js";
-import { BocService } from "../services/boc.js";
-import { QueueService } from "../services/queue.js";
+import { BocError, BocService } from "../services/boc.js";
+import { QueueError, QueueService } from "../services/queue.js";
 
 export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
   WatcherWorkflow,
   {
-    readonly runWatcher: Effect.Effect<void, unknown>;
-    readonly runWatcherScheduled: Effect.Effect<number, unknown>;
+    readonly runWatcher: Effect.Effect<void, BocError | QueueError>;
+    readonly runWatcherScheduled: Effect.Effect<number, BocError | QueueError>;
   }
 >() {
   static readonly Live = Layer.effect(

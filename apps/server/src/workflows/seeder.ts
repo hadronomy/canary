@@ -1,12 +1,12 @@
-import { Context, Data, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { Queues } from "../queues/index.js";
 import { BocItem } from "../services/boc.js";
 import { QueueError, QueueService } from "../services/queue.js";
 
-export class BocArchiveError extends Data.TaggedError("BocArchiveError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class BocArchiveError extends Schema.TaggedError<BocArchiveError>()("BocArchiveError", {
+  message: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {}
 
 export class BocArchiveService extends Context.Tag("BocArchiveService")<
   BocArchiveService,
