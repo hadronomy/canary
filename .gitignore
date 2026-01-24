@@ -47,4 +47,4 @@ coverage
 *.tgz
 .cache
 tmp
-temp
+temp.worktrees/
