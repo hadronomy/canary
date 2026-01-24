@@ -1,3 +1,4 @@
+import { describe, it, expect } from "bun:test";
 import { Schema } from "effect";
 import { defineQueue, defineQueues } from "../../src/queues/registry.js";
 
