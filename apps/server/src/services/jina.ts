@@ -57,48 +57,47 @@ export type JinaInput =
   | Blob
   | { text?: string; image?: string | Uint8Array | Blob; url?: string };
 
-export const normalizeInput = (input: JinaInput): Effect.Effect<object, JinaError> =>
-  Effect.gen(function* () {
-    if (typeof input === "string") {
-      const isUrl = /^(http|https):\/\/[^ "]+$/.test(input);
-      return isUrl ? { url: input } : { text: input };
-    }
+export const normalizeInput = Effect.fn("normalizeInput")(function* (input: JinaInput) {
+  if (typeof input === "string") {
+    const isUrl = /^(http|https):\/\/[^ "]+$/.test(input);
+    return isUrl ? { url: input } : { text: input };
+  }
 
-    if (input instanceof Uint8Array) {
-      const base64 = Buffer.from(input).toString("base64");
-      return { image: base64 };
-    }
+  if (input instanceof Uint8Array) {
+    const base64 = Buffer.from(input).toString("base64");
+    return { image: base64 };
+  }
 
-    if (input instanceof Blob) {
-      const arrayBuffer = yield* Effect.tryPromise({
-        try: () => input.arrayBuffer(),
-        catch: (e) => new JinaError({ message: "Failed to read blob", cause: e }),
-      });
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
-      return { image: base64 };
-    }
+  if (input instanceof Blob) {
+    const arrayBuffer = yield* Effect.tryPromise({
+      try: () => input.arrayBuffer(),
+      catch: (e) => new JinaError({ message: "Failed to read blob", cause: e }),
+    });
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    return { image: base64 };
+  }
 
-    if (typeof input === "object" && input !== null) {
-      if ("image" in input && input.image) {
-        const image = input.image;
-        if (image instanceof Uint8Array) {
-          const base64 = Buffer.from(image).toString("base64");
-          return { ...input, image: base64 };
-        }
-        if (image instanceof Blob) {
-          const arrayBuffer = yield* Effect.tryPromise({
-            try: () => image.arrayBuffer(),
-            catch: (e) => new JinaError({ message: "Failed to read blob", cause: e }),
-          });
-          const base64 = Buffer.from(arrayBuffer).toString("base64");
-          return { ...input, image: base64 };
-        }
+  if (typeof input === "object" && input !== null) {
+    if ("image" in input && input.image) {
+      const image = input.image;
+      if (image instanceof Uint8Array) {
+        const base64 = Buffer.from(image).toString("base64");
+        return { ...input, image: base64 };
       }
-      return input;
+      if (image instanceof Blob) {
+        const arrayBuffer = yield* Effect.tryPromise({
+          try: () => image.arrayBuffer(),
+          catch: (e) => new JinaError({ message: "Failed to read blob", cause: e }),
+        });
+        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        return { ...input, image: base64 };
+      }
     }
+    return input;
+  }
 
-    return yield* Effect.fail(new JinaError({ message: "Invalid input format" }));
-  });
+  return yield* new JinaError({ message: "Invalid input format" });
+});
 
 export class JinaService extends Context.Tag("JinaService")<
   JinaService,
@@ -118,57 +117,54 @@ export const JinaServiceLive = Layer.effect(
   Effect.gen(function* () {
     const apiKey = yield* Config.string("JINA_API_KEY");
 
-    const embed = (input: JinaInput | JinaInput[]) =>
-      Effect.gen(function* () {
-        const inputs = Array.isArray(input) ? input : [input];
-        const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
+    const embed = Effect.fn("JinaService.embed")(function* (input: JinaInput | JinaInput[]) {
+      const inputs = Array.isArray(input) ? input : [input];
+      const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
 
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch("https://api.jina.ai/v1/embeddings", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model: "jina-embeddings-v4",
-                input: normalizedInputs,
-                late_chunking: true,
-                return_multivector: true,
-              }),
+      const response = yield* Effect.tryPromise({
+        try: () =>
+          fetch("https://api.jina.ai/v1/embeddings", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "jina-embeddings-v4",
+              input: normalizedInputs,
+              late_chunking: true,
+              return_multivector: true,
             }),
-          catch: (error) => new JinaError({ message: "Embed Error", cause: error }),
-        });
-
-        if (!response.ok) {
-          const text = yield* Effect.tryPromise({
-            try: () => response.text(),
-            catch: (e) => new JinaError({ message: "Failed to read response", cause: e }),
-          });
-          return yield* Effect.fail(
-            new JinaError({
-              message: `Jina API Error: ${response.status} ${text}`,
-            }),
-          );
-        }
-
-        const data = yield* Effect.tryPromise({
-          try: () => response.json() as Promise<JinaEmbeddingResponse>,
-          catch: (e) => new JinaError({ message: "Failed to parse JSON", cause: e }),
-        });
-        const item = data.data[0];
-
-        if (!item) {
-          return yield* Effect.fail(new JinaError({ message: "No embedding returned" }));
-        }
-
-        return {
-          full: item.embedding,
-          multi: item.multi_vector,
-          scout: item.embedding?.slice(0, 256),
-        } as EmbeddedResult;
+          }),
+        catch: (error) => new JinaError({ message: "Embed Error", cause: error }),
       });
+
+      if (!response.ok) {
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (e) => new JinaError({ message: "Failed to read response", cause: e }),
+        });
+        return yield* new JinaError({
+          message: `Jina API Error: ${response.status} ${text}`,
+        });
+      }
+
+      const data = yield* Effect.tryPromise({
+        try: () => response.json() as Promise<JinaEmbeddingResponse>,
+        catch: (e) => new JinaError({ message: "Failed to parse JSON", cause: e }),
+      });
+      const item = data.data[0];
+
+      if (!item) {
+        return yield* new JinaError({ message: "No embedding returned" });
+      }
+
+      return {
+        full: item.embedding,
+        multi: item.multi_vector,
+        scout: item.embedding?.slice(0, 256),
+      } as EmbeddedResult;
+    });
 
     const rerank = (query: string, docs: string[]) =>
       Effect.tryPromise({
