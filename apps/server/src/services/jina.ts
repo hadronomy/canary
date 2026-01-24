@@ -132,7 +132,7 @@ export const JinaServiceLive = Layer.effect(
                 Authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
-                model: "jina-embeddings-v3",
+                model: "jina-embeddings-v4",
                 input: normalizedInputs,
                 late_chunking: true,
                 return_multivector: true,
