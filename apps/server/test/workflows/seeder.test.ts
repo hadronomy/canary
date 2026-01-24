@@ -3,7 +3,7 @@ import { Effect, Layer, Ref } from "effect";
 import { Queues } from "../../src/queues/index.js";
 import { BocItem } from "../../src/services/boc.js";
 import { QueueService } from "../../src/services/queue.js";
-import { BocArchiveService, SeederWorkflow } from "../../src/workflows/seeder.js";
+import { BocArchiveError, BocArchiveService, SeederWorkflow } from "../../src/workflows/seeder.js";
 
 describe("SeederWorkflow", () => {
   it("should enqueue archive items", async () => {
@@ -58,5 +58,38 @@ describe("SeederWorkflow", () => {
     });
 
     await Effect.runPromise(Effect.provide(program, TestLayer));
+  });
+
+  it("should surface archive failures", async () => {
+    const BocArchiveServiceTest = Layer.succeed(
+      BocArchiveService,
+      BocArchiveService.of({
+        fetchRange: () =>
+          Effect.fail(
+            new BocArchiveError({ message: "Archive failure", cause: new Error("boom") }),
+          ),
+      }),
+    );
+    const QueueServiceTest = Layer.succeed(
+      QueueService,
+      QueueService.of({
+        add: () => Effect.succeed({ id: "mock-id", name: Queues.refinery.name, data: {} } as any),
+      }),
+    );
+
+    const TestLayer = SeederWorkflow.Live.pipe(
+      Layer.provide(Layer.mergeAll(BocArchiveServiceTest, QueueServiceTest)),
+    );
+
+    const program = Effect.gen(function* () {
+      const seeder = yield* SeederWorkflow;
+      yield* seeder.runSeeder({ startYear: 2020, endYear: 2021 });
+    });
+
+    const result = await Effect.runPromise(Effect.either(Effect.provide(program, TestLayer)));
+    expect(result._tag).toBe("Left");
+    if (result._tag === "Left") {
+      expect(result.left).toBeInstanceOf(BocArchiveError);
+    }
   });
 });

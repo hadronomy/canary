@@ -1,12 +1,20 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 import { Queues } from "../queues/index.js";
 import { BocItem } from "../services/boc.js";
-import { QueueService } from "../services/queue.js";
+import { QueueError, QueueService } from "../services/queue.js";
+
+export class BocArchiveError extends Data.TaggedError("BocArchiveError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 export class BocArchiveService extends Context.Tag("BocArchiveService")<
   BocArchiveService,
   {
-    readonly fetchRange: (startYear: number, endYear: number) => Effect.Effect<readonly BocItem[]>;
+    readonly fetchRange: (
+      startYear: number,
+      endYear: number,
+    ) => Effect.Effect<readonly BocItem[], BocArchiveError>;
   }
 >() {
   static readonly Live = Layer.succeed(
@@ -23,7 +31,7 @@ export class SeederWorkflow extends Context.Tag("SeederWorkflow")<
     readonly runSeeder: (options: {
       startYear: number;
       endYear: number;
-    }) => Effect.Effect<void, unknown>;
+    }) => Effect.Effect<void, QueueError | BocArchiveError>;
   }
 >() {
   static readonly Live = Layer.effect(
