@@ -1,6 +1,6 @@
 import { describe, it, expect, spyOn } from "bun:test";
 import { Effect, Layer, ConfigProvider } from "effect";
-import { BocService } from "../../src/services/boc";
+import { BocService } from "~/services/boc";
 
 const sampleXml = `
 <?xml version="1.0" encoding="UTF-8"?>

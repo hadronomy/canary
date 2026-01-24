@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Schedule } from "effect";
-import { BocArchiveError, SeederWorkflow } from "./seeder.js";
-import { QueueError } from "../services/queue.js";
+import { BocArchiveError, SeederWorkflow } from "~/workflows/seeder";
+import { QueueError } from "~/services/queue";
 
 export class SeederDaemon extends Context.Tag("SeederDaemon")<
   SeederDaemon,

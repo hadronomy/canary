@@ -12,7 +12,7 @@
     "rootDirs": ["."],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "~/*": ["./src/*"]
     },
     "plugins": [
       {

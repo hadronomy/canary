@@ -10,7 +10,7 @@
 - **QueueService:** Only accepts queue descriptors, validates payloads, and enqueues typed jobs.
 - **Seeder:** A workflow that streams historical BOC entries and enqueues them to the refinery queue.
 
-**Tech Stack:** Effect-TS, @effect/schema, BullMQ, fast-xml-parser.
+**Tech Stack:** Effect-TS, BullMQ, fast-xml-parser.
 
 ### Task 1: Queue Registry Core
 
@@ -24,7 +24,7 @@
 ```ts
 import { describe, it, expect } from "bun:test";
 import { defineQueue, defineQueues } from "../../src/queues/registry";
-import { Schema } from "@effect/schema";
+import { Schema } from "effect";
 
 it("should define queue descriptors with schema", () => {
   const Payload = Schema.Struct({ id: Schema.String });

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
-import { Queues } from "../../src/queues/index.js";
-import { BocItem } from "../../src/services/boc.js";
-import { QueueService } from "../../src/services/queue.js";
-import { BocArchiveError, BocArchiveService, SeederWorkflow } from "../../src/workflows/seeder.js";
+import { Queues } from "~/queues/index";
+import { BocItem } from "~/services/boc";
+import { QueueService } from "~/services/queue";
+import { BocArchiveError, BocArchiveService, SeederWorkflow } from "~/workflows/seeder";
 
 describe("SeederWorkflow", () => {
   it("should enqueue archive items", async () => {

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
-import { BocService, BocItem } from "../../src/services/boc.js";
-import { QueueService } from "../../src/services/queue.js";
-import { Queues } from "../../src/queues/index.js";
-import { WatcherWorkflow } from "../../src/workflows/watcher.js";
+import { BocService, BocItem } from "~/services/boc";
+import { QueueService } from "~/services/queue";
+import { Queues } from "~/queues/index";
+import { WatcherWorkflow } from "~/workflows/watcher";
 
 describe("WatcherWorkflow", () => {
   it("should fetch feed and queue items", async () => {

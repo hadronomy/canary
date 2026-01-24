@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer, Ref, Schedule } from "effect";
-import { SeederWorkflow } from "../../src/workflows/seeder.js";
-import { SeederDaemon } from "../../src/workflows/seeder-daemon.js";
+import { SeederWorkflow } from "~/workflows/seeder";
+import { SeederDaemon } from "~/workflows/seeder-daemon";
 
 describe("SeederDaemon", () => {
   it("runs the seeder on schedule", async () => {

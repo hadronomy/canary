@@ -1,12 +1,7 @@
 import { describe, it, expect, mock } from "bun:test";
 import { Effect, Schema } from "effect";
-import {
-  QueueError,
-  QueueService,
-  QueueServiceLive,
-  makeWorker,
-} from "../../src/services/queue.js";
-import { defineQueue, defineQueues } from "../../src/queues/registry.js";
+import { QueueError, QueueService, QueueServiceLive, makeWorker } from "~/services/queue";
+import { defineQueue, defineQueues } from "~/queues/registry";
 
 // Mock BullMQ
 mock.module("bullmq", () => {

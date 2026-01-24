@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { BunContext } from "@effect/platform-bun";
 import { Effect, Layer, Ref } from "effect";
-import { runSeederCli } from "../../src/cli/seeder.js";
-import { SeederDaemon } from "../../src/workflows/seeder-daemon.js";
+import { runSeederCli } from "~/cli/seeder";
+import { SeederDaemon } from "~/workflows/seeder-daemon";
 
 describe("Seeder CLI", () => {
   it("runs seeder in run mode", async () => {
