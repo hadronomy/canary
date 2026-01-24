@@ -1,17 +1,30 @@
 import { env } from "@canary/env/server";
 import { cors } from "@elysiajs/cors";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { Effect } from "effect";
 import { Elysia } from "elysia";
+import { runSeederCli, SeederCliLiveLayer } from "./cli/seeder.js";
 
-// @ts-ignore 6133
-// oxlint-disable-next-line no-unused-vars
-const app = new Elysia()
-  .use(
-    cors({
-      origin: env.CORS_ORIGIN,
-      methods: ["GET", "POST", "OPTIONS"],
-    }),
-  )
-  .get("/", () => "OK")
-  .listen(3000, () => {
-    console.log("Server is running on http://localhost:3000");
-  });
+if (process.argv.includes("seeder")) {
+  runSeederCli(process.argv).pipe(
+    Effect.provide(SeederCliLiveLayer),
+    Effect.provide(BunContext.layer),
+    BunRuntime.runMain,
+  );
+} else {
+  // @ts-ignore 6133
+  // oxlint-disable-next-line no-unused-vars
+  const app = new Elysia()
+    .use(
+      cors({
+        origin: env.CORS_ORIGIN,
+        methods: ["GET", "POST", "OPTIONS"],
+      }),
+    )
+    .get("/", () => "OK")
+    .listen(3000, () => {
+      console.log("Server is running on http://localhost:3000");
+    });
+}
+
+export { SeederDaemon } from "./workflows/seeder-daemon.js";
