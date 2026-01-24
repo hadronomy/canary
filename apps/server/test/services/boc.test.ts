@@ -90,4 +90,51 @@ describe("BocService", () => {
     const result = await Effect.runPromise(program.pipe(Effect.provide(TestEnv)));
     expect(result).toEqual([]);
   });
+
+  it("should filter out items with missing required fields", async () => {
+    const invalidXml = `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0">
+        <channel>
+          <title>Boletín Oficial de Canarias</title>
+          <item>
+            <title>Valid Item</title>
+            <link>http://link1.com</link>
+            <guid>guid1</guid>
+            <pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <link>http://link2.com</link>
+            <guid>guid2</guid>
+            <pubDate>Mon, 01 Jan 2024 11:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title>Missing Link</title>
+            <guid>guid3</guid>
+            <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title>Missing Guid</title>
+            <link>http://link4.com</link>
+            <pubDate>Mon, 01 Jan 2024 13:00:00 GMT</pubDate>
+          </item>
+        </channel>
+        </rss>
+        `;
+
+    const program = Effect.flatMap(BocService, (service) => service.parseFeed(invalidXml));
+
+    const TestEnv = BocService.Live.pipe(
+      Layer.provide(Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))),
+    );
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(TestEnv)));
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      title: "Valid Item",
+      link: "http://link1.com",
+      guid: "guid1",
+    });
+  });
 });

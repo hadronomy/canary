@@ -33,32 +33,48 @@ export class BocService extends Context.Tag("BocService")<
       });
 
       const parseFeed = (xml: string) =>
-        Effect.try({
-          try: () => {
-            const result = parser.parse(xml);
-            const channel = result?.rss?.channel;
+        Effect.gen(function* () {
+          const itemsArray = yield* Effect.try({
+            try: () => {
+              const result = parser.parse(xml);
+              const channel = result?.rss?.channel;
 
-            if (!channel || !channel.item) {
-              return [];
+              if (!channel || !channel.item) {
+                return [];
+              }
+
+              return Array.isArray(channel.item) ? channel.item : [channel.item];
+            },
+            catch: (error) => new BocError({ message: "Failed to parse BOC feed", cause: error }),
+          });
+
+          const validItems: BocItem[] = [];
+
+          for (const item of itemsArray) {
+            const guid =
+              typeof item.guid === "object" && item.guid !== null && "#text" in item.guid
+                ? item.guid["#text"]
+                : item.guid;
+
+            const title = item.title;
+            const link = item.link;
+
+            if (!guid || !title || !link) {
+              yield* Effect.logWarning("Skipping invalid BOC item", { guid, title, link });
+              continue;
             }
 
-            const itemsArray = Array.isArray(channel.item) ? channel.item : [channel.item];
-
-            return itemsArray.map((item: any) => {
-              const guid =
-                typeof item.guid === "object" && item.guid !== null && "#text" in item.guid
-                  ? item.guid["#text"]
-                  : item.guid;
-
-              return new BocItem({
-                title: String(item.title ?? ""),
-                link: String(item.link ?? ""),
+            validItems.push(
+              new BocItem({
+                title: String(title),
+                link: String(link),
                 pubDate: String(item.pubDate ?? ""),
-                guid: String(guid ?? ""),
-              });
-            });
-          },
-          catch: (error) => new BocError({ message: "Failed to parse BOC feed", cause: error }),
+                guid: String(guid),
+              }),
+            );
+          }
+
+          return validItems;
         });
 
       const fetchFeed = () =>
