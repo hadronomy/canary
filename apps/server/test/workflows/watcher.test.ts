@@ -57,4 +57,54 @@ describe("WatcherWorkflow", () => {
 
     await Effect.runPromise(Effect.provide(program, TestLayer));
   });
+
+  it("should queue items concurrently", async () => {
+    const mockItems: BocItem[] = Array.from(
+      { length: 5 },
+      (_, i) =>
+        new BocItem({
+          title: `Item ${i}`,
+          link: `http://link${i}`,
+          pubDate: "2023-01-01",
+          guid: `guid${i}`,
+        }),
+    );
+
+    const BocServiceTest = Layer.succeed(
+      BocService,
+      BocService.of({
+        fetchFeed: () => Effect.succeed(mockItems),
+        parseFeed: () => Effect.succeed(mockItems),
+      }),
+    );
+
+    const QueueServiceTest = Layer.succeed(
+      QueueService,
+      QueueService.of({
+        add: Effect.fn(function* (_queueName, jobName, data) {
+          // Simulate slow operation
+          yield* Effect.sleep("100 millis");
+          return { id: "mock-id", name: jobName, data } as any;
+        }),
+      }),
+    );
+
+    const TestLayer = WatcherWorkflow.Live.pipe(
+      Layer.provide(Layer.mergeAll(BocServiceTest, QueueServiceTest)),
+    );
+
+    const program = Effect.gen(function* () {
+      const watcher = yield* WatcherWorkflow;
+      const start = Date.now();
+      yield* watcher.runWatcher;
+      const duration = Date.now() - start;
+
+      // Sequential: 5 * 100ms = 500ms
+      // Concurrent (5): ~100ms
+      // We assert < 250ms to allow some overhead but fail sequential
+      expect(duration).toBeLessThan(250);
+    });
+
+    await Effect.runPromise(Effect.provide(program, TestLayer));
+  });
 });

@@ -20,9 +20,11 @@ export class WatcherWorkflow extends Context.Tag("WatcherWorkflow")<
 
         yield* Effect.logInfo(`Watcher fetched ${items.length} items`);
 
-        for (const item of items) {
-          yield* queueService.add("refinery-queue", "process-boc-item", item);
-        }
+        yield* Effect.forEach(
+          items,
+          (item) => queueService.add("refinery-queue", "process-boc-item", item),
+          { concurrency: 5 },
+        );
 
         yield* Effect.logInfo(`Watcher queued ${items.length} items`);
       });
