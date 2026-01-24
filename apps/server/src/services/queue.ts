@@ -1,5 +1,6 @@
-import { Config, Context, Effect, Layer, Runtime, Schema } from "effect";
 import { Queue, Worker, type Job } from "bullmq";
+import { Config, Context, Effect, Layer, Runtime, Schema } from "effect";
+
 import type { QueueDescriptor } from "~/queues/registry";
 
 type QueuePayload<Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>> =

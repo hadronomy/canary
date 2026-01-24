@@ -1,4 +1,5 @@
 import { TextAttributes } from "@opentui/core";
+
 import type { Theme } from "~/app/theme";
 
 type DashboardViewProps = {

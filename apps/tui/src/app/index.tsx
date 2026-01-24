@@ -1,6 +1,6 @@
+import { useAtom } from "@effect-atom/atom-react";
 import { KeyEvent } from "@opentui/core";
 import { useEffect, useMemo, useRef } from "react";
-import { useAtom } from "@effect-atom/atom-react";
 
 import { Branding } from "~/app/components/Branding";
 import { DashboardView } from "~/app/components/DashboardView";
@@ -15,7 +15,6 @@ import { createGlobalShortcuts } from "~/app/shortcuts/definitions/global";
 import { createHelpShortcuts } from "~/app/shortcuts/definitions/help";
 import { createSearchShortcuts } from "~/app/shortcuts/definitions/search";
 import { createViewShortcuts } from "~/app/shortcuts/definitions/view";
-import { catppuccinMocha } from "~/app/theme";
 import {
   activeViewAtom,
   cmdkOpenAtom,
@@ -26,6 +25,7 @@ import {
   helpOpenAtom,
   queryAtom,
 } from "~/app/state";
+import { catppuccinMocha } from "~/app/theme";
 
 const PLACEHOLDER_RESULTS = [
   {

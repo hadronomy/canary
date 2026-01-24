@@ -1,3 +1,8 @@
 {
-  "ignorePatterns": ["routeTree.gen.ts"]
+  "experimentalSortImports": {
+    "groups": ["builtin", "external", "internal", ["parent", "sibling", "index"]],
+    "internalPattern": ["@canary/", "~/"],
+    "newlinesBetween": true,
+    "ignorePatterns": ["routeTree.gen.ts"]
+  }
 }

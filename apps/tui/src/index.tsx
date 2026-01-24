@@ -1,8 +1,8 @@
+import { RegistryProvider } from "@effect-atom/atom-react";
 import { Command } from "@effect/cli";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { RegistryProvider } from "@effect-atom/atom-react";
 import { Effect } from "effect";
 
 import { App } from "~/app";
