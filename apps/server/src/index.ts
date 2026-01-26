@@ -8,7 +8,8 @@ import { runSeederCli, SeederCliLiveLayer } from "~/cli/seeder";
 
 if (process.argv[2] === "seeder") {
   const cliLayer = Layer.merge(SeederCliLiveLayer, BunContext.layer);
-  runSeederCli(process.argv).pipe(Effect.provide(cliLayer), BunRuntime.runMain);
+  const argv = process.argv.slice(1);
+  runSeederCli(argv).pipe(Effect.provide(cliLayer), BunRuntime.runMain);
 } else {
   // @ts-ignore 6133
   // oxlint-disable-next-line no-unused-vars
