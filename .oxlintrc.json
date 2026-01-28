@@ -52,7 +52,7 @@
     "no-useless-escape": "warn",
     "no-useless-rename": "warn",
     "no-with": "warn",
-    "require-yield": "warn",
+    "require-yield": "allow",
     "use-isnan": "warn",
     "valid-typeof": "warn",
     "oxc/bad-array-method-on-arguments": "warn",
