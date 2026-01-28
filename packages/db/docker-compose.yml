@@ -2,7 +2,7 @@ name: canary
 
 services:
   postgres:
-    image: postgres
+    build: .
     container_name: canary-postgres
     environment:
       POSTGRES_DB: canary
@@ -12,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - canary_postgres_data:/var/lib/postgresql
+      - ./init-vector.sql:/docker-entrypoint-initdb.d/init-vector.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
