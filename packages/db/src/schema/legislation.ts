@@ -138,7 +138,7 @@ export const legislativeSources = pgTable(
   {
     sourceId: uuid("source_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
 
     sourceCode: varchar("source_code", { length: 50 }).notNull().unique(),
     sourceName: varchar("source_name", { length: 200 }).notNull(),
@@ -182,7 +182,7 @@ export const legalDocuments = pgTable(
   {
     docId: uuid("doc_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
 
     sourceId: uuid("source_id")
       .references(() => legislativeSources.sourceId)
@@ -271,7 +271,7 @@ export const documentVersions = pgTable(
   {
     versionId: uuid("version_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
     docId: uuid("doc_id")
       .references(() => legalDocuments.docId, { onDelete: "cascade" })
       .notNull(),
@@ -310,7 +310,7 @@ export const senseFragments = pgTable(
   {
     fragmentId: uuid("fragment_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
     docId: uuid("doc_id")
       .references(() => legalDocuments.docId, { onDelete: "cascade" })
       .notNull(),
@@ -386,7 +386,7 @@ export const legalPaths = pgTable(
   {
     pathId: uuid("path_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
     startDocId: uuid("start_doc_id")
       .references(() => legalDocuments.docId)
       .notNull(),
@@ -446,7 +446,7 @@ export const syncRuns = pgTable(
   {
     runId: uuid("run_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
     sourceId: uuid("source_id")
       .references(() => legislativeSources.sourceId)
       .notNull(),
@@ -469,7 +469,7 @@ export const embeddingsCache = pgTable(
   {
     embeddingId: uuid("embedding_id")
       .primaryKey()
-      .default(sql`generate_uuid_v7()`),
+      .default(sql`gen_random_uuid_v7()`),
     fragmentId: uuid("fragment_id")
       .references(() => senseFragments.fragmentId, { onDelete: "cascade" })
       .notNull(),
