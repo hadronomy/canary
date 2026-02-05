@@ -1,6 +1,15 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/bun-sql";
+import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
 
 import { env } from "@canary/env/server";
 import * as schema from "~/schema";
 
 export const db = drizzle(env.DATABASE_URL, { schema });
+
+export type Database = BunSQLDatabase<typeof schema>;
+
+export const withTransaction = async <T>(callback: (trx: Database) => Promise<T>): Promise<T> => {
+  return await db.transaction(async (trx) => {
+    return await callback(trx as Database);
+  });
+};

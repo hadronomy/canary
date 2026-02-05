@@ -23,13 +23,12 @@
     "@canary/env": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
-    "pg": "^8.17.1",
     "pgvector": "^0.2.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "@types/pg": "^8.16.0",
+    "@types/bun": "^1.2.0",
     "drizzle-kit": "^0.31.8",
     "typescript": "catalog:"
   }
