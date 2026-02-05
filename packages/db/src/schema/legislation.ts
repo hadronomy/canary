@@ -1,20 +1,18 @@
-import { sql } from "drizzle-orm";
-import { relations } from "drizzle-orm";
-// db/schema.ts - Complete Legislative Database Schema
+import { relations, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
   pgTable,
-  uuid,
-  varchar,
+  real,
   text,
   timestamp,
-  boolean,
-  jsonb,
-  integer,
-  real,
-  pgEnum,
-  index,
   uniqueIndex,
+  uuid,
+  varchar,
   vector,
 } from "drizzle-orm/pg-core";
 
@@ -124,8 +122,7 @@ export const extractionMethodEnum = pgEnum("extraction_method", [
 ]);
 
 export const embeddingModelEnum = pgEnum("embedding_model", [
-  "jina_v4_base",
-  "jina_v4_tiny",
+  "jina-embeddings-v4",
   "openai_3_large",
   "openai_3_small",
   "e5_multilingual",
