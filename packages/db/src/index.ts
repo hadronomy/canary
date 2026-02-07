@@ -1,8 +1,10 @@
 import { drizzle } from "drizzle-orm/bun-sql";
 import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
+export { and, eq } from "drizzle-orm";
 
 import { env } from "@canary/env/server";
-import * as schema from "~/schema";
+
+import * as schema from "./schema/index";
 
 export const db = drizzle(env.DATABASE_URL, { schema });
 

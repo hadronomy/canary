@@ -100,13 +100,32 @@ export const collector = {
   update: (input: CollectorUpdateInput) =>
     Effect.gen(function* () {
       const repository = yield* CollectorRepository;
+      const registry = yield* CollectorFactoryRegistry;
+      const entry = yield* repository.findOne(input.id);
+
+      const decodedConfig =
+        input.config === undefined
+          ? undefined
+          : yield* registry.validateConfig(FactoryId(entry.factoryId), input.id, input.config).pipe(
+              Effect.mapError(
+                (parseError) =>
+                  new ValidationError({
+                    collectorId: input.id,
+                    field: "config",
+                    value: input.config,
+                    reason: String(parseError),
+                    message: "Collector config did not match factory schema",
+                  }),
+              ),
+            );
+
       yield* repository.update(input.id, {
         name: input.name,
         description: input.description,
         enabled: input.enabled,
         schedule: input.schedule,
         defaultMode: input.mode,
-        config: input.config,
+        config: decodedConfig,
       });
     }),
 

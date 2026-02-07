@@ -9,7 +9,6 @@ import {
   CollectedDocument,
   CollectionMode,
   defineFactory,
-  FactoryId,
 } from "./index";
 
 const decodeDateTimeUtc = Schema.decodeSync(Schema.DateTimeUtc);
@@ -23,12 +22,8 @@ const FacadeFactory = defineFactory({
     delayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), { default: () => 0 }),
   }),
   capabilities: new Set(["FullSync", "Incremental", "Resume"]),
-  make: ({ collectorId, name, config }) =>
+  make: ({ config }) =>
     Effect.succeed({
-      id: collectorId,
-      factoryId: FactoryId("facade-test-rss"),
-      name,
-      capabilities: new Set(["FullSync", "Incremental", "Resume"]),
       collect: (_mode, _runId) =>
         Stream.fromEffect(
           Effect.sleep(Duration.millis(config.delayMs)).pipe(
