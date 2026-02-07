@@ -1,6 +1,6 @@
-import { Cause, Duration, Effect, Exit, Option, Ref, Schema, Stream } from "effect";
+import { Cause, Duration, Effect, Exit, Option, Ref, Schedule, Schema, Stream } from "effect";
 
-import { and, db, eq } from "@canary/db";
+import { and, db, eq, inArray, sql } from "@canary/db";
 import {
   documentVersions,
   legalDocuments,
@@ -42,6 +42,16 @@ interface SyncStats {
   readonly inserted: number;
   readonly updated: number;
   readonly failed: number;
+}
+
+interface ExistingLegalDocument {
+  readonly docId: string;
+  readonly canonicalId: string;
+  readonly firstSeenAt: Date | null;
+  readonly officialTitle: string;
+  readonly metadataHash: string | null;
+  readonly lastUpdatedAt: Date | null;
+  readonly contentHash: string | null;
 }
 
 const toMetadataRecord = (value: unknown): Record<string, unknown> => {
@@ -107,6 +117,26 @@ const isWithinModeWindow = (itemUpdatedAt: Date, mode: CollectionModeType): bool
   });
 };
 
+const isFullSyncLike = (mode: CollectionModeType): boolean => {
+  if (mode._tag === "FullSync") {
+    return true;
+  }
+  if (mode._tag === "Resume") {
+    return isFullSyncLike(mode.originalMode);
+  }
+  return false;
+};
+
+const shouldFailFastOnSourceError = (mode: CollectionModeType): boolean => {
+  if (mode._tag === "Incremental") {
+    return true;
+  }
+  if (mode._tag === "Resume") {
+    return shouldFailFastOnSourceError(mode.originalMode);
+  }
+  return false;
+};
+
 export const BoeLawsCollectorFactory = defineFactory({
   id: "boe-laws",
   name: "BOE Laws Collector",
@@ -115,6 +145,12 @@ export const BoeLawsCollectorFactory = defineFactory({
   capabilities,
   make: ({ collectorId, config }) => {
     const sourceId = config.sourceId;
+
+    const retryPolicy = (attempts: number, baseDelayMs: number) =>
+      Schedule.intersect(
+        Schedule.recurs(Math.max(0, attempts - 1)),
+        Schedule.exponential(Duration.millis(baseDelayMs)).pipe(Schedule.jittered),
+      );
 
     const ensureSourceExists = Effect.fn("BoeCollector.ensureSourceExists")(() =>
       Effect.tryPromise({
@@ -178,7 +214,6 @@ export const BoeLawsCollectorFactory = defineFactory({
             try: async () => {
               const response = await fetch(url, {
                 headers: { Accept: "application/json" },
-                signal: AbortSignal.timeout(config.timeoutMs),
               });
 
               if (!response.ok) {
@@ -201,7 +236,24 @@ export const BoeLawsCollectorFactory = defineFactory({
                     cause,
                     message: `Cannot reach source '${url}' for collector '${collectorId}'`,
                   }),
-          });
+          }).pipe(
+            Effect.timeout(Duration.millis(config.timeoutMs)),
+            Effect.catchTag("TimeoutException", (timeoutError) =>
+              Effect.fail(
+                new SourceConnectionError({
+                  collectorId,
+                  sourceUrl: url.toString(),
+                  cause: timeoutError,
+                  message: `Cannot reach source '${url}' for collector '${collectorId}'`,
+                }),
+              ),
+            ),
+            Effect.retry({
+              schedule: retryPolicy(config.textFetchMaxAttempts, config.textRetryBaseMs),
+              while: (error): error is SourceConnectionError =>
+                error._tag === "SourceConnectionError",
+            }),
+          );
 
           const decoded = yield* decodeBoeResponse(payload).pipe(
             Effect.mapError(
@@ -223,138 +275,133 @@ export const BoeLawsCollectorFactory = defineFactory({
     const fetchConsolidatedText = Effect.fn("BoeCollector.fetchConsolidatedText")(
       (identifier: string, runId: CollectionRunId) =>
         config.ingestTextVersions
-          ? Effect.tryPromise({
-              try: async () => {
-                const sourceUrl = toTextEndpoint(config.baseUrl, identifier);
-                const response = await fetch(sourceUrl, {
-                  headers: { Accept: "application/xml" },
-                  signal: AbortSignal.timeout(config.textRequestTimeoutMs),
-                });
+          ? Effect.gen(function* () {
+              const sourceUrl = toTextEndpoint(config.baseUrl, identifier);
 
-                if (!response.ok) {
-                  throw new SourceConnectionError({
-                    collectorId,
-                    sourceUrl,
-                    cause: `HTTP ${response.status}`,
-                    message: `Cannot reach source '${sourceUrl}' for collector '${collectorId}'`,
+              const fetchOnce = Effect.tryPromise({
+                try: async () => {
+                  const response = await fetch(sourceUrl, {
+                    headers: { Accept: "application/xml" },
                   });
-                }
 
-                return response.text();
-              },
-              catch: (cause) =>
-                cause instanceof SourceConnectionError
-                  ? cause
-                  : new CollectionError({
+                  if (!response.ok) {
+                    throw new SourceConnectionError({
                       collectorId,
-                      runId,
-                      reason: `Unable to fetch consolidated text for '${identifier}'`,
-                      cause,
-                      message: `Collection error [${collectorId}]: Unable to fetch consolidated text for '${identifier}'`,
-                    }),
-            }).pipe(
-              Effect.flatMap((xml) =>
-                xml.trim().length > 0
-                  ? Effect.succeed(xml)
-                  : Effect.fail(
-                      new CollectionError({
+                      sourceUrl,
+                      cause: `HTTP ${response.status}`,
+                      message: `Cannot reach source '${sourceUrl}' for collector '${collectorId}'`,
+                    });
+                  }
+
+                  return response.text();
+                },
+                catch: (cause) =>
+                  cause instanceof SourceConnectionError
+                    ? cause
+                    : new CollectionError({
                         collectorId,
                         runId,
-                        reason: `Empty consolidated text for '${identifier}'`,
-                        message: `Collection error [${collectorId}]: Empty consolidated text for '${identifier}'`,
+                        reason: `Unable to fetch consolidated text for '${identifier}'`,
+                        cause,
+                        message: `Collection error [${collectorId}]: Unable to fetch consolidated text for '${identifier}'`,
                       }),
-                    ),
-              ),
-            )
+              }).pipe(
+                Effect.timeout(Duration.millis(config.textRequestTimeoutMs)),
+                Effect.catchTag("TimeoutException", (timeoutError) =>
+                  Effect.fail(
+                    new SourceConnectionError({
+                      collectorId,
+                      sourceUrl,
+                      cause: timeoutError,
+                      message: `Cannot reach source '${sourceUrl}' for collector '${collectorId}'`,
+                    }),
+                  ),
+                ),
+                Effect.flatMap((xml) =>
+                  xml.trim().length > 0
+                    ? Effect.succeed(xml)
+                    : Effect.fail(
+                        new CollectionError({
+                          collectorId,
+                          runId,
+                          reason: `Empty consolidated text for '${identifier}'`,
+                          message: `Collection error [${collectorId}]: Empty consolidated text for '${identifier}'`,
+                        }),
+                      ),
+                ),
+              );
+
+              return yield* fetchOnce.pipe(
+                Effect.retry({
+                  schedule: retryPolicy(config.textFetchMaxAttempts, config.textRetryBaseMs),
+                  while: (error): error is SourceConnectionError =>
+                    error._tag === "SourceConnectionError",
+                }),
+              );
+            })
           : Effect.succeed(""),
     );
 
-    const upsertDocumentVersion = Effect.fn("BoeCollector.upsertDocumentVersion")(
-      (input: {
-        readonly docId: string;
-        readonly contentText: string;
-        readonly validFrom: Date;
-        readonly kind: "New" | "Update";
-        readonly runId: CollectionRunId;
-      }) =>
-        config.ingestTextVersions
-          ? input.contentText.length === 0
-            ? Effect.void
-            : Effect.tryPromise({
-                try: () =>
-                  db
-                    .select({
-                      versionId: documentVersions.versionId,
-                      versionNumber: documentVersions.versionNumber,
-                    })
-                    .from(documentVersions)
-                    .where(eq(documentVersions.docId, input.docId)),
-                catch: (cause) =>
-                  new CollectionError({
-                    collectorId,
-                    runId: input.runId,
-                    reason: "Unable to load document versions",
-                    cause,
-                    message: `Collection error [${collectorId}]: Unable to load document versions`,
-                  }),
-              }).pipe(
-                Effect.flatMap((existingVersions) => {
-                  const latest = existingVersions.reduce<{
-                    readonly versionId: string;
-                    readonly versionNumber: number;
-                  } | null>((acc, item) => {
-                    if (acc === null || item.versionNumber > acc.versionNumber) {
-                      return item;
-                    }
-                    return acc;
-                  }, null);
+    interface PreparedLaw {
+      readonly law: BoeLawItem;
+      readonly mapped: ReturnType<typeof mapBoeLawToDocument>;
+      readonly existing: ExistingLegalDocument | null;
+      readonly kind: "New" | "Update" | "Unchanged";
+      readonly contentText: string;
+      readonly contentHash: string | null;
+    }
 
-                  const nextVersion = latest === null ? 1 : latest.versionNumber + 1;
+    const prepareLaw = Effect.fn("BoeCollector.prepareLaw")(
+      (law: BoeLawItem, runId: CollectionRunId, existing: ExistingLegalDocument | null) =>
+        Effect.gen(function* () {
+          const mapped = yield* Effect.try({
+            try: () =>
+              mapBoeLawToDocument(law, {
+                sourceId,
+                actor: config.upsertActor,
+                unknownRangeStrategy: config.unknownRangeStrategy,
+              }),
+            catch: (cause) =>
+              new ValidationError({
+                collectorId,
+                field: "mapping",
+                value: law,
+                reason: String(cause),
+                message: `Failed to map BOE law '${law.identificador}'`,
+              }),
+          });
 
-                  const closePrevious =
-                    input.kind === "Update" && latest !== null
-                      ? Effect.tryPromise({
-                          try: () =>
-                            db
-                              .update(documentVersions)
-                              .set({ validUntil: new Date() })
-                              .where(eq(documentVersions.versionId, latest.versionId)),
-                          catch: (cause) =>
-                            new CollectionError({
-                              collectorId,
-                              runId: input.runId,
-                              reason: "Unable to close previous document version",
-                              cause,
-                              message: `Collection error [${collectorId}]: Unable to close previous document version`,
-                            }),
-                        })
-                      : Effect.void;
+          const unchangedByMetadata =
+            existing !== null &&
+            existing.officialTitle === mapped.document.officialTitle &&
+            existing.metadataHash === mapped.metadataHash &&
+            existing.lastUpdatedAt?.getTime() === mapped.document.lastUpdatedAt?.getTime();
 
-                  const insertNext = Effect.tryPromise({
-                    try: () =>
-                      db.insert(documentVersions).values({
-                        docId: input.docId,
-                        versionNumber: nextVersion,
-                        versionType:
-                          input.kind === "New" ? "consolidated_initial" : "consolidated_update",
-                        contentText: input.contentText,
-                        validFrom: input.validFrom,
-                        validUntil: null,
-                      }),
-                    catch: (cause) =>
-                      new CollectionError({
-                        collectorId,
-                        runId: input.runId,
-                        reason: "Unable to insert document version",
-                        cause,
-                        message: `Collection error [${collectorId}]: Unable to insert document version`,
-                      }),
-                  });
+          if (unchangedByMetadata) {
+            return {
+              law,
+              mapped,
+              existing,
+              kind: "Unchanged" as const,
+              contentText: "",
+              contentHash: existing.contentHash,
+            };
+          }
 
-                  return closePrevious.pipe(Effect.zipRight(insertNext), Effect.asVoid);
-                }),
-              )
-          : Effect.void,
+          const contentText = config.ingestTextVersions
+            ? yield* fetchConsolidatedText(law.identificador, runId)
+            : "";
+          const contentHash = config.ingestTextVersions ? createContentHash(contentText) : null;
+
+          return {
+            law,
+            mapped,
+            existing,
+            kind: existing === null ? ("New" as const) : ("Update" as const),
+            contentText,
+            contentHash,
+          };
+        }),
     );
 
     const startSyncRun = Effect.fn("BoeCollector.startSyncRun")(
@@ -442,169 +489,287 @@ export const BoeLawsCollectorFactory = defineFactory({
           : Effect.void,
     );
 
-    const upsertLaw = Effect.fn("BoeCollector.upsertLaw")(
-      (law: BoeLawItem, runId: CollectionRunId) =>
+    const canonicalIdFromIdentifier = (identifier: string): string => `boe:${identifier}`;
+
+    const loadExistingDocuments = Effect.fn("BoeCollector.loadExistingDocuments")((
+      page: ReadonlyArray<BoeLawItem>,
+      runId: CollectionRunId,
+    ) => {
+      const canonicalIds = Array.from(
+        new Set(page.map((law) => canonicalIdFromIdentifier(law.identificador))),
+      );
+
+      if (canonicalIds.length === 0) {
+        return Effect.succeed(new Map<string, ExistingLegalDocument>());
+      }
+
+      return Effect.tryPromise({
+        try: () =>
+          db
+            .select({
+              docId: legalDocuments.docId,
+              canonicalId: legalDocuments.canonicalId,
+              firstSeenAt: legalDocuments.firstSeenAt,
+              officialTitle: legalDocuments.officialTitle,
+              metadataHash: legalDocuments.metadataHash,
+              lastUpdatedAt: legalDocuments.lastUpdatedAt,
+              contentHash: legalDocuments.contentHash,
+            })
+            .from(legalDocuments)
+            .where(
+              and(
+                eq(legalDocuments.sourceId, sourceId),
+                inArray(legalDocuments.canonicalId, canonicalIds),
+              ),
+            ),
+        catch: (cause) =>
+          new CollectionError({
+            collectorId,
+            runId,
+            reason: "Unable to load existing page documents",
+            cause,
+            message: `Collection error [${collectorId}]: Unable to load existing page documents`,
+          }),
+      }).pipe(
+        Effect.map(
+          (rows) =>
+            new Map<string, ExistingLegalDocument>(rows.map((row) => [row.canonicalId, row])),
+        ),
+      );
+    });
+
+    const persistPreparedLaws = Effect.fn("BoeCollector.persistPreparedLaws")(
+      (preparedLaws: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
         Effect.gen(function* () {
-          const mapped = yield* Effect.try({
-            try: () =>
-              mapBoeLawToDocument(law, {
-                sourceId,
-                actor: config.upsertActor,
-                unknownRangeStrategy: config.unknownRangeStrategy,
-              }),
-            catch: (cause) =>
-              new ValidationError({
-                collectorId,
-                field: "mapping",
-                value: law,
-                reason: String(cause),
-                message: `Failed to map BOE law '${law.identificador}'`,
-              }),
+          const persistable = preparedLaws.filter((law) => law.kind !== "Unchanged");
+          if (persistable.length === 0) {
+            return;
+          }
+
+          const now = new Date();
+
+          const upsertRows = persistable.map((item) => {
+            const documentValues = {
+              ...item.mapped.document,
+              contentHash: item.contentHash,
+            };
+
+            return {
+              ...documentValues,
+              firstSeenAt: item.existing?.firstSeenAt ?? documentValues.firstSeenAt,
+            };
           });
 
-          const existingRows = yield* Effect.tryPromise({
+          const upserted = yield* Effect.tryPromise({
             try: () =>
               db
-                .select({
-                  docId: legalDocuments.docId,
-                  firstSeenAt: legalDocuments.firstSeenAt,
-                  officialTitle: legalDocuments.officialTitle,
-                  metadataHash: legalDocuments.metadataHash,
-                  lastUpdatedAt: legalDocuments.lastUpdatedAt,
-                  contentHash: legalDocuments.contentHash,
+                .insert(legalDocuments)
+                .values(upsertRows)
+                .onConflictDoUpdate({
+                  target: legalDocuments.canonicalId,
+                  set: {
+                    sourceId: sql`excluded.source_id`,
+                    eliUri: sql`excluded.eli_uri`,
+                    contentType: sql`excluded.content_type`,
+                    legislativeStage: sql`excluded.legislative_stage`,
+                    hierarchyLevel: sql`excluded.hierarchy_level`,
+                    officialTitle: sql`excluded.official_title`,
+                    draftNumber: sql`excluded.draft_number`,
+                    proceduralStatus: sql`excluded.procedural_status`,
+                    introducedAt: sql`excluded.introduced_at`,
+                    publishedAt: sql`excluded.published_at`,
+                    entryIntoForceAt: sql`excluded.entry_into_force_at`,
+                    repealedAt: sql`excluded.repealed_at`,
+                    isConsolidatedText: sql`excluded.is_consolidated_text`,
+                    consolidationDate: sql`excluded.consolidation_date`,
+                    bulletinSection: sql`excluded.bulletin_section`,
+                    bulletinPage: sql`excluded.bulletin_page`,
+                    originalTextUrl: sql`excluded.original_text_url`,
+                    enactedTextUrl: sql`excluded.enacted_text_url`,
+                    rawMetadata: sql`excluded.raw_metadata`,
+                    department: sql`excluded.department`,
+                    proposerName: sql`excluded.proposer_name`,
+                    contentHash: sql`excluded.content_hash`,
+                    metadataHash: sql`excluded.metadata_hash`,
+                    lastUpdatedAt: sql`excluded.last_updated_at`,
+                    updatedBy: sql`excluded.updated_by`,
+                  },
                 })
-                .from(legalDocuments)
-                .where(
-                  and(
-                    eq(legalDocuments.canonicalId, mapped.canonicalId),
-                    eq(legalDocuments.sourceId, sourceId),
-                  ),
-                )
-                .limit(1),
+                .returning({
+                  docId: legalDocuments.docId,
+                  canonicalId: legalDocuments.canonicalId,
+                }),
             catch: (cause) =>
               new CollectionError({
                 collectorId,
                 runId,
-                reason: "Unable to load existing document",
+                reason: "Unable to bulk upsert legal documents",
                 cause,
-                message: `Collection error [${collectorId}]: Unable to load existing document`,
+                message: `Collection error [${collectorId}]: Unable to bulk upsert legal documents`,
               }),
           });
-          const existing = existingRows[0] ?? null;
 
-          const unchangedByMetadata =
-            existing !== null &&
-            existing.officialTitle === mapped.document.officialTitle &&
-            existing.metadataHash === mapped.metadataHash &&
-            existing.lastUpdatedAt?.getTime() === mapped.document.lastUpdatedAt?.getTime();
+          const docIdByCanonicalId = new Map(upserted.map((row) => [row.canonicalId, row.docId]));
 
-          if (unchangedByMetadata) {
-            return {
-              kind: "Unchanged" as const,
-              mapped,
-              contentText: "",
-              contentHash: existing.contentHash,
-            };
+          if (!config.ingestTextVersions) {
+            return;
           }
 
-          const contentText = config.ingestTextVersions
-            ? yield* fetchConsolidatedText(law.identificador, runId)
-            : "";
-          const contentHash = config.ingestTextVersions ? createContentHash(contentText) : null;
-          const documentValues = {
-            ...mapped.document,
-            contentHash,
-          };
+          const newVersionRows: Array<{
+            readonly docId: string;
+            readonly versionNumber: number;
+            readonly versionType: "consolidated_initial";
+            readonly contentText: string;
+            readonly validFrom: Date;
+            readonly validUntil: null;
+          }> = [];
 
-          if (existing === null) {
-            return yield* Effect.tryPromise({
-              try: () =>
-                db
-                  .insert(legalDocuments)
-                  .values(documentValues)
-                  .returning({ docId: legalDocuments.docId }),
+          const updateCandidates: Array<{
+            readonly docId: string;
+            readonly validFrom: Date;
+            readonly contentText: string;
+          }> = [];
+
+          for (const item of persistable) {
+            if (item.contentText.length === 0) {
+              continue;
+            }
+
+            const canonicalId = item.mapped.canonicalId;
+            const docId = docIdByCanonicalId.get(canonicalId);
+            if (docId === undefined) {
+              return yield* new CollectionError({
+                collectorId,
+                runId,
+                reason: `Bulk upsert did not return docId for '${canonicalId}'`,
+                message: `Collection error [${collectorId}]: Bulk upsert did not return docId for '${canonicalId}'`,
+              });
+            }
+
+            const validFrom =
+              item.mapped.document.entryIntoForceAt ?? item.mapped.document.publishedAt ?? now;
+
+            if (item.kind === "New") {
+              newVersionRows.push({
+                docId,
+                versionNumber: 1,
+                versionType: "consolidated_initial",
+                contentText: item.contentText,
+                validFrom,
+                validUntil: null,
+              });
+            } else {
+              updateCandidates.push({ docId, validFrom, contentText: item.contentText });
+            }
+          }
+
+          if (newVersionRows.length > 0) {
+            const _initialInsert = yield* Effect.tryPromise({
+              try: async () => {
+                await db.insert(documentVersions).values(newVersionRows);
+              },
               catch: (cause) =>
                 new CollectionError({
                   collectorId,
                   runId,
-                  reason: "Unable to insert legal document",
+                  reason: "Unable to bulk insert initial versions",
                   cause,
-                  message: `Collection error [${collectorId}]: Unable to insert legal document`,
+                  message: `Collection error [${collectorId}]: Unable to bulk insert initial versions`,
                 }),
-            }).pipe(
-              Effect.flatMap((insertedRows) => {
-                const inserted = insertedRows[0];
-                if (inserted === undefined) {
-                  return Effect.fail(
-                    new CollectionError({
-                      collectorId,
-                      runId,
-                      reason: "Insert did not return docId",
-                      message: `Collection error [${collectorId}]: Insert did not return docId`,
-                    }),
-                  );
-                }
-
-                return upsertDocumentVersion({
-                  docId: inserted.docId,
-                  contentText,
-                  validFrom:
-                    documentValues.entryIntoForceAt ?? documentValues.publishedAt ?? new Date(),
-                  kind: "New",
-                  runId,
-                }).pipe(
-                  Effect.as({
-                    kind: "New" as const,
-                    mapped: {
-                      ...mapped,
-                      document: documentValues,
-                    },
-                    contentText,
-                    contentHash,
-                  }),
-                );
-              }),
-            );
+            });
+            void _initialInsert;
           }
 
-          return yield* Effect.tryPromise({
+          if (updateCandidates.length === 0) {
+            return;
+          }
+
+          const updateDocIds = updateCandidates.map((candidate) => candidate.docId);
+          const existingVersions = yield* Effect.tryPromise({
             try: () =>
               db
-                .update(legalDocuments)
-                .set({
-                  ...documentValues,
-                  firstSeenAt: existing.firstSeenAt ?? documentValues.firstSeenAt,
+                .select({
+                  versionId: documentVersions.versionId,
+                  docId: documentVersions.docId,
+                  versionNumber: documentVersions.versionNumber,
                 })
-                .where(eq(legalDocuments.docId, existing.docId)),
+                .from(documentVersions)
+                .where(inArray(documentVersions.docId, updateDocIds)),
             catch: (cause) =>
               new CollectionError({
                 collectorId,
                 runId,
-                reason: "Unable to update legal document",
+                reason: "Unable to load versions for batch updates",
                 cause,
-                message: `Collection error [${collectorId}]: Unable to update legal document`,
+                message: `Collection error [${collectorId}]: Unable to load versions for batch updates`,
               }),
-          }).pipe(
-            Effect.zipRight(
-              upsertDocumentVersion({
-                docId: existing.docId,
-                contentText,
-                validFrom:
-                  documentValues.entryIntoForceAt ?? documentValues.publishedAt ?? new Date(),
-                kind: "Update",
-                runId,
-              }),
-            ),
-            Effect.as({
-              kind: "Update" as const,
-              mapped: {
-                ...mapped,
-                document: documentValues,
-              },
-              contentText,
-              contentHash,
-            }),
+          });
+
+          const latestByDocId = new Map<
+            string,
+            { readonly versionId: string; readonly versionNumber: number }
+          >();
+          for (const row of existingVersions) {
+            const current = latestByDocId.get(row.docId);
+            if (current === undefined || row.versionNumber > current.versionNumber) {
+              latestByDocId.set(row.docId, {
+                versionId: row.versionId,
+                versionNumber: row.versionNumber,
+              });
+            }
+          }
+
+          const versionIdsToClose = Array.from(latestByDocId.values()).map(
+            (version) => version.versionId,
           );
+          if (versionIdsToClose.length > 0) {
+            const _closedVersions = yield* Effect.tryPromise({
+              try: async () => {
+                await db
+                  .update(documentVersions)
+                  .set({ validUntil: now })
+                  .where(inArray(documentVersions.versionId, versionIdsToClose));
+              },
+              catch: (cause) =>
+                new CollectionError({
+                  collectorId,
+                  runId,
+                  reason: "Unable to close existing versions in bulk",
+                  cause,
+                  message: `Collection error [${collectorId}]: Unable to close existing versions in bulk`,
+                }),
+            });
+            void _closedVersions;
+          }
+
+          const updateVersionRows = updateCandidates.map((candidate) => {
+            const latest = latestByDocId.get(candidate.docId);
+            return {
+              docId: candidate.docId,
+              versionNumber: (latest?.versionNumber ?? 0) + 1,
+              versionType: "consolidated_update" as const,
+              contentText: candidate.contentText,
+              validFrom: candidate.validFrom,
+              validUntil: null,
+            };
+          });
+
+          if (updateVersionRows.length > 0) {
+            const _updateInsert = yield* Effect.tryPromise({
+              try: async () => {
+                await db.insert(documentVersions).values(updateVersionRows);
+              },
+              catch: (cause) =>
+                new CollectionError({
+                  collectorId,
+                  runId,
+                  reason: "Unable to bulk insert update versions",
+                  cause,
+                  message: `Collection error [${collectorId}]: Unable to bulk insert update versions`,
+                }),
+            });
+            void _updateInsert;
+          }
         }),
     );
 
@@ -654,103 +819,153 @@ export const BoeLawsCollectorFactory = defineFactory({
                       return Option.none();
                     }
 
-                    const documents: CollectedDocument[] = [];
-                    let inserted = 0;
-                    let updated = 0;
-                    let failed = 0;
+                    const existingByCanonicalId = yield* loadExistingDocuments(page, runId);
 
-                    for (const law of page) {
-                      const includeInWindow = yield* Effect.try({
-                        try: () =>
-                          isWithinModeWindow(parseBoeDateTime(law.fecha_actualizacion), mode),
-                        catch: (cause) =>
-                          new ValidationError({
-                            collectorId,
-                            field: "fecha_actualizacion",
-                            value: law.fecha_actualizacion,
-                            reason: String(cause),
-                            message: `Invalid BOE update timestamp for '${law.identificador}'`,
-                          }),
-                      }).pipe(
-                        Effect.catchTag("ValidationError", (error) => {
-                          if (config.unknownRangeStrategy === "fail") {
-                            return Effect.fail(error);
+                    const outcomes = yield* Effect.forEach(
+                      page,
+                      (law) =>
+                        Effect.gen(function* () {
+                          const includeInWindow = yield* Effect.try({
+                            try: () =>
+                              isWithinModeWindow(parseBoeDateTime(law.fecha_actualizacion), mode),
+                            catch: (cause) =>
+                              new ValidationError({
+                                collectorId,
+                                field: "fecha_actualizacion",
+                                value: law.fecha_actualizacion,
+                                reason: String(cause),
+                                message: `Invalid BOE update timestamp for '${law.identificador}'`,
+                              }),
+                          }).pipe(
+                            Effect.catchTag("ValidationError", (error) => {
+                              if (config.unknownRangeStrategy === "fail") {
+                                return Effect.fail(error);
+                              }
+
+                              return appendErrorLog({
+                                identifier: law.identificador,
+                                tag: error._tag,
+                                message: error.message,
+                              }).pipe(Effect.as(false));
+                            }),
+                          );
+
+                          if (!includeInWindow) {
+                            return {
+                              prepared: null as PreparedLaw | null,
+                              inserted: 0,
+                              updated: 0,
+                              failed: 0,
+                              document: null as CollectedDocument | null,
+                            };
                           }
 
-                          failed += 1;
-                          return appendErrorLog({
-                            identifier: law.identificador,
-                            tag: error._tag,
-                            message: error.message,
-                          }).pipe(Effect.as(false));
-                        }),
-                      );
+                          const existing = existingByCanonicalId.get(
+                            canonicalIdFromIdentifier(law.identificador),
+                          );
 
-                      if (!includeInWindow) {
-                        continue;
-                      }
+                          const prepared = yield* prepareLaw(law, runId, existing ?? null).pipe(
+                            Effect.catchTags({
+                              ValidationError: (error) => {
+                                if (config.unknownRangeStrategy === "fail") {
+                                  return Effect.fail(error);
+                                }
 
-                      const result = yield* upsertLaw(law, runId).pipe(
-                        Effect.catchTag("ValidationError", (error) => {
-                          if (config.unknownRangeStrategy === "fail") {
-                            return Effect.fail(error);
+                                return appendErrorLog({
+                                  identifier: law.identificador,
+                                  tag: error._tag,
+                                  message: error.message,
+                                }).pipe(Effect.as(null));
+                              },
+                              SourceConnectionError: (error) => {
+                                if (shouldFailFastOnSourceError(mode)) {
+                                  return Effect.fail(error);
+                                }
+
+                                return appendErrorLog({
+                                  identifier: law.identificador,
+                                  tag: error._tag,
+                                  message: error.message,
+                                }).pipe(Effect.as(null));
+                              },
+                              CollectionError: (error) => {
+                                if (shouldFailFastOnSourceError(mode)) {
+                                  return Effect.fail(error);
+                                }
+
+                                return appendErrorLog({
+                                  identifier: law.identificador,
+                                  tag: error._tag,
+                                  message: error.message,
+                                }).pipe(Effect.as(null));
+                              },
+                            }),
+                          );
+
+                          if (prepared === null) {
+                            return {
+                              prepared: null as PreparedLaw | null,
+                              inserted: 0,
+                              updated: 0,
+                              failed: 1,
+                              document: null as CollectedDocument | null,
+                            };
                           }
 
-                          failed += 1;
-                          return appendErrorLog({
-                            identifier: law.identificador,
-                            tag: error._tag,
-                            message: error.message,
-                          }).pipe(Effect.as(null));
+                          const document = yield* Effect.try({
+                            try: () =>
+                              buildDocument(
+                                law,
+                                prepared.kind,
+                                prepared.mapped.document.rawMetadata,
+                                prepared.contentText,
+                                prepared.contentHash,
+                              ),
+                            catch: (cause) =>
+                              new ValidationError({
+                                collectorId,
+                                field: "documentEncoding",
+                                value: law.identificador,
+                                reason: String(cause),
+                                message: `Failed to build collected document for '${law.identificador}'`,
+                              }),
+                          }).pipe(
+                            Effect.catchTag("ValidationError", (error) => {
+                              if (config.unknownRangeStrategy === "fail") {
+                                return Effect.fail(error);
+                              }
+
+                              return appendErrorLog({
+                                identifier: law.identificador,
+                                tag: error._tag,
+                                message: error.message,
+                              }).pipe(Effect.as(null));
+                            }),
+                          );
+
+                          return {
+                            prepared,
+                            inserted: prepared.kind === "New" ? 1 : 0,
+                            updated: prepared.kind === "Update" ? 1 : 0,
+                            failed: document === null ? 1 : 0,
+                            document,
+                          };
                         }),
-                      );
+                      { concurrency: config.perPageConcurrency },
+                    );
 
-                      if (result === null) {
-                        continue;
-                      }
+                    const preparedLaws = outcomes
+                      .map((outcome) => outcome.prepared)
+                      .filter((prepared): prepared is PreparedLaw => prepared !== null);
 
-                      if (result.kind === "New") {
-                        inserted += 1;
-                      } else if (result.kind === "Update") {
-                        updated += 1;
-                      }
+                    yield* persistPreparedLaws(preparedLaws, runId);
 
-                      const document = yield* Effect.try({
-                        try: () =>
-                          buildDocument(
-                            law,
-                            result.kind,
-                            result.mapped.document.rawMetadata,
-                            result.contentText,
-                            result.contentHash,
-                          ),
-                        catch: (cause) =>
-                          new ValidationError({
-                            collectorId,
-                            field: "documentEncoding",
-                            value: law.identificador,
-                            reason: String(cause),
-                            message: `Failed to build collected document for '${law.identificador}'`,
-                          }),
-                      }).pipe(
-                        Effect.catchTag("ValidationError", (error) => {
-                          if (config.unknownRangeStrategy === "fail") {
-                            return Effect.fail(error);
-                          }
-
-                          failed += 1;
-                          return appendErrorLog({
-                            identifier: law.identificador,
-                            tag: error._tag,
-                            message: error.message,
-                          }).pipe(Effect.as(null));
-                        }),
-                      );
-
-                      if (document !== null) {
-                        documents.push(document);
-                      }
-                    }
+                    const documents = outcomes
+                      .map((outcome) => outcome.document)
+                      .filter((document): document is CollectedDocument => document !== null);
+                    const inserted = outcomes.reduce((acc, outcome) => acc + outcome.inserted, 0);
+                    const updated = outcomes.reduce((acc, outcome) => acc + outcome.updated, 0);
+                    const failed = outcomes.reduce((acc, outcome) => acc + outcome.failed, 0);
 
                     yield* Ref.update(statsRef, (stats) => ({
                       inserted: stats.inserted + inserted,
@@ -761,8 +976,12 @@ export const BoeLawsCollectorFactory = defineFactory({
                     const hasMore = page.length === config.batchSize;
                     const nextOffset = state.offset + config.batchSize;
 
-                    if (hasMore && config.requestDelayMs > 0) {
-                      yield* Effect.sleep(Duration.millis(config.requestDelayMs));
+                    const effectiveDelayMs = isFullSyncLike(mode)
+                      ? Math.max(50, Math.floor(config.requestDelayMs / 4))
+                      : config.requestDelayMs;
+
+                    if (hasMore && effectiveDelayMs > 0) {
+                      yield* Effect.sleep(Duration.millis(effectiveDelayMs));
                     }
 
                     return Option.some([
