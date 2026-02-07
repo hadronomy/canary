@@ -127,6 +127,19 @@ const normalizeCanonicalId = (identifier: string): string => {
   return canonicalId;
 };
 
+const buildBoePdfUrl = (identifier: string, publicationDate: string): string => {
+  const year = publicationDate.slice(0, 4);
+  const month = publicationDate.slice(4, 6);
+  const day = publicationDate.slice(6, 8);
+  return `https://www.boe.es/boe/dias/${year}/${month}/${day}/pdfs/${identifier}.pdf`;
+};
+
+const buildBoeXmlUrl = (identifier: string): string =>
+  `https://www.boe.es/diario_boe/xml.php?id=${identifier}`;
+
+const buildBoeOriginalTextUrl = (identifier: string): string =>
+  `https://www.boe.es/diario_boe/txt.php?id=${identifier}`;
+
 const stableStringify = (value: unknown): string => {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
@@ -166,9 +179,18 @@ export const mapBoeLawToDocument = (
   const contentType = toContentType(law, options.unknownRangeStrategy);
   const legislativeStage = toLegislativeStage(law);
   const hierarchyLevel = toHierarchyLevel(law);
+  const pdfUrl = buildBoePdfUrl(law.identificador, law.fecha_publicacion);
+  const xmlUrl = buildBoeXmlUrl(law.identificador);
+  const originalTextUrl = buildBoeOriginalTextUrl(law.identificador);
 
   const rawMetadata = {
     boe: law,
+    links: {
+      pdf: pdfUrl,
+      xml: xmlUrl,
+      originalText: originalTextUrl,
+      consolidatedText: law.url_html_consolidada,
+    },
     mappedBy: options.actor,
     mappedAt: updatedAt.toISOString(),
     source: {
@@ -207,13 +229,13 @@ export const mapBoeLawToDocument = (
       consolidationDate: updatedAt,
       consolidatesDocId: null,
       parentBulletinId: null,
-      bulletinSection: law.ambito.texto,
+      bulletinSection: law.diario,
       bulletinPage: law.diario_numero,
-      originalTextUrl: law.url_html_consolidada,
+      originalTextUrl,
       debateTranscriptUrl: null,
       enactedTextUrl: law.url_html_consolidada,
-      pdfUrl: null,
-      xmlUrl: null,
+      pdfUrl,
+      xmlUrl,
       rawMetadata,
       department: law.departamento.texto,
       proposerType: null,
