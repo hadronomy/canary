@@ -16,8 +16,17 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
   requestDelayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), {
     default: () => 300,
   }),
+  perPageConcurrency: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
+    default: () => 8,
+  }),
   ingestTextVersions: Schema.optionalWith(Schema.Boolean, {
     default: () => true,
+  }),
+  textFetchMaxAttempts: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
+    default: () => 3,
+  }),
+  textRetryBaseMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), {
+    default: () => 250,
   }),
   textRequestTimeoutMs: Schema.optionalWith(Schema.Number.pipe(Schema.positive()), {
     default: () => 45000,

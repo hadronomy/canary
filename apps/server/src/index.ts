@@ -8,7 +8,7 @@ import {
   ensureBoeCollector,
   ensureBoeSource,
 } from "~/collectors/boe";
-import { collector, CollectionMode, CollectorLive } from "~/services/collector";
+import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 
 const incrementalCron = "*/15 * * * *";
@@ -158,6 +158,13 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
       since: new Date(),
       lookBackWindow: undefined,
     }),
+    config: {
+      sourceId,
+      requestDelayMs: 50,
+      perPageConcurrency: 16,
+      textFetchMaxAttempts: 3,
+      textRetryBaseMs: 250,
+    },
   });
 
   yield* Effect.logInfo("Starting BOE full sync", {
