@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/bun-sql";
 import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
-export { and, eq } from "drizzle-orm";
+export { and, eq, inArray, sql } from "drizzle-orm";
 
 import { env } from "@canary/env/server";
 
