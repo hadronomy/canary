@@ -1,4 +1,15 @@
-import { DateTime, Effect, Fiber, HashMap, Metric, Option, Queue, Ref, Stream } from "effect";
+import {
+  Cause,
+  DateTime,
+  Effect,
+  Fiber,
+  HashMap,
+  Metric,
+  Option,
+  Queue,
+  Ref,
+  Stream,
+} from "effect";
 
 import type { Collector } from "./collector";
 import { CollectionError, ResumeError, type CollectorError } from "./errors";
@@ -415,12 +426,16 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
               ),
           }),
           Effect.catchAllCause((cause) =>
-            Metric.increment(collectorRunErrorsTotal).pipe(
-              Effect.tagMetrics({ collector_id: "unknown", error_tag: "UnhandledCause" }),
-              Effect.zipRight(
-                Effect.logError("Unhandled orchestrator worker error", { cause: cause.toString() }),
-              ),
-            ),
+            Cause.isInterruptedOnly(cause)
+              ? Effect.void
+              : Metric.increment(collectorRunErrorsTotal).pipe(
+                  Effect.tagMetrics({ collector_id: "unknown", error_tag: "UnhandledCause" }),
+                  Effect.zipRight(
+                    Effect.logError("Unhandled orchestrator worker error", {
+                      cause: cause.toString(),
+                    }),
+                  ),
+                ),
           ),
         ),
       );

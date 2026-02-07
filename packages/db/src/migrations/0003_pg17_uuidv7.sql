@@ -1,6 +1,3 @@
-CREATE OR REPLACE FUNCTION generate_uuid_v7()
-RETURNS UUID AS $$
-BEGIN
-  RETURN gen_random_uuid_v7();
-END;
-$$ LANGUAGE plpgsql VOLATILE;
+-- Keep compatibility across PostgreSQL versions.
+-- Some environments do not provide gen_random_uuid_v7().
+-- We retain the implementation from 0001_id_functions.sql.

@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Duration, Effect, Either, Layer, Metric, Option, Schema, Stream } from "effect";
 
-import type { Collector } from "./collector";
-import { defineFactory } from "./factory";
+import { defineFactory, type CollectorRuntime } from "./factory";
 import {
   CollectionBatch,
   CollectionMode,
@@ -15,7 +14,6 @@ import {
   CollectorOrchestrator,
   CollectorRepository,
   CollectorStateManager,
-  FactoryId,
   type CollectorId,
 } from "./index";
 
@@ -29,12 +27,8 @@ const TestFactory = defineFactory({
     delayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), { default: () => 0 }),
   }),
   capabilities: new Set(["FullSync", "Incremental", "Backfill", "Resume"]),
-  make: ({ collectorId, name, config }) => {
-    const collector: Collector = {
-      id: collectorId,
-      factoryId: FactoryId("test-orchestrator"),
-      name,
-      capabilities: new Set(["FullSync", "Incremental", "Backfill", "Resume"]),
+  make: ({ config }) => {
+    const collector: CollectorRuntime = {
       collect: (_mode, _runId) =>
         Stream.fromEffect(
           Effect.sleep(Duration.millis(config.delayMs)).pipe(

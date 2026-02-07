@@ -3,7 +3,6 @@ import { DateTime, Effect, HashMap, Option, Ref } from "effect";
 import { CollectionError } from "./errors";
 import type {
   CollectionMode,
-  CollectionCursor,
   CollectionProgress,
   CollectionRun,
   CollectionRunId,
@@ -12,6 +11,7 @@ import type {
   CollectorId,
 } from "./schema";
 import {
+  CollectionCursor,
   CollectionRun as CollectionRunModel,
   CollectionRunStatus,
   CollectionState as CollectionStateModel,
@@ -83,10 +83,14 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
             }),
         );
 
-        const nextCursor: Option.Option<CollectionCursor> = Option.map(update.cursor, (cursor) => ({
-          value: cursor.value,
-          displayLabel: Option.none(),
-        }));
+        const nextCursor: Option.Option<CollectionCursor> = Option.map(
+          update.cursor,
+          (cursor) =>
+            new CollectionCursor({
+              value: cursor.value,
+              displayLabel: Option.none(),
+            }),
+        );
 
         const next = new CollectionStateModel({
           ...previous,

@@ -1,1 +1,1 @@
-export * from "~/schema/legislation";
+export * from "./legislation";
