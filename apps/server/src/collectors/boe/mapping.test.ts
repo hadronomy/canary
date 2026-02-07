@@ -36,6 +36,15 @@ describe("boe mapping", () => {
     expect(mapped.document.legislativeStage).toBe("enacted");
     expect(mapped.document.hierarchyLevel).toBe("real_decreto");
     expect(mapped.document.officialTitle).toContain("Real Decreto 1095/1989");
+    expect(mapped.document.pdfUrl).toBe(
+      "https://www.boe.es/boe/dias/1989/09/12/pdfs/BOE-A-1989-22056.pdf",
+    );
+    expect(mapped.document.xmlUrl).toBe(
+      "https://www.boe.es/diario_boe/xml.php?id=BOE-A-1989-22056",
+    );
+    expect(mapped.document.originalTextUrl).toBe(
+      "https://www.boe.es/diario_boe/txt.php?id=BOE-A-1989-22056",
+    );
   });
 
   test("fails on unknown rango with strict strategy", () => {
