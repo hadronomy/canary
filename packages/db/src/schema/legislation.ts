@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -343,7 +344,13 @@ export const senseFragments = pgTable(
     index("idx_frag_256_hnsw")
       .using("hnsw", table.embedding256.op("vector_cosine_ops"))
       .with({ m: 16, ef_construction: 64 }),
-    uniqueIndex("idx_frag_fingerprint").on(table.contentFingerprint),
+    index("idx_frag_1024_hnsw")
+      .using("hnsw", table.embedding1024.op("vector_cosine_ops"))
+      .with({ m: 16, ef_construction: 64 }),
+    index("idx_frag_doc_version").on(table.docId, table.versionId),
+    index("idx_frag_node_type").on(table.nodeType),
+    index("idx_frag_valid_window").on(table.validFrom, table.validUntil),
+    uniqueIndex("idx_frag_doc_fingerprint").on(table.docId, table.contentFingerprint),
   ],
 );
 
@@ -400,8 +407,8 @@ export const legalPaths = pgTable(
 );
 
 // ─── 8. Query Cache (NanoID) ───
-export const queryCache = pgTable(
-  "query_cache",
+export const queryCacheEntries = pgTable(
+  "query_cache_entries",
   {
     cacheId: varchar("cache_id", { length: 32 })
       .primaryKey()
@@ -419,7 +426,7 @@ export const queryCache = pgTable(
 
 // ─── 9. Audit Log (ULID) ───
 export const auditLog = pgTable(
-  "audit_log",
+  "audit_logs",
   {
     logId: varchar("log_id", { length: 26 })
       .primaryKey()
@@ -431,10 +438,10 @@ export const auditLog = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
     metadata: jsonb("metadata").default({}),
   },
-  (table) => ({
-    entityIdx: index("idx_audit_entity").on(table.entityType, table.entityId, table.occurredAt),
-    timeBrinIdx: sql`CREATE INDEX idx_audit_time_brin ON ${table} USING BRIN (${table.occurredAt})`,
-  }),
+  (table) => [
+    index("idx_audit_entity").on(table.entityType, table.entityId, table.occurredAt),
+    sql`CREATE INDEX idx_audit_time_brin ON ${table} USING BRIN (${table.occurredAt})`,
+  ],
 );
 
 // ─── 10. Sync Runs ───
@@ -461,8 +468,8 @@ export const syncRuns = pgTable(
 );
 
 // ─── 11. Embeddings Cache ───
-export const embeddingsCache = pgTable(
-  "embeddings_cache",
+export const embeddingCache = pgTable(
+  "embedding_cache",
   {
     embeddingId: uuid("embedding_id")
       .primaryKey()
@@ -480,6 +487,16 @@ export const embeddingsCache = pgTable(
   (table) => [
     uniqueIndex("idx_embedding_fragment_model").on(table.fragmentId, table.modelName),
     index("idx_embedding_vector_hnsw").using("hnsw", table.embeddingVector.op("vector_cosine_ops")),
+    check(
+      "chk_embeddings_model_dims",
+      sql`(
+        (${table.modelName} = 'jina-embeddings-v4' and ${table.dimensions} in (256, 1024, 1536))
+        or (${table.modelName} = 'openai_3_small' and ${table.dimensions} in (256, 1024, 1536))
+        or (${table.modelName} = 'openai_3_large' and ${table.dimensions} in (256, 1024, 1536))
+        or (${table.modelName} = 'e5_multilingual' and ${table.dimensions} in (256, 384, 768, 1024))
+        or (${table.modelName} = 'custom' and ${table.dimensions} > 0 and ${table.dimensions} <= 1536)
+      )`,
+    ),
   ],
 );
 
@@ -538,21 +555,24 @@ export const senseFragmentsRelations = relations(senseFragments, ({ one, many })
     references: [documentVersions.versionId],
   }),
   outgoingAnchors: many(referenceAnchors, { relationName: "fragmentSourceRefs" }),
-  embeddings: many(embeddingsCache),
+  embeddings: many(embeddingCache),
 }));
 
 export const referenceAnchorsRelations = relations(referenceAnchors, ({ one }) => ({
   sourceDoc: one(legalDocuments, {
     fields: [referenceAnchors.sourceDocId],
     references: [legalDocuments.docId],
+    relationName: "sourceRefs",
   }),
   targetDoc: one(legalDocuments, {
     fields: [referenceAnchors.targetDocId],
     references: [legalDocuments.docId],
+    relationName: "targetRefs",
   }),
   sourceFragment: one(senseFragments, {
     fields: [referenceAnchors.sourceFragmentId],
     references: [senseFragments.fragmentId],
+    relationName: "fragmentSourceRefs",
   }),
 }));
 
@@ -574,9 +594,9 @@ export const syncRunsRelations = relations(syncRuns, ({ one }) => ({
   }),
 }));
 
-export const embeddingsCacheRelations = relations(embeddingsCache, ({ one }) => ({
+export const embeddingCacheRelations = relations(embeddingCache, ({ one }) => ({
   fragment: one(senseFragments, {
-    fields: [embeddingsCache.fragmentId],
+    fields: [embeddingCache.fragmentId],
     references: [senseFragments.fragmentId],
   }),
 }));
@@ -603,8 +623,8 @@ export type NewReferenceAnchor = typeof referenceAnchors.$inferInsert;
 export type LegalPath = typeof legalPaths.$inferSelect;
 export type NewLegalPath = typeof legalPaths.$inferInsert;
 
-export type QueryCacheEntry = typeof queryCache.$inferSelect;
-export type NewQueryCacheEntry = typeof queryCache.$inferInsert;
+export type QueryCacheEntry = typeof queryCacheEntries.$inferSelect;
+export type NewQueryCacheEntry = typeof queryCacheEntries.$inferInsert;
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
@@ -612,8 +632,8 @@ export type NewAuditLogEntry = typeof auditLog.$inferInsert;
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type NewSyncRun = typeof syncRuns.$inferInsert;
 
-export type EmbeddingsCacheEntry = typeof embeddingsCache.$inferSelect;
-export type NewEmbeddingsCacheEntry = typeof embeddingsCache.$inferInsert;
+export type EmbeddingsCacheEntry = typeof embeddingCache.$inferSelect;
+export type NewEmbeddingsCacheEntry = typeof embeddingCache.$inferInsert;
 
 // ─── Enums Types ───
 export type Jurisdiction = (typeof jurisdictionEnum.enumValues)[number];
