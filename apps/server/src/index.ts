@@ -1,4 +1,4 @@
-import { Duration, Effect, Fiber, Layer, Option, Ref, Schema } from "effect";
+import { Duration, Effect, Layer, Option, Ref, Schema } from "effect";
 
 import { db, eq } from "@canary/db";
 import { syncRuns } from "@canary/db/schema/legislation";
@@ -222,21 +222,8 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     cron: defaultCollectorCron,
   });
 
-  const heartbeat = Effect.forever(
-    Effect.sleep(Duration.minutes(15)).pipe(
-      Effect.zipRight(
-        Effect.logInfo("Collector scheduler heartbeat", {
-          factoryId: bootstrapFactory.id,
-          collectorId,
-          cron: defaultCollectorCron,
-        }),
-      ),
-    ),
-  );
-
-  const heartbeatFiber = yield* Effect.forkDaemon(heartbeat);
   const signal = yield* waitForTerminationSignal;
-  yield* gracefulShutdown(signal).pipe(Effect.ensuring(Fiber.interrupt(heartbeatFiber)));
+  yield* gracefulShutdown(signal);
   return;
 });
 
