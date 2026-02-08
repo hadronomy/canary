@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Duration, Schema } from "effect";
 
 export const UnknownRangeStrategy = Schema.Literal("fail", "regulation");
 
@@ -10,11 +10,11 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
   batchSize: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 250,
   }),
-  timeoutMs: Schema.optionalWith(Schema.Number.pipe(Schema.positive()), {
-    default: () => 30000,
+  timeout: Schema.optionalWith(Schema.DurationFromMillis, {
+    default: () => Duration.seconds(30),
   }),
-  requestDelayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), {
-    default: () => 300,
+  requestDelay: Schema.optionalWith(Schema.DurationFromMillis, {
+    default: () => Duration.millis(300),
   }),
   perPageConcurrency: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 8,
@@ -25,11 +25,11 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
   textFetchMaxAttempts: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 3,
   }),
-  textRetryBaseMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), {
-    default: () => 250,
+  textRetryBase: Schema.optionalWith(Schema.DurationFromMillis, {
+    default: () => Duration.millis(250),
   }),
-  textRequestTimeoutMs: Schema.optionalWith(Schema.Number.pipe(Schema.positive()), {
-    default: () => 45000,
+  textRequestTimeout: Schema.optionalWith(Schema.DurationFromMillis, {
+    default: () => Duration.seconds(45),
   }),
   trackSyncRuns: Schema.optionalWith(Schema.Boolean, {
     default: () => true,

@@ -1,7 +1,7 @@
 // apps/server/src/services/collector/schema.ts
 // Domain schema types for the collector system
 
-import { Brand, Data, Option, type Option as OptionType } from "effect";
+import { Brand, Data, Duration, Option, type Option as OptionType } from "effect";
 import { Schema } from "effect";
 
 // ─── Branded IDs ─────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ export type CollectionMode = Data.TaggedEnum<{
   };
   readonly Incremental: {
     readonly since: Date;
-    readonly lookBackWindow?: number; // milliseconds
+    readonly lookBackWindow?: Duration.Duration;
   };
   readonly Backfill: {
     readonly from: Date;
@@ -88,6 +88,35 @@ export type CollectionMode = Data.TaggedEnum<{
   };
   readonly Resume: {
     readonly originalMode: CollectionMode;
+    readonly cursor: string;
+    readonly runId: string;
+  };
+  readonly Continuous: {
+    readonly bufferSize?: number;
+  };
+}>;
+
+type CollectionModeEncoded = Data.TaggedEnum<{
+  readonly FullSync: {
+    readonly startDate?: Date;
+    readonly batchSize?: number;
+  };
+  readonly Incremental: {
+    readonly since: Date;
+    readonly lookBackWindow?: number;
+  };
+  readonly Backfill: {
+    readonly from: Date;
+    readonly to: Date;
+    readonly batchSize?: number;
+  };
+  readonly Validation: {
+    readonly from?: Date;
+    readonly to?: Date;
+    readonly strategy: ValidationStrategy;
+  };
+  readonly Resume: {
+    readonly originalMode: CollectionModeEncoded;
     readonly cursor: string;
     readonly runId: string;
   };
@@ -114,36 +143,37 @@ export const ValidationStrategySchema = Schema.Union(
   Schema.TaggedStruct("RefetchAll", {}),
 );
 
-export const CollectionModeSchema: Schema.Schema<CollectionMode> = Schema.suspend(() =>
-  Schema.Union(
-    Schema.TaggedStruct("FullSync", {
-      startDate: Schema.optional(Schema.DateFromSelf),
-      batchSize: Schema.optional(Schema.Number),
-    }),
-    Schema.TaggedStruct("Incremental", {
-      since: Schema.DateFromSelf,
-      lookBackWindow: Schema.optional(Schema.Number),
-    }),
-    Schema.TaggedStruct("Backfill", {
-      from: Schema.DateFromSelf,
-      to: Schema.DateFromSelf,
-      batchSize: Schema.optional(Schema.Number),
-    }),
-    Schema.TaggedStruct("Validation", {
-      from: Schema.optional(Schema.DateFromSelf),
-      to: Schema.optional(Schema.DateFromSelf),
-      strategy: ValidationStrategySchema,
-    }),
-    Schema.TaggedStruct("Resume", {
-      originalMode: CollectionModeSchema,
-      cursor: Schema.String,
-      runId: Schema.String,
-    }),
-    Schema.TaggedStruct("Continuous", {
-      bufferSize: Schema.optional(Schema.Number),
-    }),
-  ).pipe(Schema.annotations({ identifier: "CollectionMode" })),
-);
+export const CollectionModeSchema: Schema.Schema<CollectionMode, CollectionModeEncoded> =
+  Schema.suspend(() =>
+    Schema.Union(
+      Schema.TaggedStruct("FullSync", {
+        startDate: Schema.optional(Schema.DateFromSelf),
+        batchSize: Schema.optional(Schema.Number),
+      }),
+      Schema.TaggedStruct("Incremental", {
+        since: Schema.DateFromSelf,
+        lookBackWindow: Schema.optional(Schema.DurationFromMillis),
+      }),
+      Schema.TaggedStruct("Backfill", {
+        from: Schema.DateFromSelf,
+        to: Schema.DateFromSelf,
+        batchSize: Schema.optional(Schema.Number),
+      }),
+      Schema.TaggedStruct("Validation", {
+        from: Schema.optional(Schema.DateFromSelf),
+        to: Schema.optional(Schema.DateFromSelf),
+        strategy: ValidationStrategySchema,
+      }),
+      Schema.TaggedStruct("Resume", {
+        originalMode: CollectionModeSchema,
+        cursor: Schema.String,
+        runId: Schema.String,
+      }),
+      Schema.TaggedStruct("Continuous", {
+        bufferSize: Schema.optional(Schema.Number),
+      }),
+    ).pipe(Schema.annotations({ identifier: "CollectionMode" })),
+  );
 
 // ─── Collected Document ──────────────────────────────────────────────────────
 
@@ -200,7 +230,7 @@ export class CollectionStats extends Schema.Class<CollectionStats>("CollectionSt
   updated: Schema.Number,
   skipped: Schema.Number,
   failed: Schema.Number,
-  duration: Schema.Number, // milliseconds
+  duration: Schema.DurationFromMillis,
 }) {}
 
 // ─── Collection Run Status ───────────────────────────────────────────────────

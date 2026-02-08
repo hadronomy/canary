@@ -107,13 +107,14 @@ export const collector = {
         input.config === undefined
           ? undefined
           : yield* registry.validateConfig(FactoryId(entry.factoryId), input.id, input.config).pipe(
-              Effect.mapError(
+              Effect.catchTag(
+                "ConfigValidationError",
                 (parseError) =>
                   new ValidationError({
                     collectorId: input.id,
                     field: "config",
                     value: input.config,
-                    reason: String(parseError),
+                    reason: parseError.issues.join("; "),
                     message: "Collector config did not match factory schema",
                   }),
               ),

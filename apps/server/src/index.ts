@@ -12,7 +12,7 @@ import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 
 const incrementalCron = "*/15 * * * *";
-const progressPollMs = 5000;
+const progressPollInterval = Duration.seconds(5);
 
 class CliError extends Schema.TaggedError<CliError>()("CliError", {
   message: Schema.String,
@@ -102,7 +102,7 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
       }
     }
 
-    yield* Effect.sleep(Duration.millis(progressPollMs));
+    yield* Effect.sleep(progressPollInterval);
   }
 });
 
@@ -160,10 +160,10 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
     }),
     config: {
       sourceId,
-      requestDelayMs: 50,
+      requestDelay: Duration.millis(50),
       perPageConcurrency: 16,
       textFetchMaxAttempts: 3,
-      textRetryBaseMs: 250,
+      textRetryBase: Duration.millis(250),
     },
   });
 

@@ -1,6 +1,7 @@
 import {
   Cause,
   DateTime,
+  Duration,
   Effect,
   Fiber,
   HashMap,
@@ -43,7 +44,8 @@ import type {
 import { CollectionMode as CollectionModeTag, CollectionProgress } from "./schema";
 import { CollectorStateManager } from "./state";
 
-const ENQUEUE_TIMEOUT_MS = 5_000;
+const ENQUEUE_TIMEOUT = Duration.seconds(5);
+const WORKER_CONCURRENCY = 4;
 
 export interface CollectionJob {
   readonly _tag: "Run";
@@ -72,7 +74,7 @@ interface RunAccumulator {
   readonly skipped: number;
   readonly failed: number;
   readonly lastCursor: Option.Option<CollectionCursor>;
-  readonly lastDocumentDate: Option.Option<Date>;
+  readonly lastDocumentDate: Option.Option<DateTime.Utc>;
 }
 
 const initialAccumulator: RunAccumulator = {
@@ -86,15 +88,16 @@ const initialAccumulator: RunAccumulator = {
 };
 
 const updateLastDocumentDate = (
-  current: Option.Option<Date>,
+  current: Option.Option<DateTime.Utc>,
   documents: ReadonlyArray<CollectedDocument>,
-): Option.Option<Date> => {
+): Option.Option<DateTime.Utc> => {
   let latest = current;
   for (const document of documents) {
-    const publishedAt = new Date(document.publishedAt.toString());
+    const publishedAt = document.publishedAt;
     latest = Option.match(latest, {
       onNone: () => Option.some(publishedAt),
-      onSome: (existing) => Option.some(existing > publishedAt ? existing : publishedAt),
+      onSome: (existing) =>
+        Option.some(existing.epochMillis > publishedAt.epochMillis ? existing : publishedAt),
     });
   }
   return latest;
@@ -127,6 +130,8 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
           return { collector, entry };
         });
 
+      const findCollectorEntry = (collectorId: CollectorId) => repository.findOne(collectorId);
+
       const enqueueJob = (job: CollectionJob) =>
         Effect.gen(function* () {
           yield* Queue.offer(queue, job).pipe(
@@ -138,7 +143,7 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
                   reason: "Queue offer timed out due to backpressure",
                   message: `Queue offer timed out for collector '${job.collectorId}'`,
                 }),
-              duration: ENQUEUE_TIMEOUT_MS,
+              duration: ENQUEUE_TIMEOUT,
             }),
             Effect.tapError(() =>
               Metric.increment(collectorQueueOfferTimeoutTotal).pipe(
@@ -236,7 +241,7 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
             updated: statsAcc.updated,
             skipped: statsAcc.skipped,
             failed: statsAcc.failed,
-            duration: Math.max(0, endedAt.epochMillis - startedAt.epochMillis),
+            duration: Duration.millis(Math.max(0, endedAt.epochMillis - startedAt.epochMillis)),
           };
 
           yield* stateManager.updateState(collector.id, {
@@ -248,12 +253,14 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
 
           yield* stateManager.completeRun(runId, stats);
           yield* withRunTags(Metric.increment(collectorRunsCompletedTotal));
-          yield* withRunTags(Metric.update(collectorRunDurationMs, stats.duration));
+          yield* withRunTags(
+            Metric.update(collectorRunDurationMs, Duration.toMillis(stats.duration)),
+          );
           yield* Effect.logInfo("Collector run completed", {
             collectorId: collector.id,
             runId,
             processed: stats.processed,
-            durationMs: stats.duration,
+            durationMs: Duration.toMillis(stats.duration),
           });
           return stats;
         }).pipe(
@@ -440,23 +447,47 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         ),
       );
 
-      yield* Effect.forkDaemon(workerLoop);
+      yield* Effect.forEach(
+        Array.from({ length: WORKER_CONCURRENCY }),
+        () => Effect.forkDaemon(workerLoop),
+        {
+          discard: true,
+        },
+      );
 
       const schedule = Effect.fn("CollectorOrchestrator.schedule")(function* (
         collectorId: CollectorId,
       ) {
-        const { entry } = yield* instantiateCollector(collectorId);
+        const entry = yield* findCollectorEntry(collectorId);
         const runId = yield* stateManager.createRun(collectorId, entry.defaultMode);
-        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode: entry.defaultMode });
+        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode: entry.defaultMode }).pipe(
+          Effect.tapError((error) =>
+            stateManager.failRun(
+              runId,
+              "Failed to enqueue run",
+              Option.none(),
+              "_tag" in error ? error._tag !== "CollectionError" : true,
+            ),
+          ),
+        );
       });
 
       const scheduleExplicit = Effect.fn("CollectorOrchestrator.scheduleExplicit")(function* (
         collectorId: CollectorId,
         mode: CollectionMode,
       ) {
-        yield* instantiateCollector(collectorId);
+        yield* findCollectorEntry(collectorId);
         const runId = yield* stateManager.createRun(collectorId, mode);
-        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode });
+        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode }).pipe(
+          Effect.tapError((error) =>
+            stateManager.failRun(
+              runId,
+              "Failed to enqueue run",
+              Option.none(),
+              "_tag" in error ? error._tag !== "CollectionError" : true,
+            ),
+          ),
+        );
       });
 
       const collectNow = Effect.fn("CollectorOrchestrator.collectNow")(function* (

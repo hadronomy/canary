@@ -1,6 +1,6 @@
-import { Effect, Schema } from "effect";
+import { Duration, Effect, Schema } from "effect";
 
-import { db, eq } from "@canary/db";
+import { db, eq, sql } from "@canary/db";
 import { legalDocuments, legislativeSources } from "@canary/db/schema/legislation";
 import { collector } from "~/services/collector/api";
 import { CollectionMode } from "~/services/collector/schema";
@@ -102,20 +102,20 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
         enabled: true,
         schedule: resolved.schedule,
         mode: CollectionMode.Incremental({
-          since: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7),
+          since: new Date(Date.now() - Duration.toMillis(Duration.days(7))),
           lookBackWindow: undefined,
         }),
         config: {
           sourceId,
           baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
           batchSize: 250,
-          timeoutMs: 30000,
-          requestDelayMs: 50,
+          timeout: Duration.seconds(30),
+          requestDelay: Duration.millis(50),
           perPageConcurrency: 16,
           ingestTextVersions: true,
           textFetchMaxAttempts: 3,
-          textRetryBaseMs: 250,
-          textRequestTimeoutMs: 45000,
+          textRetryBase: Duration.millis(250),
+          textRequestTimeout: Duration.seconds(45),
           trackSyncRuns: true,
           unknownRangeStrategy: "regulation",
           upsertActor: "collector:boe-laws",
@@ -139,10 +139,10 @@ export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsFor
     Effect.tryPromise({
       try: async () => {
         const docs = await db
-          .select({ docId: legalDocuments.docId })
+          .select({ total: sql<number>`count(*)` })
           .from(legalDocuments)
           .where(eq(legalDocuments.sourceId, sourceId));
-        return docs.length;
+        return Number(docs[0]?.total ?? 0);
       },
       catch: (cause) =>
         new BoeBootstrapError({
