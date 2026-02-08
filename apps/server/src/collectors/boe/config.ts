@@ -10,10 +10,10 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
   batchSize: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 250,
   }),
-  timeout: Schema.optionalWith(Schema.DurationFromMillis, {
+  timeout: Schema.optionalWith(Schema.DurationFromSelf, {
     default: () => Duration.seconds(30),
   }),
-  requestDelay: Schema.optionalWith(Schema.DurationFromMillis, {
+  requestDelay: Schema.optionalWith(Schema.DurationFromSelf, {
     default: () => Duration.millis(300),
   }),
   perPageConcurrency: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
@@ -25,10 +25,10 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
   textFetchMaxAttempts: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 3,
   }),
-  textRetryBase: Schema.optionalWith(Schema.DurationFromMillis, {
+  textRetryBase: Schema.optionalWith(Schema.DurationFromSelf, {
     default: () => Duration.millis(250),
   }),
-  textRequestTimeout: Schema.optionalWith(Schema.DurationFromMillis, {
+  textRequestTimeout: Schema.optionalWith(Schema.DurationFromSelf, {
     default: () => Duration.seconds(45),
   }),
   trackSyncRuns: Schema.optionalWith(Schema.Boolean, {
