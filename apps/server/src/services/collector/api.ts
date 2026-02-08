@@ -4,7 +4,7 @@ import { ValidationError } from "./errors";
 import { CollectorFactoryRegistry, type CollectorFactory, type ConfigType } from "./factory";
 import { CollectorOrchestrator } from "./orchestrator";
 import { CollectorRepository, CollectorFilter } from "./repository";
-import { CollectorScheduler } from "./scheduler";
+import { CollectorScheduler, type ScheduleStartOptions } from "./scheduler";
 import { CollectorId as CollectorIdBrand, FactoryId } from "./schema";
 import type { CollectionMode, CollectionRunId, CollectorId } from "./schema";
 import { CollectorStateManager } from "./state";
@@ -183,21 +183,21 @@ export const collector = {
 
   runSnapshot: (runId: CollectionRunId) => CollectorStateManager.getRunSnapshot(runId),
 
-  schedule: (sourceId: CollectorId, cron?: string) =>
+  schedule: (sourceId: CollectorId, cron?: string, options?: ScheduleStartOptions) =>
     Effect.gen(function* () {
       if (cron !== undefined) {
-        return yield* CollectorScheduler.start(sourceId, cron);
+        return yield* CollectorScheduler.start(sourceId, cron, options);
       }
 
       const repository = yield* CollectorRepository;
       const entry = yield* repository.findOne(sourceId);
-      return yield* CollectorScheduler.start(sourceId, entry.schedule);
+      return yield* CollectorScheduler.start(sourceId, entry.schedule, options);
     }),
 
   stopSchedule: (sourceId: CollectorId) => CollectorScheduler.stop(sourceId),
 
-  reschedule: (sourceId: CollectorId, cron: string) =>
-    CollectorScheduler.reschedule(sourceId, cron),
+  reschedule: (sourceId: CollectorId, cron: string, options?: ScheduleStartOptions) =>
+    CollectorScheduler.reschedule(sourceId, cron, options),
 
   startAllSchedules: () => CollectorScheduler.startAll,
 

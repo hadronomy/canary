@@ -213,7 +213,9 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     durationMs: stats.durationMs,
   });
 
-  yield* collector.schedule(collectorId, defaultCollectorCron);
+  yield* collector.schedule(collectorId, defaultCollectorCron, {
+    startMode: "next_cron",
+  });
   yield* Effect.logInfo("Collector incremental schedule started", {
     factoryId: bootstrapFactory.id,
     collectorId,

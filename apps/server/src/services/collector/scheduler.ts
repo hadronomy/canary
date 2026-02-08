@@ -1,4 +1,4 @@
-import { Cron, Effect, Either, Fiber, HashMap, Metric, Option, Ref, Schedule } from "effect";
+import { Cron, Duration, Effect, Either, Fiber, HashMap, Metric, Option, Ref } from "effect";
 
 import { ScheduleError } from "./errors";
 import {
@@ -14,6 +14,12 @@ export interface ScheduledCollector {
   readonly collectorId: CollectorId;
   readonly schedule: string;
   readonly fiber: Fiber.RuntimeFiber<void, never>;
+}
+
+export type ScheduleStartMode = "next_cron" | "immediate_then_cron";
+
+export interface ScheduleStartOptions {
+  readonly startMode?: ScheduleStartMode;
 }
 
 const parseCron = (
@@ -63,6 +69,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
     const start = Effect.fn("CollectorScheduler.start")(function* (
       collectorId: CollectorId,
       cronExpression: string,
+      options?: ScheduleStartOptions,
     ) {
       const cron = yield* parseCron(collectorId, cronExpression).pipe(
         Effect.tapError((error) =>
@@ -74,7 +81,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
 
       yield* stop(collectorId);
 
-      const scheduledTask = orchestrator.schedule(collectorId).pipe(
+      const runScheduledOnce = orchestrator.schedule(collectorId).pipe(
         Effect.tap(() =>
           Metric.increment(collectorScheduleTriggersTotal).pipe(
             Effect.tagMetrics({ collector_id: collectorId }),
@@ -91,9 +98,25 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
             ),
           ),
         ),
-        Effect.repeat(Schedule.cron(cron)),
-        Effect.asVoid,
       );
+
+      const sleepUntilNextCron = Effect.sync(() => {
+        const nextRunAt = Cron.next(cron, new Date());
+        return Math.max(0, nextRunAt.getTime() - Date.now());
+      }).pipe(Effect.flatMap((delayMs) => Effect.sleep(Duration.millis(delayMs))));
+
+      const scheduledTask = Effect.gen(function* () {
+        const startMode = options?.startMode ?? "next_cron";
+
+        if (startMode === "immediate_then_cron") {
+          yield* runScheduledOnce;
+        }
+
+        while (true) {
+          yield* sleepUntilNextCron;
+          yield* runScheduledOnce;
+        }
+      }).pipe(Effect.asVoid);
 
       const fiber = yield* Effect.forkDaemon(scheduledTask);
 
@@ -127,7 +150,8 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
     );
 
     const reschedule = Effect.fn("CollectorScheduler.reschedule")(
-      (collectorId: CollectorId, schedule: string) => start(collectorId, schedule),
+      (collectorId: CollectorId, schedule: string, options?: ScheduleStartOptions) =>
+        start(collectorId, schedule, options),
     );
 
     const triggerNow = Effect.fn("CollectorScheduler.triggerNow")((collectorId: CollectorId) =>
