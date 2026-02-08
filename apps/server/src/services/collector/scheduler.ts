@@ -2,8 +2,8 @@ import { Cron, Duration, Effect, Either, Fiber, HashMap, Metric, Option, Ref } f
 
 import { ScheduleError } from "./errors";
 import {
-  collectorScheduleErrorsTotal,
   collectorScheduledTotal,
+  collectorScheduleErrorsTotal,
   collectorScheduleTriggersTotal,
 } from "./metrics";
 import { CollectorOrchestrator } from "./orchestrator";
@@ -21,6 +21,8 @@ export type ScheduleStartMode = "next_cron" | "immediate_then_cron";
 export interface ScheduleStartOptions {
   readonly startMode?: ScheduleStartMode;
 }
+
+const SCHEDULER_HEARTBEAT_INTERVAL = Duration.minutes(15);
 
 const parseCron = (
   collectorId: CollectorId,
@@ -42,10 +44,11 @@ const parseCron = (
 export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("CollectorScheduler", {
   accessors: true,
   dependencies: [CollectorOrchestrator.Default, CollectorRepository.Default],
-  effect: Effect.gen(function* () {
+  scoped: Effect.gen(function* () {
     const orchestrator = yield* CollectorOrchestrator;
     const repository = yield* CollectorRepository;
     const scheduledRef = yield* Ref.make(HashMap.empty<CollectorId, ScheduledCollector>());
+    const heartbeatFiberRef = yield* Ref.make(Option.none<Fiber.RuntimeFiber<void, never>>());
 
     const syncScheduledGauge = Ref.get(scheduledRef).pipe(
       Effect.flatMap((scheduled) => Metric.set(collectorScheduledTotal, HashMap.size(scheduled))),
@@ -143,11 +146,16 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
         ),
       );
 
-    const stopAll = Ref.get(scheduledRef).pipe(
-      Effect.flatMap((scheduled) =>
-        Effect.forEach(Array.from(HashMap.keys(scheduled)), stop, { discard: true }),
-      ),
-    );
+    const stopAll = Effect.gen(function* () {
+      const scheduled = yield* Ref.get(scheduledRef);
+      yield* Effect.forEach(Array.from(HashMap.keys(scheduled)), stop, { discard: true });
+
+      const heartbeatFiber = yield* Ref.get(heartbeatFiberRef);
+      if (Option.isSome(heartbeatFiber)) {
+        yield* Fiber.interrupt(heartbeatFiber.value).pipe(Effect.asVoid);
+        yield* Ref.set(heartbeatFiberRef, Option.none());
+      }
+    });
 
     const reschedule = Effect.fn("CollectorScheduler.reschedule")(
       (collectorId: CollectorId, schedule: string, options?: ScheduleStartOptions) =>
@@ -166,6 +174,26 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
         })),
       ),
     );
+
+    const heartbeat = Effect.forever(
+      Effect.sleep(SCHEDULER_HEARTBEAT_INTERVAL).pipe(
+        Effect.zipRight(
+          scheduled.pipe(
+            Effect.flatMap((entries) =>
+              Effect.logInfo("Collector scheduler heartbeat", {
+                scheduledCollectors: entries.length,
+                schedules: entries,
+              }),
+            ),
+          ),
+        ),
+      ),
+    ).pipe(Effect.asVoid);
+
+    const heartbeatFiber = yield* Effect.forkDaemon(heartbeat);
+    yield* Ref.set(heartbeatFiberRef, Option.some(heartbeatFiber));
+
+    yield* Effect.addFinalizer(() => stopAll);
 
     return {
       start,

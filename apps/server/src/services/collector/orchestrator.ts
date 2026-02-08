@@ -112,12 +112,13 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
       CollectorRepository.Default,
       CollectorStateManager.Default,
     ],
-    effect: Effect.gen(function* () {
+    scoped: Effect.gen(function* () {
       const registry = yield* CollectorFactoryRegistry;
       const repository = yield* CollectorRepository;
       const stateManager = yield* CollectorStateManager;
       const queue = yield* Queue.bounded<CollectionJob>(128);
       const runningRef = yield* Ref.make(HashMap.empty<CollectionRunId, RunningCollector>());
+      const workerFibersRef = yield* Ref.make<Array<Fiber.RuntimeFiber<void, never>>>([]);
 
       const syncQueueDepth = Queue.size(queue).pipe(
         Effect.flatMap((pending) => Metric.set(collectorQueueDepth, pending)),
@@ -447,12 +448,32 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         ),
       );
 
-      yield* Effect.forEach(
+      const workerFibers = yield* Effect.forEach(
         Array.from({ length: WORKER_CONCURRENCY }),
         () => Effect.forkDaemon(workerLoop),
         {
-          discard: true,
+          discard: false,
         },
+      );
+      yield* Ref.set(workerFibersRef, workerFibers);
+
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          const running = yield* Ref.get(runningRef);
+          yield* Effect.forEach(
+            Array.from(HashMap.values(running)),
+            ({ fiber }) => Fiber.interrupt(fiber).pipe(Effect.asVoid),
+            { discard: true },
+          );
+
+          const workerFibers = yield* Ref.get(workerFibersRef);
+          yield* Effect.forEach(
+            workerFibers,
+            (workerFiber) => Fiber.interrupt(workerFiber).pipe(Effect.asVoid),
+            { discard: true },
+          );
+          yield* Ref.set(workerFibersRef, []);
+        }),
       );
 
       const schedule = Effect.fn("CollectorOrchestrator.schedule")(function* (
