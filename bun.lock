@@ -59,6 +59,7 @@
         "@effect/platform": "^0.94.1",
         "@effect/platform-bun": "^0.87.0",
         "@elysiajs/cors": "^1.4.1",
+        "ansis": "^4.1.0",
         "bullmq": "^5.66.7",
         "dotenv": "catalog:",
         "effect": "^3.19.15",
