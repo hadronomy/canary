@@ -1,4 +1,4 @@
-import { Duration, Effect, Fiber, Option, Ref, Schema } from "effect";
+import { Duration, Effect, Fiber, Layer, Option, Ref, Schema } from "effect";
 
 import { db, eq } from "@canary/db";
 import { syncRuns } from "@canary/db/schema/legislation";
@@ -8,6 +8,7 @@ import {
   ensureBoeCollector,
   ensureBoeSource,
 } from "~/collectors/boe";
+import { AppLoggerLive } from "~/logging/logger";
 import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 
@@ -237,7 +238,7 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   return;
 });
 
-const main = runCollectorCli().pipe(Effect.provide(CollectorLive));
+const main = runCollectorCli().pipe(Effect.provide(Layer.merge(CollectorLive, AppLoggerLive)));
 void Effect.runPromise(main);
 
 // import { cors } from "@elysiajs/cors";
