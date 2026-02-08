@@ -238,7 +238,8 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   return;
 });
 
-const main = runCollectorCli().pipe(Effect.provide(Layer.merge(CollectorLive, AppLoggerLive)));
+const RuntimeLive = CollectorLive.pipe(Layer.provide(AppLoggerLive));
+const main = runCollectorCli().pipe(Effect.provide(RuntimeLive));
 void Effect.runPromise(main);
 
 // import { cors } from "@elysiajs/cors";
