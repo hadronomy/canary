@@ -145,11 +145,15 @@ export const BoeLawsCollectorFactory = defineFactory({
   capabilities,
   make: ({ collectorId, config }) => {
     const sourceId = config.sourceId;
+    const requestTimeout = config.timeout;
+    const requestDelay = config.requestDelay;
+    const textRetryBaseDelay = config.textRetryBase;
+    const textRequestTimeout = config.textRequestTimeout;
 
-    const retryPolicy = (attempts: number, baseDelayMs: number) =>
+    const retryPolicy = (attempts: number, baseDelay: Duration.DurationInput) =>
       Schedule.intersect(
         Schedule.recurs(Math.max(0, attempts - 1)),
-        Schedule.exponential(Duration.millis(baseDelayMs)).pipe(Schedule.jittered),
+        Schedule.exponential(baseDelay).pipe(Schedule.jittered),
       );
 
     const ensureSourceExists = Effect.fn("BoeCollector.ensureSourceExists")(() =>
@@ -237,7 +241,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                     message: `Cannot reach source '${url}' for collector '${collectorId}'`,
                   }),
           }).pipe(
-            Effect.timeout(Duration.millis(config.timeoutMs)),
+            Effect.timeout(requestTimeout),
             Effect.catchTag("TimeoutException", (timeoutError) =>
               Effect.fail(
                 new SourceConnectionError({
@@ -249,7 +253,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               ),
             ),
             Effect.retry({
-              schedule: retryPolicy(config.textFetchMaxAttempts, config.textRetryBaseMs),
+              schedule: retryPolicy(config.textFetchMaxAttempts, textRetryBaseDelay),
               while: (error): error is SourceConnectionError =>
                 error._tag === "SourceConnectionError",
             }),
@@ -306,7 +310,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                         message: `Collection error [${collectorId}]: Unable to fetch consolidated text for '${identifier}'`,
                       }),
               }).pipe(
-                Effect.timeout(Duration.millis(config.textRequestTimeoutMs)),
+                Effect.timeout(textRequestTimeout),
                 Effect.catchTag("TimeoutException", (timeoutError) =>
                   Effect.fail(
                     new SourceConnectionError({
@@ -333,7 +337,7 @@ export const BoeLawsCollectorFactory = defineFactory({
 
               return yield* fetchOnce.pipe(
                 Effect.retry({
-                  schedule: retryPolicy(config.textFetchMaxAttempts, config.textRetryBaseMs),
+                  schedule: retryPolicy(config.textFetchMaxAttempts, textRetryBaseDelay),
                   while: (error): error is SourceConnectionError =>
                     error._tag === "SourceConnectionError",
                 }),
@@ -976,9 +980,10 @@ export const BoeLawsCollectorFactory = defineFactory({
                     const hasMore = page.length === config.batchSize;
                     const nextOffset = state.offset + config.batchSize;
 
+                    const requestDelayMs = Duration.toMillis(requestDelay);
                     const effectiveDelayMs = isFullSyncLike(mode)
-                      ? Math.max(50, Math.floor(config.requestDelayMs / 4))
-                      : config.requestDelayMs;
+                      ? Math.max(50, Math.floor(requestDelayMs / 4))
+                      : requestDelayMs;
 
                     if (hasMore && effectiveDelayMs > 0) {
                       yield* Effect.sleep(Duration.millis(effectiveDelayMs));

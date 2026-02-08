@@ -26,7 +26,7 @@ export interface RunSnapshot {
 export interface StateUpdate {
   readonly mode: CollectionMode;
   readonly documentsCollected: number;
-  readonly lastDocumentDate: Option.Option<Date>;
+  readonly lastDocumentDate: Option.Option<DateTime.Utc>;
   readonly cursor: Option.Option<{ readonly value: string }>;
 }
 
@@ -99,6 +99,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
             update.mode._tag === "Incremental" ? Option.some(now) : previous.lastIncremental,
           lastCursor: nextCursor,
           totalDocumentsCollected: previous.totalDocumentsCollected + update.documentsCollected,
+          lastDocumentDate: update.lastDocumentDate,
           updatedAt: now,
         });
 
