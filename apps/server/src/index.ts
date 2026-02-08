@@ -11,8 +11,9 @@ import {
 import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 
-const incrementalCron = "*/15 * * * *";
+const defaultCollectorCron = "*/15 * * * *";
 const progressPollInterval = Duration.seconds(5);
+const bootstrapFactory = BoeLawsCollectorFactory;
 
 class CliError extends Schema.TaggedError<CliError>()("CliError", {
   message: Schema.String,
@@ -91,7 +92,7 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
       const progress = progressOption.value;
       if (progress.processed !== lastLoggedProcessed) {
         lastLoggedProcessed = progress.processed;
-        yield* Effect.logInfo("BOE full sync progress", {
+        yield* Effect.logInfo("Collector full sync progress", {
           runId,
           processed: progress.processed,
           inserted: progress.inserted,
@@ -106,8 +107,8 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
   }
 });
 
-const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
-  yield* collector.registerFactory(BoeLawsCollectorFactory);
+const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
+  yield* collector.registerFactory(bootstrapFactory);
 
   const activeCollectorRef = yield* Ref.make(Option.none<CollectorId>());
   const activeRunRef = yield* Ref.make(Option.none<CollectionRunId>());
@@ -129,31 +130,34 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
     yield* Effect.logInfo("Graceful shutdown complete", { signal });
   });
 
-  yield* Effect.logInfo("BOE collector bootstrap started", {
-    schedule: incrementalCron,
+  yield* Effect.logInfo("Collector bootstrap started", {
+    factoryId: bootstrapFactory.id,
+    schedule: defaultCollectorCron,
   });
 
   const sourceId = yield* ensureBoeSource();
   const existingDocuments = yield* countDocumentsForSource(sourceId);
   if (existingDocuments > 0) {
-    yield* Effect.logInfo("Existing BOE documents found; unchanged items will be skipped", {
+    yield* Effect.logInfo("Existing source documents found; unchanged items will be skipped", {
+      factoryId: bootstrapFactory.id,
       sourceId,
       existingDocuments,
     });
   }
 
   const collectorId = yield* ensureBoeCollector({
-    schedule: incrementalCron,
+    schedule: defaultCollectorCron,
   });
   yield* Ref.set(activeCollectorRef, Option.some(collectorId));
 
-  yield* Effect.logInfo("BOE collector is ready", {
+  yield* Effect.logInfo("Collector is ready", {
+    factoryId: bootstrapFactory.id,
     collectorId,
   });
 
   yield* collector.update({
     id: collectorId,
-    schedule: incrementalCron,
+    schedule: defaultCollectorCron,
     mode: CollectionMode.Incremental({
       since: new Date(),
       lookBackWindow: undefined,
@@ -167,7 +171,8 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
     },
   });
 
-  yield* Effect.logInfo("Starting BOE full sync", {
+  yield* Effect.logInfo("Starting collector full sync", {
+    factoryId: bootstrapFactory.id,
     collectorId,
   });
 
@@ -197,7 +202,8 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
   const stats = fullSyncOutcome.stats;
   yield* Ref.set(activeRunRef, Option.none());
 
-  yield* Effect.logInfo("BOE full sync finished", {
+  yield* Effect.logInfo("Collector full sync finished", {
+    factoryId: bootstrapFactory.id,
     collectorId,
     runId,
     inserted: stats.inserted,
@@ -206,18 +212,20 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
     durationMs: stats.durationMs,
   });
 
-  yield* collector.schedule(collectorId, incrementalCron);
-  yield* Effect.logInfo("BOE incremental schedule started", {
+  yield* collector.schedule(collectorId, defaultCollectorCron);
+  yield* Effect.logInfo("Collector incremental schedule started", {
+    factoryId: bootstrapFactory.id,
     collectorId,
-    cron: incrementalCron,
+    cron: defaultCollectorCron,
   });
 
   const heartbeat = Effect.forever(
     Effect.sleep(Duration.minutes(15)).pipe(
       Effect.zipRight(
-        Effect.logInfo("BOE scheduler heartbeat", {
+        Effect.logInfo("Collector scheduler heartbeat", {
+          factoryId: bootstrapFactory.id,
           collectorId,
-          cron: incrementalCron,
+          cron: defaultCollectorCron,
         }),
       ),
     ),
@@ -229,7 +237,7 @@ const runBoeCollectorCli = Effect.fn("cli.runBoeCollector")(function* () {
   return;
 });
 
-const main = runBoeCollectorCli().pipe(Effect.provide(CollectorLive));
+const main = runCollectorCli().pipe(Effect.provide(CollectorLive));
 void Effect.runPromise(main);
 
 // import { cors } from "@elysiajs/cors";
