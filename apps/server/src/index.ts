@@ -1,5 +1,20 @@
 import * as Sentry from "@sentry/node";
-import { Cause, Duration, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
+import {
+  Cause,
+  Duration,
+  Effect,
+  Exit,
+  FiberId,
+  FiberRefs,
+  HashMap,
+  Layer,
+  List,
+  LogLevel,
+  LogSpan,
+  Option,
+  Ref,
+  Schema,
+} from "effect";
 
 import { eq } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
@@ -10,7 +25,7 @@ import {
   ensureBoeCollector,
   ensureBoeSource,
 } from "~/collectors/boe";
-import { AppLoggerLive } from "~/logging/logger";
+import { AppLoggerLive, makeAppStringLogger } from "~/logging/logger";
 import { CollectionMode, collector, CollectorLiveWithFactories } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 import { TelemetryLive } from "~/telemetry/sentry-otel";
@@ -18,6 +33,7 @@ import { TelemetryLive } from "~/telemetry/sentry-otel";
 const defaultCollectorCron = "*/15 * * * *";
 const progressPollInterval = Duration.seconds(5);
 const bootstrapFactory = BoeLawsCollectorFactory;
+const runtimeStartedAt = Date.now();
 
 class CliError extends Schema.TaggedError<CliError>()("CliError", {
   message: Schema.String,
@@ -241,21 +257,37 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   return;
 });
 
+const DatabaseLive = DatabaseService.Default;
+
 const CollectorRuntimeLive = Layer.mergeAll(
   CollectorLiveWithFactories(bootstrapFactory),
   TelemetryLive,
-).pipe(Layer.provide(DatabaseService.Default));
+).pipe(Layer.provide(DatabaseLive));
 
-const RuntimeLive = Layer.mergeAll(DatabaseService.Default, CollectorRuntimeLive).pipe(
+const RuntimeLive = Layer.mergeAll(DatabaseLive, CollectorRuntimeLive).pipe(
   Layer.provide(AppLoggerLive),
 );
 
 const main = runCollectorCli().pipe(Effect.provide(RuntimeLive));
 void Effect.runPromiseExit(main).then(async (exit) => {
   if (Exit.isFailure(exit)) {
+    const now = Date.now();
     Sentry.captureException(Cause.squash(exit.cause));
     await Sentry.close(2000);
-    process.stderr.write(`${Cause.pretty(exit.cause)}\n`);
+    const rendered = makeAppStringLogger().log({
+      fiberId: FiberId.none,
+      logLevel: LogLevel.Error,
+      message: "Collector runtime terminated with failure",
+      cause: exit.cause,
+      context: FiberRefs.empty(),
+      spans: List.fromIterable([
+        LogSpan.make("runtime", runtimeStartedAt),
+        LogSpan.make("shutdown", now),
+      ]),
+      annotations: HashMap.empty(),
+      date: new Date(),
+    });
+    process.stderr.write(`${rendered}\n`);
     process.exitCode = 1;
   }
 });

@@ -1,6 +1,6 @@
 import * as PgClient from "@effect/sql-pg/PgClient";
 import * as PgDrizzle from "drizzle-orm/effect-postgres";
-import { Duration, Effect, Schema } from "effect";
+import { Duration, Effect, Schedule, Schema } from "effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 
@@ -56,8 +56,20 @@ const makeDatabaseService = Effect.gen(function* () {
 
   const drizzleLayer = Layer.merge(PgDrizzle.DefaultServices, pgClientLayer);
 
+  const startupRetrySchedule = Schedule.exponential(
+    Duration.max(Duration.millis(1), serviceConfig.startupBaseDelay),
+  ).pipe(Schedule.compose(Schedule.recurs(serviceConfig.startupRetries)));
+
   const db: DatabaseClient = yield* PgDrizzle.make({ schema, relations }).pipe(
     Effect.provide(drizzleLayer),
+    Effect.tapError((cause) =>
+      Effect.logWarning("Database client initialization failed", {
+        maxRetries: serviceConfig.startupRetries,
+        baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
+        error: String(cause),
+      }),
+    ),
+    Effect.retry(startupRetrySchedule),
     Effect.mapError(
       (cause) =>
         new DatabaseUnavailableError({
@@ -82,27 +94,18 @@ const makeDatabaseService = Effect.gen(function* () {
     ),
   );
 
-  const startupCheck = (attempt: number): Effect.Effect<void, DatabaseUnavailableError> =>
+  const ready = Effect.fn("DatabaseService.ready")(() =>
     healthCheck().pipe(
-      Effect.catchTag("DatabaseUnavailableError", (error) => {
-        if (attempt >= serviceConfig.startupRetries) {
-          return Effect.fail(error);
-        }
-
-        const delayMs = Math.max(0, serviceConfig.startupBaseDelayMs * 2 ** attempt);
-        return Effect.logWarning("Database unavailable during startup precheck, retrying", {
-          attempt: attempt + 1,
+      Effect.tapError((error) =>
+        Effect.logWarning("Database unavailable during startup precheck", {
           maxRetries: serviceConfig.startupRetries,
-          nextDelayMs: delayMs,
+          baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
           error: error.message,
-        }).pipe(
-          Effect.zipRight(Effect.sleep(Duration.millis(delayMs))),
-          Effect.zipRight(startupCheck(attempt + 1)),
-        );
-      }),
-    );
-
-  const ready = Effect.fn("DatabaseService.ready")(() => startupCheck(0));
+        }),
+      ),
+      Effect.retry(startupRetrySchedule),
+    ),
+  );
   const client = Effect.fn("DatabaseService.client")(() => Effect.succeed(db));
 
   const service: DatabaseServiceApi = {

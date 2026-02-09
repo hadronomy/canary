@@ -23,9 +23,7 @@ export const databaseServiceConfig = Config.all({
   startupRetries: Schema.Config("DB_STARTUP_RETRIES", NonNegativeIntFromString).pipe(
     Config.withDefault(2),
   ),
-  startupBaseDelayMs: Schema.Config("DB_STARTUP_BASE_DELAY_MS", NonNegativeIntFromString).pipe(
-    Config.withDefault(250),
-  ),
+  startupBaseDelay: Config.duration("DB_STARTUP_BASE_DELAY").pipe(Config.withDefault("250 millis")),
 });
 
 export type DatabaseClientConfig = Effect.Effect.Success<typeof databaseClientConfig>;
