@@ -1,6 +1,7 @@
-import { Duration, Effect, Layer, Option, Ref, Schema } from "effect";
+import * as Sentry from "@sentry/node";
+import { Cause, Duration, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
 
-import { db, eq } from "@canary/db";
+import { eq } from "@canary/db";
 import { syncRuns } from "@canary/db/schema/legislation";
 import {
   BoeLawsCollectorFactory,
@@ -11,6 +12,8 @@ import {
 import { AppLoggerLive } from "~/logging/logger";
 import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
+import { DatabaseService } from "~/services/database";
+import { TelemetryLive } from "~/telemetry/sentry-otel";
 
 const defaultCollectorCron = "*/15 * * * *";
 const progressPollInterval = Duration.seconds(5);
@@ -43,6 +46,7 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
   while (true) {
     const snapshotOption = yield* collector.runSnapshot(runId);
     if (Option.isNone(snapshotOption)) {
+      const db = yield* DatabaseService.client();
       const runRows = yield* Effect.tryPromise({
         try: () =>
           db
@@ -136,6 +140,17 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     schedule: defaultCollectorCron,
   });
 
+  yield* DatabaseService.ready().pipe(
+    Effect.mapError(
+      (cause) =>
+        new CliError({
+          operation: "startup.dbPrecheck",
+          message: cause.message,
+          cause,
+        }),
+    ),
+  );
+
   const sourceId = yield* ensureBoeSource();
   const existingDocuments = yield* countDocumentsForSource(sourceId);
   if (existingDocuments > 0) {
@@ -227,9 +242,19 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   return;
 });
 
-const RuntimeLive = CollectorLive.pipe(Layer.provide(AppLoggerLive));
+const RuntimeLive = Layer.mergeAll(CollectorLive, TelemetryLive, DatabaseService.Default).pipe(
+  Layer.provide(AppLoggerLive),
+);
+
 const main = runCollectorCli().pipe(Effect.provide(RuntimeLive));
-void Effect.runPromise(main);
+void Effect.runPromiseExit(main).then(async (exit) => {
+  if (Exit.isFailure(exit)) {
+    Sentry.captureException(Cause.squash(exit.cause));
+    await Sentry.close(2000);
+    process.stderr.write(`${Cause.pretty(exit.cause)}\n`);
+    process.exitCode = 1;
+  }
+});
 
 // import { cors } from "@elysiajs/cors";
 // import { Elysia } from "elysia";
