@@ -1,2 +1,0 @@
--- Keep generate_uuid_v7 for compatibility with existing defaults in manually written migrations.
--- This migration is intentionally a no-op.

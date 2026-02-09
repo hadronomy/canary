@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   boolean,
@@ -499,107 +499,6 @@ export const embeddingCache = pgTable(
     ),
   ],
 );
-
-// ─── Relations ───
-export const legislativeSourcesRelations = relations(legislativeSources, ({ many }) => ({
-  documents: many(legalDocuments),
-  syncRuns: many(syncRuns),
-}));
-
-export const legalDocumentsRelations = relations(legalDocuments, ({ one, many }) => ({
-  source: one(legislativeSources, {
-    fields: [legalDocuments.sourceId],
-    references: [legislativeSources.sourceId],
-  }),
-  fragments: many(senseFragments),
-  versions: many(documentVersions),
-  events: many(legislativeEvents),
-  outgoingAnchors: many(referenceAnchors, { relationName: "sourceRefs" }),
-  incomingAnchors: many(referenceAnchors, { relationName: "targetRefs" }),
-  parentBulletin: one(legalDocuments, {
-    fields: [legalDocuments.parentBulletinId],
-    references: [legalDocuments.docId],
-  }),
-  repealedBy: one(legalDocuments, {
-    fields: [legalDocuments.repealedByDocId],
-    references: [legalDocuments.docId],
-  }),
-  consolidates: one(legalDocuments, {
-    fields: [legalDocuments.consolidatesDocId],
-    references: [legalDocuments.docId],
-  }),
-}));
-
-export const documentVersionsRelations = relations(documentVersions, ({ one, many }) => ({
-  document: one(legalDocuments, {
-    fields: [documentVersions.docId],
-    references: [legalDocuments.docId],
-  }),
-  fragments: many(senseFragments),
-}));
-
-export const legislativeEventsRelations = relations(legislativeEvents, ({ one }) => ({
-  document: one(legalDocuments, {
-    fields: [legislativeEvents.docId],
-    references: [legalDocuments.docId],
-  }),
-}));
-
-export const senseFragmentsRelations = relations(senseFragments, ({ one, many }) => ({
-  document: one(legalDocuments, {
-    fields: [senseFragments.docId],
-    references: [legalDocuments.docId],
-  }),
-  version: one(documentVersions, {
-    fields: [senseFragments.versionId],
-    references: [documentVersions.versionId],
-  }),
-  outgoingAnchors: many(referenceAnchors, { relationName: "fragmentSourceRefs" }),
-  embeddings: many(embeddingCache),
-}));
-
-export const referenceAnchorsRelations = relations(referenceAnchors, ({ one }) => ({
-  sourceDoc: one(legalDocuments, {
-    fields: [referenceAnchors.sourceDocId],
-    references: [legalDocuments.docId],
-    relationName: "sourceRefs",
-  }),
-  targetDoc: one(legalDocuments, {
-    fields: [referenceAnchors.targetDocId],
-    references: [legalDocuments.docId],
-    relationName: "targetRefs",
-  }),
-  sourceFragment: one(senseFragments, {
-    fields: [referenceAnchors.sourceFragmentId],
-    references: [senseFragments.fragmentId],
-    relationName: "fragmentSourceRefs",
-  }),
-}));
-
-export const legalPathsRelations = relations(legalPaths, ({ one }) => ({
-  startDoc: one(legalDocuments, {
-    fields: [legalPaths.startDocId],
-    references: [legalDocuments.docId],
-  }),
-  endDoc: one(legalDocuments, {
-    fields: [legalPaths.endDocId],
-    references: [legalDocuments.docId],
-  }),
-}));
-
-export const syncRunsRelations = relations(syncRuns, ({ one }) => ({
-  source: one(legislativeSources, {
-    fields: [syncRuns.sourceId],
-    references: [legislativeSources.sourceId],
-  }),
-}));
-
-export const embeddingCacheRelations = relations(embeddingCache, ({ one }) => ({
-  fragment: one(senseFragments, {
-    fields: [embeddingCache.fragmentId],
-    references: [senseFragments.fragmentId],
-  }),
-}));
 
 // ─── Types ───
 export type LegislativeSource = typeof legislativeSources.$inferSelect;
