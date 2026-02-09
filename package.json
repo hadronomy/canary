@@ -35,9 +35,10 @@
   "dependencies": {
     "@canary/env": "workspace:*",
     "@effect/cli": "^0.73.2",
-    "@effect/platform": "^0.94.3",
+    "@effect/platform": "^0.94.4",
     "@effect/platform-bun": "^0.87.1",
     "dotenv": "^17.2.3",
+    "drizzle-orm": "1.0.0-beta.15-90d1d1a",
     "effect": "^3.19.16",
     "tsdown": "^0.20.3",
     "zod": "^4.3.6"
