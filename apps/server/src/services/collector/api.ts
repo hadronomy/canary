@@ -10,15 +10,17 @@ import type { CollectionMode, CollectionRunId, CollectorId } from "./schema";
 import { CollectorStateManager } from "./state";
 
 type AnySchema = Schema.Schema.AnyNoContext;
+type AnyFactory = CollectorFactory<AnySchema, unknown>;
+type FactorySchema<F extends AnyFactory> = F extends CollectorFactory<infer S, unknown> ? S : never;
 
-export interface CollectorCreateInput<S extends AnySchema> {
-  readonly factory: CollectorFactory<S>;
+export interface CollectorCreateInput<F extends AnyFactory> {
+  readonly factory: F;
   readonly name: string;
   readonly description?: string;
   readonly enabled?: boolean;
   readonly schedule: string;
   readonly mode: CollectionMode;
-  readonly config: ConfigType<S>;
+  readonly config: ConfigType<FactorySchema<F>>;
 }
 
 export interface CollectorUpdateInput {
@@ -48,7 +50,11 @@ const toSummary = (entry: {
 });
 
 export const collector = {
-  registerFactory: <S extends AnySchema>(factory: CollectorFactory<S>) =>
+  /**
+   * @deprecated Prefer static factory wiring with CollectorLiveWithFactories(...factories).
+   * Dynamic registration remains for compatibility and tests.
+   */
+  registerFactory: <S extends AnySchema, R>(factory: CollectorFactory<S, R>) =>
     Effect.gen(function* () {
       const registry = yield* CollectorFactoryRegistry;
       yield* registry.register(factory);
@@ -66,7 +72,7 @@ export const collector = {
       return yield* registry.list;
     }),
 
-  create: <S extends AnySchema>(input: CollectorCreateInput<S>) =>
+  create: <F extends AnyFactory>(input: CollectorCreateInput<F>) =>
     Effect.gen(function* () {
       const repository = yield* CollectorRepository;
       const decodedConfig = yield* Schema.decodeUnknown(input.factory.configSchema)(
@@ -208,10 +214,28 @@ export const collector = {
   schedules: () => CollectorScheduler.scheduled,
 };
 
-export const CollectorLive = Layer.mergeAll(
-  CollectorFactoryRegistry.Default,
+const CollectorRuntimeLive = Layer.mergeAll(
   CollectorRepository.Default,
   CollectorStateManager.Default,
   CollectorOrchestrator.Default,
   CollectorScheduler.Default,
-);
+).pipe(Layer.provide(CollectorFactoryRegistry.Default));
+
+/**
+ * @deprecated Prefer CollectorLiveWithFactories(...factories) for deterministic wiring and dependency inference.
+ */
+export const CollectorLive = Layer.mergeAll(CollectorFactoryRegistry.Default, CollectorRuntimeLive);
+
+export const CollectorLiveWithFactories = <const Factories extends ReadonlyArray<AnyFactory>>(
+  ...factories: Factories
+) => {
+  const registry = CollectorFactoryRegistry.layer(...factories);
+  const runtime = Layer.mergeAll(
+    CollectorRepository.Default,
+    CollectorStateManager.Default,
+    CollectorOrchestrator.Default,
+    CollectorScheduler.Default,
+  ).pipe(Layer.provide(registry));
+
+  return Layer.mergeAll(registry, runtime);
+};
