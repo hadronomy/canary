@@ -1,7 +1,8 @@
-import { Config, Duration, Effect, Schema } from "effect";
+import { Duration, Effect, Schema } from "effect";
 
-import { db } from "@canary/db";
-import { legislativeSources } from "@canary/db/schema/legislation";
+import { databaseServiceConfig } from "./config";
+import { db } from "./index";
+import { legislativeSources } from "./schema/legislation";
 
 export class DatabaseUnavailableError extends Schema.TaggedError<DatabaseUnavailableError>()(
   "DatabaseUnavailableError",
@@ -12,15 +13,10 @@ export class DatabaseUnavailableError extends Schema.TaggedError<DatabaseUnavail
   },
 ) {}
 
-const DatabaseConfig = Config.all({
-  startupRetries: Config.integer("DB_STARTUP_RETRIES").pipe(Config.withDefault(2)),
-  startupBaseDelayMs: Config.integer("DB_STARTUP_BASE_DELAY_MS").pipe(Config.withDefault(250)),
-});
-
 export class DatabaseService extends Effect.Service<DatabaseService>()("DatabaseService", {
   accessors: true,
   scoped: Effect.gen(function* () {
-    const config = yield* DatabaseConfig;
+    const config = yield* databaseServiceConfig;
 
     const healthCheck = Effect.fn("DatabaseService.healthCheck")(function* () {
       yield* Effect.tryPromise({

@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/node";
 import { Cause, Duration, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
 
 import { eq } from "@canary/db";
+import { DatabaseService } from "@canary/db/effect";
 import { syncRuns } from "@canary/db/schema/legislation";
 import {
   BoeLawsCollectorFactory,
@@ -12,7 +13,6 @@ import {
 import { AppLoggerLive } from "~/logging/logger";
 import { CollectionMode, collector, CollectorLive } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
-import { DatabaseService } from "~/services/database";
 import { TelemetryLive } from "~/telemetry/sentry-otel";
 
 const defaultCollectorCron = "*/15 * * * *";
