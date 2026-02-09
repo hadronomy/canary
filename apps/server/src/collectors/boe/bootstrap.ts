@@ -1,9 +1,10 @@
 import { Duration, Effect, Schema } from "effect";
 
-import { db, eq, sql } from "@canary/db";
+import { eq, sql } from "@canary/db";
 import { legalDocuments, legislativeSources } from "@canary/db/schema/legislation";
 import { collector } from "~/services/collector/api";
 import { CollectionMode } from "~/services/collector/schema";
+import { DatabaseService } from "~/services/database";
 
 import { BoeLawsCollectorFactory } from "./factory";
 
@@ -36,49 +37,70 @@ const defaults: Required<EnsureBoeCollectorInput> = {
 
 export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
   (input?: EnsureBoeCollectorInput) =>
-    Effect.tryPromise({
-      try: async () => {
-        const resolved = { ...defaults, ...input };
-        const existing = await db
-          .select({ sourceId: legislativeSources.sourceId })
-          .from(legislativeSources)
-          .where(eq(legislativeSources.sourceCode, resolved.sourceCode))
-          .limit(1);
+    Effect.gen(function* () {
+      const resolved = { ...defaults, ...input };
+      const db = yield* DatabaseService.client();
+      const existingRows = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .select({ sourceId: legislativeSources.sourceId })
+            .from(legislativeSources)
+            .where(eq(legislativeSources.sourceCode, resolved.sourceCode))
+            .limit(1),
+        catch: (cause) =>
+          new BoeBootstrapError({
+            operation: "ensureBoeSource.findLegislativeSource",
+            message: `Failed to query legislative source: ${String(cause)}`,
+            cause,
+          }),
+      });
 
-        if (existing[0] !== undefined) {
-          return existing[0].sourceId;
-        }
+      const existingSourceId = existingRows[0]?.sourceId;
+      if (existingSourceId !== undefined) {
+        return existingSourceId;
+      }
 
-        const inserted = await db
-          .insert(legislativeSources)
-          .values({
-            sourceCode: resolved.sourceCode,
-            sourceName: resolved.sourceName,
-            shortName: "BOE",
-            description: "Official BOE consolidated laws source",
-            jurisdiction: "estatal",
-            autonomousCommunity: null,
-            isParliamentary: false,
-            isOfficialGazette: true,
-            providesStage: ["bulletin", "enacted", "repealed", "expired"],
-            baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
-            apiConfig: {
-              supportsIncremental: true,
-              supportsBackfill: true,
-              format: "json",
-            },
-          })
-          .returning({ sourceId: legislativeSources.sourceId });
+      const inserted = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .insert(legislativeSources)
+            .values({
+              sourceCode: resolved.sourceCode,
+              sourceName: resolved.sourceName,
+              shortName: "BOE",
+              description: "Official BOE consolidated laws source",
+              jurisdiction: "estatal",
+              autonomousCommunity: null,
+              isParliamentary: false,
+              isOfficialGazette: true,
+              providesStage: ["bulletin", "enacted", "repealed", "expired"],
+              baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
+              apiConfig: {
+                supportsIncremental: true,
+                supportsBackfill: true,
+                format: "json",
+              },
+            })
+            .returning({ sourceId: legislativeSources.sourceId }),
+        catch: (cause) =>
+          new BoeBootstrapError({
+            operation: "ensureBoeSource.insertLegislativeSource",
+            message: `Failed to insert legislative source: ${String(cause)}`,
+            cause,
+          }),
+      });
 
-        return inserted[0]!.sourceId;
-      },
-      catch: (cause) =>
-        new BoeBootstrapError({
-          operation: "ensureBoeSource",
-          message: `Failed to ensure BOE legislative source: ${String(cause)}`,
-          cause,
-        }),
-    }),
+      return inserted[0]!.sourceId;
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new BoeBootstrapError({
+            operation: "ensureBoeSource",
+            message: `Failed to ensure BOE legislative source: ${String(cause)}`,
+            cause,
+          }),
+      ),
+    ),
 );
 
 export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
@@ -136,19 +158,30 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
 
 export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsForSource")(
   (sourceId: string) =>
-    Effect.tryPromise({
-      try: async () => {
-        const docs = await db
-          .select({ total: sql<number>`count(*)` })
-          .from(legalDocuments)
-          .where(eq(legalDocuments.sourceId, sourceId));
-        return Number(docs[0]?.total ?? 0);
-      },
-      catch: (cause) =>
-        new BoeBootstrapError({
-          operation: "countDocumentsForSource",
-          message: `Failed to count source docs: ${String(cause)}`,
-          cause,
-        }),
-    }),
+    Effect.gen(function* () {
+      const db = yield* DatabaseService.client();
+      const docs = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .select({ total: sql<number>`count(*)` })
+            .from(legalDocuments)
+            .where(eq(legalDocuments.sourceId, sourceId)),
+        catch: (cause) =>
+          new BoeBootstrapError({
+            operation: "countDocumentsForSource.query",
+            message: `Failed to count source docs: ${String(cause)}`,
+            cause,
+          }),
+      });
+      return Number(docs[0]?.total ?? 0);
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new BoeBootstrapError({
+            operation: "countDocumentsForSource",
+            message: `Failed to count source docs: ${String(cause)}`,
+            cause,
+          }),
+      ),
+    ),
 );

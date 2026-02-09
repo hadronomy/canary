@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@canary/env": "workspace:*",
+    "@kubiks/otel-drizzle": "^2.1.0",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "pgvector": "^0.2.1",
