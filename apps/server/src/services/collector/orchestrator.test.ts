@@ -65,18 +65,16 @@ const TestFactory = defineFactory({
   },
 });
 
-const TestLayer = Layer.mergeAll(
-  CollectorFactoryRegistry.Default,
+const TestRegistryLayer = CollectorFactoryRegistry.layer(TestFactory);
+const TestRuntimeLayer = Layer.mergeAll(
   CollectorRepository.Default,
   CollectorStateManager.Default,
   CollectorOrchestrator.Default,
-);
+).pipe(Layer.provide(TestRegistryLayer));
+const TestLayer = Layer.mergeAll(TestRegistryLayer, TestRuntimeLayer);
 
 const createCollector = (name: string, delayMs = 0) =>
   Effect.gen(function* () {
-    const registry = yield* CollectorFactoryRegistry;
-    yield* registry.register(TestFactory);
-
     const entry = yield* CollectorRepository.create({
       factoryId: TestFactory.id,
       name,

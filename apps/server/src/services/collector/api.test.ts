@@ -4,7 +4,8 @@ import { Duration, Effect, Option, Schema, Stream } from "effect";
 
 import {
   collector,
-  CollectorLive,
+  CollectorFactoryRegistry,
+  CollectorLiveWithFactories,
   CollectionBatch,
   CollectedDocument,
   CollectionMode,
@@ -58,8 +59,6 @@ const FacadeFactory = defineFactory({
 describe("collector facade", () => {
   test("register/create/run/status flow works end-to-end", async () => {
     const program = Effect.gen(function* () {
-      yield* collector.registerFactory(FacadeFactory);
-
       const sourceId = yield* collector.create({
         factory: FacadeFactory,
         name: "Facade Source",
@@ -80,9 +79,24 @@ describe("collector facade", () => {
       return { runId, status, source };
     });
 
-    const result = await Effect.runPromise(program.pipe(Effect.provide(CollectorLive)));
+    const result = await Effect.runPromise(
+      program.pipe(Effect.provide(CollectorLiveWithFactories(FacadeFactory))),
+    );
     expect(result.runId).toBeDefined();
     expect(result.status.running).toBe(0);
     expect(result.source.name).toBe("Facade Source");
+  });
+
+  test("registerFactory remains available for dynamic registration", async () => {
+    const program = Effect.gen(function* () {
+      yield* collector.registerFactory(FacadeFactory);
+      const factories = yield* collector.factories();
+      return factories.some((factory) => factory.id === FacadeFactory.id);
+    });
+
+    const hasFactory = await Effect.runPromise(
+      program.pipe(Effect.provide(CollectorFactoryRegistry.Default)),
+    );
+    expect(hasFactory).toBe(true);
   });
 });

@@ -107,11 +107,7 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
   "CollectorOrchestrator",
   {
     accessors: true,
-    dependencies: [
-      CollectorFactoryRegistry.Default,
-      CollectorRepository.Default,
-      CollectorStateManager.Default,
-    ],
+    dependencies: [CollectorRepository.Default, CollectorStateManager.Default],
     scoped: Effect.gen(function* () {
       const registry = yield* CollectorFactoryRegistry;
       const repository = yield* CollectorRepository;
