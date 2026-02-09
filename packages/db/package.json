@@ -20,10 +20,10 @@
     "db:down": "docker compose down"
   },
   "dependencies": {
-    "@canary/env": "workspace:*",
     "@kubiks/otel-drizzle": "^2.1.0",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
+    "effect": "^3.19.16",
     "pgvector": "^0.2.1",
     "zod": "catalog:"
   },

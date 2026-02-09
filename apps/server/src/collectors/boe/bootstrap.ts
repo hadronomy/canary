@@ -1,10 +1,10 @@
 import { Duration, Effect, Schema } from "effect";
 
 import { eq, sql } from "@canary/db";
+import { DatabaseService } from "@canary/db/effect";
 import { legalDocuments, legislativeSources } from "@canary/db/schema/legislation";
 import { collector } from "~/services/collector/api";
 import { CollectionMode } from "~/services/collector/schema";
-import { DatabaseService } from "~/services/database";
 
 import { BoeLawsCollectorFactory } from "./factory";
 
