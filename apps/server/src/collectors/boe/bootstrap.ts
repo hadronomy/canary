@@ -1,6 +1,6 @@
 import { Duration, Effect, Schema } from "effect";
 
-import { eq, sql } from "@canary/db";
+import { count, eq } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
 import { legalDocuments, legislativeSources } from "@canary/db/schema/legislation";
 import { collector } from "~/services/collector/api";
@@ -40,55 +40,57 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
     Effect.gen(function* () {
       const resolved = { ...defaults, ...input };
       const db = yield* DatabaseService.client();
-      const existingRows = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({ sourceId: legislativeSources.sourceId })
-            .from(legislativeSources)
-            .where(eq(legislativeSources.sourceCode, resolved.sourceCode))
-            .limit(1),
-        catch: (cause) =>
-          new BoeBootstrapError({
-            operation: "ensureBoeSource.findLegislativeSource",
-            message: `Failed to query legislative source: ${String(cause)}`,
-            cause,
-          }),
-      });
+      const existingRows = yield* db
+        .select({ sourceId: legislativeSources.sourceId })
+        .from(legislativeSources)
+        .where(eq(legislativeSources.sourceCode, resolved.sourceCode))
+        .limit(1)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new BoeBootstrapError({
+                operation: "ensureBoeSource.findLegislativeSource",
+                message: `Failed to query legislative source: ${String(cause)}`,
+                cause,
+              }),
+          ),
+        );
 
       const existingSourceId = existingRows[0]?.sourceId;
       if (existingSourceId !== undefined) {
         return existingSourceId;
       }
 
-      const inserted = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .insert(legislativeSources)
-            .values({
-              sourceCode: resolved.sourceCode,
-              sourceName: resolved.sourceName,
-              shortName: "BOE",
-              description: "Official BOE consolidated laws source",
-              jurisdiction: "estatal",
-              autonomousCommunity: null,
-              isParliamentary: false,
-              isOfficialGazette: true,
-              providesStage: ["bulletin", "enacted", "repealed", "expired"],
-              baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
-              apiConfig: {
-                supportsIncremental: true,
-                supportsBackfill: true,
-                format: "json",
-              },
-            })
-            .returning({ sourceId: legislativeSources.sourceId }),
-        catch: (cause) =>
-          new BoeBootstrapError({
-            operation: "ensureBoeSource.insertLegislativeSource",
-            message: `Failed to insert legislative source: ${String(cause)}`,
-            cause,
-          }),
-      });
+      const inserted = yield* db
+        .insert(legislativeSources)
+        .values({
+          sourceCode: resolved.sourceCode,
+          sourceName: resolved.sourceName,
+          shortName: "BOE",
+          description: "Official BOE consolidated laws source",
+          jurisdiction: "estatal",
+          autonomousCommunity: null,
+          isParliamentary: false,
+          isOfficialGazette: true,
+          providesStage: ["bulletin", "enacted", "repealed", "expired"],
+          baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
+          apiConfig: {
+            supportsIncremental: true,
+            supportsBackfill: true,
+            format: "json",
+          },
+        })
+        .returning({ sourceId: legislativeSources.sourceId })
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new BoeBootstrapError({
+                operation: "ensureBoeSource.insertLegislativeSource",
+                message: `Failed to insert legislative source: ${String(cause)}`,
+                cause,
+              }),
+          ),
+        );
 
       return inserted[0]!.sourceId;
     }).pipe(
@@ -160,19 +162,20 @@ export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsFor
   (sourceId: string) =>
     Effect.gen(function* () {
       const db = yield* DatabaseService.client();
-      const docs = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({ total: sql<number>`count(*)` })
-            .from(legalDocuments)
-            .where(eq(legalDocuments.sourceId, sourceId)),
-        catch: (cause) =>
-          new BoeBootstrapError({
-            operation: "countDocumentsForSource.query",
-            message: `Failed to count source docs: ${String(cause)}`,
-            cause,
-          }),
-      });
+      const docs = yield* db
+        .select({ total: count() })
+        .from(legalDocuments)
+        .where(eq(legalDocuments.sourceId, sourceId))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new BoeBootstrapError({
+                operation: "countDocumentsForSource.query",
+                message: `Failed to count source docs: ${String(cause)}`,
+                cause,
+              }),
+          ),
+        );
       return Number(docs[0]?.total ?? 0);
     }).pipe(
       Effect.mapError(

@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { Cause, Duration, Effect, Exit, Layer, Option, Ref, Schema } from "effect";
 
-import { eq } from "@canary/db";
+import { eq } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
 import { syncRuns } from "@canary/db/schema/legislation";
 import {
@@ -11,7 +11,7 @@ import {
   ensureBoeSource,
 } from "~/collectors/boe";
 import { AppLoggerLive } from "~/logging/logger";
-import { CollectionMode, collector, CollectorLive } from "~/services/collector";
+import { CollectionMode, collector, CollectorLiveWithFactories } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 import { TelemetryLive } from "~/telemetry/sentry-otel";
 
@@ -47,26 +47,27 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
     const snapshotOption = yield* collector.runSnapshot(runId);
     if (Option.isNone(snapshotOption)) {
       const db = yield* DatabaseService.client();
-      const runRows = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select({
-              status: syncRuns.status,
-              docsInserted: syncRuns.docsInserted,
-              docsUpdated: syncRuns.docsUpdated,
-              docsFailed: syncRuns.docsFailed,
-              durationMs: syncRuns.durationMs,
-            })
-            .from(syncRuns)
-            .where(eq(syncRuns.runId, runId))
-            .limit(1),
-        catch: (cause) =>
-          new CliError({
-            operation: "waitForRunCompletion.fetchSyncRun",
-            message: `Failed to fetch sync run status: ${String(cause)}`,
-            cause,
-          }),
-      });
+      const runRows = yield* db
+        .select({
+          status: syncRuns.status,
+          docsInserted: syncRuns.docsInserted,
+          docsUpdated: syncRuns.docsUpdated,
+          docsFailed: syncRuns.docsFailed,
+          durationMs: syncRuns.durationMs,
+        })
+        .from(syncRuns)
+        .where(eq(syncRuns.runId, runId))
+        .limit(1)
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new CliError({
+                operation: "waitForRunCompletion.fetchSyncRun",
+                message: `Failed to fetch sync run status: ${String(cause)}`,
+                cause,
+              }),
+          ),
+        );
 
       const run = runRows[0];
       if (run === undefined) {
@@ -113,8 +114,6 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
 });
 
 const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
-  yield* collector.registerFactory(bootstrapFactory);
-
   const activeCollectorRef = yield* Ref.make(Option.none<CollectorId>());
   const activeRunRef = yield* Ref.make(Option.none<CollectionRunId>());
 
@@ -242,7 +241,12 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   return;
 });
 
-const RuntimeLive = Layer.mergeAll(CollectorLive, TelemetryLive, DatabaseService.Default).pipe(
+const CollectorRuntimeLive = Layer.mergeAll(
+  CollectorLiveWithFactories(bootstrapFactory),
+  TelemetryLive,
+).pipe(Layer.provide(DatabaseService.Default));
+
+const RuntimeLive = Layer.mergeAll(DatabaseService.Default, CollectorRuntimeLive).pipe(
   Layer.provide(AppLoggerLive),
 );
 
