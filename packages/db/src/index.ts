@@ -1,41 +1,28 @@
-import { instrumentDrizzleClient } from "@kubiks/otel-drizzle";
 import { drizzle } from "drizzle-orm/bun-sql";
-import type { BunSQLDatabase } from "drizzle-orm/bun-sql";
 export { and, eq, inArray, sql } from "drizzle-orm";
 
-import { env } from "@canary/env/server";
-
+import { loadDatabaseClientConfig } from "./config";
 import * as schema from "./schema/index";
+import { relations } from "./schema/relations";
 
-function getDatabaseTelemetryConfig(databaseUrl: string) {
-  try {
-    const parsed = new URL(databaseUrl);
-    return {
-      dbSystem: "postgresql" as const,
-      dbName: parsed.pathname.replace(/^\//, "") || undefined,
-      peerName: parsed.hostname || undefined,
-      peerPort: parsed.port ? Number(parsed.port) : undefined,
-      captureQueryText: process.env.DB_OTEL_CAPTURE_QUERY_TEXT === "true",
-      maxQueryTextLength: 2000,
-    };
-  } catch {
-    return {
-      dbSystem: "postgresql" as const,
-      captureQueryText: process.env.DB_OTEL_CAPTURE_QUERY_TEXT === "true",
-      maxQueryTextLength: 2000,
-    };
-  }
-}
+const config = loadDatabaseClientConfig();
 
-export const db = instrumentDrizzleClient(
-  drizzle(env.DATABASE_URL, { schema }),
-  getDatabaseTelemetryConfig(env.DATABASE_URL),
-);
+const poolConfig = {
+  url: config.databaseUrl,
+  max: config.poolMax,
+  idleTimeout: config.poolIdleTimeout,
+  connectionTimeout: config.poolConnectionTimeout,
+};
 
-export type Database = BunSQLDatabase<typeof schema>;
+export const db = drizzle({ connection: poolConfig, schema, relations });
 
-export const withTransaction = async <T>(callback: (trx: Database) => Promise<T>): Promise<T> => {
+export type Database = typeof db;
+export type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export const withTransaction = async <T>(
+  callback: (trx: DatabaseTransaction) => Promise<T>,
+): Promise<T> => {
   return await db.transaction(async (trx) => {
-    return await callback(trx as Database);
+    return await callback(trx);
   });
 };

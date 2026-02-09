@@ -20,17 +20,19 @@
     "db:down": "docker compose down"
   },
   "dependencies": {
-    "@canary/env": "workspace:*",
-    "@kubiks/otel-drizzle": "^2.1.0",
+    "@effect/sql-pg": "^0.50.3",
     "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "1.0.0-beta.15-90d1d1a",
+    "effect": "^3.19.16",
+    "pg": "^8.16.3",
     "pgvector": "^0.2.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@types/bun": "^1.2.0",
-    "drizzle-kit": "^0.31.8",
+    "@types/pg": "^8.15.5",
+    "drizzle-kit": "1.0.0-beta.15-90d1d1a",
     "typescript": "catalog:"
   }
 }

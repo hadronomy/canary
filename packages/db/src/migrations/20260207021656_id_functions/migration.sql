@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION generate_uuid_v7()
+CREATE OR REPLACE FUNCTION gen_random_uuid_v7()
 RETURNS UUID AS $$
 DECLARE
   unix_ts_ms BIGINT;
@@ -18,7 +18,14 @@ BEGIN
 
   RETURN ENCODE(uuid_bytes, 'hex')::UUID;
 END;
-$$ LANGUAGE plpgsql VOLATILE;
+$$ LANGUAGE plpgsql VOLATILE;--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION generate_uuid_v7()
+RETURNS UUID AS $$
+BEGIN
+  RETURN gen_random_uuid_v7();
+END;
+$$ LANGUAGE plpgsql VOLATILE;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION generate_nanoid(size INT DEFAULT 21)
 RETURNS TEXT AS $$
@@ -41,7 +48,7 @@ BEGIN
   END LOOP;
   RETURN id;
 END;
-$$ LANGUAGE plpgsql VOLATILE;
+$$ LANGUAGE plpgsql VOLATILE;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION generate_ulid()
 RETURNS TEXT AS $$

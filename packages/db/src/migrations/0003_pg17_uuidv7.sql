@@ -1,3 +1,0 @@
--- Keep compatibility across PostgreSQL versions.
--- Some environments do not provide gen_random_uuid_v7().
--- We retain the implementation from 0001_id_functions.sql.
