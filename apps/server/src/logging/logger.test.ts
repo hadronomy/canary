@@ -64,7 +64,7 @@ describe("app logger formatter", () => {
     });
 
     expect(output).toContain("✖ Cause");
-    expect(output).toContain("↳ caused by");
+    expect(output).toContain("╰→ caused by");
     expect(output).toContain("Nested failure");
   });
 });
