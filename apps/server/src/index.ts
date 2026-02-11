@@ -1,16 +1,11 @@
-import * as Sentry from "@sentry/node";
 import {
   Cause,
   Duration,
   Effect,
   Exit,
-  FiberId,
-  FiberRefs,
-  HashMap,
   Layer,
-  List,
+  Logger,
   LogLevel,
-  LogSpan,
   Option,
   Ref,
   Schema,
@@ -25,15 +20,15 @@ import {
   ensureBoeCollector,
   ensureBoeSource,
 } from "~/collectors/boe";
-import { AppLoggerLive, makeAppStringLogger } from "~/logging/logger";
+import { AppLoggerLive } from "~/logging/logger";
 import { CollectionMode, collector, CollectorLiveWithFactories } from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
-import { TelemetryLive } from "~/telemetry/sentry-otel";
+import { AxiomTelemetryLive, OtlpInfraLive } from "~/telemetry/axiom";
+import { AxiomErrorReporter } from "~/telemetry/errors";
 
 const defaultCollectorCron = "*/15 * * * *";
 const progressPollInterval = Duration.seconds(5);
 const bootstrapFactory = BoeLawsCollectorFactory;
-const runtimeStartedAt = Date.now();
 
 class CliError extends Schema.TaggedError<CliError>()("CliError", {
   message: Schema.String,
@@ -259,36 +254,45 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
 
 const DatabaseLive = DatabaseService.Default;
 
-const CollectorRuntimeLive = Layer.mergeAll(
-  CollectorLiveWithFactories(bootstrapFactory),
-  TelemetryLive,
-).pipe(Layer.provide(DatabaseLive));
-
-const RuntimeLive = Layer.mergeAll(DatabaseLive, CollectorRuntimeLive).pipe(
-  Layer.provide(AppLoggerLive),
+const CollectorRuntimeLive = Layer.mergeAll(CollectorLiveWithFactories(bootstrapFactory)).pipe(
+  Layer.provide(DatabaseLive),
 );
 
-const main = runCollectorCli().pipe(Effect.provide(RuntimeLive));
+const AllLayers = Layer.provide(
+  Layer.mergeAll(
+    DatabaseLive,
+    CollectorRuntimeLive,
+    AxiomTelemetryLive,
+    AxiomErrorReporter.Default,
+    Logger.minimumLogLevel(LogLevel.Debug),
+  ),
+  Layer.merge(AppLoggerLive, OtlpInfraLive),
+);
+
+const ErrorHandlerLive = Layer.mergeAll(AxiomErrorReporter.Default, AppLoggerLive);
+
+const reportRuntimeFailure = (cause: Cause.Cause<unknown>) =>
+  Effect.gen(function* () {
+    yield* Effect.logError("Collector runtime terminated with failure");
+
+    yield* AxiomErrorReporter.report(Cause.squash(cause)).pipe(
+      Effect.timeout(Duration.seconds(5)),
+      Effect.ignore,
+    );
+
+    return yield* Effect.failCause(cause);
+  }).pipe(Effect.provide(ErrorHandlerLive), Effect.withLogSpan("shutdown"));
+
+const main = runCollectorCli().pipe(
+  Effect.provide(AllLayers),
+  Effect.catchAllCause(reportRuntimeFailure),
+  Effect.withLogSpan("runtime"),
+);
+
 void Effect.runPromiseExit(main).then(async (exit) => {
+  await new Promise((resolve) => setTimeout(resolve, 2000));
   if (Exit.isFailure(exit)) {
-    const now = Date.now();
-    Sentry.captureException(Cause.squash(exit.cause));
-    await Sentry.close(2000);
-    const rendered = makeAppStringLogger().log({
-      fiberId: FiberId.none,
-      logLevel: LogLevel.Error,
-      message: "Collector runtime terminated with failure",
-      cause: exit.cause,
-      context: FiberRefs.empty(),
-      spans: List.fromIterable([
-        LogSpan.make("runtime", runtimeStartedAt),
-        LogSpan.make("shutdown", now),
-      ]),
-      annotations: HashMap.empty(),
-      date: new Date(),
-    });
-    process.stderr.write(`${rendered}\n`);
-    process.exitCode = 1;
+    process.exit(1);
   }
 });
 
