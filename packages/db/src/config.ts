@@ -1,4 +1,4 @@
-import { Config, Effect, Schema } from "effect";
+import { Config, Duration, Effect, Schema } from "effect";
 
 const PositiveIntFromString = Schema.NumberFromString.pipe(Schema.int(), Schema.greaterThan(0));
 const NonNegativeIntFromString = Schema.NumberFromString.pipe(
@@ -23,7 +23,9 @@ export const databaseServiceConfig = Config.all({
   startupRetries: Schema.Config("DB_STARTUP_RETRIES", NonNegativeIntFromString).pipe(
     Config.withDefault(2),
   ),
-  startupBaseDelay: Config.duration("DB_STARTUP_BASE_DELAY").pipe(Config.withDefault("250 millis")),
+  startupBaseDelay: Config.duration("DB_STARTUP_BASE_DELAY").pipe(
+    Config.withDefault(Duration.millis(250)),
+  ),
 });
 
 export type DatabaseClientConfig = Effect.Effect.Success<typeof databaseClientConfig>;
