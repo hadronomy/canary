@@ -1,6 +1,6 @@
 import * as PgClient from "@effect/sql-pg/PgClient";
 import * as PgDrizzle from "drizzle-orm/effect-postgres";
-import { Duration, Effect, Schedule, Schema } from "effect";
+import { Duration, Effect, Option, Schedule, Schema } from "effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 
@@ -60,13 +60,29 @@ const makeDatabaseService = Effect.gen(function* () {
     Duration.max(Duration.millis(1), serviceConfig.startupBaseDelay),
   ).pipe(Schedule.compose(Schedule.recurs(serviceConfig.startupRetries)));
 
+  const withCurrentSpanCorrelation = <A extends Record<string, unknown>>(fields: A) =>
+    Effect.gen(function* () {
+      const spanOption = yield* Effect.currentSpan.pipe(Effect.option);
+      if (Option.isNone(spanOption)) {
+        return fields;
+      }
+      return {
+        ...fields,
+        traceId: spanOption.value.traceId,
+        spanId: spanOption.value.spanId,
+      };
+    });
+
   const db: DatabaseClient = yield* PgDrizzle.make({ schema, relations }).pipe(
     Effect.provide(drizzleLayer),
     Effect.tapError((cause) =>
-      Effect.logWarning("Database client initialization failed", {
-        maxRetries: serviceConfig.startupRetries,
-        baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
-        error: String(cause),
+      Effect.gen(function* () {
+        const fields = yield* withCurrentSpanCorrelation({
+          maxRetries: serviceConfig.startupRetries,
+          baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
+          error: String(cause),
+        });
+        yield* Effect.logWarning("Database client initialization failed", fields);
       }),
     ),
     Effect.retry(startupRetrySchedule),
@@ -78,6 +94,7 @@ const makeDatabaseService = Effect.gen(function* () {
           cause,
         }),
     ),
+    Effect.withSpan("DatabaseService.initializeClient"),
   );
 
   const healthCheck = Effect.fn("DatabaseService.healthCheck")(() =>
@@ -97,10 +114,13 @@ const makeDatabaseService = Effect.gen(function* () {
   const ready = Effect.fn("DatabaseService.ready")(() =>
     healthCheck().pipe(
       Effect.tapError((error) =>
-        Effect.logWarning("Database unavailable during startup precheck", {
-          maxRetries: serviceConfig.startupRetries,
-          baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
-          error: error.message,
+        Effect.gen(function* () {
+          const fields = yield* withCurrentSpanCorrelation({
+            maxRetries: serviceConfig.startupRetries,
+            baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
+            error: error.message,
+          });
+          yield* Effect.logWarning("Database unavailable during startup precheck", fields);
         }),
       ),
       Effect.retry(startupRetrySchedule),
@@ -115,7 +135,7 @@ const makeDatabaseService = Effect.gen(function* () {
   };
 
   return service;
-});
+}).pipe(Effect.withSpan("DatabaseService.make"));
 
 export class DatabaseService extends Effect.Service<DatabaseService>()("DatabaseService", {
   accessors: true,
