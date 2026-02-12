@@ -1,19 +1,19 @@
 import {
   Cause,
+  Data,
   Duration,
   Effect,
   Exit,
   Layer,
   Logger,
   LogLevel,
+  Match,
   Option,
   Ref,
   Schema,
 } from "effect";
 
-import { eq } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
-import { syncRuns } from "@canary/db/schema/legislation";
 import {
   BoeLawsCollectorFactory,
   countDocumentsForSource,
@@ -30,11 +30,41 @@ const defaultCollectorCron = "*/15 * * * *";
 const progressPollInterval = Duration.seconds(5);
 const bootstrapFactory = BoeLawsCollectorFactory;
 
+const CliOperation = Schema.Literal(
+  "startup.dbPrecheck",
+  "waitForRunCompletion.fetchSyncRun",
+  "waitForRunCompletion.missingSyncRun",
+  "waitForRunCompletion.unsuccessful",
+  "startup.ensureBoeSource",
+  "startup.ensureBoeCollector",
+  "startup.countDocuments",
+  "collector.update",
+  "collector.runWithMode",
+  "collector.schedule",
+  "shutdown.cancelRun",
+  "shutdown.stopSchedule",
+  "shutdown.stopAllSchedules",
+);
+
 class CliError extends Schema.TaggedError<CliError>()("CliError", {
   message: Schema.String,
-  operation: Schema.String,
+  operation: CliOperation,
   cause: Schema.optional(Schema.Unknown),
 }) {}
+
+interface SyncStats {
+  inserted: number;
+  updated: number;
+  failed: number;
+  durationMs: number;
+}
+
+type FullSyncOutcome = Data.TaggedEnum<{
+  readonly Completed: { readonly stats: SyncStats };
+  readonly Terminated: { readonly signal: NodeJS.Signals };
+}>;
+
+const FullSyncOutcome = Data.taggedEnum<FullSyncOutcome>();
 
 const waitForTerminationSignal = Effect.async<NodeJS.Signals>((resume) => {
   const handleSigInt = () => resume(Effect.succeed("SIGINT"));
@@ -56,71 +86,52 @@ const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
 
   while (true) {
     const snapshotOption = yield* collector.runSnapshot(runId);
-    if (Option.isNone(snapshotOption)) {
-      const db = yield* DatabaseService.client();
-      const runRows = yield* db
-        .select({
-          status: syncRuns.status,
-          docsInserted: syncRuns.docsInserted,
-          docsUpdated: syncRuns.docsUpdated,
-          docsFailed: syncRuns.docsFailed,
-          durationMs: syncRuns.durationMs,
-        })
-        .from(syncRuns)
-        .where(eq(syncRuns.runId, runId))
-        .limit(1)
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new CliError({
-                operation: "waitForRunCompletion.fetchSyncRun",
-                message: `Failed to fetch sync run status: ${String(cause)}`,
-                cause,
-              }),
-          ),
-        );
 
-      const run = runRows[0];
-      if (run === undefined) {
-        return yield* new CliError({
-          operation: "waitForRunCompletion.missingSyncRun",
-          message: `Run '${runId}' finished but no sync_runs row was found`,
-        });
-      }
+    const result = yield* Option.match(snapshotOption, {
+      onNone: () =>
+        Effect.gen(function* () {
+          yield* Effect.sleep(progressPollInterval);
+          return undefined;
+        }),
+      onSome: (snapshot) =>
+        Effect.gen(function* () {
+          const runStatus = snapshot.run.status;
+          if (runStatus._tag === "Completed") {
+            const stats = runStatus.stats;
+            return {
+              inserted: stats.inserted,
+              updated: stats.updated,
+              failed: stats.failed,
+              durationMs: Number(Duration.toMillis(stats.duration)),
+            };
+          }
 
-      if (run.status !== "completed") {
-        return yield* new CliError({
-          operation: "waitForRunCompletion.unsuccessful",
-          message: `Run '${runId}' did not complete successfully (status=${run.status})`,
-        });
-      }
+          yield* Option.match(snapshot.progress, {
+            onNone: () => Effect.void,
+            onSome: (progress) =>
+              progress.processed !== lastLoggedProcessed
+                ? Effect.gen(function* () {
+                    lastLoggedProcessed = progress.processed;
+                    yield* Effect.logInfo("Collector full sync progress", {
+                      runId,
+                      processed: progress.processed,
+                      inserted: progress.inserted,
+                      updated: progress.updated,
+                      skipped: progress.skipped,
+                      failed: progress.failed,
+                    });
+                  })
+                : Effect.void,
+          });
 
-      return {
-        inserted: run.docsInserted,
-        updated: run.docsUpdated,
-        failed: run.docsFailed,
-        durationMs: run.durationMs,
-      };
+          yield* Effect.sleep(progressPollInterval);
+          return undefined;
+        }),
+    });
+
+    if (result !== undefined) {
+      return result;
     }
-
-    const snapshot = snapshotOption.value;
-    const progressOption = snapshot.progress;
-    if (Option.isSome(progressOption)) {
-      const progress = progressOption.value;
-      if (progress.processed !== lastLoggedProcessed) {
-        lastLoggedProcessed = progress.processed;
-        yield* Effect.logInfo("Collector full sync progress", {
-          runId,
-          processed: progress.processed,
-          inserted: progress.inserted,
-          updated: progress.updated,
-          skipped: progress.skipped,
-          failed: progress.failed,
-        });
-      }
-    }
-
-    yield* Effect.sleep(progressPollInterval);
   }
 });
 
@@ -132,14 +143,16 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     yield* Effect.logInfo("Termination signal received", { signal });
 
     const activeRun = yield* Ref.get(activeRunRef);
-    if (Option.isSome(activeRun)) {
-      yield* collector.cancelRun(activeRun.value, `Received ${signal}`).pipe(Effect.ignore);
-    }
+    yield* Option.match(activeRun, {
+      onNone: () => Effect.void,
+      onSome: (runId) => collector.cancelRun(runId, `Received ${signal}`).pipe(Effect.ignore),
+    });
 
     const activeCollector = yield* Ref.get(activeCollectorRef);
-    if (Option.isSome(activeCollector)) {
-      yield* collector.stopSchedule(activeCollector.value).pipe(Effect.ignore);
-    }
+    yield* Option.match(activeCollector, {
+      onNone: () => Effect.void,
+      onSome: (collectorId) => collector.stopSchedule(collectorId).pipe(Effect.ignore),
+    });
 
     yield* collector.stopAllSchedules().pipe(Effect.ignore);
     yield* Effect.logInfo("Graceful shutdown complete", { signal });
@@ -212,44 +225,41 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
   yield* Ref.set(activeRunRef, Option.some(runId));
 
   const fullSyncOutcome = yield* Effect.raceFirst(
-    waitForRunCompletion(runId).pipe(
-      Effect.map((stats) => ({ _tag: "Completed" as const, stats })),
-    ),
-    waitForTerminationSignal.pipe(
-      Effect.map((signal) => ({ _tag: "Terminated" as const, signal })),
-    ),
+    waitForRunCompletion(runId).pipe(Effect.map((stats) => FullSyncOutcome.Completed({ stats }))),
+    waitForTerminationSignal.pipe(Effect.map((signal) => FullSyncOutcome.Terminated({ signal }))),
   );
 
-  if (fullSyncOutcome._tag === "Terminated") {
-    yield* gracefulShutdown(fullSyncOutcome.signal);
-    return;
-  }
+  yield* Match.value(fullSyncOutcome).pipe(
+    Match.tag("Terminated", ({ signal }) => gracefulShutdown(signal)),
+    Match.tag("Completed", ({ stats }) =>
+      Effect.gen(function* () {
+        yield* Ref.set(activeRunRef, Option.none());
 
-  const stats = fullSyncOutcome.stats;
-  yield* Ref.set(activeRunRef, Option.none());
+        yield* Effect.logInfo("Collector full sync finished", {
+          factoryId: bootstrapFactory.id,
+          collectorId,
+          runId,
+          inserted: stats.inserted,
+          updated: stats.updated,
+          failed: stats.failed,
+          durationMs: stats.durationMs,
+        });
 
-  yield* Effect.logInfo("Collector full sync finished", {
-    factoryId: bootstrapFactory.id,
-    collectorId,
-    runId,
-    inserted: stats.inserted,
-    updated: stats.updated,
-    failed: stats.failed,
-    durationMs: stats.durationMs,
-  });
+        yield* collector.schedule(collectorId, defaultCollectorCron, {
+          startMode: "next_cron",
+        });
+        yield* Effect.logInfo("Collector incremental schedule started", {
+          factoryId: bootstrapFactory.id,
+          collectorId,
+          cron: defaultCollectorCron,
+        });
 
-  yield* collector.schedule(collectorId, defaultCollectorCron, {
-    startMode: "next_cron",
-  });
-  yield* Effect.logInfo("Collector incremental schedule started", {
-    factoryId: bootstrapFactory.id,
-    collectorId,
-    cron: defaultCollectorCron,
-  });
-
-  const signal = yield* waitForTerminationSignal;
-  yield* gracefulShutdown(signal);
-  return;
+        const signal = yield* waitForTerminationSignal;
+        yield* gracefulShutdown(signal);
+      }),
+    ),
+    Match.exhaustive,
+  );
 });
 
 const DatabaseLive = DatabaseService.Default;
@@ -285,7 +295,10 @@ const reportRuntimeFailure = (cause: Cause.Cause<unknown>) =>
 
 const main = runCollectorCli().pipe(
   Effect.provide(AllLayers),
-  Effect.catchAllCause(reportRuntimeFailure),
+  Effect.catchTags({
+    DatabaseUnavailableError: (error) => reportRuntimeFailure(Cause.fail(error)),
+    CliError: (error) => reportRuntimeFailure(Cause.fail(error)),
+  }),
   Effect.withLogSpan("runtime"),
 );
 
@@ -295,21 +308,3 @@ void Effect.runPromiseExit(main).then(async (exit) => {
     process.exit(1);
   }
 });
-
-// import { cors } from "@elysiajs/cors";
-// import { Elysia } from "elysia";
-// import { env } from "@canary/env/server";
-//
-// // @ts-ignore 6133
-// // oxlint-disable-next-line no-unused-vars
-// const app = new Elysia()
-//   .use(
-//     cors({
-//       origin: env.CORS_ORIGIN,
-//       methods: ["GET", "POST", "OPTIONS"],
-//     }),
-//   )
-//   .get("/", () => "OK")
-//   .listen(3000, () => {
-//     console.log("Server is running on http://localhost:3000");
-//   });
