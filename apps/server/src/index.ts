@@ -339,6 +339,11 @@ const main = runCollectorCli().pipe(
 
 void Effect.runPromiseExit(main).then((exit) => {
   if (Exit.isFailure(exit)) {
+    const cause = Exit.match(exit, {
+      onFailure: (cause) => cause,
+      onSuccess: () => Cause.empty,
+    });
+    console.error("Application failed to start:", Cause.pretty(cause));
     process.exit(1);
   }
   process.exitCode = 0;
