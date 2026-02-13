@@ -8,7 +8,7 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
     default: () => "https://boe.es/datosabiertos/api/legislacion-consolidada",
   }),
   batchSize: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
-    default: () => 250,
+    default: () => 500,
   }),
   timeout: Schema.optionalWith(Schema.DurationFromSelf, {
     default: () => Duration.seconds(30),

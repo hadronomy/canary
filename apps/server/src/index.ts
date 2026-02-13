@@ -232,21 +232,22 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     collectorId,
   });
 
-  const state = yield* collector.estimateState(collectorId);
-  const startDate = Option.getOrUndefined(state.lastDocumentDate);
+  // TODO: This mechanism doesnt work if the previous collection failed in some way.
+  // const state = yield* collector.estimateState(collectorId);
+  // const startDate = Option.getOrUndefined(state.lastDocumentDate);
 
-  if (startDate) {
-    yield* Effect.logInfo("Found existing documents, using latest date as start", {
-      factoryId: bootstrapFactory.id,
-      collectorId,
-      startDate: startDate.toISOString(),
-    });
-  }
+  // if (startDate) {
+  //   yield* Effect.logInfo("Found existing documents, using latest date as start", {
+  //     factoryId: bootstrapFactory.id,
+  //     collectorId,
+  //     startDate: startDate.toISOString(),
+  //   });
+  // }
 
   const runId = yield* collector.runWithMode(
     collectorId,
     CollectionMode.FullSync({
-      startDate,
+      startDate: undefined,
       batchSize: undefined,
     }),
   );
