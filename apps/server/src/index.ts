@@ -328,6 +328,12 @@ const main = runCollectorCli().pipe(
     DatabaseUnavailableError: (error) => reportRuntimeFailure(Cause.fail(error)),
     CliError: (error) => reportRuntimeFailure(Cause.fail(error)),
   }),
+  Effect.catchAllCause((cause) =>
+    Effect.gen(function* () {
+      yield* Effect.logError("Unexpected runtime error occurred", cause);
+      return yield* Effect.fail(cause);
+    }),
+  ),
   Effect.catchAllDefect((defect) =>
     Effect.gen(function* () {
       yield* Effect.logError("Fatal defect occurred", { defect });
