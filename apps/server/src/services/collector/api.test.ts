@@ -52,6 +52,8 @@ const FacadeFactory = defineFactory({
       validate: Effect.void,
       detectChanges: () => Effect.succeed(false),
       estimateTotal: () => Effect.succeed(Option.none()),
+      estimateState: () =>
+        Effect.succeed({ lastDocumentDate: Option.none(), documentsCollected: 0 }),
       healthCheck: Effect.succeed({ status: "healthy", checkedAt: new Date() } as const),
     }),
 });

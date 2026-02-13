@@ -16,6 +16,11 @@ export type HealthStatus =
   | { readonly status: "degraded"; readonly message: string; readonly checkedAt: Date }
   | { readonly status: "unhealthy"; readonly message: string; readonly checkedAt: Date };
 
+export interface CollectorState {
+  readonly lastDocumentDate: Option<Date>;
+  readonly documentsCollected: number;
+}
+
 export interface Collector {
   readonly id: CollectorId;
   readonly factoryId: FactoryId;
@@ -32,6 +37,8 @@ export interface Collector {
   readonly detectChanges: (since: Date) => Effect.Effect<boolean, CollectorError>;
 
   readonly estimateTotal: (mode: CollectionMode) => Effect.Effect<Option<number>, CollectorError>;
+
+  readonly estimateState: () => Effect.Effect<CollectorState, CollectorError>;
 
   readonly healthCheck: Effect.Effect<HealthStatus, never>;
 }

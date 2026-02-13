@@ -163,31 +163,58 @@ export const collector = {
       return entries.map(toSummary);
     }),
 
-  runOnce: (sourceId: CollectorId) => CollectorOrchestrator.schedule(sourceId),
+  runOnce: (sourceId: CollectorId) =>
+    CollectorOrchestrator.schedule(sourceId).pipe(
+      Effect.withSpan("CollectorApi.runOnce", { attributes: { sourceId } }),
+    ),
 
   runWithMode: (sourceId: CollectorId, mode: CollectionMode) =>
-    CollectorOrchestrator.scheduleExplicit(sourceId, mode),
+    CollectorOrchestrator.scheduleExplicit(sourceId, mode).pipe(
+      Effect.withSpan("CollectorApi.runWithMode", {
+        attributes: { sourceId, mode: mode._tag },
+      }),
+    ),
 
   runNow: (sourceId: CollectorId, mode?: CollectionMode) =>
     Effect.gen(function* () {
       const repository = yield* CollectorRepository;
       const entry = yield* repository.findOne(sourceId);
       return yield* CollectorOrchestrator.collectNow(sourceId, mode ?? entry.defaultMode);
-    }),
+    }).pipe(
+      Effect.withSpan("CollectorApi.runNow", {
+        attributes: { sourceId, mode: mode?._tag ?? "default" },
+      }),
+    ),
 
-  runAll: () => CollectorOrchestrator.collectAll,
+  runAll: () => CollectorOrchestrator.collectAll.pipe(Effect.withSpan("CollectorApi.runAll")),
 
   resumeRun: (sourceId: CollectorId, runId: CollectionRunId) =>
-    CollectorOrchestrator.resume(sourceId, runId),
+    CollectorOrchestrator.resume(sourceId, runId).pipe(
+      Effect.withSpan("CollectorApi.resumeRun", { attributes: { sourceId, runId } }),
+    ),
 
   cancelRun: (runId: CollectionRunId, reason?: string) =>
-    CollectorOrchestrator.cancel(runId, reason),
+    CollectorOrchestrator.cancel(runId, reason).pipe(
+      Effect.withSpan("CollectorApi.cancelRun", { attributes: { runId, reason } }),
+    ),
 
-  status: () => CollectorOrchestrator.status,
+  status: () => CollectorOrchestrator.status.pipe(Effect.withSpan("CollectorApi.status")),
 
-  running: () => CollectorOrchestrator.running,
+  running: () => CollectorOrchestrator.running.pipe(Effect.withSpan("CollectorApi.running")),
 
-  runSnapshot: (runId: CollectionRunId) => CollectorStateManager.getRunSnapshot(runId),
+  runSnapshot: (runId: CollectionRunId) =>
+    CollectorStateManager.getRunSnapshot(runId).pipe(
+      Effect.withSpan("CollectorApi.runSnapshot", { attributes: { runId } }),
+    ),
+
+  estimateState: (sourceId: CollectorId) =>
+    Effect.gen(function* () {
+      const registry = yield* CollectorFactoryRegistry;
+      const repository = yield* CollectorRepository;
+      const entry = yield* repository.findOne(sourceId);
+      const collector = yield* registry.instantiate(entry);
+      return yield* collector.estimateState();
+    }).pipe(Effect.withSpan("CollectorApi.estimateState", { attributes: { sourceId } })),
 
   schedule: (sourceId: CollectorId, cron?: string, options?: ScheduleStartOptions) =>
     Effect.gen(function* () {
@@ -198,18 +225,28 @@ export const collector = {
       const repository = yield* CollectorRepository;
       const entry = yield* repository.findOne(sourceId);
       return yield* CollectorScheduler.start(sourceId, entry.schedule, options);
-    }),
+    }).pipe(Effect.withSpan("CollectorApi.schedule", { attributes: { sourceId, cron } })),
 
-  stopSchedule: (sourceId: CollectorId) => CollectorScheduler.stop(sourceId),
+  stopSchedule: (sourceId: CollectorId) =>
+    CollectorScheduler.stop(sourceId).pipe(
+      Effect.withSpan("CollectorApi.stopSchedule", { attributes: { sourceId } }),
+    ),
 
   reschedule: (sourceId: CollectorId, cron: string, options?: ScheduleStartOptions) =>
-    CollectorScheduler.reschedule(sourceId, cron, options),
+    CollectorScheduler.reschedule(sourceId, cron, options).pipe(
+      Effect.withSpan("CollectorApi.reschedule", { attributes: { sourceId, cron } }),
+    ),
 
-  startAllSchedules: () => CollectorScheduler.startAll,
+  startAllSchedules: () =>
+    CollectorScheduler.startAll.pipe(Effect.withSpan("CollectorApi.startAllSchedules")),
 
-  stopAllSchedules: () => CollectorScheduler.stopAll,
+  stopAllSchedules: () =>
+    CollectorScheduler.stopAll.pipe(Effect.withSpan("CollectorApi.stopAllSchedules")),
 
-  triggerNow: (sourceId: CollectorId) => CollectorScheduler.triggerNow(sourceId),
+  triggerNow: (sourceId: CollectorId) =>
+    CollectorScheduler.triggerNow(sourceId).pipe(
+      Effect.withSpan("CollectorApi.triggerNow", { attributes: { sourceId } }),
+    ),
 
   schedules: () => CollectorScheduler.scheduled,
 };

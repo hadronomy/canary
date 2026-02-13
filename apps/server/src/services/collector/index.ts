@@ -8,3 +8,5 @@ export * from "./orchestrator";
 export * from "./scheduler";
 export * from "./api";
 export * from "./metrics";
+export * from "./events";
+export * from "./event-bus";

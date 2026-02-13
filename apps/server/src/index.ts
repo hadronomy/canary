@@ -4,6 +4,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Fiber,
   Layer,
   Logger,
   LogLevel,
@@ -11,6 +12,7 @@ import {
   Option,
   Ref,
   Schema,
+  Stream,
 } from "effect";
 
 import { DatabaseService } from "@canary/db/effect";
@@ -21,13 +23,17 @@ import {
   ensureBoeSource,
 } from "~/collectors/boe";
 import { AppLoggerLive } from "~/logging/logger";
-import { CollectionMode, collector, CollectorLiveWithFactories } from "~/services/collector";
+import {
+  CollectionMode,
+  collector,
+  CollectorEventBus,
+  CollectorLiveWithFactories,
+} from "~/services/collector";
 import type { CollectionRunId, CollectorId } from "~/services/collector/schema";
 import { AxiomTelemetryLive, OtlpInfraLive } from "~/telemetry/axiom";
 import { AxiomErrorReporter } from "~/telemetry/errors";
 
 const defaultCollectorCron = "*/15 * * * *";
-const progressPollInterval = Duration.seconds(5);
 const bootstrapFactory = BoeLawsCollectorFactory;
 
 const CliOperation = Schema.Literal(
@@ -35,6 +41,8 @@ const CliOperation = Schema.Literal(
   "waitForRunCompletion.fetchSyncRun",
   "waitForRunCompletion.missingSyncRun",
   "waitForRunCompletion.unsuccessful",
+  "waitForRunCompletion.cancelled",
+  "waitForRunCompletion.stallDetected",
   "startup.ensureBoeSource",
   "startup.ensureBoeCollector",
   "startup.countDocuments",
@@ -82,57 +90,66 @@ const waitForTerminationSignal = Effect.async<NodeJS.Signals>((resume) => {
 const waitForRunCompletion = Effect.fn("cli.waitForRunCompletion")(function* (
   runId: CollectionRunId,
 ) {
-  let lastLoggedProcessed = -1;
+  const eventBus = yield* CollectorEventBus;
 
-  while (true) {
-    const snapshotOption = yield* collector.runSnapshot(runId);
+  const progressLogger = yield* eventBus
+    .subscribeToRun(runId, { bufferSize: 50, throttle: "1 second" })
+    .pipe(
+      Effect.map((stream) =>
+        stream.pipe(
+          Stream.filter((e) => e._tag === "Progress"),
+          Stream.tap((event) =>
+            Effect.logInfo("Collector full sync progress", {
+              runId,
+              processed: event.progress.processed,
+              inserted: event.progress.inserted,
+              updated: event.progress.updated,
+              skipped: event.progress.skipped,
+              failed: event.progress.failed,
+            }),
+          ),
+          Stream.runDrain,
+        ),
+      ),
+      Effect.fork,
+    );
 
-    const result = yield* Option.match(snapshotOption, {
-      onNone: () =>
-        Effect.gen(function* () {
-          yield* Effect.sleep(progressPollInterval);
-          return undefined;
-        }),
-      onSome: (snapshot) =>
-        Effect.gen(function* () {
-          const runStatus = snapshot.run.status;
-          if (runStatus._tag === "Completed") {
-            const stats = runStatus.stats;
-            return {
-              inserted: stats.inserted,
-              updated: stats.updated,
-              failed: stats.failed,
-              durationMs: Number(Duration.toMillis(stats.duration)),
-            };
-          }
+  const result = yield* eventBus
+    .waitForRunCompletionWithStallDetection(runId, Duration.minutes(30))
+    .pipe(
+      Effect.tap(() => Fiber.interrupt(progressLogger)),
+      Effect.map((event) => ({
+        inserted: event.stats.inserted,
+        updated: event.stats.updated,
+        failed: event.stats.failed,
+        durationMs: Number(Duration.toMillis(event.stats.duration)),
+      })),
+      Effect.catchTags({
+        Failed: (error) =>
+          Effect.fail(
+            new CliError({
+              operation: "waitForRunCompletion.unsuccessful",
+              message: `Collection failed: ${error.error}`,
+            }),
+          ),
+        Cancelled: (error) =>
+          Effect.fail(
+            new CliError({
+              operation: "waitForRunCompletion.cancelled",
+              message: `Collection cancelled: ${error.reason || "No reason provided"}`,
+            }),
+          ),
+        CollectionStallError: (error) =>
+          Effect.fail(
+            new CliError({
+              operation: "waitForRunCompletion.stallDetected",
+              message: error.message,
+            }),
+          ),
+      }),
+    );
 
-          yield* Option.match(snapshot.progress, {
-            onNone: () => Effect.void,
-            onSome: (progress) =>
-              progress.processed !== lastLoggedProcessed
-                ? Effect.gen(function* () {
-                    lastLoggedProcessed = progress.processed;
-                    yield* Effect.logInfo("Collector full sync progress", {
-                      runId,
-                      processed: progress.processed,
-                      inserted: progress.inserted,
-                      updated: progress.updated,
-                      skipped: progress.skipped,
-                      failed: progress.failed,
-                    });
-                  })
-                : Effect.void,
-          });
-
-          yield* Effect.sleep(progressPollInterval);
-          return undefined;
-        }),
-    });
-
-    if (result !== undefined) {
-      return result;
-    }
-  }
+  return result;
 });
 
 const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
@@ -215,10 +232,21 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     collectorId,
   });
 
+  const state = yield* collector.estimateState(collectorId);
+  const startDate = Option.getOrUndefined(state.lastDocumentDate);
+
+  if (startDate) {
+    yield* Effect.logInfo("Found existing documents, using latest date as start", {
+      factoryId: bootstrapFactory.id,
+      collectorId,
+      startDate: startDate.toISOString(),
+    });
+  }
+
   const runId = yield* collector.runWithMode(
     collectorId,
     CollectionMode.FullSync({
-      startDate: undefined,
+      startDate,
       batchSize: undefined,
     }),
   );
@@ -264,9 +292,10 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
 
 const DatabaseLive = DatabaseService.Default;
 
-const CollectorRuntimeLive = Layer.mergeAll(CollectorLiveWithFactories(bootstrapFactory)).pipe(
-  Layer.provide(DatabaseLive),
-);
+const CollectorRuntimeLive = Layer.mergeAll(
+  CollectorLiveWithFactories(bootstrapFactory),
+  CollectorEventBus.Default,
+).pipe(Layer.provide(DatabaseLive), Layer.provide(AxiomTelemetryLive));
 
 const AllLayers = Layer.provide(
   Layer.mergeAll(

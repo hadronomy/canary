@@ -511,7 +511,4 @@ export function makeAppStringLogger(options?: { readonly noColor?: boolean }) {
 
 export const AppStringLogger = makeAppStringLogger();
 
-export const AppLoggerLive = Logger.replace(
-	Logger.defaultLogger,
-	Logger.withSpanAnnotations(makeAppLogger()),
-);
+export const AppLoggerLive = Logger.replace(Logger.defaultLogger, makeAppLogger());

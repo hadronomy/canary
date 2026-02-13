@@ -36,3 +36,7 @@ details when the documentation isn't enough.
 
 The opencode repository is cloned to `~/code/opensource/opencode/src/cli/cmd/tui` for reference.
 Use this as an important reference implementation with opentui best practices.
+
+## Code style
+
+- Always use the path alias for relative paths `~/*` -> `./src/*`

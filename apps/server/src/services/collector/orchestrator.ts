@@ -14,6 +14,8 @@ import {
 
 import type { Collector } from "./collector";
 import { CollectionError, ResumeError, type CollectorError } from "./errors";
+import { CollectorEventBus } from "./event-bus";
+import { CancelledEvent, FailedEvent } from "./events";
 import { CollectorFactoryRegistry } from "./factory";
 import {
   collectorActiveRuns,
@@ -34,12 +36,12 @@ import {
 } from "./metrics";
 import { CollectorRepository } from "./repository";
 import type {
+  CollectedDocument,
+  CollectionCursor,
   CollectionMode,
   CollectionRunId,
   CollectionStats,
   CollectorId,
-  CollectionCursor,
-  CollectedDocument,
 } from "./schema";
 import { CollectionMode as CollectionModeTag, CollectionProgress } from "./schema";
 import { CollectorStateManager } from "./state";
@@ -107,17 +109,23 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
   "CollectorOrchestrator",
   {
     accessors: true,
-    dependencies: [CollectorRepository.Default, CollectorStateManager.Default],
+    dependencies: [
+      CollectorRepository.Default,
+      CollectorStateManager.Default,
+      CollectorEventBus.Default,
+    ],
     scoped: Effect.gen(function* () {
       const registry = yield* CollectorFactoryRegistry;
       const repository = yield* CollectorRepository;
       const stateManager = yield* CollectorStateManager;
+      const eventBus = yield* CollectorEventBus;
       const queue = yield* Queue.bounded<CollectionJob>(128);
       const runningRef = yield* Ref.make(HashMap.empty<CollectionRunId, RunningCollector>());
       const workerFibersRef = yield* Ref.make<Array<Fiber.RuntimeFiber<void, never>>>([]);
 
       const syncQueueDepth = Queue.size(queue).pipe(
         Effect.flatMap((pending) => Metric.set(collectorQueueDepth, pending)),
+        Effect.withSpan("CollectorOrchestrator.syncQueueDepth"),
       );
 
       const instantiateCollector = (collectorId: CollectorId) =>
@@ -153,7 +161,7 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
           );
           yield* syncQueueDepth;
           return job.runId;
-        });
+        }).pipe(Effect.withSpan("CollectorOrchestrator.enqueueJob"));
 
       const processCollector = (
         collector: Collector,
@@ -161,6 +169,11 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         runId: CollectionRunId,
       ) =>
         Effect.gen(function* () {
+          yield* Effect.annotateCurrentSpan("collector.id", collector.id);
+          yield* Effect.annotateCurrentSpan("collector.factoryId", collector.factoryId);
+          yield* Effect.annotateCurrentSpan("run.id", runId);
+          yield* Effect.annotateCurrentSpan("run.mode", mode._tag);
+
           const withRunTags = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
             effect.pipe(Effect.tagMetrics({ collector_id: collector.id, mode: mode._tag }));
 
@@ -168,10 +181,14 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
           yield* withRunTags(Metric.increment(collectorActiveRuns));
 
           const startedAt = DateTime.unsafeNow();
+          yield* Effect.annotateCurrentSpan("run.startedAt", startedAt.epochMillis);
 
           const statsAcc = yield* collector.collect(mode, runId).pipe(
+            Stream.withSpan("CollectorOrchestrator.collectStream"),
             Stream.runFoldEffect(initialAccumulator, (acc, batch) =>
               Effect.gen(function* () {
+                yield* Effect.annotateCurrentSpan("batch.size", batch.documents.length);
+
                 const batchTotals = batch.documents.reduce(
                   (totals, document) => ({
                     processed: totals.processed + 1,
@@ -181,6 +198,10 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
                   }),
                   { processed: 0, inserted: 0, updated: 0, skipped: 0 },
                 );
+
+                yield* Effect.annotateCurrentSpan("batch.processed", batchTotals.processed);
+                yield* Effect.annotateCurrentSpan("batch.inserted", batchTotals.inserted);
+                yield* Effect.annotateCurrentSpan("batch.updated", batchTotals.updated);
 
                 yield* withRunTags(
                   Metric.incrementBy(collectorDocumentsProcessedTotal, batchTotals.processed),
@@ -207,27 +228,38 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
                   lastDocumentDate: updateLastDocumentDate(acc.lastDocumentDate, batch.documents),
                 };
 
-                yield* stateManager.updateProgress(
+                yield* Effect.annotateCurrentSpan("total.processed", nextAcc.processed);
+                yield* Effect.annotateCurrentSpan("total.inserted", nextAcc.inserted);
+                yield* Effect.annotateCurrentSpan("total.updated", nextAcc.updated);
+
+                const progress = new CollectionProgress({
                   runId,
-                  new CollectionProgress({
-                    runId,
-                    collectorId: collector.id,
-                    mode,
-                    cursor: nextAcc.lastCursor,
-                    processed: nextAcc.processed,
-                    inserted: nextAcc.inserted,
-                    updated: nextAcc.updated,
-                    skipped: nextAcc.skipped,
-                    failed: nextAcc.failed,
-                    startedAt,
-                    lastProgressAt: DateTime.unsafeNow(),
-                    estimatedTotal: Option.none(),
-                    estimatedCompletion: Option.none(),
-                  }),
-                );
+                  collectorId: collector.id,
+                  mode,
+                  cursor: nextAcc.lastCursor,
+                  processed: nextAcc.processed,
+                  inserted: nextAcc.inserted,
+                  updated: nextAcc.updated,
+                  skipped: nextAcc.skipped,
+                  failed: nextAcc.failed,
+                  startedAt,
+                  lastProgressAt: DateTime.unsafeNow(),
+                  estimatedTotal: Option.none(),
+                  estimatedCompletion: Option.none(),
+                });
+
+                yield* stateManager.updateProgress(runId, progress);
+
+                yield* eventBus.publish({
+                  _tag: "Progress" as const,
+                  runId,
+                  collectorId: collector.id,
+                  timestamp: DateTime.unsafeNow(),
+                  progress,
+                });
 
                 return nextAcc;
-              }),
+              }).pipe(Effect.withSpan("CollectorOrchestrator.processBatch")),
             ),
           );
 
@@ -241,6 +273,12 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
             duration: Duration.millis(Math.max(0, endedAt.epochMillis - startedAt.epochMillis)),
           };
 
+          yield* Effect.annotateCurrentSpan("run.completedAt", endedAt.epochMillis);
+          yield* Effect.annotateCurrentSpan("run.durationMs", Duration.toMillis(stats.duration));
+          yield* Effect.annotateCurrentSpan("run.totalProcessed", stats.processed);
+          yield* Effect.annotateCurrentSpan("run.totalInserted", stats.inserted);
+          yield* Effect.annotateCurrentSpan("run.totalUpdated", stats.updated);
+
           yield* stateManager.updateState(collector.id, {
             mode,
             documentsCollected: statsAcc.processed,
@@ -253,6 +291,15 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
           yield* withRunTags(
             Metric.update(collectorRunDurationMs, Duration.toMillis(stats.duration)),
           );
+
+          yield* eventBus.publish({
+            _tag: "Completed" as const,
+            runId,
+            collectorId: collector.id,
+            timestamp: DateTime.unsafeNow(),
+            stats,
+          });
+
           yield* Effect.logInfo("Collector run completed", {
             collectorId: collector.id,
             runId,
@@ -261,10 +308,13 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
           });
           return stats;
         }).pipe(
+          Effect.withSpan("CollectorOrchestrator.processCollector"),
           Effect.tapError((error) => {
             const message = "message" in error ? String(error.message) : String(error);
             const errorTag = "_tag" in error ? String(error._tag) : "UnknownError";
-            return stateManager.failRun(runId, message, Option.none(), true).pipe(
+            const retryable = true;
+
+            return stateManager.failRun(runId, message, Option.none(), retryable).pipe(
               Effect.zipRight(
                 Metric.increment(collectorRunsFailedTotal).pipe(
                   Effect.tagMetrics({ collector_id: collector.id, mode: mode._tag }),
@@ -274,6 +324,18 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
                 Metric.increment(collectorRunErrorsTotal).pipe(
                   Effect.tagMetrics({ collector_id: collector.id, mode: mode._tag }),
                   Effect.tagMetrics({ error_tag: errorTag }),
+                ),
+              ),
+              Effect.zipRight(
+                eventBus.publish(
+                  new FailedEvent({
+                    runId,
+                    collectorId: collector.id,
+                    timestamp: DateTime.unsafeNow(),
+                    error: message,
+                    retryable,
+                    progress: Option.none(),
+                  }),
                 ),
               ),
               Effect.zipRight(
@@ -295,6 +357,8 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
       const workerLoop = Effect.forever(
         Effect.gen(function* () {
           const job = yield* Queue.take(queue);
+          yield* Effect.annotateCurrentSpan("job.collectorId", job.collectorId);
+          yield* Effect.annotateCurrentSpan("job.runId", job.runId);
           yield* syncQueueDepth;
           const { collector } = yield* instantiateCollector(job.collectorId);
           const startedAt = DateTime.unsafeNow();
@@ -326,11 +390,23 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
                       Effect.tagMetrics({ collector_id: job.collectorId, mode: job.mode._tag }),
                     ),
                   ),
+                  Effect.zipRight(
+                    eventBus.publish(
+                      new CancelledEvent({
+                        runId: job.runId,
+                        collectorId: job.collectorId,
+                        timestamp: DateTime.unsafeNow(),
+                        reason: "Worker interrupted",
+                        progress: Option.none(),
+                      }),
+                    ),
+                  ),
                   Effect.catchTag("CollectionError", () => Effect.void),
                 ),
             ),
           );
         }).pipe(
+          Effect.withSpan("CollectorOrchestrator.workerLoop"),
           Effect.catchTags({
             CollectorNotFoundError: (error) =>
               Metric.increment(collectorRunErrorsTotal).pipe(
@@ -446,7 +522,22 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
 
       const workerFibers = yield* Effect.forEach(
         Array.from({ length: WORKER_CONCURRENCY }),
-        () => Effect.forkDaemon(workerLoop),
+        (_, i) =>
+          Effect.forkDaemon(
+            Effect.gen(function* () {
+              yield* Effect.logInfo(`Worker ${i} starting`);
+              yield* Effect.annotateCurrentSpan("worker.index", i);
+              return yield* workerLoop.pipe(
+                Effect.tapError((error) =>
+                  Effect.logError(`Worker ${i} error`, { error: String(error) }),
+                ),
+              );
+            }).pipe(
+              Effect.withSpan("CollectorOrchestrator.worker", {
+                attributes: { workerIndex: i },
+              }),
+            ),
+          ),
         {
           discard: false,
         },
@@ -475,9 +566,33 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
       const schedule = Effect.fn("CollectorOrchestrator.schedule")(function* (
         collectorId: CollectorId,
       ) {
+        yield* Effect.annotateCurrentSpan("collector.id", collectorId);
+
         const entry = yield* findCollectorEntry(collectorId);
-        const runId = yield* stateManager.createRun(collectorId, entry.defaultMode);
-        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode: entry.defaultMode }).pipe(
+        const { collector } = yield* instantiateCollector(collectorId);
+
+        const state = yield* collector.estimateState();
+        const mode = Option.match(state.lastDocumentDate, {
+          onNone: () => entry.defaultMode,
+          onSome: (latestDate) =>
+            CollectionModeTag.Incremental({
+              since: latestDate,
+              lookBackWindow: Duration.days(1),
+            }),
+        });
+
+        yield* Effect.annotateCurrentSpan("run.mode", mode._tag);
+        if (mode._tag === "Incremental") {
+          yield* Effect.logInfo("Using incremental mode based on existing documents", {
+            collectorId,
+            since: mode.since.toISOString(),
+          });
+        }
+
+        const runId = yield* stateManager.createRun(collectorId, mode);
+        yield* Effect.annotateCurrentSpan("run.id", runId);
+
+        return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode }).pipe(
           Effect.tapError((error) =>
             stateManager.failRun(
               runId,
@@ -493,8 +608,14 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         collectorId: CollectorId,
         mode: CollectionMode,
       ) {
+        yield* Effect.annotateCurrentSpan("collector.id", collectorId);
+        yield* Effect.annotateCurrentSpan("run.mode", mode._tag);
+
         yield* findCollectorEntry(collectorId);
         const runId = yield* stateManager.createRun(collectorId, mode);
+
+        yield* Effect.annotateCurrentSpan("run.id", runId);
+
         return yield* enqueueJob({ _tag: "Run", runId, collectorId, mode }).pipe(
           Effect.tapError((error) =>
             stateManager.failRun(
@@ -511,8 +632,14 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         collectorId: CollectorId,
         mode: CollectionMode,
       ) {
+        yield* Effect.annotateCurrentSpan("collector.id", collectorId);
+        yield* Effect.annotateCurrentSpan("run.mode", mode._tag);
+
         const { collector } = yield* instantiateCollector(collectorId);
         const runId = yield* stateManager.createRun(collectorId, mode);
+
+        yield* Effect.annotateCurrentSpan("run.id", runId);
+
         return yield* processCollector(collector, mode, runId);
       });
 
@@ -520,6 +647,9 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         collectorId: CollectorId,
         runId: CollectionRunId,
       ) {
+        yield* Effect.annotateCurrentSpan("collector.id", collectorId);
+        yield* Effect.annotateCurrentSpan("run.id", runId);
+
         const snapshot = yield* stateManager.getRunSnapshot(runId).pipe(
           Effect.flatMap(
             Option.match({
@@ -573,30 +703,44 @@ export class CollectorOrchestrator extends Effect.Service<CollectorOrchestrator>
         ),
       );
 
-      const cancel = Effect.fn("CollectorOrchestrator.cancel")(
-        (runId: CollectionRunId, reason?: string) =>
-          Ref.get(runningRef).pipe(
-            Effect.flatMap((running) =>
-              HashMap.get(running, runId).pipe(
-                Option.match({
-                  onNone: () => Effect.void,
-                  onSome: ({ fiber, collectorId, mode }) =>
-                    Fiber.interrupt(fiber).pipe(
-                      Effect.zipRight(
-                        stateManager.cancelRun(runId, Option.fromNullable(reason), Option.none()),
-                      ),
-                      Effect.zipRight(
-                        Metric.increment(collectorRunsCancelledTotal).pipe(
-                          Effect.tagMetrics({ collector_id: collectorId, mode: mode._tag }),
-                        ),
-                      ),
-                    ),
-                }),
+      const cancel = Effect.fn("CollectorOrchestrator.cancel")(function* (
+        runId: CollectionRunId,
+        reason?: string,
+      ) {
+        yield* Effect.annotateCurrentSpan("run.id", runId);
+        yield* Effect.annotateCurrentSpan("cancel.reason", reason ?? "not_specified");
+
+        const running = yield* Ref.get(runningRef);
+        return yield* HashMap.get(running, runId).pipe(
+          Option.match({
+            onNone: () => Effect.void,
+            onSome: ({ fiber, collectorId, mode }) =>
+              Fiber.interrupt(fiber).pipe(
+                Effect.zipRight(
+                  stateManager
+                    .cancelRun(runId, Option.fromNullable(reason), Option.none())
+                    .pipe(Effect.catchTag("CollectionError", () => Effect.void)),
+                ),
+                Effect.zipRight(
+                  Metric.increment(collectorRunsCancelledTotal).pipe(
+                    Effect.tagMetrics({ collector_id: collectorId, mode: mode._tag }),
+                  ),
+                ),
+                Effect.zipRight(
+                  eventBus.publish(
+                    new CancelledEvent({
+                      runId,
+                      collectorId,
+                      timestamp: DateTime.unsafeNow(),
+                      reason,
+                      progress: Option.none(),
+                    }),
+                  ),
+                ),
               ),
-            ),
-            Effect.catchTag("CollectionError", () => Effect.void),
-          ),
-      );
+          }),
+        );
+      });
 
       const status = Effect.all({
         pending: Queue.size(queue),

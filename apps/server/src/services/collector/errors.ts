@@ -86,6 +86,15 @@ export class HealthCheckError extends Schema.TaggedError<HealthCheckError>()("He
   message: Schema.String,
 }) {}
 
+export class CollectionStallError extends Schema.TaggedError<CollectionStallError>()(
+  "CollectionStallError",
+  {
+    runId: CollectionRunIdSchema,
+    durationMs: Schema.Number,
+    message: Schema.String,
+  },
+) {}
+
 export type CollectorError =
   | CollectorNotFoundError
   | FactoryNotFoundError
