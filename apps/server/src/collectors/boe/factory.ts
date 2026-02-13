@@ -1,4 +1,16 @@
-import { Cause, Duration, Effect, Exit, Option, Ref, Schedule, Schema, Stream } from "effect";
+import {
+  Cause,
+  Chunk,
+  Clock,
+  Duration,
+  Effect,
+  Exit,
+  Option,
+  Ref,
+  Schedule,
+  Schema,
+  Stream,
+} from "effect";
 
 import { and, eq, inArray, sql } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
@@ -39,6 +51,10 @@ const capabilities: Capabilities = new Set([
   "ChangeDetection",
 ]);
 
+// =============================================================================
+// Module-Level Types
+// =============================================================================
+
 interface SyncStats {
   readonly inserted: number;
   readonly updated: number;
@@ -49,11 +65,22 @@ interface ExistingLegalDocument {
   readonly docId: string;
   readonly canonicalId: string;
   readonly firstSeenAt: Date | null;
-  readonly officialTitle: string;
   readonly metadataHash: string | null;
-  readonly lastUpdatedAt: Date | null;
   readonly contentHash: string | null;
 }
+
+interface PreparedLaw {
+  readonly law: BoeLawItem;
+  readonly mapped: ReturnType<typeof mapBoeLawToDocument>;
+  readonly existing: ExistingLegalDocument | null;
+  readonly kind: "New" | "Update" | "Unchanged";
+  readonly contentText: string;
+  readonly contentHash: string | null;
+}
+
+// =============================================================================
+// Pure Helper Functions (Module Level)
+// =============================================================================
 
 const toMetadataRecord = (value: unknown): Record<string, unknown> => {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -87,7 +114,7 @@ const parseResumeOffset = (mode: CollectionModeType): number => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
 
-const collectWindow = (
+const getCollectionWindow = (
   mode: CollectionModeType,
 ): Option.Option<{ readonly from?: Date; readonly to?: Date }> => {
   switch (mode._tag) {
@@ -98,14 +125,14 @@ const collectWindow = (
     case "Backfill":
       return Option.some({ from: mode.from, to: mode.to });
     case "Resume":
-      return collectWindow(mode.originalMode);
+      return getCollectionWindow(mode.originalMode);
     default:
       return Option.none();
   }
 };
 
 const isWithinModeWindow = (itemUpdatedAt: Date, mode: CollectionModeType): boolean => {
-  const window = collectWindow(mode);
+  const window = getCollectionWindow(mode);
   return Option.match(window, {
     onNone: () => true,
     onSome: ({ from, to }) => {
@@ -139,6 +166,29 @@ const shouldFailFastOnSourceError = (mode: CollectionModeType): boolean => {
   }
   return false;
 };
+
+const canonicalIdFromIdentifier = (identifier: string): string => `boe:${identifier}`;
+
+const buildDocument = (
+  law: BoeLawItem,
+  kind: CollectedDocument["kind"],
+  mappedMetadata: unknown,
+  contentText: string,
+  contentHash: string | null,
+): CollectedDocument =>
+  new CollectedDocument({
+    externalId: `boe:${law.identificador}`,
+    title: law.titulo,
+    content: contentText,
+    metadata: toMetadataRecord(mappedMetadata),
+    publishedAt: decodeDateTimeUtc(parseBoeDate(law.fecha_publicacion).toISOString()),
+    updatedAt: Option.some(
+      decodeDateTimeUtc(parseBoeDateTime(law.fecha_actualizacion).toISOString()),
+    ),
+    sourceUrl: Option.some(law.url_html_consolidada),
+    contentHash: Option.fromNullable(contentHash),
+    kind,
+  });
 
 export const BoeLawsCollectorFactory = defineFactory({
   id: "boe-laws",
@@ -211,7 +261,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               url.searchParams.set("query", config.staticQuery);
             }
 
-            Option.match(collectWindow(mode), {
+            Option.match(getCollectionWindow(mode), {
               onNone: () => undefined,
               onSome: ({ from, to }) => {
                 if (from !== undefined) {
@@ -364,15 +414,6 @@ export const BoeLawsCollectorFactory = defineFactory({
             : Effect.succeed(""),
       );
 
-      interface PreparedLaw {
-        readonly law: BoeLawItem;
-        readonly mapped: ReturnType<typeof mapBoeLawToDocument>;
-        readonly existing: ExistingLegalDocument | null;
-        readonly kind: "New" | "Update" | "Unchanged";
-        readonly contentText: string;
-        readonly contentHash: string | null;
-      }
-
       const prepareLaw = Effect.fn("BoeCollector.prepareLaw")(
         (law: BoeLawItem, runId: CollectionRunId, existing: ExistingLegalDocument | null) =>
           Effect.gen(function* () {
@@ -397,10 +438,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             });
 
             const unchangedByMetadata =
-              existing !== null &&
-              existing.officialTitle === mapped.document.officialTitle &&
-              existing.metadataHash === mapped.metadataHash &&
-              existing.lastUpdatedAt?.getTime() === mapped.document.lastUpdatedAt?.getTime();
+              existing !== null && existing.metadataHash === mapped.metadataHash;
 
             if (unchangedByMetadata) {
               return {
@@ -432,54 +470,58 @@ export const BoeLawsCollectorFactory = defineFactory({
       const startSyncRun = Effect.fn("BoeCollector.startSyncRun")(
         (runId: CollectionRunId, mode: CollectionModeType) =>
           config.trackSyncRuns
-            ? db
-                .insert(syncRuns)
-                .values({
-                  runId,
-                  sourceId,
-                  status: "running",
-                  startedAt: new Date(),
-                  docsInserted: 0,
-                  docsUpdated: 0,
-                  docsFailed: 0,
-                  metadata: {
-                    collectorId,
-                    factoryId: "boe-laws",
-                    mode: mode._tag,
-                  },
-                })
-                .onConflictDoUpdate({
-                  target: syncRuns.runId,
-                  set: {
+            ? Effect.gen(function* () {
+                const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
+                return yield* db
+                  .insert(syncRuns)
+                  .values({
+                    runId,
+                    sourceId,
                     status: "running",
-                    completedAt: null,
+                    startedAt: now,
                     docsInserted: 0,
                     docsUpdated: 0,
                     docsFailed: 0,
-                    durationMs: null,
-                    errorLog: [],
                     metadata: {
                       collectorId,
                       factoryId: "boe-laws",
                       mode: mode._tag,
                     },
-                  },
-                })
-                .pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new CollectionError({
+                  })
+                  .onConflictDoUpdate({
+                    target: syncRuns.runId,
+                    set: {
+                      status: "running",
+                      completedAt: null,
+                      docsInserted: 0,
+                      docsUpdated: 0,
+                      docsFailed: 0,
+                      durationMs: null,
+                      errorLog: [],
+                      metadata: {
                         collectorId,
-                        runId,
-                        reason: "Unable to start sync run",
-                        cause,
-                        message: `Collection error [${collectorId}]: Unable to start sync run`,
-                      }),
-                  ),
-                  Effect.withSpan("BoeCollector.startSyncRun", {
-                    attributes: { runId, mode: mode._tag },
-                  }),
-                )
+                        factoryId: "boe-laws",
+                        mode: mode._tag,
+                      },
+                    },
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CollectionError({
+                          collectorId,
+                          runId,
+                          reason: "Unable to start sync run",
+                          cause,
+                          message: `Collection error [${collectorId}]: Unable to start sync run`,
+                        }),
+                    ),
+                  );
+              }).pipe(
+                Effect.withSpan("BoeCollector.startSyncRun", {
+                  attributes: { runId, mode: mode._tag },
+                }),
+              )
             : Effect.void,
       );
 
@@ -492,43 +534,46 @@ export const BoeLawsCollectorFactory = defineFactory({
           readonly errorLog: ReadonlyArray<Record<string, string>>;
         }) =>
           config.trackSyncRuns
-            ? db
-                .update(syncRuns)
-                .set({
-                  status: input.status,
-                  completedAt: new Date(),
-                  docsInserted: input.stats.inserted,
-                  docsUpdated: input.stats.updated,
-                  docsFailed: input.stats.failed,
-                  durationMs: Date.now() - input.startedAt.getTime(),
-                  errorLog: input.errorLog,
-                })
-                .where(eq(syncRuns.runId, input.runId))
-                .pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new CollectionError({
-                        collectorId,
-                        runId: input.runId,
-                        reason: "Unable to finalize sync run",
-                        cause,
-                        message: `Collection error [${collectorId}]: Unable to finalize sync run`,
-                      }),
-                  ),
-                  Effect.withSpan("BoeCollector.finishSyncRun", {
-                    attributes: {
-                      runId: input.runId,
-                      status: input.status,
-                      inserted: input.stats.inserted,
-                      updated: input.stats.updated,
-                      failed: input.stats.failed,
-                    },
-                  }),
-                )
+            ? Effect.gen(function* () {
+                const nowMs = yield* Clock.currentTimeMillis;
+                const now = new Date(nowMs);
+                return yield* db
+                  .update(syncRuns)
+                  .set({
+                    status: input.status,
+                    completedAt: now,
+                    docsInserted: input.stats.inserted,
+                    docsUpdated: input.stats.updated,
+                    docsFailed: input.stats.failed,
+                    durationMs: nowMs - input.startedAt.getTime(),
+                    errorLog: input.errorLog,
+                  })
+                  .where(eq(syncRuns.runId, input.runId))
+                  .pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CollectionError({
+                          collectorId,
+                          runId: input.runId,
+                          reason: "Unable to finalize sync run",
+                          cause,
+                          message: `Collection error [${collectorId}]: Unable to finalize sync run`,
+                        }),
+                    ),
+                  );
+              }).pipe(
+                Effect.withSpan("BoeCollector.finishSyncRun", {
+                  attributes: {
+                    runId: input.runId,
+                    status: input.status,
+                    inserted: input.stats.inserted,
+                    updated: input.stats.updated,
+                    failed: input.stats.failed,
+                  },
+                }),
+              )
             : Effect.void,
       );
-
-      const canonicalIdFromIdentifier = (identifier: string): string => `boe:${identifier}`;
 
       const loadExistingDocuments = Effect.fn("BoeCollector.loadExistingDocuments")(
         (page: ReadonlyArray<BoeLawItem>, runId: CollectionRunId) =>
@@ -546,9 +591,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 docId: legalDocuments.docId,
                 canonicalId: legalDocuments.canonicalId,
                 firstSeenAt: legalDocuments.firstSeenAt,
-                officialTitle: legalDocuments.officialTitle,
                 metadataHash: legalDocuments.metadataHash,
-                lastUpdatedAt: legalDocuments.lastUpdatedAt,
                 contentHash: legalDocuments.contentHash,
               })
               .from(legalDocuments)
@@ -581,16 +624,9 @@ export const BoeLawsCollectorFactory = defineFactory({
           ),
       );
 
-      const persistPreparedLaws = Effect.fn("BoeCollector.persistPreparedLaws")(
-        (preparedLaws: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
+      const upsertLegalDocuments = Effect.fn("BoeCollector.upsertLegalDocuments")(
+        (persistable: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
           Effect.gen(function* () {
-            const persistable = preparedLaws.filter((law) => law.kind !== "Unchanged");
-            if (persistable.length === 0) {
-              return;
-            }
-
-            const now = new Date();
-
             const upsertRows = persistable.map((item) => {
               const documentValues = {
                 ...item.mapped.document,
@@ -603,7 +639,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               };
             });
 
-            const upserted = yield* db
+            return yield* db
               .insert(legalDocuments)
               .values(upsertRows)
               .onConflictDoUpdate({
@@ -652,12 +688,17 @@ export const BoeLawsCollectorFactory = defineFactory({
                     }),
                 ),
               );
+          }).pipe(Effect.withSpan("BoeCollector.upsertLegalDocuments")),
+      );
 
-            const docIdByCanonicalId = new Map(upserted.map((row) => [row.canonicalId, row.docId]));
-
-            if (!config.ingestTextVersions) {
-              return;
-            }
+      const ingestDocumentVersions = Effect.fn("BoeCollector.ingestDocumentVersions")(
+        (
+          persistable: ReadonlyArray<PreparedLaw>,
+          docIdByCanonicalId: Map<string, string>,
+          runId: CollectionRunId,
+        ) =>
+          Effect.gen(function* () {
+            const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
 
             const newVersionRows: Array<{
               readonly docId: string;
@@ -816,33 +857,29 @@ export const BoeLawsCollectorFactory = defineFactory({
                   ),
                 );
             }
+          }).pipe(Effect.withSpan("BoeCollector.ingestDocumentVersions")),
+      );
+
+      const persistPreparedLaws = Effect.fn("BoeCollector.persistPreparedLaws")(
+        (preparedLaws: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
+          Effect.gen(function* () {
+            const persistable = preparedLaws.filter((law) => law.kind !== "Unchanged");
+            if (persistable.length === 0) {
+              return;
+            }
+
+            const upserted = yield* upsertLegalDocuments(persistable, runId);
+            const docIdByCanonicalId = new Map(upserted.map((row) => [row.canonicalId, row.docId]));
+
+            if (config.ingestTextVersions) {
+              yield* ingestDocumentVersions(persistable, docIdByCanonicalId, runId);
+            }
           }).pipe(
             Effect.withSpan("BoeCollector.persistPreparedLaws", {
               attributes: { runId, totalLaws: preparedLaws.length },
             }),
           ),
       );
-
-      const buildDocument = (
-        law: BoeLawItem,
-        kind: CollectedDocument["kind"],
-        mappedMetadata: unknown,
-        contentText: string,
-        contentHash: string | null,
-      ) =>
-        new CollectedDocument({
-          externalId: `boe:${law.identificador}`,
-          title: law.titulo,
-          content: contentText,
-          metadata: toMetadataRecord(mappedMetadata),
-          publishedAt: decodeDateTimeUtc(parseBoeDate(law.fecha_publicacion).toISOString()),
-          updatedAt: Option.some(
-            decodeDateTimeUtc(parseBoeDateTime(law.fecha_actualizacion).toISOString()),
-          ),
-          sourceUrl: Option.some(law.url_html_consolidada),
-          contentHash: Option.fromNullable(contentHash),
-          kind,
-        });
 
       const collectStream = (mode: CollectionModeType, runId: CollectionRunId) =>
         Stream.unwrap(
@@ -852,7 +889,7 @@ export const BoeLawsCollectorFactory = defineFactory({
 
             yield* ensureSourceExists();
 
-            const startedAt = new Date();
+            const startedAt = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
             const statsRef = yield* Ref.make(zeroStats);
             const errorLogRef = yield* Ref.make<Array<Record<string, string>>>([]);
 
@@ -861,210 +898,191 @@ export const BoeLawsCollectorFactory = defineFactory({
             const appendErrorLog = (entry: Record<string, string>) =>
               Ref.update(errorLogRef, (entries) => [...entries, entry]);
 
-            const stream = Stream.unfoldEffect(
-              { offset: parseResumeOffset(mode), done: false },
-              (state: { readonly offset: number; readonly done: boolean }) =>
-                state.done
-                  ? Effect.succeed(Option.none())
-                  : Effect.gen(function* () {
-                      yield* Effect.annotateCurrentSpan("page.offset", state.offset);
+            interface ProcessSuccess {
+              readonly prepared: PreparedLaw;
+              readonly document: CollectedDocument;
+              readonly inserted: number;
+              readonly updated: number;
+            }
 
-                      const page = yield* fetchPage(state.offset, mode);
-                      if (page.length === 0) {
-                        return Option.none();
-                      }
+            const checkWindow = Effect.fn("BoeCollector.checkWindow")((law: BoeLawItem) =>
+              Effect.try({
+                try: () => isWithinModeWindow(parseBoeDateTime(law.fecha_actualizacion), mode),
+                catch: (cause) =>
+                  new ValidationError({
+                    collectorId,
+                    field: "fecha_actualizacion",
+                    value: law.fecha_actualizacion,
+                    reason: String(cause),
+                    message: `Invalid BOE update timestamp for '${law.identificador}'`,
+                  }),
+              }),
+            );
 
-                      const existingByCanonicalId = yield* loadExistingDocuments(page, runId);
+            const processItem = Effect.fn("BoeCollector.processItem")(
+              (
+                law: BoeLawItem,
+                existingByCanonicalId: Map<string, ExistingLegalDocument>,
+              ): Effect.Effect<
+                ProcessSuccess,
+                ValidationError | SourceConnectionError | CollectionError
+              > =>
+                Effect.gen(function* () {
+                  const existing = existingByCanonicalId.get(
+                    canonicalIdFromIdentifier(law.identificador),
+                  );
 
-                      const outcomes = yield* Effect.forEach(
-                        page,
-                        (law) =>
-                          Effect.gen(function* () {
-                            const includeInWindow = yield* Effect.try({
-                              try: () =>
-                                isWithinModeWindow(parseBoeDateTime(law.fecha_actualizacion), mode),
-                              catch: (cause) =>
-                                new ValidationError({
-                                  collectorId,
-                                  field: "fecha_actualizacion",
-                                  value: law.fecha_actualizacion,
-                                  reason: String(cause),
-                                  message: `Invalid BOE update timestamp for '${law.identificador}'`,
-                                }),
-                            }).pipe(
-                              Effect.catchTag("ValidationError", (error) => {
-                                if (config.unknownRangeStrategy === "fail") {
-                                  return Effect.fail(error);
-                                }
+                  const prepared = yield* prepareLaw(law, runId, existing ?? null);
 
-                                return appendErrorLog({
-                                  identifier: law.identificador,
-                                  tag: error._tag,
-                                  message: error.message,
-                                }).pipe(Effect.as(false));
-                              }),
-                            );
+                  const document = yield* Effect.try({
+                    try: () =>
+                      buildDocument(
+                        law,
+                        prepared.kind,
+                        prepared.mapped.document.rawMetadata,
+                        prepared.contentText,
+                        prepared.contentHash,
+                      ),
+                    catch: (cause) =>
+                      new ValidationError({
+                        collectorId,
+                        field: "documentEncoding",
+                        value: law.identificador,
+                        reason: String(cause),
+                        message: `Failed to build collected document for '${law.identificador}'`,
+                      }),
+                  });
 
-                            if (!includeInWindow) {
-                              return {
-                                prepared: null as PreparedLaw | null,
-                                inserted: 0,
-                                updated: 0,
-                                failed: 0,
-                                document: null as CollectedDocument | null,
-                              };
-                            }
+                  return {
+                    prepared,
+                    document,
+                    inserted: prepared.kind === "New" ? 1 : 0,
+                    updated: prepared.kind === "Update" ? 1 : 0,
+                  };
+                }),
+            );
 
-                            const existing = existingByCanonicalId.get(
-                              canonicalIdFromIdentifier(law.identificador),
-                            );
+            const fetchAndProcessPage = Effect.fn("BoeCollector.fetchAndProcessPage")(
+              (
+                offset: number,
+              ): Effect.Effect<
+                readonly [Chunk.Chunk<CollectionBatch>, Option.Option<{ readonly offset: number }>],
+                ValidationError | SourceConnectionError | CollectionError,
+                never
+              > =>
+                Effect.gen(function* () {
+                  yield* Effect.annotateCurrentSpan("page.offset", offset);
 
-                            const prepared = yield* prepareLaw(law, runId, existing ?? null).pipe(
-                              Effect.catchTags({
-                                ValidationError: (error) => {
-                                  if (config.unknownRangeStrategy === "fail") {
-                                    return Effect.fail(error);
-                                  }
+                  const page = yield* fetchPage(offset, mode);
+                  if (page.length === 0) {
+                    return [Chunk.empty(), Option.none()];
+                  }
 
-                                  return appendErrorLog({
-                                    identifier: law.identificador,
-                                    tag: error._tag,
-                                    message: error.message,
-                                  }).pipe(Effect.as(null));
-                                },
-                                SourceConnectionError: (error) => {
-                                  if (shouldFailFastOnSourceError(mode)) {
-                                    return Effect.fail(error);
-                                  }
+                  const existingByCanonicalId = yield* loadExistingDocuments(page, runId);
 
-                                  return appendErrorLog({
-                                    identifier: law.identificador,
-                                    tag: error._tag,
-                                    message: error.message,
-                                  }).pipe(Effect.as(null));
-                                },
-                                CollectionError: (error) => {
-                                  if (shouldFailFastOnSourceError(mode)) {
-                                    return Effect.fail(error);
-                                  }
+                  const windowChecks = yield* Effect.forEach(page, (law) =>
+                    checkWindow(law).pipe(
+                      Effect.map((inWindow) => ({ law, inWindow })),
+                      Effect.catchTag("ValidationError", (error) =>
+                        config.unknownRangeStrategy === "fail"
+                          ? Effect.fail(error)
+                          : Effect.succeed({ law, inWindow: false, error }),
+                      ),
+                    ),
+                  );
 
-                                  return appendErrorLog({
-                                    identifier: law.identificador,
-                                    tag: error._tag,
-                                    message: error.message,
-                                  }).pipe(Effect.as(null));
-                                },
-                              }),
-                            );
+                  const itemsInWindow = windowChecks.filter((c) => c.inWindow);
 
-                            if (prepared === null) {
-                              return {
-                                prepared: null as PreparedLaw | null,
-                                inserted: 0,
-                                updated: 0,
-                                failed: 1,
-                                document: null as CollectedDocument | null,
-                              };
-                            }
+                  const [failures, successes] = yield* Effect.partition(
+                    itemsInWindow.map((c) => c.law),
+                    (law) => processItem(law, existingByCanonicalId),
+                    { concurrency: config.perPageConcurrency },
+                  );
 
-                            const document = yield* Effect.try({
-                              try: () =>
-                                buildDocument(
-                                  law,
-                                  prepared.kind,
-                                  prepared.mapped.document.rawMetadata,
-                                  prepared.contentText,
-                                  prepared.contentHash,
-                                ),
-                              catch: (cause) =>
-                                new ValidationError({
-                                  collectorId,
-                                  field: "documentEncoding",
-                                  value: law.identificador,
-                                  reason: String(cause),
-                                  message: `Failed to build collected document for '${law.identificador}'`,
-                                }),
-                            }).pipe(
-                              Effect.catchTag("ValidationError", (error) => {
-                                if (config.unknownRangeStrategy === "fail") {
-                                  return Effect.fail(error);
-                                }
+                  const shouldFailFast = (
+                    error: ValidationError | SourceConnectionError | CollectionError,
+                  ): boolean => {
+                    switch (error._tag) {
+                      case "ValidationError":
+                        return config.unknownRangeStrategy === "fail";
+                      case "SourceConnectionError":
+                      case "CollectionError":
+                        return shouldFailFastOnSourceError(mode);
+                    }
+                  };
 
-                                return appendErrorLog({
-                                  identifier: law.identificador,
-                                  tag: error._tag,
-                                  message: error.message,
-                                }).pipe(Effect.as(null));
-                              }),
-                            );
+                  const failFastError = failures.find(shouldFailFast);
+                  if (failFastError) return yield* failFastError;
 
-                            return {
-                              prepared,
-                              inserted: prepared.kind === "New" ? 1 : 0,
-                              updated: prepared.kind === "Update" ? 1 : 0,
-                              failed: document === null ? 1 : 0,
-                              document,
-                            };
-                          }),
-                        { concurrency: config.perPageConcurrency },
-                      );
-
-                      const preparedLaws = outcomes
-                        .map((outcome) => outcome.prepared)
-                        .filter((prepared): prepared is PreparedLaw => prepared !== null);
-
-                      yield* persistPreparedLaws(preparedLaws, runId);
-
-                      const documents = outcomes
-                        .map((outcome) => outcome.document)
-                        .filter((document): document is CollectedDocument => document !== null);
-                      const inserted = outcomes.reduce((acc, outcome) => acc + outcome.inserted, 0);
-                      const updated = outcomes.reduce((acc, outcome) => acc + outcome.updated, 0);
-                      const failed = outcomes.reduce((acc, outcome) => acc + outcome.failed, 0);
-
-                      yield* Ref.update(statsRef, (stats) => ({
-                        inserted: stats.inserted + inserted,
-                        updated: stats.updated + updated,
-                        failed: stats.failed + failed,
-                      }));
-
-                      const currentStats = yield* Ref.get(statsRef);
-                      yield* Effect.annotateCurrentSpan(
-                        "stats.totalInserted",
-                        currentStats.inserted,
-                      );
-                      yield* Effect.annotateCurrentSpan("stats.totalUpdated", currentStats.updated);
-                      yield* Effect.annotateCurrentSpan("stats.totalFailed", currentStats.failed);
-
-                      const hasMore = page.length === config.batchSize;
-                      const nextOffset = state.offset + config.batchSize;
-
-                      yield* Effect.annotateCurrentSpan("page.hasMore", hasMore);
-                      yield* Effect.annotateCurrentSpan("page.nextOffset", nextOffset);
-
-                      const requestDelayMs = Duration.toMillis(requestDelay);
-                      const effectiveDelayMs = isFullSyncLike(mode)
-                        ? Math.max(50, Math.floor(requestDelayMs / 4))
-                        : requestDelayMs;
-
-                      if (hasMore && effectiveDelayMs > 0) {
-                        yield* Effect.sleep(Duration.millis(effectiveDelayMs));
-                      }
-
-                      return Option.some([
-                        new CollectionBatch({
-                          documents,
-                          cursor: Option.some(
-                            new CollectionCursor({
-                              value: String(nextOffset),
-                              displayLabel: Option.none(),
-                            }),
-                          ),
-                          hasMore,
-                        }),
-                        { offset: nextOffset, done: !hasMore },
-                      ] as const);
+                  yield* Effect.forEach(failures, (error) =>
+                    appendErrorLog({
+                      identifier:
+                        "_tag" in error && "identifier" in error
+                          ? String(error.identifier)
+                          : "unknown",
+                      tag: "_tag" in error ? String(error._tag) : "Unknown",
+                      message:
+                        "message" in error && typeof error.message === "string"
+                          ? error.message
+                          : String(error),
                     }),
+                  );
+
+                  const preparedLaws = successes.map((s) => s.prepared);
+                  yield* persistPreparedLaws(preparedLaws, runId);
+
+                  const documents = successes.map((s) => s.document);
+                  const inserted = successes.reduce((acc, s) => acc + s.inserted, 0);
+                  const updated = successes.reduce((acc, s) => acc + s.updated, 0);
+                  const failed = failures.length;
+
+                  yield* Ref.update(statsRef, (stats) => ({
+                    inserted: stats.inserted + inserted,
+                    updated: stats.updated + updated,
+                    failed: stats.failed + failed,
+                  }));
+
+                  const currentStats = yield* Ref.get(statsRef);
+                  yield* Effect.annotateCurrentSpan("stats.totalInserted", currentStats.inserted);
+                  yield* Effect.annotateCurrentSpan("stats.totalUpdated", currentStats.updated);
+                  yield* Effect.annotateCurrentSpan("stats.totalFailed", currentStats.failed);
+
+                  const hasMore = page.length === config.batchSize;
+                  const nextOffset = offset + config.batchSize;
+
+                  yield* Effect.annotateCurrentSpan("page.hasMore", hasMore);
+                  yield* Effect.annotateCurrentSpan("page.nextOffset", nextOffset);
+
+                  const requestDelayMs = Duration.toMillis(requestDelay);
+                  const effectiveDelayMs = isFullSyncLike(mode)
+                    ? Math.max(50, Math.floor(requestDelayMs / 4))
+                    : requestDelayMs;
+
+                  if (hasMore && effectiveDelayMs > 0) {
+                    yield* Effect.sleep(Duration.millis(effectiveDelayMs));
+                  }
+
+                  const batch = new CollectionBatch({
+                    documents,
+                    cursor: Option.some(
+                      new CollectionCursor({
+                        value: String(nextOffset),
+                        displayLabel: Option.none(),
+                      }),
+                    ),
+                    hasMore,
+                  });
+
+                  return [
+                    Chunk.of(batch),
+                    hasMore ? Option.some({ offset: nextOffset }) : Option.none(),
+                  ];
+                }),
+            );
+
+            const stream = Stream.paginateChunkEffect(
+              { offset: parseResumeOffset(mode) },
+              ({ offset }) => fetchAndProcessPage(offset),
             );
 
             return stream.pipe(
@@ -1152,24 +1170,27 @@ export const BoeLawsCollectorFactory = defineFactory({
         }),
 
         estimateTotal: () => Effect.succeed(Option.none()),
-        healthCheck: fetchPage(0, fullSyncMode).pipe(
-          Effect.as({ status: "healthy" as const, checkedAt: new Date() }),
-          Effect.catchTags({
-            SourceConnectionError: (error) =>
-              Effect.succeed({
-                status: "unhealthy" as const,
-                checkedAt: new Date(),
-                message: error.message,
-              }),
-            ValidationError: (error) =>
-              Effect.succeed({
-                status: "unhealthy" as const,
-                checkedAt: new Date(),
-                message: error.message,
-              }),
-          }),
-          Effect.withSpan("BoeCollector.healthCheck"),
-        ),
+        healthCheck: Effect.gen(function* () {
+          const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
+          return yield* fetchPage(0, fullSyncMode).pipe(
+            Effect.as({ status: "healthy" as const, checkedAt: now }),
+            Effect.catchTags({
+              SourceConnectionError: (error) =>
+                Effect.succeed({
+                  status: "unhealthy" as const,
+                  checkedAt: now,
+                  message: error.message,
+                }),
+              ValidationError: (error) =>
+                Effect.succeed({
+                  status: "unhealthy" as const,
+                  checkedAt: now,
+                  message: error.message,
+                }),
+            }),
+            Effect.withSpan("BoeCollector.healthCheck"),
+          );
+        }),
       };
 
       return collectorRuntime;
