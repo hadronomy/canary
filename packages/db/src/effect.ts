@@ -1,6 +1,8 @@
+import * as Reactivity from "@effect/experimental/Reactivity";
 import * as PgClient from "@effect/sql-pg/PgClient";
+import * as SqlClient from "@effect/sql/SqlClient";
 import * as PgDrizzle from "drizzle-orm/effect-postgres";
-import { Config, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
+import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
 import * as Redacted from "effect/Redacted";
 
 import { databaseClientConfig, databaseServiceConfig } from "./config";
@@ -89,54 +91,49 @@ const makeDatabaseService = Effect.fn("DatabaseService.make")(function* (
 
 const make = Effect.gen(function* () {
   const serviceConfig = yield* databaseServiceConfig;
-
   const db: DatabaseClient = yield* PgDrizzle.make({ schema, relations });
 
   const service = yield* makeDatabaseService(
     db,
     serviceConfig.startupRetries,
     serviceConfig.startupBaseDelay,
-  ).pipe(
-    Effect.tapError((cause) =>
-      Effect.gen(function* () {
-        const fields = yield* withCurrentSpanCorrelation({
-          maxRetries: serviceConfig.startupRetries,
-          baseDelayMs: Duration.toMillis(serviceConfig.startupBaseDelay),
-          error: String(cause),
-        });
-        yield* Effect.logWarning("Database client initialization failed", fields);
-      }),
-    ),
-    Effect.retry(
-      Schedule.exponential(Duration.max(Duration.millis(1), serviceConfig.startupBaseDelay)).pipe(
-        Schedule.compose(Schedule.recurs(serviceConfig.startupRetries)),
-      ),
-    ),
-    Effect.mapError(
-      (cause) =>
-        new DatabaseUnavailableError({
-          operation: "createDatabaseClient",
-          message: `Failed to create effect-postgres client: ${String(cause)}`,
-          cause,
-        }),
-    ),
-    Effect.withSpan("DatabaseService.initializeClient"),
   );
 
   return service;
 }).pipe(Effect.withSpan("DatabaseService.make"));
 
-const pgClientConfig = Config.all({
-  url: databaseClientConfig.pipe(Config.map((c) => Redacted.make(c.databaseUrl))),
-  maxConnections: databaseClientConfig.pipe(Config.map((c) => c.poolMax)),
-  idleTimeout: databaseClientConfig.pipe(Config.map((c) => Duration.seconds(c.poolIdleTimeout))),
-  connectTimeout: databaseClientConfig.pipe(
-    Config.map((c) => Duration.seconds(c.poolConnectionTimeout)),
-  ),
-  ssl: Config.succeed(false),
-});
+const pgClientLayer = Layer.scopedContext(
+  Effect.gen(function* () {
+    const clientConfig = yield* databaseClientConfig;
+    const serviceConfig = yield* databaseServiceConfig;
 
-const pgClientLayer = PgClient.layerConfig(pgClientConfig);
+    const client = yield* PgClient.make({
+      url: Redacted.make(clientConfig.databaseUrl),
+      maxConnections: clientConfig.poolMax,
+      idleTimeout: clientConfig.poolIdleTimeout,
+      connectTimeout: clientConfig.poolConnectionTimeout,
+      ssl: false,
+    }).pipe(
+      Effect.tapError(() => Effect.logWarning("Database connection failed, retrying...")),
+      Effect.retry({
+        schedule: Schedule.exponential(
+          Duration.max(Duration.millis(10), serviceConfig.startupBaseDelay),
+        ).pipe(Schedule.compose(Schedule.recurs(serviceConfig.startupRetries))),
+        while: (error) => error._tag === "SqlError",
+      }),
+      Effect.mapError(
+        (cause) =>
+          new DatabaseUnavailableError({
+            operation: "createDrizzleClient",
+            message: `Failed to create Drizzle client after ${serviceConfig.startupRetries} retries: ${String(cause)}`,
+            cause,
+          }),
+      ),
+    );
+
+    return Context.make(PgClient.PgClient, client).pipe(Context.add(SqlClient.SqlClient, client));
+  }),
+).pipe(Layer.provide(Reactivity.layer));
 
 const drizzleDependencies = Layer.merge(PgDrizzle.DefaultServices, pgClientLayer);
 

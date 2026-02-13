@@ -312,7 +312,7 @@ const ErrorHandlerLive = Layer.mergeAll(AxiomErrorReporter.Default, AppLoggerLiv
 
 const reportRuntimeFailure = (cause: Cause.Cause<unknown>) =>
   Effect.gen(function* () {
-    yield* Effect.logError("Collector runtime terminated with failure");
+    yield* Effect.logError("Runtime failure occurred", cause);
 
     yield* AxiomErrorReporter.report(Cause.squash(cause)).pipe(
       Effect.timeout(Duration.seconds(5)),
@@ -328,12 +328,18 @@ const main = runCollectorCli().pipe(
     DatabaseUnavailableError: (error) => reportRuntimeFailure(Cause.fail(error)),
     CliError: (error) => reportRuntimeFailure(Cause.fail(error)),
   }),
+  Effect.catchAllDefect((defect) =>
+    Effect.gen(function* () {
+      yield* Effect.logError("Fatal defect occurred", { defect });
+      return yield* Effect.die(defect);
+    }),
+  ),
   Effect.withLogSpan("runtime"),
 );
 
-void Effect.runPromiseExit(main).then(async (exit) => {
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+void Effect.runPromiseExit(main).then((exit) => {
   if (Exit.isFailure(exit)) {
     process.exit(1);
   }
+  process.exitCode = 0;
 });
