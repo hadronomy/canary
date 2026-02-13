@@ -11,8 +11,8 @@
  */
 
 import { spawn } from "child_process";
-import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 import { parseArgs } from "util";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));

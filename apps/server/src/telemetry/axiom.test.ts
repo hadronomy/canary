@@ -1,7 +1,9 @@
-import { Effect, Layer, Logger, LogLevel, ConfigProvider } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { AxiomTelemetryLive, OtlpInfraLive } from "./axiom.js";
+
+import { Effect, Layer, Logger, LogLevel, ConfigProvider } from "effect";
+
 import { AppLoggerLive } from "../logging/logger.js";
+import { AxiomTelemetryLive, OtlpInfraLive } from "./axiom.js";
 
 interface CapturedRequest {
   path: string;
@@ -40,8 +42,8 @@ const createConfigLayer = (port: number) =>
         ["AXIOM_DATASET", "test-dataset"],
         ["AXIOM_TRACES_DATASET", "test-traces"],
         ["AXIOM_LOGS_DATASET", "test-logs"],
-      ])
-    )
+      ]),
+    ),
   );
 
 describe("Axiom OTLP Integration", () => {
@@ -57,15 +59,8 @@ describe("Axiom OTLP Integration", () => {
     const configLayer = createConfigLayer(mockPort);
 
     const testLayer = Layer.provide(
-      Layer.mergeAll(
-        AxiomTelemetryLive,
-        Logger.minimumLogLevel(LogLevel.Debug),
-      ),
-      Layer.mergeAll(
-        AppLoggerLive,
-        OtlpInfraLive,
-        configLayer,
-      )
+      Layer.mergeAll(AxiomTelemetryLive, Logger.minimumLogLevel(LogLevel.Debug)),
+      Layer.mergeAll(AppLoggerLive, OtlpInfraLive, configLayer),
     );
 
     const tracedWork = Effect.gen(function* () {
@@ -76,13 +71,13 @@ describe("Axiom OTLP Integration", () => {
 
     const program = Effect.gen(function* () {
       yield* Effect.logInfo("Test log message for OTLP");
-      
+
       yield* tracedWork.pipe(
         Effect.withSpan("test-operation", {
-          attributes: { "test.attribute": "value" }
-        })
+          attributes: { "test.attribute": "value" },
+        }),
       );
-      
+
       return "success";
     }).pipe(
       Effect.tap(() => Effect.sleep(100)),
@@ -109,15 +104,8 @@ describe("Axiom OTLP Integration", () => {
     const configLayer = createConfigLayer(mockPort);
 
     const testLayer = Layer.provide(
-      Layer.mergeAll(
-        AxiomTelemetryLive,
-        Logger.minimumLogLevel(LogLevel.Debug),
-      ),
-      Layer.mergeAll(
-        AppLoggerLive,
-        OtlpInfraLive,
-        configLayer,
-      )
+      Layer.mergeAll(AxiomTelemetryLive, Logger.minimumLogLevel(LogLevel.Debug)),
+      Layer.mergeAll(AppLoggerLive, OtlpInfraLive, configLayer),
     );
 
     const program = Effect.gen(function* () {
@@ -125,11 +113,9 @@ describe("Axiom OTLP Integration", () => {
       yield* Effect.logWarning("Warning test message");
       yield* Effect.logError("Error test message");
       yield* Effect.logDebug("Debug test message");
-      
+
       return "done";
-    }).pipe(
-      Effect.tap(() => Effect.sleep(500)),
-    );
+    }).pipe(Effect.tap(() => Effect.sleep(500)));
 
     await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
     await new Promise((resolve) => setTimeout(resolve, 1000));
