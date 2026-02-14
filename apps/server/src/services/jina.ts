@@ -146,7 +146,7 @@ export const JinaServiceLive = Layer.effect(
         return {
           full: [...item.embedding],
           multi: item.multi_vector ? item.multi_vector.map((m) => [...m]) : undefined,
-          scout: [...item.embedding.slice(0, 256)],
+          scout: item.embedding.slice(0, 256),
         };
       }).pipe(Effect.withSpan("JinaService.embedOne"));
 
@@ -180,7 +180,7 @@ export const JinaServiceLive = Layer.effect(
         return response.data.map((item) => ({
           full: [...item.embedding],
           multi: item.multi_vector ? item.multi_vector.map((m) => [...m]) : undefined,
-          scout: [...item.embedding.slice(0, 256)],
+          scout: item.embedding.slice(0, 256),
         }));
       }).pipe(Effect.withSpan("JinaService.embedMany"));
 
