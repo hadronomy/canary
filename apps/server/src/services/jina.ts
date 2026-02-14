@@ -1,4 +1,5 @@
-import { Context, Data, Effect, Layer, Config } from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
+import { Context, Data, Effect, Layer, Config, Redacted, Schema } from "effect";
 
 export class JinaError extends Data.TaggedError("JinaError")<{
   readonly message: string;
@@ -19,37 +20,37 @@ export interface RerankResult {
   };
 }
 
-export interface JinaEmbeddingItem {
-  readonly embedding: number[];
-  readonly multi_vector?: number[][];
-  readonly index: number;
-}
+const JinaEmbeddingItemSchema = Schema.Struct({
+  embedding: Schema.Array(Schema.Number),
+  multi_vector: Schema.optional(Schema.Array(Schema.Array(Schema.Number))),
+  index: Schema.Number,
+});
 
-export interface JinaEmbeddingResponse {
-  readonly model: string;
-  readonly data: JinaEmbeddingItem[];
-  readonly usage: {
-    readonly total_tokens: number;
-    readonly prompt_tokens: number;
-  };
-}
+const JinaEmbeddingResponseSchema = Schema.Struct({
+  model: Schema.String,
+  data: Schema.Array(JinaEmbeddingItemSchema),
+  usage: Schema.Struct({
+    total_tokens: Schema.Number,
+    prompt_tokens: Schema.Number,
+  }),
+});
 
-export interface JinaRerankItem {
-  readonly index: number;
-  readonly relevance_score: number;
-  readonly document: {
-    readonly text: string;
-  };
-}
+const JinaRerankItemSchema = Schema.Struct({
+  index: Schema.Number,
+  relevance_score: Schema.Number,
+  document: Schema.Struct({
+    text: Schema.String,
+  }),
+});
 
-export interface JinaRerankResponse {
-  readonly model: string;
-  readonly results: JinaRerankItem[];
-  readonly usage: {
-    readonly total_tokens: number;
-    readonly prompt_tokens: number;
-  };
-}
+const JinaRerankResponseSchema = Schema.Struct({
+  model: Schema.String,
+  results: Schema.Array(JinaRerankItemSchema),
+  usage: Schema.Struct({
+    total_tokens: Schema.Number,
+    prompt_tokens: Schema.Number,
+  }),
+});
 
 export type JinaInput =
   | string
@@ -99,107 +100,118 @@ export const normalizeInput = Effect.fn("normalizeInput")(function* (input: Jina
   return yield* new JinaError({ message: "Invalid input format" });
 });
 
-export class JinaService extends Context.Tag("JinaService")<
-  JinaService,
-  {
-    readonly embed: (
-      input: JinaInput | JinaInput[],
-    ) => Effect.Effect<EmbeddedResult | EmbeddedResult[], JinaError>;
-    readonly rerank: (
-      query: string,
-      docs: string[],
-    ) => Effect.Effect<Array<RerankResult>, JinaError>;
-  }
->() {}
+interface JinaServiceShape {
+  readonly embed: {
+    (input: JinaInput): Effect.Effect<EmbeddedResult, JinaError>;
+    (input: JinaInput[]): Effect.Effect<EmbeddedResult[], JinaError>;
+  };
+  readonly rerank: (query: string, docs: string[]) => Effect.Effect<RerankResult[], JinaError>;
+}
+
+export class JinaService extends Context.Tag("JinaService")<JinaService, JinaServiceShape>() {}
 
 export const JinaServiceLive = Layer.effect(
   JinaService,
   Effect.gen(function* () {
-    const apiKey = yield* Config.string("JINA_API_KEY");
+    const apiKey = yield* Config.redacted("JINA_API_KEY");
+    const client = yield* HttpClient.HttpClient;
 
-    const embed = Effect.fn("JinaService.embed")(function* (input: JinaInput | JinaInput[]) {
-      const inputs = Array.isArray(input) ? input : [input];
-      const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
+    const embedOne = (input: JinaInput): Effect.Effect<EmbeddedResult, JinaError, never> =>
+      Effect.gen(function* () {
+        const normalizedInput = yield* normalizeInput(input);
 
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch("https://api.jina.ai/v1/embeddings", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "jina-embeddings-v4",
-              input: normalizedInputs,
-              late_chunking: true,
-              return_multivector: true,
-            }),
+        const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/embeddings").pipe(
+          HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
+          HttpClientRequest.setHeader("Content-Type", "application/json"),
+          HttpClientRequest.bodyJson({
+            model: "jina-embeddings-v4",
+            input: [normalizedInput],
+            late_chunking: true,
+            return_multivector: true,
           }),
-        catch: (error) => new JinaError({ message: "Embed Error", cause: error }),
-      });
+          Effect.mapError(
+            (error) => new JinaError({ message: "Failed to serialize request body", cause: error }),
+          ),
+        );
 
-      if (!response.ok) {
-        const text = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: (e) => new JinaError({ message: "Failed to read response", cause: e }),
-        });
-        return yield* new JinaError({
-          message: `Jina API Error: ${response.status} ${text}`,
-        });
-      }
+        const response = yield* client.execute(request).pipe(
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(JinaEmbeddingResponseSchema)),
+          Effect.mapError((error) => new JinaError({ message: "Embed Error", cause: error })),
+        );
 
-      const data = yield* Effect.tryPromise({
-        try: () => response.json() as Promise<JinaEmbeddingResponse>,
-        catch: (e) => new JinaError({ message: "Failed to parse JSON", cause: e }),
-      });
-      const item = data.data[0];
+        const item = response.data[0];
+        if (!item) {
+          return yield* new JinaError({ message: "No embedding returned" });
+        }
+        return {
+          full: [...item.embedding],
+          multi: item.multi_vector ? item.multi_vector.map((m) => [...m]) : undefined,
+          scout: [...item.embedding.slice(0, 256)],
+        };
+      }).pipe(Effect.withSpan("JinaService.embedOne"));
 
-      if (!item) {
-        return yield* new JinaError({ message: "No embedding returned" });
-      }
+    const embedMany = (inputs: JinaInput[]): Effect.Effect<EmbeddedResult[], JinaError, never> =>
+      Effect.gen(function* () {
+        const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
 
-      return {
-        full: item.embedding,
-        multi: item.multi_vector,
-        scout: item.embedding?.slice(0, 256),
-      } as EmbeddedResult;
+        const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/embeddings").pipe(
+          HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
+          HttpClientRequest.setHeader("Content-Type", "application/json"),
+          HttpClientRequest.bodyJson({
+            model: "jina-embeddings-v4",
+            input: normalizedInputs,
+            late_chunking: true,
+            return_multivector: true,
+          }),
+          Effect.mapError(
+            (error) => new JinaError({ message: "Failed to serialize request body", cause: error }),
+          ),
+        );
+
+        const response = yield* client.execute(request).pipe(
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(JinaEmbeddingResponseSchema)),
+          Effect.mapError((error) => new JinaError({ message: "Embed Error", cause: error })),
+        );
+
+        if (!response.data || response.data.length === 0) {
+          return yield* new JinaError({ message: "No embedding returned" });
+        }
+
+        return response.data.map((item) => ({
+          full: [...item.embedding],
+          multi: item.multi_vector ? item.multi_vector.map((m) => [...m]) : undefined,
+          scout: [...item.embedding.slice(0, 256)],
+        }));
+      }).pipe(Effect.withSpan("JinaService.embedMany"));
+
+    const embed = ((input: JinaInput | JinaInput[]) =>
+      Array.isArray(input) ? embedMany(input) : embedOne(input)) as JinaServiceShape["embed"];
+
+    const rerank = Effect.fn("JinaService.rerank")(function* (query: string, docs: string[]) {
+      const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/rerank").pipe(
+        HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
+        HttpClientRequest.setHeader("Content-Type", "application/json"),
+        HttpClientRequest.bodyJson({
+          model: "jina-reranker-v2-base-multilingual",
+          query,
+          documents: docs,
+        }),
+        Effect.mapError(
+          (error) => new JinaError({ message: "Failed to serialize request body", cause: error }),
+        ),
+      );
+
+      const response = yield* client.execute(request).pipe(
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(JinaRerankResponseSchema)),
+        Effect.mapError((error) => new JinaError({ message: "Rerank Error", cause: error })),
+      );
+
+      return response.results.map((r) => ({
+        index: r.index,
+        relevance_score: r.relevance_score,
+        document: { text: r.document.text },
+      }));
     });
-
-    const rerank = (query: string, docs: string[]) =>
-      Effect.tryPromise({
-        try: async () => {
-          const response = await fetch("https://api.jina.ai/v1/rerank", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "jina-reranker-v2-base-multilingual",
-              query,
-              documents: docs,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new JinaError({
-              message: `Jina API Error: ${response.status} ${await response.text()}`,
-            });
-          }
-
-          const data = (await response.json()) as JinaRerankResponse;
-          return data.results.map((r) => ({
-            index: r.index,
-            relevance_score: r.relevance_score,
-            document: r.document,
-          })) as Array<RerankResult>;
-        },
-        catch: (error) =>
-          error instanceof JinaError
-            ? error
-            : new JinaError({ message: "Rerank Error", cause: error }),
-      });
 
     return { embed, rerank };
   }),
@@ -207,9 +219,9 @@ export const JinaServiceLive = Layer.effect(
 export const JinaServiceTest = Layer.succeed(
   JinaService,
   JinaService.of({
-    embed: (input) => {
+    embed: ((input: JinaInput | JinaInput[]) => {
       const isArray = Array.isArray(input);
-      const mockResult = {
+      const mockResult: EmbeddedResult = {
         scout: [0.1, 0.2, 0.3],
         full: [0.1, 0.2, 0.3],
         multi: [
@@ -218,7 +230,7 @@ export const JinaServiceTest = Layer.succeed(
         ],
       };
       return Effect.succeed(isArray ? [mockResult] : mockResult);
-    },
+    }) as JinaServiceShape["embed"],
     rerank: (_query, docs) =>
       Effect.succeed(
         docs.map((doc, index) => ({

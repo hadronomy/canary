@@ -1,5 +1,6 @@
 import { describe, it, expect, spyOn } from "bun:test";
 
+import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer, ConfigProvider } from "effect";
 
 import { JinaService, JinaServiceTest, JinaServiceLive, normalizeInput } from "~/services/jina";
@@ -61,6 +62,7 @@ describe("JinaService", () => {
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
+      Layer.provide(FetchHttpClient.layer),
     );
 
     const result = await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
@@ -121,6 +123,7 @@ describe("JinaService", () => {
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
+      Layer.provide(FetchHttpClient.layer),
     );
 
     await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
@@ -154,6 +157,7 @@ describe("JinaService", () => {
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
+      Layer.provide(FetchHttpClient.layer),
     );
 
     await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
