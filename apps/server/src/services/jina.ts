@@ -1,5 +1,5 @@
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
-import { Context, Data, Effect, Layer, Config, Redacted, Schema } from "effect";
+import { Config, Context, Data, Duration, Effect, Layer, Redacted, Schedule, Schema } from "effect";
 
 export class JinaError extends Data.TaggedError("JinaError")<{
   readonly message: string;
@@ -117,38 +117,14 @@ export const JinaServiceLive = Layer.effect(
     const client = yield* HttpClient.HttpClient;
 
     const embedOne = (input: JinaInput): Effect.Effect<EmbeddedResult, JinaError, never> =>
-      Effect.gen(function* () {
-        const normalizedInput = yield* normalizeInput(input);
-
-        const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/embeddings").pipe(
-          HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
-          HttpClientRequest.setHeader("Content-Type", "application/json"),
-          HttpClientRequest.bodyJson({
-            model: "jina-embeddings-v4",
-            input: [normalizedInput],
-            late_chunking: true,
-            return_multivector: true,
-          }),
-          Effect.mapError(
-            (error) => new JinaError({ message: "Failed to serialize request body", cause: error }),
-          ),
-        );
-
-        const response = yield* client.execute(request).pipe(
-          Effect.flatMap(HttpClientResponse.schemaBodyJson(JinaEmbeddingResponseSchema)),
-          Effect.mapError((error) => new JinaError({ message: "Embed Error", cause: error })),
-        );
-
-        const item = response.data[0];
-        if (!item) {
-          return yield* new JinaError({ message: "No embedding returned" });
-        }
-        return {
-          full: [...item.embedding],
-          multi: item.multi_vector ? item.multi_vector.map((m) => [...m]) : undefined,
-          scout: item.embedding.slice(0, 256),
-        };
-      }).pipe(Effect.withSpan("JinaService.embedOne"));
+      embedMany([input]).pipe(
+        Effect.flatMap((results) =>
+          results[0]
+            ? Effect.succeed(results[0])
+            : new JinaError({ message: "No embedding returned" }),
+        ),
+        Effect.withSpan("JinaService.embedOne"),
+      );
 
     const embedMany = (inputs: JinaInput[]): Effect.Effect<EmbeddedResult[], JinaError, never> =>
       Effect.gen(function* () {
@@ -162,6 +138,12 @@ export const JinaServiceLive = Layer.effect(
             input: normalizedInputs,
             late_chunking: true,
             return_multivector: true,
+          }),
+          Effect.retry({
+            schedule: Schedule.intersect(
+              Schedule.exponential(Duration.millis(100)),
+              Schedule.recurs(3),
+            ),
           }),
           Effect.mapError(
             (error) => new JinaError({ message: "Failed to serialize request body", cause: error }),
