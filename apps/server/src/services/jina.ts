@@ -198,6 +198,7 @@ export const JinaServiceLive = Layer.effect(
     return { embed, rerank };
   }),
 );
+
 export const JinaServiceTest = Layer.succeed(
   JinaService,
   JinaService.of({
