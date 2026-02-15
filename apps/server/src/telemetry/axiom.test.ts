@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
-import { Effect, Layer, Logger, LogLevel, ConfigProvider } from "effect";
+import { ConfigProvider, Effect, Layer, Logger, LogLevel } from "effect";
 
-import { AppLoggerLive } from "../logging/logger.js";
-import { AxiomTelemetryLive, OtlpInfraLive } from "./axiom.js";
+import { AppLoggerLive } from "~/logging/logger";
+
+import { AxiomTelemetryLive, OtlpInfraLive } from "./axiom";
 
 interface CapturedRequest {
   path: string;
