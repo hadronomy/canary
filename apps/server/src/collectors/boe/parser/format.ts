@@ -1,15 +1,4 @@
-import type {
-  Heading,
-  Html,
-  List,
-  ListItem,
-  Paragraph,
-  Root,
-  RootContent,
-  Text,
-  ThematicBreak,
-} from "mdast";
-import { toMarkdown } from "mdast-util-to-markdown";
+import { remark } from "remark";
 
 import type {
   BoeFragment,
@@ -25,6 +14,19 @@ const FRAGMENT_PATH_SCOPES = [
   "x",
   "t",
 ] as const satisfies ReadonlyArray<FragmentPathScope>;
+
+const markdownProcessor = remark();
+type RemarkRoot = Parameters<typeof markdownProcessor.stringify>[0];
+type RemarkRootContent = RemarkRoot extends { children: ReadonlyArray<infer Child> }
+  ? Child
+  : never;
+type RemarkText = Extract<RemarkRootContent, { type: "text" }>;
+type RemarkHeading = Extract<RemarkRootContent, { type: "heading" }>;
+type RemarkParagraph = Extract<RemarkRootContent, { type: "paragraph" }>;
+type RemarkListItem = Extract<RemarkRootContent, { type: "listItem" }>;
+type RemarkList = Extract<RemarkRootContent, { type: "list" }>;
+type RemarkThematicBreak = Extract<RemarkRootContent, { type: "thematicBreak" }>;
+type RemarkHtml = Extract<RemarkRootContent, { type: "html" }>;
 
 export const isFragmentPathQuery = (value: string): value is FragmentPathQuery => {
   if (value === "/") {
@@ -74,7 +76,7 @@ export const formatFragmentsAsMarkdown = (
   const selected = selectFragmentsByPathQuery(fragments, canonical);
   const metadata = selected[0]?.metadata ?? fragments[0]?.metadata;
 
-  const children: Array<RootContent> = [];
+  const children: Array<RemarkRootContent> = [];
 
   const title = metadata?.title ?? "Documento BOE";
   children.push(heading(1, title));
@@ -139,12 +141,12 @@ export const formatFragmentsAsMarkdown = (
     closeEndedNodes(openNodes, next?.nodePath, children);
   }
 
-  const ast: Root = {
+  const ast = {
     type: "root",
     children,
-  };
+  } satisfies RemarkRoot;
 
-  return MarkdownString(toMarkdown(ast));
+  return MarkdownString(markdownProcessor.stringify(ast));
 };
 
 const toStructuredHeading = (
@@ -192,40 +194,40 @@ const toStructuredHeading = (
   }
 };
 
-const text = (value: string): Text => ({
+const text = (value: string): RemarkText => ({
   type: "text",
   value,
 });
 
-const heading = (depth: 1 | 2 | 3 | 4 | 5 | 6, value: string): Heading => ({
+const heading = (depth: 1 | 2 | 3 | 4 | 5 | 6, value: string): RemarkHeading => ({
   type: "heading",
   depth,
   children: [text(value)],
 });
 
-const paragraph = (value: string): Paragraph => ({
+const paragraph = (value: string): RemarkParagraph => ({
   type: "paragraph",
   children: [text(value)],
 });
 
-const listItem = (value: string): ListItem => ({
+const listItem = (value: string): RemarkListItem => ({
   type: "listItem",
   spread: false,
   children: [paragraph(value)],
 });
 
-const summaryList = (values: ReadonlyArray<string>): List => ({
+const summaryList = (values: ReadonlyArray<string>): RemarkList => ({
   type: "list",
   ordered: false,
   spread: false,
   children: values.map(listItem),
 });
 
-const hr = (): ThematicBreak => ({
+const hr = (): RemarkThematicBreak => ({
   type: "thematicBreak",
 });
 
-const comment = (value: string): Html => ({
+const comment = (value: string): RemarkHtml => ({
   type: "html",
   value: `<!-- ${value} -->`,
 });
@@ -237,7 +239,7 @@ const closeEndedNodes = (
     readonly nodeType: string;
   }>,
   nextPath: string | undefined,
-  children: Array<RootContent>,
+  children: Array<RemarkRootContent>,
 ): void => {
   while (openNodes.length > 0) {
     const current = openNodes[openNodes.length - 1];
