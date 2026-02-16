@@ -1,0 +1,14 @@
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  "resources": [
+    {
+      "type": "git",
+      "name": "effect",
+      "url": "https://github.com/Effect-TS/effect",
+      "branch": "main",
+      "searchPaths": ["docs", "packages"],
+    },
+  ],
+  "model": "claude-haiku-4-5",
+  "provider": "opencode",
+}

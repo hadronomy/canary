@@ -18,6 +18,22 @@ The Effect repository is cloned to `~/code/opensource/effect` for reference.
 Use this to explore APIs, find usage examples, and understand implementation
 details when the documentation isn't enough.
 
+## Effect primitive guides (proposal docs)
+
+When working with Effect primitives referenced in `docs/*`, consult these focused guides first:
+
+- `docs/effect-primitives/Effect.md`
+- `docs/effect-primitives/Effect.fn.md`
+- `docs/effect-primitives/Effect.Service.md`
+- `docs/effect-primitives/Layer.md`
+- `docs/effect-primitives/Schema.md`
+- `docs/effect-primitives/Stream.md`
+- `docs/effect-primitives/Schedule.md`
+- `docs/effect-primitives/Chunk.md`
+- `docs/effect-primitives/Option.md`
+- `docs/effect-primitives/Data.TaggedError.md`
+- `docs/effect-primitives/HashMap.md`
+
 <!-- effect-solutions:end -->
 
 ## Opentui best practices

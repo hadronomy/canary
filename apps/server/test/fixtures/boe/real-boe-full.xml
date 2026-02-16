@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<documento fecha_actualizacion="20260206142601">
+  <metadatos>
+    <identificador>BOE-A-1989-22056</identificador>
+    <origen_legislativo codigo="1">Estatal</origen_legislativo>
+    <departamento codigo="3120">Ministerio de Agricultura, Pesca y Alimentación</departamento>
+    <rango codigo="1340">Real Decreto</rango>
+    <fecha_disposicion>19890908</fecha_disposicion>
+    <numero_oficial>1095/1989</numero_oficial>
+    <titulo>Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</titulo>
+    <diario codigo="BOE">Boletín Oficial del Estado</diario>
+    <fecha_publicacion>19890912</fecha_publicacion>
+    <diario_numero>218</diario_numero>
+    <seccion>1</seccion>
+    <subseccion/>
+    <pagina_inicial>28819</pagina_inicial>
+    <pagina_final>28821</pagina_final>
+    <suplemento_pagina_inicial/>
+    <suplemento_pagina_final/>
+    <url_pdf>/boe/dias/1989/09/12/pdfs/A28819-28821.pdf</url_pdf>
+    <url_epub/>
+    <url_pdf_catalan/>
+    <url_pdf_euskera/>
+    <url_pdf_gallego/>
+    <url_pdf_valenciano/>
+    <estatus_legislativo>L</estatus_legislativo>
+    <fecha_vigencia>19890913</fecha_vigencia>
+    <estatus_derogacion>N</estatus_derogacion>
+    <fecha_derogacion/>
+    <judicialmente_anulada>N</judicialmente_anulada>
+    <fecha_anulacion/>
+    <vigencia_agotada>N</vigencia_agotada>
+    <estado_consolidacion codigo="3">Finalizado</estado_consolidacion>
+    <letra_imagen>A</letra_imagen>
+    <suplemento_letra_imagen/>
+    <url_eli>https://www.boe.es/eli/es/rd/1989/09/08/1095</url_eli>
+  </metadatos>
+  <metadata-eli>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:eli="http://data.europa.eu/eli/ontology#">
+      <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095">
+        <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+        <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+        <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+        <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+        <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+        <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+        <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+        <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+        <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+        <eli:has_member>
+          <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof">
+            <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+            <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+            <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+            <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+            <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+            <eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/dof"/>
+            <eli:is_member_of rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095"/>
+            <eli:consolidated_by rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221"/>
+            <eli:consolidated_by rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327"/>
+            <eli:consolidated_by rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731"/>
+            <eli:consolidated_by rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912"/>
+            <eli:is_realized_by>
+              <eli:LegalExpression rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa">
+                <eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/>
+                <eli:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</eli:title>
+                <eli:publisher_agent rdf:resource="https://www.boe.es"/>
+                <eli:date_publication rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-12</eli:date_publication>
+                <eli:realizes rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof"/>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa/html">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/text/html"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa/pdf">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/application/pdf"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa/xml">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/application/xml"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+              </eli:LegalExpression>
+            </eli:is_realized_by>
+          </eli:LegalResource>
+        </eli:has_member>
+        <eli:has_member>
+          <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221">
+            <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+            <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+            <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+            <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+            <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+            <eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/>
+            <eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2013-12-21</eli:version_date>
+            <eli:is_member_of rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095"/>
+            <eli:consolidates rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof"/>
+            <eli:is_realized_by>
+              <eli:LegalExpression rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221/spa">
+                <eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/>
+                <eli:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</eli:title>
+                <eli:publisher_agent rdf:resource="https://www.boe.es"/>
+                <eli:realizes rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221"/>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221/spa/html">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/text/html"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20131221/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+              </eli:LegalExpression>
+            </eli:is_realized_by>
+          </eli:LegalResource>
+        </eli:has_member>
+        <eli:has_member>
+          <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327">
+            <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+            <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+            <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+            <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+            <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+            <eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/>
+            <eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">2000-03-27</eli:version_date>
+            <eli:is_member_of rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095"/>
+            <eli:consolidates rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof"/>
+            <eli:is_realized_by>
+              <eli:LegalExpression rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327/spa">
+                <eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/>
+                <eli:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</eli:title>
+                <eli:publisher_agent rdf:resource="https://www.boe.es"/>
+                <eli:realizes rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327"/>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327/spa/html">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/text/html"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/20000327/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+              </eli:LegalExpression>
+            </eli:is_realized_by>
+          </eli:LegalResource>
+        </eli:has_member>
+        <eli:has_member>
+          <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731">
+            <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+            <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+            <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+            <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+            <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+            <eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/>
+            <eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1995-07-31</eli:version_date>
+            <eli:is_member_of rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095"/>
+            <eli:consolidates rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof"/>
+            <eli:is_realized_by>
+              <eli:LegalExpression rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731/spa">
+                <eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/>
+                <eli:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</eli:title>
+                <eli:publisher_agent rdf:resource="https://www.boe.es"/>
+                <eli:realizes rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731"/>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731/spa/html">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/text/html"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19950731/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+              </eli:LegalExpression>
+            </eli:is_realized_by>
+          </eli:LegalResource>
+        </eli:has_member>
+        <eli:has_member>
+          <eli:LegalResource rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912">
+            <eli:jurisdiction rdf:resource="http://www.elidata.es/mdr/authority/jurisdiction/1/es"/>
+            <eli:type_document rdf:resource="http://www.elidata.es/mdr/authority/resource-type/1/rd"/>
+            <eli:id_local rdf:datatype="http://www.w3.org/2001/XMLSchema#string">BOE-A-1989-22056</eli:id_local>
+            <eli:date_document rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-08</eli:date_document>
+            <eli:number rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1095</eli:number>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/674"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/1320"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/3608"/>
+            <eli:is_about rdf:resource="https://www.boe.es/legislacion/eli/materias/5568"/>
+            <eli:version rdf:resource="http://www.elidata.es/mdr/authority/version/con"/>
+            <eli:version_date rdf:datatype="http://www.w3.org/2001/XMLSchema#date">1989-09-12</eli:version_date>
+            <eli:is_member_of rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095"/>
+            <eli:consolidates rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/dof"/>
+            <eli:is_realized_by>
+              <eli:LegalExpression rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912/spa">
+                <eli:language rdf:resource="http://www.elidata.es/mdr/authority/language/spa"/>
+                <eli:title rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Real Decreto 1095/1989, de 8 de septiembre, por el que se declaran las especies objeto de caza y pesca y se establecen normas para su protección.</eli:title>
+                <eli:publisher_agent rdf:resource="https://www.boe.es"/>
+                <eli:realizes rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912"/>
+                <eli:is_embodied_by>
+                  <eli:Format rdf:about="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912/spa/html">
+                    <eli:format rdf:resource="http://www.iana.org/assignments/media-types/text/html"/>
+                    <eli:embodies rdf:resource="https://www.boe.es/eli/es/rd/1989/09/08/1095/con/19890912/spa"/>
+                  </eli:Format>
+                </eli:is_embodied_by>
+              </eli:LegalExpression>
+            </eli:is_realized_by>
+          </eli:LegalResource>
+        </eli:has_member>
+      </eli:LegalResource>
+    </rdf:RDF>
+  </metadata-eli>
+  <analisis>
+    <materias>
+      <materia codigo="674" orden="1">Caza</materia>
+      <materia codigo="1320" orden="2">Comunidades Autónomas</materia>
+      <materia codigo="3608" orden="3">Fauna</materia>
+      <materia codigo="5568" orden="4">Pesca fluvial</materia>
+    </materias>
+    <notas>
+      <nota codigo="10" orden="200">Entrada en vigor:  13 de septiembre de 1989.</nota>
+    </notas>
+    <referencias>
+      <anteriores>
+        <anterior referencia="BOE-A-1971-444" orden="1010">
+          <palabra codigo="210">DEROGA</palabra>
+          <texto>el art. 4 del Reglamento aprobado por Real Decreto 506/1971, de 25 de marzo</texto>
+        </anterior>
+        <anterior referencia="BOE-A-1989-6881" orden="3010">
+          <palabra codigo="490">DESARROLLA</palabra>
+          <texto>determinados preceptos de la Ley 4/1989, de 27 de marzo</texto>
+        </anterior>
+        <anterior referencia="BOE-A-1970-369" orden="5020">
+          <palabra codigo="330">CITA</palabra>
+          <texto>Ley 1/1970, de 4 de abril</texto>
+        </anterior>
+      </anteriores>
+      <posteriores>
+        <posterior referencia="BOE-A-2013-13432" orden="">
+          <palabra codigo="270">SE MODIFICA</palabra>
+          <texto>los anexos I,A) y II , por Real Decreto 1015/2013, de 20 de diciembre</texto>
+        </posterior>
+        <posterior referencia="BOE-A-2000-5908" orden="1">
+          <palabra codigo="470">SE DECLARA</palabra>
+          <texto>la nulidad de lo indicado del art. 7.2.a), por Sentencia del TS de 22 de febrero de 2000</texto>
+        </posterior>
+        <posterior referencia="BOE-T-1995-18444" orden="">
+          <palabra codigo="470">SE DECLARA</palabra>
+          <texto>en los Conflictos acumulados 95, 163, 170, 172, 209, 162, 210 y 1938/1990, la nulidad de las disposiciones adicionales 1 y 2, en la forma indicada, y que las competencias controvertidas corresponden a las comunidades autónomas que menciona, por Sentencia 102/1995, de 26 de junio</texto>
+        </posterior>
+      </posteriores>
+    </referencias>
+    <alertas>
+      <alerta codigo="117" orden="1">Ganadería y animales</alerta>
+      <alerta codigo="119" orden="2">Medio ambiente</alerta>
+      <alerta codigo="122" orden="3">Pesca</alerta>
+    </alertas>
+  </analisis>
+  <texto>
+    <p class="parrafo">La Ley 4/1989, de 27 de marzo, de Conservación de los Espacios Naturales y de la Flora y de la Fauna Silvestres, en su artículo 33, apartado 1, establece que la caza y la pesca en aguas continentales sólo podrá realizarse sobre las especies que reglamentariamente se declaren como piezas de caza o pesca, para añadir en otros apartados del mismo artículo y en el siguiente, las condiciones básicas para garantizar que tales actividades sean compatibles con la conservación de dichas especies.</p>
+    <p class="parrafo">Este enunciado es concordante con uno de los principios fundamentales de la Ley, según el cual se adopta el compromiso expreso de garantizar la conservación de todas las especies de la flora y la fauna, algunas de las cuales, en razón al tamaño de sus poblaciones, a su distribución geográfica y a su índice de reproductividad, pueden ser objeto de un ordenado aprovechamiento.</p>
+    <p class="parrafo">El artículo 1,º de este Real Decreto, mediante referencia a los anexos I y II, establece las listas de las especies que pueden ser objeto de caza o pesca en todo el territorio español, sin perjuicio de que las Comunidades Autónomas, en el ejercicio de sus competencias en la materia, puedan excluir de ella, o autorizar, en su caso, para sus respectivos ámbitos territoriales, tanto las que no existen en éstos como las que reciben medidas especiales de protección a través de su inclusión en los respectivos catálogos de especies amenazadas.</p>
+    <p class="parrafo">Los artículos 3.º a 5.º desarrollan las condiciones generales que el artículo 34 de la Ley establece con el fin de garantizar la protección de las especies objeto de caza y pesca. En ellos se concretan los procedimientos masivos o no selectivos prohibidos con carácter general en la Ley. Asimismo, considerando que los períodos de celo, reproducción y crianza de las especies cinegéticas presentan variaciones en las distintas regiones, no pueden fijarse unas fechas únicas para todo el territorio durante las que las especies deben estar protegidas por este motivo. Caso distinto es el del periodo de regreso hacia los lugares de cría de las especies migradoras, que se extiende de manera continua desde febrero a mayo, tanto para las poblaciones que invernan en España, como para las que, procedentes de África, la atraviesan hacia el norte o llegan para criar, lo que exige el establecimiento de las fechas, para su protección con carácter general.</p>
+    <p class="parrafo">También se consideran las posibles circunstancias de carácter climatológico o biológico en que una o varias especies resulten particularmente vulnerables y requieran medidas especiales para su protección.</p>
+    <p class="parrafo">En el articulo 5.º se regula la autorización administrativa para la liberación en el medio natural de animales vivos.</p>
+    <p class="parrafo">Adicionalmente, el artículo 2.º determina el carácter y contenido del Censo Nacional de Caza y Pesca que el artículo 35.3 de la Ley adscribe al Ministerio de Agricultura, Pesca y Alimentación, y establece procedimientos generales para su mantenimiento permanentemente actualizado, función que asigna al Instituto Nacional para la Conservación de la Naturaleza.</p>
+    <p class="parrafo">Por último, se establece una limitación temporal para el caso particular de las aves acuáticas migratorias, cuya vulnerabilidad es creciente a medida que, en verano, se reduce progresivamente la superficie inundada en las zonas húmedas hasta que se generalizan las lluvias otoñales.</p>
+    <p class="parrafo">En consecuencia, a propuesta del Ministro de Agricultura, Pesca y Alimentación, de acuerdo con el Consejo de Estado y previa deliberación del Consejo de Ministros en su reunión del día 8 de septiembre de 1989,</p>
+    <p class="centro_redonda">DISPONGO:</p>
+    <p class="articulo">Artículo 1.º</p>
+    <p class="parrafo">1. En desarrollo de lo establecida en el artículo 33.1 de la Ley 4/1989, se declaran objeto de caza o pesca, las especies que se relacionan en los anexos I y II del presente Real Decreto.</p>
+    <p class="parrafo">2. Cuando se constate la variación significativa de las circunstancias de índole biológica o demográfica de las especies, previo informe de la Comisión Nacional de Protección de la Naturaleza y a propuesta del Ministerio de Agricultura, Pesca y Alimentación podrá modificarse la relación de especies de los citados anexos.</p>
+    <p class="parrafo">3. Las Comunidades Autónomas podrán excluir de la relación del anexo I, en el ámbito de sus respectivas competencias, aquellas especies sobre las que decidan aplicar medidas adicionales de protección.</p>
+    <p class="parrafo">4. Las Comunidades Autónomas podrán autorizar la caza y pesca de cada una de las especies incluidas en el anexo II.</p>
+    <p class="articulo">Art. 2.º</p>
+    <p class="parrafo">1. A efectos de mantener una información actualizada y continua sobre el estado de las poblaciones y la evolución genética de las especies objeto de caza o pesca, el Censo Nacional de Caza y Pesca previsto en el artículo 35.3 de la Ley 4/1989, dependiente del Ministerio de Agricultura, Pesca y Alimentación y adscrito al Instituto Nacional para la Conservación de la Naturaleza, se configura como un inventario nacional que incluirá, en todo caso, los datos relativos a la distribución geográfica de tales especies, el tamaño de sus poblaciones y el volumen de capturas, así como a sus respectivas tendencias.</p>
+    <p class="parrafo">2. La Comisión Nacional de Protección de la Naturaleza propondrá al Ministerio de Agricultura, Pesca y Alimentación la periodicidad y metodología para la obtención coordinada de los datos a incluir en el Censo Nacional de Caza y Pesca.</p>
+    <p class="parrafo">3. Las Comunidades Autónomas facilitarán anualmente al Instituto Nacional para la Conservación de la Naturaleza los datos relativos al volumen de capturas y, con la periodicidad que corresponda, los relativos a la evolución genética de las poblaciones y aquellos otros que propuestos por la Comisión Nacional de Protección de la Naturaleza, se hayan de incluir en el Censo Nacional.</p>
+    <p class="articulo">Art. 3.º</p>
+    <p class="parrafo">1. En aplicación del artículo 34, a), de la Ley 4/1989, se consideran procedimientos masivos y no selectivos prohibidos, para la captura o muerte de animales, los que se relacionan en el anexo III.</p>
+    <p class="parrafo">2. Las Comunidades Autónomas podrán prohibir en sus respectivos ámbitos territoriales la utilización de otros procedimientos que puedan causar localmente la desaparición o turbar gravemente la tranquilidad de las poblaciones de una especie.</p>
+    <p class="articulo">Art. 4.º</p>
+    <p class="parrafo">1. Con el fin de asegurar la conservación de las especies cinegéticas durante las épocas de celo, reproducción y crianza, las Comunidades Autónomas determinarán para cada una de ellas, en desarrollo de los artículos 33.2 y 34.b) de la Ley los períodos en que no podrán ser objeto de caza por este motivo.</p>
+    <p class="parrafo">2. A los mismos efectos, se considerarán periodos de regreso hacia los lugares de reproducción de las especies cinegéticas migratorias los comprendidos entre el 1 de febrero y el 31 de mayo.</p>
+    <p class="parrafo">3. Cuando existan circunstancias excepcionales de orden climatológico o biológico que afecten o puedan afectar localmente a una o varias especies objeto de caza o pesca, las Comunidades Autónomas podrán establecer moratorias temporales o prohibiciones especiales con respecto a su captura.</p>
+    <p class="parrafo">4. Cuanto tales circunstancias excepcionales afecten de un modo generalizado a especies o poblaciones objeto de caza o pesca en territorios que excedan del ámbito de una Comunidad Autónoma se podrán establecer por el Ministerio de Agricultura, Pesca y Alimentación, en colaboración con las Comunidades Autónomas correspondientes, moratorias temporales o prohibiciones especiales en relación con el ejercicio de la caza y de la pesca para la protección de dichas especies.</p>
+    <p class="articulo">Art. 5.º</p>
+    <p class="parrafo">Para garantizar la preservación de la diversidad genética y la conservación de las especies autóctonas cinegéticas y piscícolas, la introducción y reintroducción de especies o el reforzamiento de poblaciones en el medio natural requerirá autorización administrativa del órgano competente de la correspondiente Comunidad Autónoma, que solo podrá concederse cuando tal suelta de ejemplares:</p>
+    <p class="parrafo_2">a) No afecte a la diversidad genética de la zona donde se ubica la localidad de destino.</p>
+    <p class="parrafo">b) No resulte contraria a las determinaciones o disposiciones de los Planes de Ordenación de los Recursos Naturales que afecten a dicha zona, si los hubiere.</p>
+    <p class="parrafo">c) Sea compatible con los Planes relativos a las especies catalogadas que, en su caso, existan en ese territorio.</p>
+    <p class="parrafo">d) Se adecue a las previsiones del Plan Técnico de aprovechamientos cinegéticos o piscícolas del lugar de destino.</p>
+    <p class="parrafo">e) Cumpla cualquier otra condición que determine el órgano competente de la Comunidad Autónoma.</p>
+    <p class="articulo">Art. 6.º</p>
+    <p class="parrafo">Cualquier otro acto de persecución, muerte o captura de especies distintas o en condiciones diferentes a las definidas en el presente Real Decreto, requerirá una autorización excepcional y expresa del órgano competente de la Comunidad Autónoma.</p>
+    <p class="articulo">Art. 7.º</p>
+    <p class="parrafo">De conformidad con lo previsto en el título VI de la Ley 4/1989:</p>
+    <p class="parrafo_2">1. Se considerarán infracciones graves:</p>
+    <p class="parrafo_2">a) La utilización no autorizada de los métodos descritos en los números 4, 5, 7, 8 y 10 del anexo III.A, y en los números 2 y 3 del anexo III.B.</p>
+    <p class="parrafo">b) La preparación, manipulación y venta para su utilización como métodos de caza o pesca no autorizada de los elementos y sustancias incluidos en el número 7 del anexo III.A y del número 3 del anexo III.B.</p>
+    <p class="parrafo_2">2. Se considerarán infracciones menos graves:</p>
+    <p class="parrafo_2">a) El ejercicio de la caza o la pesca durante las épocas de celo, reproducción o crianza, o durante los períodos de regreso hacia los lugares de reproducción,</p>
+    <p class="parrafo">b) El ejercicio de la caza o la pesca durante las moratorias o prohibiciones temporales establecidas por la autoridad competente.</p>
+    <p class="parrafo">c) El ejercicio de la caza o de la pesca en terrenos acotados al efecto en ausencia del preceptivo Plan Técnico de aprovechamientos.</p>
+    <p class="parrafo_2">Se considera infracción leve la utilización, así como la preparación, manipulación y venta para su uso no autorizados de los métodos y procedimientos de caza o pesca incluidos en el anexo III y no mencionados en apartados anteriores.</p>
+    <p class="capitulo">[encabezado]DISPOSICIONES ADICIONALES</p>
+    <p class="articulo">[precepto]Primera.</p>
+    <p class="parrafo">Los artículos 1.1, 3.1, 4.2 y disposición adicional segunda tendrán el carácter de normativa básica estatal.</p>
+    <p class="articulo">[precepto]Segunda.</p>
+    <p class="parrafo">En aplicación de la disposición adicional cuarta de la Ley 4/1989, el periodo hábil de caza de las aves acuáticas, que establezcan las Comunidades Autónomas, no podrá dar comienzo antes del 15 de octubre de cada año.</p>
+    <p class="capitulo">DISPOSICIÓN DEROGATORIA</p>
+    <p class="parrafo">Queda derogado el artículo 4 del Decreto 506/1971, de 25 de marzo, por el que se aprueba el Reglamento para la ejecución de la Ley de Caza de 4 de abril de 1970.</p>
+    <p class="capitulo">[encabezado]DISPOSICIONES FINALES</p>
+    <p class="articulo">[precepto]Primera.</p>
+    <p class="parrafo">Se faculta al Ministro de Agricultura, Pesca y Alimentación para dictar las normas y actos necesarios para el desarrollo y aplicación del presente Real Decreto en el ámbito de sus competencias.</p>
+    <p class="articulo">[precepto]Segunda.</p>
+    <p class="parrafo">El presente Real Decreto entrará en vigor el día siguiente al de su publicación en el «Boletín Oficial del Estado».</p>
+    <p class="parrafo_2">Dado en Madrid a 8 de septiembre de 1989.</p>
+    <p class="firma_rey">JUAN CARLOS R.</p>
+    <p class="firma_ministro">El Ministro de Agricultura, Pesca y Alimentación,</p>
+    <p class="firma_ministro">CARLOS ROMERO HERRERA</p>
+    <p class="anexo_num">ANEXO I</p>
+    <p class="anexo_tit">Relación de especies objeto de caza y pesca en España, que puede ser reducida por las Comunidades Autónomas, en función de sus situaciones específicas, de acuerdo con lo que se establece en el artículo 1.3 del presente Real Decreto</p>
+    <p class="centro_redonda">A) ESPECIES CINEGÉTICAS</p>
+    <p class="centro_cursiva">Mamíferos</p>
+    <p class="parrafo">Liebre (Lepus spp.).</p>
+    <p class="parrafo">Conejo (Oryctolagus cuniculos).</p>
+    <p class="parrafo">Zorro (Vulpes vulpes).</p>
+    <p class="parrafo">Jabalí (Sus scrofa).</p>
+    <p class="parrafo">Ciervo (Cervus elaphus).</p>
+    <p class="parrafo">Gamo (Dama dama).</p>
+    <p class="parrafo">Corzo (Capreolus capreolus).</p>
+    <p class="parrafo">Rebeco (Rupicapra rupicapra).</p>
+    <p class="parrafo">Cabra montés (Capra pyrenaica), excepto el bucardo (C. p. pyrenaica).</p>
+    <p class="parrafo">Muflón (Ovis musimon).</p>
+    <p class="parrafo">Arruí (Ammotragus lervia).</p>
+    <p class="centro_cursiva">Aves</p>
+    <p class="parrafo">Ansar común (Anser anser).</p>
+    <p class="parrafo">Anade real (Anas platyrhynchos).</p>
+    <p class="parrafo">Cerceta carretona (Anas querquedula).</p>
+    <p class="parrafo">Cerceta común (Anas crecca).</p>
+    <p class="parrafo">Anade friso (Anas strepera).</p>
+    <p class="parrafo">Anade silbón (Anas penélope).</p>
+    <p class="parrafo">Anade rabudo (Anas acuta).</p>
+    <p class="parrafo">Pato cuchara (Anas clipeata).</p>
+    <p class="parrafo">Pato colorado (Neita rufina).</p>
+    <p class="parrafo">Porrón común (Aythya ferina).</p>
+    <p class="parrafo">Porrón moñudo (Aythya fuligula).</p>
+    <p class="parrafo">Perdiz roja (Alectoris rufa).</p>
+    <p class="parrafo">Perdiz moruna (Alectoris barbara).</p>
+    <p class="parrafo">Codorniz (Coturnix coturnix).</p>
+    <p class="parrafo">Colín de Vírgina (Colinus virginianus).</p>
+    <p class="parrafo">Colín de California (Lophortix califórnica).</p>
+    <p class="parrafo">Faisán (Phasianus colchicus).</p>
+    <p class="parrafo">Focha común (Fulica atra).</p>
+    <p class="parrafo">Avefría (Vanellus vanellus).</p>
+    <p class="parrafo">Becada (Scolopax rusticola).</p>
+    <p class="parrafo">Agachadiza común (Gallinago gallinago).</p>
+    <p class="parrafo">Agachadiza chica (Lymnocriptes minima).</p>
+    <p class="parrafo">Gaviota reidora (Larus ridibundus).</p>
+    <p class="parrafo">Gaviota argentea (Larus argentatus),</p>
+    <p class="parrafo">Gaviota patiamarilla (Larus cachinans).</p>
+    <p class="parrafo">Paloma torcaz (Columba palumbus).</p>
+    <p class="parrafo">Paloma bravía (Columba livia).</p>
+    <p class="parrafo">Paloma zurita (Columba oenas).</p>
+    <p class="parrafo">Tórtola común (Streptopelia turtur).</p>
+    <p class="parrafo">Zorzal Común (Turdus philomelos).</p>
+    <p class="parrafo">Zorzal alirrojo (Turdus aliacus).</p>
+    <p class="parrafo">Zorzal real (Turdus pilaris).</p>
+    <p class="parrafo">Zorzal charlo (Turdus viscivorus).</p>
+    <p class="parrafo">Estornino negro (Sturnus unicolor),</p>
+    <p class="parrafo">Estornino pinto (Sturnus vulgaris).</p>
+    <p class="parrafo">Urraca (Pica pica).</p>
+    <p class="parrafo">Grajilla (Corvus monedula).</p>
+    <p class="parrafo">Corneja (Corvus corone).</p>
+    <p class="centro_redonda">B) ESPECIES OBJETO DE PESCA</p>
+    <p class="centro_cursiva">Peces</p>
+    <p class="parrafo">Lamprea (Petromyzon marinos).</p>
+    <p class="parrafo">Sábalo (Alosa alosa).</p>
+    <p class="parrafo">Saboga (Alosa fallax).</p>
+    <p class="parrafo">Anguila (Anguilla anguilla).</p>
+    <p class="parrafo">Salmón (Salmo salar).</p>
+    <p class="parrafo">Trucha común (Salmo trutta).</p>
+    <p class="parrafo">Trucha arco-iris (Salmo gairdnieri).</p>
+    <p class="parrafo">Black-bass (Micropterus salmoides).</p>
+    <p class="parrafo">Barbos (Barbus spp.).</p>
+    <p class="parrafo">Carpa (Cyprinus carpio).</p>
+    <p class="parrafo">Carpin (Carassius auratus).</p>
+    <p class="parrafo">Boga de río (Chondrostoma polylepis).</p>
+    <p class="parrafo">Madrilla (Chondrostoma toxostoma).</p>
+    <p class="parrafo">Cachos (Leuciscus spp.).</p>
+    <p class="parrafo">Tenca (Tinca tinca).</p>
+    <p class="parrafo">Lucio (Esox Lucios).</p>
+    <p class="parrafo">Pez gato (Ictalarus melas).</p>
+    <p class="parrafo">Siluro (Silurus glanis).</p>
+    <p class="parrafo">Lubina (Dicentrarchus Labrax).</p>
+    <p class="parrafo">Baila (Dicentrarchus punctatus).</p>
+    <p class="parrafo">Lisa (Chelon labrosus).</p>
+    <p class="parrafo">Morragute (Liza ramada).</p>
+    <p class="parrafo">Galúa (Liza salina).</p>
+    <p class="parrafo">Pardete (Mugil cephalus).</p>
+    <p class="parrafo">Platija (Platichtys flesus)</p>
+    <p class="centro_cursiva">Invertebrados</p>
+    <p class="parrafo">Cangrejo rojo (Procambarus clarkii).</p>
+    <p class="anexo_num">ANEXO II</p>
+    <p class="anexo_tit">Relación de especies que pueden ser objeto de caza y pesca si se autoriza expresamente por las Comunidades Autónomas, de acuerdo con lo que se establece en el artículo 1.4 del presente Real Decreto</p>
+    <p class="centro_cursiva">Mamíferos</p>
+    <p class="parrafo">Lobo (Canis lupus).</p>
+    <p class="centro_cursiva">Aves</p>
+    <p class="parrafo">Tórtola turca (Streptopelia decaoto).</p>
+    <p class="parrafo">Gabiota sombría (Larus fuscus),</p>
+    <p class="centro_cursiva">Peces</p>
+    <p class="parrafo">Huchón (Hucho hucho).</p>
+    <p class="anexo_num">ANEXO III</p>
+    <p class="anexo_tit">Relación de procedimientos prohibidos para la captura de animales</p>
+    <p class="centro_redonda">A) PARA LAS ESPECIES CINEGÉTICAS</p>
+    <p class="parrafo_2">1. Los lazos y anzuelos, así como todo tipo de trampas y cepos, incluyendo costillas, perchas o ballestas, fosos, nasas y alares.</p>
+    <p class="parrafo">2. El arbolillo, las varetas, las rametas, las barracas, parayns y todo tipo de medios o métodos que impliquen el uso de la liga.</p>
+    <p class="parrafo">3. Los reclamos de especies protegidas vivas o naturalizadas y otros reclamos vivos cegados o mutilados, así como todo tipo de reclamos eléctricos o mecánicos incluidas las grabaciones.</p>
+    <p class="parrafo">4. Los aparatos electrocutantes o paralizantes.</p>
+    <p class="parrafo">5. Los faros, linternas, espejos y otras fuentes luminosas artificiales.</p>
+    <p class="parrafo">6. Todo tipo de redes o de artefactos que requieran para su funcionamiento el uso de mallas, como las redes abatibles, las redes-niebla o verticales y las redes-cañón.</p>
+    <p class="parrafo">7. Todo tipo de cebos, gases o sustancias venenosas, paralizantes, tranquilizantes, atrayentes o repelentes, así como los explosivos.</p>
+    <p class="parrafo">8. Las armas semiautomáticas o automáticas cuyo cargador pueda contener más de dos cartuchos, las de aire comprimido y las provistas de silenciador o de visor para el disparo nocturna, así como las que disparen proyectiles que inyecten sustancias paralizantes.</p>
+    <p class="parrafo">9. Los hurones y las aves de cetrería.</p>
+    <p class="parrafo">10. Las aeronaves de cualquier tipo o los vehículos terrestres motorizados, así como las embarcaciones a motor como lugar desde donde realizar los disparos.</p>
+    <p class="centro_redonda">B) PARA LAS ESPECIES OBJETO DE PESCA</p>
+    <p class="parrafo_2">1. Las redes o artefactos de cualquier tipo cuya malla, luz o dimensiones no permitan el paso de peces con una talla igual o inferior a los 8 centímetros, así como la que ocupen más de la mitad de la anchura de la corriente.</p>
+    <p class="parrafo">2. Cualquier procedimiento que implique la instalación de obstáculos o barreras de piedra, madera u otro material o la alteración de cauces o caudales, para facilitar la pesca.</p>
+    <p class="parrafo">3. Los aparatos electrocutantes o paralizantes, fuentes luminosas artificiales, explosivos y sustancias venenosas, paralizantes, tranquilizantes, atrayentes o repelentes.</p>
+    <p class="parrafo">4. Las garras, garfios, tridentes, gamos, grampines, fitoras, arpones, garlitos, cribas, butrones, esparaveles, remangas, palangres, salbardos, cordelillos, sedales durmientes y artes similares.</p>
+    <p class="parrafo">5. Los peces vivos como cebo, así como cebar las aguas antes o durante la pesca.</p>
+  </texto>
+</documento>

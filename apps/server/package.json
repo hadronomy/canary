@@ -18,9 +18,11 @@
     "@effect/platform-bun": "^0.87.0",
     "@effect/sql-pg": "^0.50.3",
     "@elysiajs/cors": "^1.4.1",
+    "@huggingface/transformers": "^3.8.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.211.0",
     "@opentelemetry/sdk-trace-node": "^2.5.0",
+    "@types/mdast": "^4.0.4",
     "ansis": "^4.1.0",
     "bullmq": "^5.66.7",
     "dotenv": "catalog:",
@@ -28,6 +30,8 @@
     "effect": "^3.19.16",
     "elysia": "^1.4.21",
     "fast-xml-parser": "^5.3.3",
+    "mdast": "^3.0.0",
+    "mdast-util-to-markdown": "^2.1.2",
     "zod": "catalog:"
   },
   "devDependencies": {

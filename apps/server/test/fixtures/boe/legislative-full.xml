@@ -1,0 +1,35 @@
+<documento fecha_actualizacion="20260206142601">
+  <metadatos>
+    <identificador>BOE-A-1989-22056</identificador>
+    <departamento>Ministerio de Agricultura</departamento>
+    <titulo>Real Decreto 1095/1989</titulo>
+    <rango codigo="1340">Real Decreto</rango>
+    <seccion>1</seccion>
+    <subseccion>A</subseccion>
+    <fecha_publicacion>19890912</fecha_publicacion>
+    <url_pdf>/boe/dias/1989/09/12/pdfs/A28819-28821.pdf</url_pdf>
+    <url_eli>https://www.boe.es/eli/es/rd/1989/09/08/1095</url_eli>
+  </metadatos>
+  <analisis>
+    <materias>
+      <materia>Biodiversidad</materia>
+    </materias>
+    <notas>
+      <nota>Entrada en vigor el 13 de septiembre</nota>
+    </notas>
+  </analisis>
+  <texto>
+    <p class="parrafo">La Ley 4/1989 establece el marco general.</p>
+    <p class="capitulo">CAPITULO I</p>
+    <p class="articulo">Articulo 1.º Objeto.</p>
+    <p class="parrafo">1. Esta norma tiene por objeto regular.</p>
+    <p class="parrafo_2">a) No afecte a la diversidad.</p>
+    <p class="capitulo">[encabezado]DISPOSICIONES FINALES</p>
+    <p class="articulo">[precepto]Primera.</p>
+    <p class="parrafo">Se faculta al Ministerio para desarrollar la norma.</p>
+    <p class="anexo_num">ANEXO I</p>
+    <p class="anexo_tit">Relacion de especies</p>
+    <p class="centro_cursiva">Mamiferos</p>
+    <p class="parrafo">Liebre (Lepus spp.).</p>
+  </texto>
+</documento>

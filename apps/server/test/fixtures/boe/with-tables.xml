@@ -1,0 +1,32 @@
+<documento fecha_actualizacion="20260206142601">
+  <metadatos>
+    <identificador>BOE-A-2024-30003</identificador>
+    <departamento>Ministerio de Hacienda</departamento>
+    <titulo>Resolucion con tabla</titulo>
+    <rango codigo="1370">Resolucion</rango>
+    <seccion>2</seccion>
+    <subseccion>A</subseccion>
+    <fecha_publicacion>20240501</fecha_publicacion>
+    <url_pdf>/boe/dias/2024/05/01/pdfs/BOE-A-2024-30003.pdf</url_pdf>
+    <url_eli>https://www.boe.es/eli/es/res/2024/05/01/30003</url_eli>
+  </metadatos>
+  <analisis />
+  <texto>
+    <p class="parrafo">Se aprueba la relacion de puestos.</p>
+    <table class="tabla_ancha">
+      <thead>
+        <tr>
+          <th class="cabeza_tabla">N de orden</th>
+          <th class="cabeza_tabla">Codigo puesto</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="cuerpo_tabla_centro">1</td>
+          <td class="cuerpo_tabla_izq">1400460</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="parrafo_2">Madrid, 1 de mayo de 2024.</p>
+  </texto>
+</documento>
