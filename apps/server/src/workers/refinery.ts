@@ -2,18 +2,18 @@
 // import { Console, Effect } from "effect";
 
 // import { Queues } from "~/queues/index";
-// import { JinaService } from "~/services/jina";
+// import { EmbeddingService } from "~/services/embedding";
 // import { makeWorker } from "~/services/queue";
 
 // export const RefineryWorker = makeWorker(Queues.refinery, (job) =>
 //   Effect.gen(function* () {
 //     yield* Console.log(`Processing BOC item ${job.id}: ${job.data.title}`);
 
-//     const jina = yield* JinaService;
+//     const embedding = yield* EmbeddingService;
 
 //     const content = `Mock content for ${job.data.title}`;
 
-//     const embeddings = yield* jina.embed(content);
+//     const embeddings = yield* embedding.embed(content);
 
 //     if (Array.isArray(embeddings)) {
 //       yield* Console.log(`Generated embeddings for ${job.data.title}`);
