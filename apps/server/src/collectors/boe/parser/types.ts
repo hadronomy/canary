@@ -79,7 +79,7 @@ export interface FragmentTokenCount {
 }
 
 export interface FragmentTokenCountResult {
-  readonly model: "jina-embeddings-v4";
+  readonly model: string;
   readonly totalTokens: number;
   readonly fragments: ReadonlyArray<FragmentTokenCount>;
 }

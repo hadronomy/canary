@@ -1,6 +1,7 @@
-import { AutoTokenizer, type PreTrainedTokenizer } from "@huggingface/transformers";
 import { Effect, Schema } from "effect";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
+
+import { EmbeddingService } from "~/services/embedding";
 
 import {
   InvalidMetadataError,
@@ -30,25 +31,6 @@ import { BoeMetadataSchema } from "./types";
 
 const decodeDate = Schema.decodeUnknownSync(Schema.String.pipe(Schema.pattern(/^\d{8}$/)));
 const decodeBoeMetadata = Schema.decodeUnknownSync(BoeMetadataSchema);
-const jinaEmbeddingModelName = "jinaai/jina-embeddings-v4" as const;
-
-let jinaTokenizerPromise: Promise<PreTrainedTokenizer> | undefined;
-
-function getJinaTokenizer(): Promise<PreTrainedTokenizer> {
-  if (jinaTokenizerPromise === undefined) {
-    jinaTokenizerPromise = AutoTokenizer.from_pretrained(jinaEmbeddingModelName, {
-      local_files_only: false,
-    });
-  }
-  return jinaTokenizerPromise;
-}
-
-async function countTokensWithTransformers(
-  texts: ReadonlyArray<string>,
-): Promise<ReadonlyArray<number>> {
-  const tokenizer = await getJinaTokenizer();
-  return texts.map((text) => tokenizer.encode(text).length);
-}
 
 function createOrderedParser() {
   return new XMLParser({
@@ -176,24 +158,28 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
         Effect.gen(function* () {
           const fragments = yield* parseToFragments({ xml: input.xml });
           const selected = selectFragmentsByPathQuery(fragments, input.query);
-          const counts = yield* Effect.tryPromise({
-            try: () => countTokensWithTransformers(selected.map((fragment) => fragment.content)),
-            catch: (cause) =>
-              new XmlParseError({
-                message: `Failed to count tokens using ${jinaEmbeddingModelName}`,
-                cause,
-              }),
-          });
+          const embeddingService = yield* EmbeddingService;
+          const tokenResult = yield* embeddingService
+            .countTokens(selected.map((fragment) => fragment.content))
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new XmlParseError({
+                    message: "Failed to count tokens using embedding service",
+                    cause,
+                  }),
+              ),
+            );
 
-          if (counts.length !== selected.length) {
+          if (tokenResult.counts.length !== selected.length) {
             return yield* new XmlParseError({
-              message: `Token count mismatch: expected ${selected.length}, got ${counts.length}`,
+              message: `Token count mismatch: expected ${selected.length}, got ${tokenResult.counts.length}`,
             });
           }
 
           const fragmentTokenCounts = selected.map((fragment, index) => ({
             fragment,
-            tokenCount: counts[index]!,
+            tokenCount: tokenResult.counts[index]!,
           }));
 
           const totalTokens = fragmentTokenCounts.reduce(
@@ -202,7 +188,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
           );
 
           return {
-            model: "jina-embeddings-v4",
+            model: tokenResult.model,
             totalTokens,
             fragments: fragmentTokenCounts,
           } satisfies FragmentTokenCountResult;

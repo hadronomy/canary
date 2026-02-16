@@ -1,5 +1,7 @@
 import type { Effect } from "effect";
 
+import type { EmbeddingService } from "~/services/embedding";
+
 import type { BoeParseError } from "./errors";
 import type { LegalQuery, LegalQueryResult } from "./query";
 import type {
@@ -42,5 +44,5 @@ export interface BoeXmlParserApi extends BoeFragmentBuilderApi {
   readonly countTokensByPath: (input: {
     readonly xml: string;
     readonly query: FragmentPathQuery;
-  }) => Effect.Effect<FragmentTokenCountResult, BoeParseError>;
+  }) => Effect.Effect<FragmentTokenCountResult, BoeParseError, EmbeddingService>;
 }
