@@ -1,5 +1,17 @@
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
-import { Config, Context, Data, Duration, Effect, Layer, Redacted, Schedule, Schema } from "effect";
+import { AutoTokenizer, type PreTrainedTokenizer } from "@huggingface/transformers";
+import {
+  Cache,
+  Config,
+  Context,
+  Data,
+  Duration,
+  Effect,
+  Layer,
+  Redacted,
+  Schedule,
+  Schema,
+} from "effect";
 
 /**
  * Unified error type for embedding and reranking operations.
@@ -29,6 +41,11 @@ export interface EmbeddedResult {
   readonly scout?: number[];
   readonly full?: number[];
   readonly multi?: number[][];
+}
+
+export interface TokenCountResult {
+  readonly model: string;
+  readonly counts: ReadonlyArray<number>;
 }
 
 /**
@@ -159,6 +176,10 @@ interface EmbeddingServiceShape {
     query: string,
     docs: string[],
   ) => Effect.Effect<RerankResult[], EmbeddingServiceError>;
+
+  readonly countTokens: (
+    texts: ReadonlyArray<string>,
+  ) => Effect.Effect<TokenCountResult, EmbeddingServiceError>;
 }
 
 /**
@@ -174,7 +195,10 @@ interface EmbeddingServiceShape {
 export class EmbeddingService extends Context.Tag("EmbeddingService")<
   EmbeddingService,
   EmbeddingServiceShape
->() {}
+>() {
+  static readonly DefaultModelName = "jina-embeddings-v4" as const;
+  static readonly DefaultTokenizerModelName = "jinaai/jina-embeddings-v4" as const;
+}
 
 /**
  * Live layer backed by the remote embedding/rerank API.
@@ -184,6 +208,19 @@ export const EmbeddingServiceLive = Layer.effect(
   Effect.gen(function* () {
     const apiKey = yield* Config.redacted("JINA_API_KEY");
     const client = yield* HttpClient.HttpClient;
+    const tokenizerCache = yield* Cache.make<string, PreTrainedTokenizer, EmbeddingServiceError>({
+      capacity: 16,
+      timeToLive: Duration.infinity,
+      lookup: (tokenizerModelName) =>
+        Effect.tryPromise({
+          try: () => AutoTokenizer.from_pretrained(tokenizerModelName, { local_files_only: false }),
+          catch: (cause) =>
+            new EmbeddingServiceError({
+              message: `Failed to load tokenizer for model ${tokenizerModelName}`,
+              cause,
+            }),
+        }),
+    });
 
     const embedOne = (
       input: EmbeddingInput,
@@ -207,7 +244,7 @@ export const EmbeddingServiceLive = Layer.effect(
           HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
           HttpClientRequest.setHeader("Content-Type", "application/json"),
           HttpClientRequest.bodyJson({
-            model: "jina-embeddings-v4",
+            model: EmbeddingService.DefaultModelName,
             input: normalizedInputs,
             late_chunking: true,
             return_multivector: true,
@@ -270,7 +307,20 @@ export const EmbeddingServiceLive = Layer.effect(
       }));
     });
 
-    return { embed, rerank };
+    const countTokens = Effect.fn("EmbeddingService.countTokens")(function* (
+      texts: ReadonlyArray<string>,
+    ) {
+      const tokenizer = yield* tokenizerCache.get(EmbeddingService.DefaultTokenizerModelName);
+
+      const counts = texts.map((text) => tokenizer.encode(text).length);
+
+      return {
+        model: EmbeddingService.DefaultModelName,
+        counts,
+      } satisfies TokenCountResult;
+    });
+
+    return { embed, rerank, countTokens };
   }),
 );
 
@@ -301,5 +351,16 @@ export const EmbeddingServiceTest = Layer.succeed(
           document: { text: doc },
         })),
       ),
+    countTokens: (texts) =>
+      Effect.succeed({
+        model: EmbeddingService.DefaultModelName,
+        counts: texts.map((text) => {
+          const words = text
+            .trim()
+            .split(/\s+/)
+            .filter((word) => word.length > 0).length;
+          return words === 0 ? 0 : words;
+        }),
+      }),
   }),
 );

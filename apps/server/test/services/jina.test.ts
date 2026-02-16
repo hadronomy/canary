@@ -158,6 +158,17 @@ describe("EmbeddingService", () => {
     expect(result[0]!.relevance_score).toBeGreaterThan(0);
   });
 
+  it("should count tokens using Test layer", async () => {
+    const program = Effect.flatMap(EmbeddingService, (service) =>
+      service.countTokens(["hello world", "a b c"]),
+    );
+
+    const result = await Effect.runPromise(Effect.provide(program, EmbeddingServiceTest));
+
+    expect(result.model).toBe("jina-embeddings-v4");
+    expect(result.counts).toEqual([2, 3]);
+  });
+
   it("should normalize mixed inputs correctly", async () => {
     const mockFetch = spyOn(global, "fetch").mockResolvedValue(
       new Response(
