@@ -3,9 +3,59 @@ import { describe, it, expect, spyOn } from "bun:test";
 import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer, ConfigProvider } from "effect";
 
-import { JinaService, JinaServiceTest, JinaServiceLive, normalizeInput } from "~/services/jina";
+import {
+  EmbeddingService,
+  EmbeddingServiceTest,
+  EmbeddingServiceLive,
+  normalizeInput,
+} from "~/services/embedding";
 
-describe("JinaService", () => {
+async function readJsonBodyFromFetchCall(call: readonly [unknown, unknown?]): Promise<unknown> {
+  const [requestInput, requestInit] = call;
+
+  if (requestInit && typeof requestInit === "object" && "body" in requestInit) {
+    const body = requestInit.body;
+    if (typeof body === "string") {
+      return JSON.parse(body);
+    }
+    if (body instanceof Uint8Array) {
+      return JSON.parse(new TextDecoder().decode(body));
+    }
+  }
+
+  if (requestInput instanceof Request) {
+    return requestInput.clone().json();
+  }
+
+  throw new Error("Unable to read JSON body from fetch call");
+}
+
+function readHeaderFromFetchCall(call: readonly [unknown, unknown?], name: string): string | null {
+  const [requestInput, requestInit] = call;
+
+  if (requestInput instanceof Request) {
+    return requestInput.headers.get(name);
+  }
+
+  if (requestInit && typeof requestInit === "object" && "headers" in requestInit) {
+    const headers = requestInit.headers;
+    if (headers instanceof Headers) {
+      return headers.get(name);
+    }
+    if (Array.isArray(headers)) {
+      const match = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
+      return match ? match[1] : null;
+    }
+    if (headers && typeof headers === "object") {
+      const record = headers as Record<string, string>;
+      return record[name] ?? record[name.toLowerCase()] ?? null;
+    }
+  }
+
+  return null;
+}
+
+describe("EmbeddingService", () => {
   describe("normalizeInput", () => {
     it("should normalize plain text", async () => {
       const result = await Effect.runPromise(normalizeInput("hello world"));
@@ -51,14 +101,16 @@ describe("JinaService", () => {
     const mockFetch = spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
-          data: [{ embedding: [0.1, 0.2], multi_vector: [[0.3, 0.4]] }],
+          model: "jina-embeddings-v4",
+          data: [{ embedding: [0.1, 0.2], multi_vector: [[0.3, 0.4]], index: 0 }],
+          usage: { total_tokens: 2, prompt_tokens: 2 },
         }),
       ),
     );
 
-    const program = Effect.flatMap(JinaService, (service) => service.embed("test"));
+    const program = Effect.flatMap(EmbeddingService, (service) => service.embed("test"));
 
-    const LiveEnv = JinaServiceLive.pipe(
+    const LiveEnv = EmbeddingServiceLive.pipe(
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
@@ -70,8 +122,8 @@ describe("JinaService", () => {
     if (Array.isArray(result)) throw new Error("Expected single result");
 
     expect(mockFetch).toHaveBeenCalled();
-    const headers = mockFetch.mock.calls[0]![1]?.headers as Record<string, string>;
-    expect(headers["Authorization"]).toBe("Bearer test-key");
+    const lastCall = mockFetch.mock.calls.at(-1)!;
+    expect(readHeaderFromFetchCall(lastCall, "Authorization")).toBe("Bearer test-key");
     expect(result.full).toEqual([0.1, 0.2]);
     expect(result.scout).toEqual([0.1, 0.2]);
     expect(result.multi).toEqual([[0.3, 0.4]]);
@@ -80,9 +132,9 @@ describe("JinaService", () => {
   });
 
   it("should embed text using Test layer", async () => {
-    const program = Effect.flatMap(JinaService, (service) => service.embed("hello world"));
+    const program = Effect.flatMap(EmbeddingService, (service) => service.embed("hello world"));
 
-    const runnable = Effect.provide(program, JinaServiceTest);
+    const runnable = Effect.provide(program, EmbeddingServiceTest);
 
     const result = await Effect.runPromise(runnable);
 
@@ -94,11 +146,11 @@ describe("JinaService", () => {
   });
 
   it("should rerank documents using Test layer", async () => {
-    const program = Effect.flatMap(JinaService, (service) =>
+    const program = Effect.flatMap(EmbeddingService, (service) =>
       service.rerank("query", ["doc1", "doc2"]),
     );
 
-    const runnable = Effect.provide(program, JinaServiceTest);
+    const runnable = Effect.provide(program, EmbeddingServiceTest);
 
     const result = await Effect.runPromise(runnable);
 
@@ -110,16 +162,18 @@ describe("JinaService", () => {
     const mockFetch = spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
+          model: "jina-embeddings-v4",
           data: [{ embedding: [0.1], index: 0 }],
+          usage: { total_tokens: 1, prompt_tokens: 1 },
         }),
       ),
     );
 
     const inputs = ["https://example.com", "some text", new Uint8Array([1]), { text: "obj text" }];
 
-    const program = Effect.flatMap(JinaService, (service) => service.embed(inputs));
+    const program = Effect.flatMap(EmbeddingService, (service) => service.embed(inputs));
 
-    const LiveEnv = JinaServiceLive.pipe(
+    const LiveEnv = EmbeddingServiceLive.pipe(
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
@@ -129,7 +183,9 @@ describe("JinaService", () => {
     await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
 
     expect(mockFetch).toHaveBeenCalled();
-    const body = JSON.parse(mockFetch.mock.calls[0]![1]?.body as string);
+    const body = (await readJsonBodyFromFetchCall(mockFetch.mock.calls.at(-1)!)) as {
+      readonly input: ReadonlyArray<unknown>;
+    };
     const sentInputs = body.input;
 
     expect(sentInputs[0]).toEqual({ url: "https://example.com" });
@@ -144,16 +200,18 @@ describe("JinaService", () => {
     const mockFetch = spyOn(global, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
+          model: "jina-embeddings-v4",
           data: [{ embedding: [0.1], index: 0 }],
+          usage: { total_tokens: 1, prompt_tokens: 1 },
         }),
       ),
     );
 
     const inputs = ["text", new Uint8Array([1, 2, 3]), { url: "https://example.com" }];
 
-    const program = Effect.flatMap(JinaService, (service) => service.embed(inputs));
+    const program = Effect.flatMap(EmbeddingService, (service) => service.embed(inputs));
 
-    const LiveEnv = JinaServiceLive.pipe(
+    const LiveEnv = EmbeddingServiceLive.pipe(
       Layer.provide(
         Layer.setConfigProvider(ConfigProvider.fromMap(new Map([["JINA_API_KEY", "test-key"]]))),
       ),
@@ -163,7 +221,10 @@ describe("JinaService", () => {
     await Effect.runPromise(program.pipe(Effect.provide(LiveEnv)));
 
     expect(mockFetch).toHaveBeenCalled();
-    const body = JSON.parse(mockFetch.mock.calls[0]![1]?.body as string);
+    const body = (await readJsonBodyFromFetchCall(mockFetch.mock.calls.at(-1)!)) as {
+      readonly input: ReadonlyArray<unknown>;
+      readonly model: string;
+    };
 
     expect(body.input).toHaveLength(3);
     expect(body.input[0]).toEqual({ text: "text" });
