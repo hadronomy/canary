@@ -186,37 +186,37 @@ Art. 5.º
 
 Para garantizar la preservación de la diversidad genética y la conservación de las especies autóctonas cinegéticas y piscícolas, la introducción y reintroducción de especies o el reforzamiento de poblaciones en el medio natural requerirá autorización administrativa del órgano competente de la correspondiente Comunidad Autónoma, que solo podrá concederse cuando tal suelta de ejemplares:
 
-<!-- End Path: /c/1/a/5/p/1 · Seq: 28 · Type: paragraph -->
-
-<!-- Path: /c/1/a/5/sp/1 · Seq: 29 · Type: subparagraph -->
+<!-- Path: /c/1/a/5/p/1/sp/1 · Seq: 29 · Type: subparagraph -->
 
 a) No afecte a la diversidad genética de la zona donde se ubica la localidad de destino.
 
-<!-- End Path: /c/1/a/5/sp/1 · Seq: 29 · Type: subparagraph -->
+<!-- End Path: /c/1/a/5/p/1/sp/1 · Seq: 29 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/5/p/2 · Seq: 30 · Type: paragraph -->
+<!-- Path: /c/1/a/5/p/1/sp/2 · Seq: 30 · Type: subparagraph -->
 
 b) No resulte contraria a las determinaciones o disposiciones de los Planes de Ordenación de los Recursos Naturales que afecten a dicha zona, si los hubiere.
 
-<!-- End Path: /c/1/a/5/p/2 · Seq: 30 · Type: paragraph -->
+<!-- End Path: /c/1/a/5/p/1/sp/2 · Seq: 30 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/5/p/3 · Seq: 31 · Type: paragraph -->
+<!-- Path: /c/1/a/5/p/1/sp/3 · Seq: 31 · Type: subparagraph -->
 
 c) Sea compatible con los Planes relativos a las especies catalogadas que, en su caso, existan en ese territorio.
 
-<!-- End Path: /c/1/a/5/p/3 · Seq: 31 · Type: paragraph -->
+<!-- End Path: /c/1/a/5/p/1/sp/3 · Seq: 31 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/5/p/4 · Seq: 32 · Type: paragraph -->
+<!-- Path: /c/1/a/5/p/1/sp/4 · Seq: 32 · Type: subparagraph -->
 
 d) Se adecue a las previsiones del Plan Técnico de aprovechamientos cinegéticos o piscícolas del lugar de destino.
 
-<!-- End Path: /c/1/a/5/p/4 · Seq: 32 · Type: paragraph -->
+<!-- End Path: /c/1/a/5/p/1/sp/4 · Seq: 32 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/5/p/5 · Seq: 33 · Type: paragraph -->
+<!-- Path: /c/1/a/5/p/1/sp/5 · Seq: 33 · Type: subparagraph -->
 
 e) Cumpla cualquier otra condición que determine el órgano competente de la Comunidad Autónoma.
 
-<!-- End Path: /c/1/a/5/p/5 · Seq: 33 · Type: paragraph -->
+<!-- End Path: /c/1/a/5/p/1/sp/5 · Seq: 33 · Type: subparagraph -->
+
+<!-- End Path: /c/1/a/5/p/1 · Seq: 28 · Type: paragraph -->
 
 <!-- End Path: /c/1/a/5 · Seq: 27 · Type: article -->
 
@@ -246,53 +246,53 @@ De conformidad con lo previsto en el título VI de la Ley 4/1989:
 
 <!-- End Path: /c/1/a/7/p/1 · Seq: 37 · Type: paragraph -->
 
-<!-- Path: /c/1/a/7/sp/1 · Seq: 38 · Type: subparagraph -->
+<!-- Path: /c/1/a/7/p/2 · Seq: 38 · Type: paragraph -->
 
-1\) Se considerarán infracciones graves:
+1\. Se considerarán infracciones graves:
 
-<!-- End Path: /c/1/a/7/sp/1 · Seq: 38 · Type: subparagraph -->
-
-<!-- Path: /c/1/a/7/sp/2 · Seq: 39 · Type: subparagraph -->
+<!-- Path: /c/1/a/7/p/2/sp/1 · Seq: 39 · Type: subparagraph -->
 
 a) La utilización no autorizada de los métodos descritos en los números 4, 5, 7, 8 y 10 del anexo III.A, y en los números 2 y 3 del anexo III.B.
 
-<!-- End Path: /c/1/a/7/sp/2 · Seq: 39 · Type: subparagraph -->
+<!-- End Path: /c/1/a/7/p/2/sp/1 · Seq: 39 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/7/p/2 · Seq: 40 · Type: paragraph -->
+<!-- Path: /c/1/a/7/p/2/sp/2 · Seq: 40 · Type: subparagraph -->
 
 b) La preparación, manipulación y venta para su utilización como métodos de caza o pesca no autorizada de los elementos y sustancias incluidos en el número 7 del anexo III.A y del número 3 del anexo III.B.
 
-<!-- End Path: /c/1/a/7/p/2 · Seq: 40 · Type: paragraph -->
+<!-- End Path: /c/1/a/7/p/2/sp/2 · Seq: 40 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/7/sp/3 · Seq: 41 · Type: subparagraph -->
+<!-- End Path: /c/1/a/7/p/2 · Seq: 38 · Type: paragraph -->
 
-2\) Se considerarán infracciones menos graves:
+<!-- Path: /c/1/a/7/p/3 · Seq: 41 · Type: paragraph -->
 
-<!-- End Path: /c/1/a/7/sp/3 · Seq: 41 · Type: subparagraph -->
+2\. Se considerarán infracciones menos graves:
 
-<!-- Path: /c/1/a/7/sp/4 · Seq: 42 · Type: subparagraph -->
+<!-- Path: /c/1/a/7/p/3/sp/1 · Seq: 42 · Type: subparagraph -->
 
 a) El ejercicio de la caza o la pesca durante las épocas de celo, reproducción o crianza, o durante los períodos de regreso hacia los lugares de reproducción,
 
-<!-- End Path: /c/1/a/7/sp/4 · Seq: 42 · Type: subparagraph -->
+<!-- End Path: /c/1/a/7/p/3/sp/1 · Seq: 42 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/7/p/3 · Seq: 43 · Type: paragraph -->
+<!-- Path: /c/1/a/7/p/3/sp/2 · Seq: 43 · Type: subparagraph -->
 
 b) El ejercicio de la caza o la pesca durante las moratorias o prohibiciones temporales establecidas por la autoridad competente.
 
-<!-- End Path: /c/1/a/7/p/3 · Seq: 43 · Type: paragraph -->
+<!-- End Path: /c/1/a/7/p/3/sp/2 · Seq: 43 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/7/p/4 · Seq: 44 · Type: paragraph -->
+<!-- Path: /c/1/a/7/p/3/sp/3 · Seq: 44 · Type: subparagraph -->
 
 c) El ejercicio de la caza o de la pesca en terrenos acotados al efecto en ausencia del preceptivo Plan Técnico de aprovechamientos.
 
-<!-- End Path: /c/1/a/7/p/4 · Seq: 44 · Type: paragraph -->
+<!-- End Path: /c/1/a/7/p/3/sp/3 · Seq: 44 · Type: subparagraph -->
 
-<!-- Path: /c/1/a/7/p/5 · Seq: 45 · Type: paragraph -->
+<!-- End Path: /c/1/a/7/p/3 · Seq: 41 · Type: paragraph -->
+
+<!-- Path: /c/1/a/7/p/4 · Seq: 45 · Type: paragraph -->
 
 Se considera infracción leve la utilización, así como la preparación, manipulación y venta para su uso no autorizados de los métodos y procedimientos de caza o pesca incluidos en el anexo III y no mencionados en apartados anteriores.
 
-<!-- End Path: /c/1/a/7/p/5 · Seq: 45 · Type: paragraph -->
+<!-- End Path: /c/1/a/7/p/4 · Seq: 45 · Type: paragraph -->
 
 <!-- End Path: /c/1/a/7 · Seq: 36 · Type: article -->
 
@@ -970,65 +970,65 @@ Huchón (Hucho hucho).
 
 <!-- End Path: /x/3/s/1 · Seq: 156 · Type: subsection -->
 
-<!-- Path: /x/3/sp/1 · Seq: 157 · Type: subparagraph -->
+<!-- Path: /x/3/p/1 · Seq: 157 · Type: paragraph -->
 
-1\) Los lazos y anzuelos, así como todo tipo de trampas y cepos, incluyendo costillas, perchas o ballestas, fosos, nasas y alares.
+1\. Los lazos y anzuelos, así como todo tipo de trampas y cepos, incluyendo costillas, perchas o ballestas, fosos, nasas y alares.
 
-<!-- End Path: /x/3/sp/1 · Seq: 157 · Type: subparagraph -->
+<!-- End Path: /x/3/p/1 · Seq: 157 · Type: paragraph -->
 
-<!-- Path: /x/3/p/1 · Seq: 158 · Type: paragraph -->
+<!-- Path: /x/3/p/2 · Seq: 158 · Type: paragraph -->
 
 2\. El arbolillo, las varetas, las rametas, las barracas, parayns y todo tipo de medios o métodos que impliquen el uso de la liga.
 
-<!-- End Path: /x/3/p/1 · Seq: 158 · Type: paragraph -->
+<!-- End Path: /x/3/p/2 · Seq: 158 · Type: paragraph -->
 
-<!-- Path: /x/3/p/2 · Seq: 159 · Type: paragraph -->
+<!-- Path: /x/3/p/3 · Seq: 159 · Type: paragraph -->
 
 3\. Los reclamos de especies protegidas vivas o naturalizadas y otros reclamos vivos cegados o mutilados, así como todo tipo de reclamos eléctricos o mecánicos incluidas las grabaciones.
 
-<!-- End Path: /x/3/p/2 · Seq: 159 · Type: paragraph -->
+<!-- End Path: /x/3/p/3 · Seq: 159 · Type: paragraph -->
 
-<!-- Path: /x/3/p/3 · Seq: 160 · Type: paragraph -->
+<!-- Path: /x/3/p/4 · Seq: 160 · Type: paragraph -->
 
 4\. Los aparatos electrocutantes o paralizantes.
 
-<!-- End Path: /x/3/p/3 · Seq: 160 · Type: paragraph -->
+<!-- End Path: /x/3/p/4 · Seq: 160 · Type: paragraph -->
 
-<!-- Path: /x/3/p/4 · Seq: 161 · Type: paragraph -->
+<!-- Path: /x/3/p/5 · Seq: 161 · Type: paragraph -->
 
 5\. Los faros, linternas, espejos y otras fuentes luminosas artificiales.
 
-<!-- End Path: /x/3/p/4 · Seq: 161 · Type: paragraph -->
+<!-- End Path: /x/3/p/5 · Seq: 161 · Type: paragraph -->
 
-<!-- Path: /x/3/p/5 · Seq: 162 · Type: paragraph -->
+<!-- Path: /x/3/p/6 · Seq: 162 · Type: paragraph -->
 
 6\. Todo tipo de redes o de artefactos que requieran para su funcionamiento el uso de mallas, como las redes abatibles, las redes-niebla o verticales y las redes-cañón.
 
-<!-- End Path: /x/3/p/5 · Seq: 162 · Type: paragraph -->
+<!-- End Path: /x/3/p/6 · Seq: 162 · Type: paragraph -->
 
-<!-- Path: /x/3/p/6 · Seq: 163 · Type: paragraph -->
+<!-- Path: /x/3/p/7 · Seq: 163 · Type: paragraph -->
 
 7\. Todo tipo de cebos, gases o sustancias venenosas, paralizantes, tranquilizantes, atrayentes o repelentes, así como los explosivos.
 
-<!-- End Path: /x/3/p/6 · Seq: 163 · Type: paragraph -->
+<!-- End Path: /x/3/p/7 · Seq: 163 · Type: paragraph -->
 
-<!-- Path: /x/3/p/7 · Seq: 164 · Type: paragraph -->
+<!-- Path: /x/3/p/8 · Seq: 164 · Type: paragraph -->
 
 8\. Las armas semiautomáticas o automáticas cuyo cargador pueda contener más de dos cartuchos, las de aire comprimido y las provistas de silenciador o de visor para el disparo nocturna, así como las que disparen proyectiles que inyecten sustancias paralizantes.
 
-<!-- End Path: /x/3/p/7 · Seq: 164 · Type: paragraph -->
+<!-- End Path: /x/3/p/8 · Seq: 164 · Type: paragraph -->
 
-<!-- Path: /x/3/p/8 · Seq: 165 · Type: paragraph -->
+<!-- Path: /x/3/p/9 · Seq: 165 · Type: paragraph -->
 
 9\. Los hurones y las aves de cetrería.
 
-<!-- End Path: /x/3/p/8 · Seq: 165 · Type: paragraph -->
+<!-- End Path: /x/3/p/9 · Seq: 165 · Type: paragraph -->
 
-<!-- Path: /x/3/p/9 · Seq: 166 · Type: paragraph -->
+<!-- Path: /x/3/p/10 · Seq: 166 · Type: paragraph -->
 
 10\. Las aeronaves de cualquier tipo o los vehículos terrestres motorizados, así como las embarcaciones a motor como lugar desde donde realizar los disparos.
 
-<!-- End Path: /x/3/p/9 · Seq: 166 · Type: paragraph -->
+<!-- End Path: /x/3/p/10 · Seq: 166 · Type: paragraph -->
 
 #### B) PARA LAS ESPECIES OBJETO DE PESCA
 
@@ -1036,34 +1036,34 @@ Huchón (Hucho hucho).
 
 <!-- End Path: /x/3/s/2 · Seq: 167 · Type: subsection -->
 
-<!-- Path: /x/3/sp/2 · Seq: 168 · Type: subparagraph -->
+<!-- Path: /x/3/p/11 · Seq: 168 · Type: paragraph -->
 
-1\) Las redes o artefactos de cualquier tipo cuya malla, luz o dimensiones no permitan el paso de peces con una talla igual o inferior a los 8 centímetros, así como la que ocupen más de la mitad de la anchura de la corriente.
+1\. Las redes o artefactos de cualquier tipo cuya malla, luz o dimensiones no permitan el paso de peces con una talla igual o inferior a los 8 centímetros, así como la que ocupen más de la mitad de la anchura de la corriente.
 
-<!-- End Path: /x/3/sp/2 · Seq: 168 · Type: subparagraph -->
+<!-- End Path: /x/3/p/11 · Seq: 168 · Type: paragraph -->
 
-<!-- Path: /x/3/p/10 · Seq: 169 · Type: paragraph -->
+<!-- Path: /x/3/p/12 · Seq: 169 · Type: paragraph -->
 
 2\. Cualquier procedimiento que implique la instalación de obstáculos o barreras de piedra, madera u otro material o la alteración de cauces o caudales, para facilitar la pesca.
 
-<!-- End Path: /x/3/p/10 · Seq: 169 · Type: paragraph -->
+<!-- End Path: /x/3/p/12 · Seq: 169 · Type: paragraph -->
 
-<!-- Path: /x/3/p/11 · Seq: 170 · Type: paragraph -->
+<!-- Path: /x/3/p/13 · Seq: 170 · Type: paragraph -->
 
 3\. Los aparatos electrocutantes o paralizantes, fuentes luminosas artificiales, explosivos y sustancias venenosas, paralizantes, tranquilizantes, atrayentes o repelentes.
 
-<!-- End Path: /x/3/p/11 · Seq: 170 · Type: paragraph -->
+<!-- End Path: /x/3/p/13 · Seq: 170 · Type: paragraph -->
 
-<!-- Path: /x/3/p/12 · Seq: 171 · Type: paragraph -->
+<!-- Path: /x/3/p/14 · Seq: 171 · Type: paragraph -->
 
 4\. Las garras, garfios, tridentes, gamos, grampines, fitoras, arpones, garlitos, cribas, butrones, esparaveles, remangas, palangres, salbardos, cordelillos, sedales durmientes y artes similares.
 
-<!-- End Path: /x/3/p/12 · Seq: 171 · Type: paragraph -->
+<!-- End Path: /x/3/p/14 · Seq: 171 · Type: paragraph -->
 
-<!-- Path: /x/3/p/13 · Seq: 172 · Type: paragraph -->
+<!-- Path: /x/3/p/15 · Seq: 172 · Type: paragraph -->
 
 5\. Los peces vivos como cebo, así como cebar las aguas antes o durante la pesca.
 
-<!-- End Path: /x/3/p/13 · Seq: 172 · Type: paragraph -->
+<!-- End Path: /x/3/p/15 · Seq: 172 · Type: paragraph -->
 
 <!-- End Path: /x/3 · Seq: 154 · Type: annex -->

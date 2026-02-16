@@ -268,6 +268,60 @@ describe("BoeXmlParser", () => {
     expect(article1Paragraph1?.legalNodePath).toBe(LegalNodePathString("/article/1/p/1"));
   });
 
+  test("classifies article 161 list markers as subparagraphs and numeric clause as paragraph", async () => {
+    const xml = await readFixture("constitution-1978.xml");
+    const result = await Effect.runPromise(
+      BoeXmlParser.queryLegal({ xml, query: Query.article("161") }).pipe(
+        Effect.provide(BoeXmlParser.Default),
+      ),
+    );
+
+    expect(result._tag).toBe("Match");
+    if (result._tag !== "Match") {
+      return;
+    }
+
+    const nodeByPath = new Map(
+      result.fragments.map((fragment) => [String(fragment.nodePath), fragment]),
+    );
+
+    expect(nodeByPath.get("/c/22/a/3/p/1")?.nodeType).toBe("paragraph");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/1")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/1")?.nodeNumber).toBe("a");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/2")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/2")?.nodeNumber).toBe("b");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/3")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/3")?.nodeNumber).toBe("c");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/4")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/22/a/3/p/1/sp/4")?.nodeNumber).toBe("d");
+    expect(nodeByPath.get("/c/22/a/3/p/2")?.nodeType).toBe("paragraph");
+  });
+
+  test("classifies article 148 ordinal list as nested subparagraphs under paragraph 1", async () => {
+    const xml = await readFixture("constitution-1978.xml");
+    const result = await Effect.runPromise(
+      BoeXmlParser.queryLegal({ xml, query: Query.article("148") }).pipe(
+        Effect.provide(BoeXmlParser.Default),
+      ),
+    );
+
+    expect(result._tag).toBe("Match");
+    if (result._tag !== "Match") {
+      return;
+    }
+
+    const nodeByPath = new Map(
+      result.fragments.map((fragment) => [String(fragment.nodePath), fragment]),
+    );
+
+    expect(nodeByPath.get("/c/21/a/6/p/1")?.nodeType).toBe("paragraph");
+    expect(nodeByPath.get("/c/21/a/6/p/1/sp/1")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/21/a/6/p/1/sp/1")?.nodeNumber).toBe("1ª");
+    expect(nodeByPath.get("/c/21/a/6/p/1/sp/22")?.nodeType).toBe("subparagraph");
+    expect(nodeByPath.get("/c/21/a/6/p/1/sp/22")?.nodeNumber).toBe("22ª");
+    expect(nodeByPath.get("/c/21/a/6/p/2")?.nodeType).toBe("paragraph");
+  });
+
   test("namespaces legal paths for additional and final dispositions", async () => {
     const xml = await readFixture("real-boe-full.xml");
     const fragments = await parseToFragments(xml);

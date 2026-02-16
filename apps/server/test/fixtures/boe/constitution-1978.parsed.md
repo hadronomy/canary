@@ -502,55 +502,55 @@ Asimismo, tienen derecho a entrar y salir libremente de España en los términos
 
 1\. Se reconocen y protegen los derechos:
 
-<!-- End Path: /c/5/a/7/p/1 · Seq: 82 · Type: paragraph -->
-
-<!-- Path: /c/5/a/7/sp/1 · Seq: 83 · Type: subparagraph -->
+<!-- Path: /c/5/a/7/p/1/sp/1 · Seq: 83 · Type: subparagraph -->
 
 a) A expresar y difundir libremente los pensamientos, ideas y opiniones mediante la palabra, el escrito o cualquier otro medio de reproducción.
 
-<!-- End Path: /c/5/a/7/sp/1 · Seq: 83 · Type: subparagraph -->
+<!-- End Path: /c/5/a/7/p/1/sp/1 · Seq: 83 · Type: subparagraph -->
 
-<!-- Path: /c/5/a/7/p/2 · Seq: 84 · Type: paragraph -->
+<!-- Path: /c/5/a/7/p/1/sp/2 · Seq: 84 · Type: subparagraph -->
 
 b) A la producción y creación literaria, artística, científica y técnica.
 
-<!-- End Path: /c/5/a/7/p/2 · Seq: 84 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/1/sp/2 · Seq: 84 · Type: subparagraph -->
 
-<!-- Path: /c/5/a/7/p/3 · Seq: 85 · Type: paragraph -->
+<!-- Path: /c/5/a/7/p/1/sp/3 · Seq: 85 · Type: subparagraph -->
 
 c) A la libertad de cátedra.
 
-<!-- End Path: /c/5/a/7/p/3 · Seq: 85 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/1/sp/3 · Seq: 85 · Type: subparagraph -->
 
-<!-- Path: /c/5/a/7/p/4 · Seq: 86 · Type: paragraph -->
+<!-- Path: /c/5/a/7/p/1/sp/4 · Seq: 86 · Type: subparagraph -->
 
 d) A comunicar o recibir libremente información veraz por cualquier medio de difusión. La ley regulará el derecho a la cláusula de conciencia y al secreto profesional en el ejercicio de estas libertades.
 
-<!-- End Path: /c/5/a/7/p/4 · Seq: 86 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/1/sp/4 · Seq: 86 · Type: subparagraph -->
 
-<!-- Path: /c/5/a/7/sp/2 · Seq: 87 · Type: subparagraph -->
+<!-- End Path: /c/5/a/7/p/1 · Seq: 82 · Type: paragraph -->
 
-2\) El ejercicio de estos derechos no puede restringirse mediante ningún tipo de censura previa.
+<!-- Path: /c/5/a/7/p/2 · Seq: 87 · Type: paragraph -->
 
-<!-- End Path: /c/5/a/7/sp/2 · Seq: 87 · Type: subparagraph -->
+2\. El ejercicio de estos derechos no puede restringirse mediante ningún tipo de censura previa.
 
-<!-- Path: /c/5/a/7/p/5 · Seq: 88 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/2 · Seq: 87 · Type: paragraph -->
+
+<!-- Path: /c/5/a/7/p/3 · Seq: 88 · Type: paragraph -->
 
 3\. La ley regulará la organización y el control parlamentario de los medios de comunicación social dependientes del Estado o de cualquier ente público y garantizará el acceso a dichos medios de los grupos sociales y políticos significativos, respetando el pluralismo de la sociedad y de las diversas lenguas de España.
 
-<!-- End Path: /c/5/a/7/p/5 · Seq: 88 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/3 · Seq: 88 · Type: paragraph -->
 
-<!-- Path: /c/5/a/7/p/6 · Seq: 89 · Type: paragraph -->
+<!-- Path: /c/5/a/7/p/4 · Seq: 89 · Type: paragraph -->
 
 4\. Estas libertades tienen su límite en el respeto a los derechos reconocidos en este Título, en los preceptos de las leyes que lo desarrollen y, especialmente, en el derecho al honor, a la intimidad, a la propia imagen y a la protección de la juventud y de la infancia.
 
-<!-- End Path: /c/5/a/7/p/6 · Seq: 89 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/4 · Seq: 89 · Type: paragraph -->
 
-<!-- Path: /c/5/a/7/p/7 · Seq: 90 · Type: paragraph -->
+<!-- Path: /c/5/a/7/p/5 · Seq: 90 · Type: paragraph -->
 
 5\. Sólo podrá acordarse el secuestro de publicaciones, grabaciones y otros medios de información en virtud de resolución judicial.
 
-<!-- End Path: /c/5/a/7/p/7 · Seq: 90 · Type: paragraph -->
+<!-- End Path: /c/5/a/7/p/5 · Seq: 90 · Type: paragraph -->
 
 <!-- End Path: /c/5/a/7 · Seq: 81 · Type: article -->
 
@@ -1278,23 +1278,23 @@ De la suspensión de los derechos y libertades
 
 <!-- Path: /c/8/a/1 · Seq: 211 · Type: article -->
 
-<!-- Path: /c/8/a/1/sp/1 · Seq: 212 · Type: subparagraph -->
+<!-- Path: /c/8/a/1/p/1 · Seq: 212 · Type: paragraph -->
 
-1\) Los derechos reconocidos en los artículos 17, 18, apartados 2 y 3, artículos 19, 20, apartados 1, a) y d), y 5, artículos 21, 28, apartado 2, y artículo 37, apartado 2, podrán ser suspendidos cuando se acuerde la declaración del estado de excepción o de sitio en los términos previstos en la Constitución. Se exceptúa de lo establecido anteriormente el apartado 3 del artículo 17 para el supuesto de declaración de estado de excepción.
+1\. Los derechos reconocidos en los artículos 17, 18, apartados 2 y 3, artículos 19, 20, apartados 1, a) y d), y 5, artículos 21, 28, apartado 2, y artículo 37, apartado 2, podrán ser suspendidos cuando se acuerde la declaración del estado de excepción o de sitio en los términos previstos en la Constitución. Se exceptúa de lo establecido anteriormente el apartado 3 del artículo 17 para el supuesto de declaración de estado de excepción.
 
-<!-- End Path: /c/8/a/1/sp/1 · Seq: 212 · Type: subparagraph -->
+<!-- End Path: /c/8/a/1/p/1 · Seq: 212 · Type: paragraph -->
 
-<!-- Path: /c/8/a/1/p/1 · Seq: 213 · Type: paragraph -->
+<!-- Path: /c/8/a/1/p/2 · Seq: 213 · Type: paragraph -->
 
 2\. Una ley orgánica podrá determinar la forma y los casos en los que, de forma individual y con la necesaria intervención judicial y el adecuado control parlamentario, los derechos reconocidos en los artículos 17, apartado 2, y 18, apartados 2 y 3, pueden ser suspendidos para personas determinadas, en relación con las investigaciones correspondientes a la actuación de bandas armadas o elementos terroristas.
 
-<!-- End Path: /c/8/a/1/p/1 · Seq: 213 · Type: paragraph -->
+<!-- End Path: /c/8/a/1/p/2 · Seq: 213 · Type: paragraph -->
 
-<!-- Path: /c/8/a/1/p/2 · Seq: 214 · Type: paragraph -->
+<!-- Path: /c/8/a/1/p/3 · Seq: 214 · Type: paragraph -->
 
 La utilización injustificada o abusiva de las facultades reconocidas en dicha ley orgánica producirá responsabilidad penal, como violación de los derechos y libertades reconocidos por las leyes.
 
-<!-- End Path: /c/8/a/1/p/2 · Seq: 214 · Type: paragraph -->
+<!-- End Path: /c/8/a/1/p/3 · Seq: 214 · Type: paragraph -->
 
 <!-- End Path: /c/8/a/1 · Seq: 211 · Type: article -->
 
@@ -1462,67 +1462,67 @@ La Reina consorte o el consorte de la Reina no podrán asumir funciones constitu
 
 Corresponde al Rey:
 
-<!-- End Path: /c/9/a/7/p/1 · Seq: 242 · Type: paragraph -->
-
-<!-- Path: /c/9/a/7/sp/1 · Seq: 243 · Type: subparagraph -->
+<!-- Path: /c/9/a/7/p/1/sp/1 · Seq: 243 · Type: subparagraph -->
 
 a) Sancionar y promulgar las leyes.
 
-<!-- End Path: /c/9/a/7/sp/1 · Seq: 243 · Type: subparagraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/1 · Seq: 243 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/2 · Seq: 244 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/2 · Seq: 244 · Type: subparagraph -->
 
 b) Convocar y disolver las Cortes Generales y convocar elecciones en los términos previstos en la Constitución.
 
-<!-- End Path: /c/9/a/7/p/2 · Seq: 244 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/2 · Seq: 244 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/3 · Seq: 245 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/3 · Seq: 245 · Type: subparagraph -->
 
 c) Convocar a referéndum en los casos previstos en la Constitución.
 
-<!-- End Path: /c/9/a/7/p/3 · Seq: 245 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/3 · Seq: 245 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/4 · Seq: 246 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/4 · Seq: 246 · Type: subparagraph -->
 
 d) Proponer el candidato a Presidente del Gobierno y, en su caso, nombrarlo, así como poner fin a sus funciones en los términos previstos en la Constitución.
 
-<!-- End Path: /c/9/a/7/p/4 · Seq: 246 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/4 · Seq: 246 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/5 · Seq: 247 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/5 · Seq: 247 · Type: subparagraph -->
 
 e) Nombrar y separar a los miembros del Gobierno, a propuesta de su Presidente.
 
-<!-- End Path: /c/9/a/7/p/5 · Seq: 247 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/5 · Seq: 247 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/6 · Seq: 248 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/6 · Seq: 248 · Type: subparagraph -->
 
 f) Expedir los decretos acordados en el Consejo de Ministros, conferir los empleos civiles y militares y conceder honores y distinciones con arreglo a las leyes.
 
-<!-- End Path: /c/9/a/7/p/6 · Seq: 248 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/6 · Seq: 248 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/7 · Seq: 249 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/7 · Seq: 249 · Type: subparagraph -->
 
 g) Ser informado de los asuntos de Estado y presidir, a estos efectos, las sesiones del Consejo de Ministros, cuando lo estime oportuno, a petición del Presidente del Gobierno.
 
-<!-- End Path: /c/9/a/7/p/7 · Seq: 249 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/7 · Seq: 249 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/8 · Seq: 250 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/8 · Seq: 250 · Type: subparagraph -->
 
 h) El mando supremo de las Fuerzas Armadas.
 
-<!-- End Path: /c/9/a/7/p/8 · Seq: 250 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/8 · Seq: 250 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/9 · Seq: 251 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/9 · Seq: 251 · Type: subparagraph -->
 
 i) Ejercer el derecho de gracia con arreglo a la ley, que no podrá autorizar indultos generales.
 
-<!-- End Path: /c/9/a/7/p/9 · Seq: 251 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/9 · Seq: 251 · Type: subparagraph -->
 
-<!-- Path: /c/9/a/7/p/10 · Seq: 252 · Type: paragraph -->
+<!-- Path: /c/9/a/7/p/1/sp/10 · Seq: 252 · Type: subparagraph -->
 
 j) El Alto Patronazgo de las Reales Academias.
 
-<!-- End Path: /c/9/a/7/p/10 · Seq: 252 · Type: paragraph -->
+<!-- End Path: /c/9/a/7/p/1/sp/10 · Seq: 252 · Type: subparagraph -->
+
+<!-- End Path: /c/9/a/7/p/1 · Seq: 242 · Type: paragraph -->
 
 <!-- End Path: /c/9/a/7 · Seq: 241 · Type: article -->
 
@@ -1756,49 +1756,49 @@ La ley reconocerá y el Estado facilitará el ejercicio del derecho de sufragio 
 
 1\. La ley electoral determinará las causas de inelegibilidad e incompatibilidad de los Diputados y Senadores, que comprenderán, en todo caso:
 
-<!-- End Path: /c/11/a/5/p/1 · Seq: 291 · Type: paragraph -->
-
-<!-- Path: /c/11/a/5/sp/1 · Seq: 292 · Type: subparagraph -->
+<!-- Path: /c/11/a/5/p/1/sp/1 · Seq: 292 · Type: subparagraph -->
 
 a) A los componentes del Tribunal Constitucional.
 
-<!-- End Path: /c/11/a/5/sp/1 · Seq: 292 · Type: subparagraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/1 · Seq: 292 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/p/2 · Seq: 293 · Type: paragraph -->
+<!-- Path: /c/11/a/5/p/1/sp/2 · Seq: 293 · Type: subparagraph -->
 
 b) A los altos cargos de la Administración del Estado que determine la ley, con la excepción de los miembros del Gobierno.
 
-<!-- End Path: /c/11/a/5/p/2 · Seq: 293 · Type: paragraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/2 · Seq: 293 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/p/3 · Seq: 294 · Type: paragraph -->
+<!-- Path: /c/11/a/5/p/1/sp/3 · Seq: 294 · Type: subparagraph -->
 
 c) Al Defensor del Pueblo.
 
-<!-- End Path: /c/11/a/5/p/3 · Seq: 294 · Type: paragraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/3 · Seq: 294 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/p/4 · Seq: 295 · Type: paragraph -->
+<!-- Path: /c/11/a/5/p/1/sp/4 · Seq: 295 · Type: subparagraph -->
 
 d) A los Magistrados, Jueces y Fiscales en activo.
 
-<!-- End Path: /c/11/a/5/p/4 · Seq: 295 · Type: paragraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/4 · Seq: 295 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/p/5 · Seq: 296 · Type: paragraph -->
+<!-- Path: /c/11/a/5/p/1/sp/5 · Seq: 296 · Type: subparagraph -->
 
 e) A los militares profesionales y miembros de las Fuerzas y Cuerpos de Seguridad y Policía en activo.
 
-<!-- End Path: /c/11/a/5/p/5 · Seq: 296 · Type: paragraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/5 · Seq: 296 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/p/6 · Seq: 297 · Type: paragraph -->
+<!-- Path: /c/11/a/5/p/1/sp/6 · Seq: 297 · Type: subparagraph -->
 
 f) A los miembros de las Juntas Electorales.
 
-<!-- End Path: /c/11/a/5/p/6 · Seq: 297 · Type: paragraph -->
+<!-- End Path: /c/11/a/5/p/1/sp/6 · Seq: 297 · Type: subparagraph -->
 
-<!-- Path: /c/11/a/5/sp/2 · Seq: 298 · Type: subparagraph -->
+<!-- End Path: /c/11/a/5/p/1 · Seq: 291 · Type: paragraph -->
 
-2\) La validez de las actas y credenciales de los miembros de ambas Cámaras estará sometida al control judicial, en los términos que establezca la ley electoral.
+<!-- Path: /c/11/a/5/p/2 · Seq: 298 · Type: paragraph -->
 
-<!-- End Path: /c/11/a/5/sp/2 · Seq: 298 · Type: subparagraph -->
+2\. La validez de las actas y credenciales de los miembros de ambas Cámaras estará sometida al control judicial, en los términos que establezca la ley electoral.
+
+<!-- End Path: /c/11/a/5/p/2 · Seq: 298 · Type: paragraph -->
 
 <!-- End Path: /c/11/a/5 · Seq: 290 · Type: article -->
 
@@ -2098,19 +2098,19 @@ De la elaboración de las leyes
 
 Las leyes de bases no podrán en ningún caso:
 
-<!-- End Path: /c/12/a/3/p/1 · Seq: 348 · Type: paragraph -->
-
-<!-- Path: /c/12/a/3/sp/1 · Seq: 349 · Type: subparagraph -->
+<!-- Path: /c/12/a/3/p/1/sp/1 · Seq: 349 · Type: subparagraph -->
 
 a) Autorizar la modificación de la propia ley de bases.
 
-<!-- End Path: /c/12/a/3/sp/1 · Seq: 349 · Type: subparagraph -->
+<!-- End Path: /c/12/a/3/p/1/sp/1 · Seq: 349 · Type: subparagraph -->
 
-<!-- Path: /c/12/a/3/p/2 · Seq: 350 · Type: paragraph -->
+<!-- Path: /c/12/a/3/p/1/sp/2 · Seq: 350 · Type: subparagraph -->
 
 b) Facultar para dictar normas con carácter retroactivo.
 
-<!-- End Path: /c/12/a/3/p/2 · Seq: 350 · Type: paragraph -->
+<!-- End Path: /c/12/a/3/p/1/sp/2 · Seq: 350 · Type: subparagraph -->
+
+<!-- End Path: /c/12/a/3/p/1 · Seq: 348 · Type: paragraph -->
 
 <!-- End Path: /c/12/a/3 · Seq: 347 · Type: article -->
 
@@ -2308,43 +2308,43 @@ Mediante ley orgánica se podrá autorizar la celebración de tratados por los q
 
 1\. La prestación del consentimiento del Estado para obligarse por medio de tratados o convenios requerirá la previa autorización de las Cortes Generales, en los siguientes casos:
 
-<!-- End Path: /c/13/a/2/p/1 · Seq: 383 · Type: paragraph -->
-
-<!-- Path: /c/13/a/2/sp/1 · Seq: 384 · Type: subparagraph -->
+<!-- Path: /c/13/a/2/p/1/sp/1 · Seq: 384 · Type: subparagraph -->
 
 a) Tratados de carácter político.
 
-<!-- End Path: /c/13/a/2/sp/1 · Seq: 384 · Type: subparagraph -->
+<!-- End Path: /c/13/a/2/p/1/sp/1 · Seq: 384 · Type: subparagraph -->
 
-<!-- Path: /c/13/a/2/p/2 · Seq: 385 · Type: paragraph -->
+<!-- Path: /c/13/a/2/p/1/sp/2 · Seq: 385 · Type: subparagraph -->
 
 b) Tratados o convenios de carácter militar.
 
-<!-- End Path: /c/13/a/2/p/2 · Seq: 385 · Type: paragraph -->
+<!-- End Path: /c/13/a/2/p/1/sp/2 · Seq: 385 · Type: subparagraph -->
 
-<!-- Path: /c/13/a/2/p/3 · Seq: 386 · Type: paragraph -->
+<!-- Path: /c/13/a/2/p/1/sp/3 · Seq: 386 · Type: subparagraph -->
 
 c) Tratados o convenios que afecten a la integridad territorial del Estado o a los derechos y deberes fundamentales establecidos en el Título I.
 
-<!-- End Path: /c/13/a/2/p/3 · Seq: 386 · Type: paragraph -->
+<!-- End Path: /c/13/a/2/p/1/sp/3 · Seq: 386 · Type: subparagraph -->
 
-<!-- Path: /c/13/a/2/p/4 · Seq: 387 · Type: paragraph -->
+<!-- Path: /c/13/a/2/p/1/sp/4 · Seq: 387 · Type: subparagraph -->
 
 d) Tratados o convenios que impliquen obligaciones financieras para la Hacienda Pública.
 
-<!-- End Path: /c/13/a/2/p/4 · Seq: 387 · Type: paragraph -->
+<!-- End Path: /c/13/a/2/p/1/sp/4 · Seq: 387 · Type: subparagraph -->
 
-<!-- Path: /c/13/a/2/p/5 · Seq: 388 · Type: paragraph -->
+<!-- Path: /c/13/a/2/p/1/sp/5 · Seq: 388 · Type: subparagraph -->
 
 e) Tratados o convenios que supongan modificación o derogación de alguna ley o exijan medidas legislativas para su ejecución.
 
-<!-- End Path: /c/13/a/2/p/5 · Seq: 388 · Type: paragraph -->
+<!-- End Path: /c/13/a/2/p/1/sp/5 · Seq: 388 · Type: subparagraph -->
 
-<!-- Path: /c/13/a/2/sp/2 · Seq: 389 · Type: subparagraph -->
+<!-- End Path: /c/13/a/2/p/1 · Seq: 383 · Type: paragraph -->
 
-2\) El Congreso y el Senado serán inmediatamente informados de la conclusión de los restantes tratados o convenios.
+<!-- Path: /c/13/a/2/p/2 · Seq: 389 · Type: paragraph -->
 
-<!-- End Path: /c/13/a/2/sp/2 · Seq: 389 · Type: subparagraph -->
+2\. El Congreso y el Senado serán inmediatamente informados de la conclusión de los restantes tratados o convenios.
+
+<!-- End Path: /c/13/a/2/p/2 · Seq: 389 · Type: paragraph -->
 
 <!-- End Path: /c/13/a/2 · Seq: 382 · Type: article -->
 
@@ -2578,25 +2578,25 @@ Los demás miembros del Gobierno serán nombrados y separados por el Rey, a prop
 
 La ley regulará:
 
-<!-- End Path: /c/14/a/9/p/1 · Seq: 428 · Type: paragraph -->
-
-<!-- Path: /c/14/a/9/sp/1 · Seq: 429 · Type: subparagraph -->
+<!-- Path: /c/14/a/9/p/1/sp/1 · Seq: 429 · Type: subparagraph -->
 
 a) La audiencia de los ciudadanos, directamente o a través de las organizaciones y asociaciones reconocidas por la ley, en el procedimiento de elaboración de las disposiciones administrativas que les afecten.
 
-<!-- End Path: /c/14/a/9/sp/1 · Seq: 429 · Type: subparagraph -->
+<!-- End Path: /c/14/a/9/p/1/sp/1 · Seq: 429 · Type: subparagraph -->
 
-<!-- Path: /c/14/a/9/p/2 · Seq: 430 · Type: paragraph -->
+<!-- Path: /c/14/a/9/p/1/sp/2 · Seq: 430 · Type: subparagraph -->
 
 b) El acceso de los ciudadanos a los archivos y registros administrativos, salvo en lo que afecte a la seguridad y defensa del Estado, la averiguación de los delitos y la intimidad de las personas.
 
-<!-- End Path: /c/14/a/9/p/2 · Seq: 430 · Type: paragraph -->
+<!-- End Path: /c/14/a/9/p/1/sp/2 · Seq: 430 · Type: subparagraph -->
 
-<!-- Path: /c/14/a/9/p/3 · Seq: 431 · Type: paragraph -->
+<!-- Path: /c/14/a/9/p/1/sp/3 · Seq: 431 · Type: subparagraph -->
 
 c) El procedimiento a través del cual deben producirse los actos administrativos, garantizando, cuando proceda, la audiencia del interesado.
 
-<!-- End Path: /c/14/a/9/p/3 · Seq: 431 · Type: paragraph -->
+<!-- End Path: /c/14/a/9/p/1/sp/3 · Seq: 431 · Type: subparagraph -->
+
+<!-- End Path: /c/14/a/9/p/1 · Seq: 428 · Type: paragraph -->
 
 <!-- End Path: /c/14/a/9 · Seq: 427 · Type: article -->
 
@@ -3490,25 +3490,25 @@ De las Comunidades Autónomas
 
 Las Cortes Generales, mediante ley orgánica, podrán, por motivos de interés nacional:
 
-<!-- End Path: /c/21/a/2/p/1 · Seq: 580 · Type: paragraph -->
-
-<!-- Path: /c/21/a/2/sp/1 · Seq: 581 · Type: subparagraph -->
+<!-- Path: /c/21/a/2/p/1/sp/1 · Seq: 581 · Type: subparagraph -->
 
 a) Autorizar la constitución de una comunidad autónoma cuando su ámbito territorial no supere el de una provincia y no reúna las condiciones del apartado 1 del artículo 143.
 
-<!-- End Path: /c/21/a/2/sp/1 · Seq: 581 · Type: subparagraph -->
+<!-- End Path: /c/21/a/2/p/1/sp/1 · Seq: 581 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/2/p/2 · Seq: 582 · Type: paragraph -->
+<!-- Path: /c/21/a/2/p/1/sp/2 · Seq: 582 · Type: subparagraph -->
 
 b) Autorizar o acordar, en su caso, un Estatuto de autonomía para territorios que no estén integrados en la organización provincial.
 
-<!-- End Path: /c/21/a/2/p/2 · Seq: 582 · Type: paragraph -->
+<!-- End Path: /c/21/a/2/p/1/sp/2 · Seq: 582 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/2/p/3 · Seq: 583 · Type: paragraph -->
+<!-- Path: /c/21/a/2/p/1/sp/3 · Seq: 583 · Type: subparagraph -->
 
 c) Sustituir la iniciativa de las Corporaciones locales a que se refiere el apartado 2 del artículo 143.
 
-<!-- End Path: /c/21/a/2/p/3 · Seq: 583 · Type: paragraph -->
+<!-- End Path: /c/21/a/2/p/1/sp/3 · Seq: 583 · Type: subparagraph -->
+
+<!-- End Path: /c/21/a/2/p/1 · Seq: 580 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/2 · Seq: 579 · Type: article -->
 
@@ -3556,37 +3556,37 @@ El proyecto de Estatuto será elaborado por una asamblea compuesta por los miemb
 
 2\. Los Estatutos de autonomía deberán contener:
 
-<!-- End Path: /c/21/a/5/p/2 · Seq: 591 · Type: paragraph -->
-
-<!-- Path: /c/21/a/5/sp/1 · Seq: 592 · Type: subparagraph -->
+<!-- Path: /c/21/a/5/p/2/sp/1 · Seq: 592 · Type: subparagraph -->
 
 a) La denominación de la Comunidad que mejor corresponda a su identidad histórica.
 
-<!-- End Path: /c/21/a/5/sp/1 · Seq: 592 · Type: subparagraph -->
+<!-- End Path: /c/21/a/5/p/2/sp/1 · Seq: 592 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/5/p/3 · Seq: 593 · Type: paragraph -->
+<!-- Path: /c/21/a/5/p/2/sp/2 · Seq: 593 · Type: subparagraph -->
 
 b) La delimitación de su territorio.
 
-<!-- End Path: /c/21/a/5/p/3 · Seq: 593 · Type: paragraph -->
+<!-- End Path: /c/21/a/5/p/2/sp/2 · Seq: 593 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/5/p/4 · Seq: 594 · Type: paragraph -->
+<!-- Path: /c/21/a/5/p/2/sp/3 · Seq: 594 · Type: subparagraph -->
 
 c) La denominación, organización y sede de las instituciones autónomas propias.
 
-<!-- End Path: /c/21/a/5/p/4 · Seq: 594 · Type: paragraph -->
+<!-- End Path: /c/21/a/5/p/2/sp/3 · Seq: 594 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/5/p/5 · Seq: 595 · Type: paragraph -->
+<!-- Path: /c/21/a/5/p/2/sp/4 · Seq: 595 · Type: subparagraph -->
 
 d) Las competencias asumidas dentro del marco establecido en la Constitución y las bases para el traspaso de los servicios correspondientes a las mismas.
 
-<!-- End Path: /c/21/a/5/p/5 · Seq: 595 · Type: paragraph -->
+<!-- End Path: /c/21/a/5/p/2/sp/4 · Seq: 595 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/5/sp/2 · Seq: 596 · Type: subparagraph -->
+<!-- End Path: /c/21/a/5/p/2 · Seq: 591 · Type: paragraph -->
 
-3\) La reforma de los Estatutos se ajustará al procedimiento establecido en los mismos y requerirá, en todo caso, la aprobación por las Cortes Generales, mediante ley orgánica.
+<!-- Path: /c/21/a/5/p/3 · Seq: 596 · Type: paragraph -->
 
-<!-- End Path: /c/21/a/5/sp/2 · Seq: 596 · Type: subparagraph -->
+3\. La reforma de los Estatutos se ajustará al procedimiento establecido en los mismos y requerirá, en todo caso, la aprobación por las Cortes Generales, mediante ley orgánica.
+
+<!-- End Path: /c/21/a/5/p/3 · Seq: 596 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/5 · Seq: 589 · Type: article -->
 
@@ -3598,145 +3598,145 @@ d) Las competencias asumidas dentro del marco establecido en la Constitución y 
 
 1\. Las Comunidades Autónomas podrán asumir competencias en las siguientes materias:
 
+<!-- Path: /c/21/a/6/p/1/sp/1 · Seq: 599 · Type: subparagraph -->
+
+1ª) Organización de sus instituciones de autogobierno.
+
+<!-- End Path: /c/21/a/6/p/1/sp/1 · Seq: 599 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/2 · Seq: 600 · Type: subparagraph -->
+
+2ª) Las alteraciones de los términos municipales comprendidos en su territorio y, en general, las funciones que correspondan a la Administración del Estado sobre las Corporaciones locales y cuya transferencia autorice la legislación sobre Régimen Local.
+
+<!-- End Path: /c/21/a/6/p/1/sp/2 · Seq: 600 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/3 · Seq: 601 · Type: subparagraph -->
+
+3ª) Ordenación del territorio, urbanismo y vivienda.
+
+<!-- End Path: /c/21/a/6/p/1/sp/3 · Seq: 601 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/4 · Seq: 602 · Type: subparagraph -->
+
+4ª) Las obras públicas de interés de la Comunidad Autónoma en su propio territorio.
+
+<!-- End Path: /c/21/a/6/p/1/sp/4 · Seq: 602 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/5 · Seq: 603 · Type: subparagraph -->
+
+5ª) Los ferrocarriles y carreteras cuyo itinerario se desarrolle íntegramente en el territorio de la Comunidad Autónoma y, en los mismos términos, el transporte desarrollado por estos medios o por cable.
+
+<!-- End Path: /c/21/a/6/p/1/sp/5 · Seq: 603 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/6 · Seq: 604 · Type: subparagraph -->
+
+6ª) Los puertos de refugio, los puertos y aeropuertos deportivos y, en general, los que no desarrollen actividades comerciales.
+
+<!-- End Path: /c/21/a/6/p/1/sp/6 · Seq: 604 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/7 · Seq: 605 · Type: subparagraph -->
+
+7ª) La agricultura y ganadería, de acuerdo con la ordenación general de la economía.
+
+<!-- End Path: /c/21/a/6/p/1/sp/7 · Seq: 605 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/8 · Seq: 606 · Type: subparagraph -->
+
+8ª) Los montes y aprovechamientos forestales.
+
+<!-- End Path: /c/21/a/6/p/1/sp/8 · Seq: 606 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/9 · Seq: 607 · Type: subparagraph -->
+
+9ª) La gestión en materia de protección del medio ambiente.
+
+<!-- End Path: /c/21/a/6/p/1/sp/9 · Seq: 607 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/10 · Seq: 608 · Type: subparagraph -->
+
+10ª) Los proyectos, construcción y explotación de los aprovechamientos hidráulicos, canales y regadíos de interés de la Comunidad Autónoma; las aguas minerales y termales.
+
+<!-- End Path: /c/21/a/6/p/1/sp/10 · Seq: 608 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/11 · Seq: 609 · Type: subparagraph -->
+
+11ª) La pesca en aguas interiores, el marisqueo y la acuicultura, la caza y la pesca fluvial.
+
+<!-- End Path: /c/21/a/6/p/1/sp/11 · Seq: 609 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/12 · Seq: 610 · Type: subparagraph -->
+
+12ª) Ferias interiores.
+
+<!-- End Path: /c/21/a/6/p/1/sp/12 · Seq: 610 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/13 · Seq: 611 · Type: subparagraph -->
+
+13ª) El fomento del desarrollo económico de la Comunidad Autónoma dentro de los objetivos marcados por la política económica nacional.
+
+<!-- End Path: /c/21/a/6/p/1/sp/13 · Seq: 611 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/14 · Seq: 612 · Type: subparagraph -->
+
+14ª) La artesanía.
+
+<!-- End Path: /c/21/a/6/p/1/sp/14 · Seq: 612 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/15 · Seq: 613 · Type: subparagraph -->
+
+15ª) Museos, bibliotecas y conservatorios de música de interés para la Comunidad Autónoma.
+
+<!-- End Path: /c/21/a/6/p/1/sp/15 · Seq: 613 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/16 · Seq: 614 · Type: subparagraph -->
+
+16ª) Patrimonio monumental de interés de la Comunidad Autónoma.
+
+<!-- End Path: /c/21/a/6/p/1/sp/16 · Seq: 614 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/17 · Seq: 615 · Type: subparagraph -->
+
+17ª) El fomento de la cultura, de la investigación y, en su caso, de la enseñanza de la lengua de la Comunidad Autónoma.
+
+<!-- End Path: /c/21/a/6/p/1/sp/17 · Seq: 615 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/18 · Seq: 616 · Type: subparagraph -->
+
+18ª) Promoción y ordenación del turismo en su ámbito territorial.
+
+<!-- End Path: /c/21/a/6/p/1/sp/18 · Seq: 616 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/19 · Seq: 617 · Type: subparagraph -->
+
+19ª) Promoción del deporte y de la adecuada utilización del ocio.
+
+<!-- End Path: /c/21/a/6/p/1/sp/19 · Seq: 617 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/20 · Seq: 618 · Type: subparagraph -->
+
+20ª) Asistencia social.
+
+<!-- End Path: /c/21/a/6/p/1/sp/20 · Seq: 618 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/21 · Seq: 619 · Type: subparagraph -->
+
+21ª) Sanidad e higiene.
+
+<!-- End Path: /c/21/a/6/p/1/sp/21 · Seq: 619 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/6/p/1/sp/22 · Seq: 620 · Type: subparagraph -->
+
+22ª) La vigilancia y protección de sus edificios e instalaciones. La coordinación y demás facultades en relación con las policías locales en los términos que establezca una ley orgánica.
+
+<!-- End Path: /c/21/a/6/p/1/sp/22 · Seq: 620 · Type: subparagraph -->
+
 <!-- End Path: /c/21/a/6/p/1 · Seq: 598 · Type: paragraph -->
 
-<!-- Path: /c/21/a/6/sp/1 · Seq: 599 · Type: subparagraph -->
+<!-- Path: /c/21/a/6/p/2 · Seq: 621 · Type: paragraph -->
 
-1\) ª Organización de sus instituciones de autogobierno.
+2\. Transcurridos cinco años, y mediante la reforma de sus Estatutos, las Comunidades Autónomas podrán ampliar sucesivamente sus competencias dentro del marco establecido en el artículo 149.
 
-<!-- End Path: /c/21/a/6/sp/1 · Seq: 599 · Type: subparagraph -->
-
-<!-- Path: /c/21/a/6/p/2 · Seq: 600 · Type: paragraph -->
-
-2.ª Las alteraciones de los términos municipales comprendidos en su territorio y, en general, las funciones que correspondan a la Administración del Estado sobre las Corporaciones locales y cuya transferencia autorice la legislación sobre Régimen Local.
-
-<!-- End Path: /c/21/a/6/p/2 · Seq: 600 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/3 · Seq: 601 · Type: paragraph -->
-
-3.ª Ordenación del territorio, urbanismo y vivienda.
-
-<!-- End Path: /c/21/a/6/p/3 · Seq: 601 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/4 · Seq: 602 · Type: paragraph -->
-
-4.ª Las obras públicas de interés de la Comunidad Autónoma en su propio territorio.
-
-<!-- End Path: /c/21/a/6/p/4 · Seq: 602 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/5 · Seq: 603 · Type: paragraph -->
-
-5.ª Los ferrocarriles y carreteras cuyo itinerario se desarrolle íntegramente en el territorio de la Comunidad Autónoma y, en los mismos términos, el transporte desarrollado por estos medios o por cable.
-
-<!-- End Path: /c/21/a/6/p/5 · Seq: 603 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/6 · Seq: 604 · Type: paragraph -->
-
-6.ª Los puertos de refugio, los puertos y aeropuertos deportivos y, en general, los que no desarrollen actividades comerciales.
-
-<!-- End Path: /c/21/a/6/p/6 · Seq: 604 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/7 · Seq: 605 · Type: paragraph -->
-
-7.ª La agricultura y ganadería, de acuerdo con la ordenación general de la economía.
-
-<!-- End Path: /c/21/a/6/p/7 · Seq: 605 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/8 · Seq: 606 · Type: paragraph -->
-
-8.ª Los montes y aprovechamientos forestales.
-
-<!-- End Path: /c/21/a/6/p/8 · Seq: 606 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/9 · Seq: 607 · Type: paragraph -->
-
-9.ª La gestión en materia de protección del medio ambiente.
-
-<!-- End Path: /c/21/a/6/p/9 · Seq: 607 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/10 · Seq: 608 · Type: paragraph -->
-
-10.ª Los proyectos, construcción y explotación de los aprovechamientos hidráulicos, canales y regadíos de interés de la Comunidad Autónoma; las aguas minerales y termales.
-
-<!-- End Path: /c/21/a/6/p/10 · Seq: 608 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/11 · Seq: 609 · Type: paragraph -->
-
-11.ª La pesca en aguas interiores, el marisqueo y la acuicultura, la caza y la pesca fluvial.
-
-<!-- End Path: /c/21/a/6/p/11 · Seq: 609 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/12 · Seq: 610 · Type: paragraph -->
-
-12.ª Ferias interiores.
-
-<!-- End Path: /c/21/a/6/p/12 · Seq: 610 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/13 · Seq: 611 · Type: paragraph -->
-
-13.ª El fomento del desarrollo económico de la Comunidad Autónoma dentro de los objetivos marcados por la política económica nacional.
-
-<!-- End Path: /c/21/a/6/p/13 · Seq: 611 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/14 · Seq: 612 · Type: paragraph -->
-
-14.ª La artesanía.
-
-<!-- End Path: /c/21/a/6/p/14 · Seq: 612 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/15 · Seq: 613 · Type: paragraph -->
-
-15.ª Museos, bibliotecas y conservatorios de música de interés para la Comunidad Autónoma.
-
-<!-- End Path: /c/21/a/6/p/15 · Seq: 613 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/16 · Seq: 614 · Type: paragraph -->
-
-16.ª Patrimonio monumental de interés de la Comunidad Autónoma.
-
-<!-- End Path: /c/21/a/6/p/16 · Seq: 614 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/17 · Seq: 615 · Type: paragraph -->
-
-17.ª El fomento de la cultura, de la investigación y, en su caso, de la enseñanza de la lengua de la Comunidad Autónoma.
-
-<!-- End Path: /c/21/a/6/p/17 · Seq: 615 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/18 · Seq: 616 · Type: paragraph -->
-
-18.ª Promoción y ordenación del turismo en su ámbito territorial.
-
-<!-- End Path: /c/21/a/6/p/18 · Seq: 616 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/19 · Seq: 617 · Type: paragraph -->
-
-19.ª Promoción del deporte y de la adecuada utilización del ocio.
-
-<!-- End Path: /c/21/a/6/p/19 · Seq: 617 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/20 · Seq: 618 · Type: paragraph -->
-
-20.ª Asistencia social.
-
-<!-- End Path: /c/21/a/6/p/20 · Seq: 618 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/21 · Seq: 619 · Type: paragraph -->
-
-21.ª Sanidad e higiene.
-
-<!-- End Path: /c/21/a/6/p/21 · Seq: 619 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/p/22 · Seq: 620 · Type: paragraph -->
-
-22.ª La vigilancia y protección de sus edificios e instalaciones. La coordinación y demás facultades en relación con las policías locales en los términos que establezca una ley orgánica.
-
-<!-- End Path: /c/21/a/6/p/22 · Seq: 620 · Type: paragraph -->
-
-<!-- Path: /c/21/a/6/sp/2 · Seq: 621 · Type: subparagraph -->
-
-2\) Transcurridos cinco años, y mediante la reforma de sus Estatutos, las Comunidades Autónomas podrán ampliar sucesivamente sus competencias dentro del marco establecido en el artículo 149.
-
-<!-- End Path: /c/21/a/6/sp/2 · Seq: 621 · Type: subparagraph -->
+<!-- End Path: /c/21/a/6/p/2 · Seq: 621 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/6 · Seq: 597 · Type: article -->
 
@@ -3748,211 +3748,211 @@ d) Las competencias asumidas dentro del marco establecido en la Constitución y 
 
 1\. El Estado tiene competencia exclusiva sobre las siguientes materias:
 
+<!-- Path: /c/21/a/7/p/1/sp/1 · Seq: 624 · Type: subparagraph -->
+
+1ª) La regulación de las condiciones básicas que garanticen la igualdad de todos los españoles en el ejercicio de los derechos y en el cumplimiento de los deberes constitucionales.
+
+<!-- End Path: /c/21/a/7/p/1/sp/1 · Seq: 624 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/2 · Seq: 625 · Type: subparagraph -->
+
+2ª) Nacionalidad, inmigración, emigración, extranjería y derecho de asilo.
+
+<!-- End Path: /c/21/a/7/p/1/sp/2 · Seq: 625 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/3 · Seq: 626 · Type: subparagraph -->
+
+3ª) Relaciones internacionales.
+
+<!-- End Path: /c/21/a/7/p/1/sp/3 · Seq: 626 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/4 · Seq: 627 · Type: subparagraph -->
+
+4ª) Defensa y Fuerzas Armadas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/4 · Seq: 627 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/5 · Seq: 628 · Type: subparagraph -->
+
+5ª) Administración de Justicia.
+
+<!-- End Path: /c/21/a/7/p/1/sp/5 · Seq: 628 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/6 · Seq: 629 · Type: subparagraph -->
+
+6ª) Legislación mercantil, penal y penitenciaria; legislación procesal, sin perjuicio de las necesarias especialidades que en este orden se deriven de las particularidades del derecho sustantivo de las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/6 · Seq: 629 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/7 · Seq: 630 · Type: subparagraph -->
+
+7ª) Legislación laboral; sin perjuicio de su ejecución por los órganos de las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/7 · Seq: 630 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/8 · Seq: 631 · Type: subparagraph -->
+
+8ª) Legislación civil, sin perjuicio de la conservación, modificación y desarrollo por las Comunidades Autónomas de los derechos civiles, forales o especiales, allí donde existan. En todo caso, las reglas relativas a la aplicación y eficacia de las normas jurídicas, relaciones jurídico-civiles relativas a las formas de matrimonio, ordenación de los registros e instrumentos públicos, bases de las obligaciones contractuales, normas para resolver los conflictos de leyes y determinación de las fuentes del Derecho, con respeto, en este último caso, a las normas de derecho foral o especial.
+
+<!-- End Path: /c/21/a/7/p/1/sp/8 · Seq: 631 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/9 · Seq: 632 · Type: subparagraph -->
+
+9ª) Legislación sobre propiedad intelectual e industrial.
+
+<!-- End Path: /c/21/a/7/p/1/sp/9 · Seq: 632 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/10 · Seq: 633 · Type: subparagraph -->
+
+10ª) Régimen aduanero y arancelario; comercio exterior.
+
+<!-- End Path: /c/21/a/7/p/1/sp/10 · Seq: 633 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/11 · Seq: 634 · Type: subparagraph -->
+
+11ª) Sistema monetario: divisas, cambio y convertibilidad; bases de la ordenación de crédito, banca y seguros.
+
+<!-- End Path: /c/21/a/7/p/1/sp/11 · Seq: 634 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/12 · Seq: 635 · Type: subparagraph -->
+
+12ª) Legislación sobre pesas y medidas, determinación de la hora oficial.
+
+<!-- End Path: /c/21/a/7/p/1/sp/12 · Seq: 635 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/13 · Seq: 636 · Type: subparagraph -->
+
+13ª) Bases y coordinación de la planificación general de la actividad económica.
+
+<!-- End Path: /c/21/a/7/p/1/sp/13 · Seq: 636 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/14 · Seq: 637 · Type: subparagraph -->
+
+14ª) Hacienda general y Deuda del Estado.
+
+<!-- End Path: /c/21/a/7/p/1/sp/14 · Seq: 637 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/15 · Seq: 638 · Type: subparagraph -->
+
+15ª) Fomento y coordinación general de la investigación científica y técnica.
+
+<!-- End Path: /c/21/a/7/p/1/sp/15 · Seq: 638 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/16 · Seq: 639 · Type: subparagraph -->
+
+16ª) Sanidad exterior. Bases y coordinación general de la sanidad. Legislación sobre productos farmacéuticos.
+
+<!-- End Path: /c/21/a/7/p/1/sp/16 · Seq: 639 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/17 · Seq: 640 · Type: subparagraph -->
+
+17ª) Legislación básica y régimen económico de la Seguridad Social, sin perjuicio de la ejecución de sus servicios por las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/17 · Seq: 640 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/18 · Seq: 641 · Type: subparagraph -->
+
+18ª) Las bases del régimen jurídico de las Administraciones públicas y del régimen estatutario de sus funcionarios que, en todo caso, garantizarán a los administrados un tratamiento común ante ellas; el procedimiento administrativo común, sin perjuicio de las especialidades derivadas de la organización propia de las Comunidades Autónomas; legislación sobre expropiación forzosa; legislación básica sobre contratos y concesiones administrativas y el sistema de responsabilidad de todas las Administraciones públicas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/18 · Seq: 641 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/19 · Seq: 642 · Type: subparagraph -->
+
+19ª) Pesca marítima, sin perjuicio de las competencias que en la ordenación del sector se atribuyan a las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/19 · Seq: 642 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/20 · Seq: 643 · Type: subparagraph -->
+
+20ª) Marina mercante y abanderamiento de buques; iluminación de costas y señales marítimas; puertos de interés general; aeropuertos de interés general; control del espacio aéreo, tránsito y transporte aéreo, servicio meteorológico y matriculación de aeronaves.
+
+<!-- End Path: /c/21/a/7/p/1/sp/20 · Seq: 643 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/21 · Seq: 644 · Type: subparagraph -->
+
+21ª) Ferrocarriles y transportes terrestres que transcurran por el territorio de más de una Comunidad Autónoma; régimen general de comunicaciones; tráfico y circulación de vehículos a motor; correos y telecomunicaciones; cables aéreos, submarinos y radiocomunicación.
+
+<!-- End Path: /c/21/a/7/p/1/sp/21 · Seq: 644 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/22 · Seq: 645 · Type: subparagraph -->
+
+22ª) La legislación, ordenación y concesión de recursos y aprovechamientos hidráulicos cuando las aguas discurran por más de una Comunidad Autónoma, y la autorización de las instalaciones eléctricas cuando su aprovechamiento afecte a otra Comunidad o el transporte de energía salga de su ámbito territorial.
+
+<!-- End Path: /c/21/a/7/p/1/sp/22 · Seq: 645 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/23 · Seq: 646 · Type: subparagraph -->
+
+23ª) Legislación básica sobre protección del medio ambiente, sin perjuicio de las facultades de las Comunidades Autónomas de establecer normas adicionales de protección. La legislación básica sobre montes, aprovechamientos forestales y vías pecuarias.
+
+<!-- End Path: /c/21/a/7/p/1/sp/23 · Seq: 646 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/24 · Seq: 647 · Type: subparagraph -->
+
+24ª) Obras públicas de interés general o cuya realización afecte a más de una Comunidad Autónoma.
+
+<!-- End Path: /c/21/a/7/p/1/sp/24 · Seq: 647 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/25 · Seq: 648 · Type: subparagraph -->
+
+25ª) Bases de régimen minero y energético.
+
+<!-- End Path: /c/21/a/7/p/1/sp/25 · Seq: 648 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/26 · Seq: 649 · Type: subparagraph -->
+
+26ª) Régimen de producción, comercio, tenencia y uso de armas y explosivos.
+
+<!-- End Path: /c/21/a/7/p/1/sp/26 · Seq: 649 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/27 · Seq: 650 · Type: subparagraph -->
+
+27ª) Normas básicas del régimen de prensa, radio y televisión y, en general, de todos los medios de comunicación social, sin perjuicio de las facultades que en su desarrollo y ejecución correspondan a las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/27 · Seq: 650 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/28 · Seq: 651 · Type: subparagraph -->
+
+28ª) Defensa del patrimonio cultural, artístico y monumental español contra la exportación y la expoliación; museos, bibliotecas y archivos de titularidad estatal, sin perjuicio de su gestión por parte de las Comunidades Autónomas.
+
+<!-- End Path: /c/21/a/7/p/1/sp/28 · Seq: 651 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/29 · Seq: 652 · Type: subparagraph -->
+
+29ª) Seguridad pública, sin perjuicio de la posibilidad de creación de policías por las Comunidades Autónomas en la forma que se establezca en los respectivos Estatutos en el marco de lo que disponga una ley orgánica.
+
+<!-- End Path: /c/21/a/7/p/1/sp/29 · Seq: 652 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/30 · Seq: 653 · Type: subparagraph -->
+
+30ª) Regulación de las condiciones de obtención, expedición y homologación de títulos académicos y profesionales y normas básicas para el desarrollo del artículo 27 de la Constitución, a fin de garantizar el cumplimiento de las obligaciones de los poderes públicos en esta materia.
+
+<!-- End Path: /c/21/a/7/p/1/sp/30 · Seq: 653 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/31 · Seq: 654 · Type: subparagraph -->
+
+31ª) Estadística para fines estatales.
+
+<!-- End Path: /c/21/a/7/p/1/sp/31 · Seq: 654 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/7/p/1/sp/32 · Seq: 655 · Type: subparagraph -->
+
+32ª) Autorización para la convocatoria de consultas populares por vía de referéndum.
+
+<!-- End Path: /c/21/a/7/p/1/sp/32 · Seq: 655 · Type: subparagraph -->
+
 <!-- End Path: /c/21/a/7/p/1 · Seq: 623 · Type: paragraph -->
 
-<!-- Path: /c/21/a/7/sp/1 · Seq: 624 · Type: subparagraph -->
+<!-- Path: /c/21/a/7/p/2 · Seq: 656 · Type: paragraph -->
 
-1\) ª La regulación de las condiciones básicas que garanticen la igualdad de todos los españoles en el ejercicio de los derechos y en el cumplimiento de los deberes constitucionales.
+2\. Sin perjuicio de las competencias que podrán asumir las Comunidades Autónomas, el Estado considerará el servicio de la cultura como deber y atribución esencial y facilitará la comunicación cultural entre las Comunidades Autónomas, de acuerdo con ellas.
 
-<!-- End Path: /c/21/a/7/sp/1 · Seq: 624 · Type: subparagraph -->
+<!-- End Path: /c/21/a/7/p/2 · Seq: 656 · Type: paragraph -->
 
-<!-- Path: /c/21/a/7/p/2 · Seq: 625 · Type: paragraph -->
+<!-- Path: /c/21/a/7/p/3 · Seq: 657 · Type: paragraph -->
 
-2.ª Nacionalidad, inmigración, emigración, extranjería y derecho de asilo.
+3\. Las materias no atribuidas expresamente al Estado por esta Constitución podrán corresponder a las Comunidades Autónomas, en virtud de sus respectivos Estatutos. La competencia sobre las materias que no se hayan asumido por los Estatutos de Autonomía corresponderá al Estado, cuyas normas prevalecerán, en caso de conflicto, sobre las de las Comunidades Autónomas en todo lo que no esté atribuido a la exclusiva competencia de éstas. El derecho estatal será, en todo caso, supletorio del derecho de las Comunidades Autónomas.
 
-<!-- End Path: /c/21/a/7/p/2 · Seq: 625 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/3 · Seq: 626 · Type: paragraph -->
-
-3.ª Relaciones internacionales.
-
-<!-- End Path: /c/21/a/7/p/3 · Seq: 626 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/4 · Seq: 627 · Type: paragraph -->
-
-4.ª Defensa y Fuerzas Armadas.
-
-<!-- End Path: /c/21/a/7/p/4 · Seq: 627 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/5 · Seq: 628 · Type: paragraph -->
-
-5.ª Administración de Justicia.
-
-<!-- End Path: /c/21/a/7/p/5 · Seq: 628 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/6 · Seq: 629 · Type: paragraph -->
-
-6.ª Legislación mercantil, penal y penitenciaria; legislación procesal, sin perjuicio de las necesarias especialidades que en este orden se deriven de las particularidades del derecho sustantivo de las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/6 · Seq: 629 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/7 · Seq: 630 · Type: paragraph -->
-
-7.ª Legislación laboral; sin perjuicio de su ejecución por los órganos de las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/7 · Seq: 630 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/8 · Seq: 631 · Type: paragraph -->
-
-8.ª Legislación civil, sin perjuicio de la conservación, modificación y desarrollo por las Comunidades Autónomas de los derechos civiles, forales o especiales, allí donde existan. En todo caso, las reglas relativas a la aplicación y eficacia de las normas jurídicas, relaciones jurídico-civiles relativas a las formas de matrimonio, ordenación de los registros e instrumentos públicos, bases de las obligaciones contractuales, normas para resolver los conflictos de leyes y determinación de las fuentes del Derecho, con respeto, en este último caso, a las normas de derecho foral o especial.
-
-<!-- End Path: /c/21/a/7/p/8 · Seq: 631 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/9 · Seq: 632 · Type: paragraph -->
-
-9.ª Legislación sobre propiedad intelectual e industrial.
-
-<!-- End Path: /c/21/a/7/p/9 · Seq: 632 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/10 · Seq: 633 · Type: paragraph -->
-
-10.ª Régimen aduanero y arancelario; comercio exterior.
-
-<!-- End Path: /c/21/a/7/p/10 · Seq: 633 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/11 · Seq: 634 · Type: paragraph -->
-
-11.ª Sistema monetario: divisas, cambio y convertibilidad; bases de la ordenación de crédito, banca y seguros.
-
-<!-- End Path: /c/21/a/7/p/11 · Seq: 634 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/12 · Seq: 635 · Type: paragraph -->
-
-12.ª Legislación sobre pesas y medidas, determinación de la hora oficial.
-
-<!-- End Path: /c/21/a/7/p/12 · Seq: 635 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/13 · Seq: 636 · Type: paragraph -->
-
-13.ª Bases y coordinación de la planificación general de la actividad económica.
-
-<!-- End Path: /c/21/a/7/p/13 · Seq: 636 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/14 · Seq: 637 · Type: paragraph -->
-
-14.ª Hacienda general y Deuda del Estado.
-
-<!-- End Path: /c/21/a/7/p/14 · Seq: 637 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/15 · Seq: 638 · Type: paragraph -->
-
-15.ª Fomento y coordinación general de la investigación científica y técnica.
-
-<!-- End Path: /c/21/a/7/p/15 · Seq: 638 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/16 · Seq: 639 · Type: paragraph -->
-
-16.ª Sanidad exterior. Bases y coordinación general de la sanidad. Legislación sobre productos farmacéuticos.
-
-<!-- End Path: /c/21/a/7/p/16 · Seq: 639 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/17 · Seq: 640 · Type: paragraph -->
-
-17.ª Legislación básica y régimen económico de la Seguridad Social, sin perjuicio de la ejecución de sus servicios por las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/17 · Seq: 640 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/18 · Seq: 641 · Type: paragraph -->
-
-18.ª Las bases del régimen jurídico de las Administraciones públicas y del régimen estatutario de sus funcionarios que, en todo caso, garantizarán a los administrados un tratamiento común ante ellas; el procedimiento administrativo común, sin perjuicio de las especialidades derivadas de la organización propia de las Comunidades Autónomas; legislación sobre expropiación forzosa; legislación básica sobre contratos y concesiones administrativas y el sistema de responsabilidad de todas las Administraciones públicas.
-
-<!-- End Path: /c/21/a/7/p/18 · Seq: 641 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/19 · Seq: 642 · Type: paragraph -->
-
-19.ª Pesca marítima, sin perjuicio de las competencias que en la ordenación del sector se atribuyan a las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/19 · Seq: 642 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/20 · Seq: 643 · Type: paragraph -->
-
-20.ª Marina mercante y abanderamiento de buques; iluminación de costas y señales marítimas; puertos de interés general; aeropuertos de interés general; control del espacio aéreo, tránsito y transporte aéreo, servicio meteorológico y matriculación de aeronaves.
-
-<!-- End Path: /c/21/a/7/p/20 · Seq: 643 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/21 · Seq: 644 · Type: paragraph -->
-
-21.ª Ferrocarriles y transportes terrestres que transcurran por el territorio de más de una Comunidad Autónoma; régimen general de comunicaciones; tráfico y circulación de vehículos a motor; correos y telecomunicaciones; cables aéreos, submarinos y radiocomunicación.
-
-<!-- End Path: /c/21/a/7/p/21 · Seq: 644 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/22 · Seq: 645 · Type: paragraph -->
-
-22.ª La legislación, ordenación y concesión de recursos y aprovechamientos hidráulicos cuando las aguas discurran por más de una Comunidad Autónoma, y la autorización de las instalaciones eléctricas cuando su aprovechamiento afecte a otra Comunidad o el transporte de energía salga de su ámbito territorial.
-
-<!-- End Path: /c/21/a/7/p/22 · Seq: 645 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/23 · Seq: 646 · Type: paragraph -->
-
-23.ª Legislación básica sobre protección del medio ambiente, sin perjuicio de las facultades de las Comunidades Autónomas de establecer normas adicionales de protección. La legislación básica sobre montes, aprovechamientos forestales y vías pecuarias.
-
-<!-- End Path: /c/21/a/7/p/23 · Seq: 646 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/24 · Seq: 647 · Type: paragraph -->
-
-24.ª Obras públicas de interés general o cuya realización afecte a más de una Comunidad Autónoma.
-
-<!-- End Path: /c/21/a/7/p/24 · Seq: 647 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/25 · Seq: 648 · Type: paragraph -->
-
-25.ª Bases de régimen minero y energético.
-
-<!-- End Path: /c/21/a/7/p/25 · Seq: 648 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/26 · Seq: 649 · Type: paragraph -->
-
-26.ª Régimen de producción, comercio, tenencia y uso de armas y explosivos.
-
-<!-- End Path: /c/21/a/7/p/26 · Seq: 649 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/27 · Seq: 650 · Type: paragraph -->
-
-27.ª Normas básicas del régimen de prensa, radio y televisión y, en general, de todos los medios de comunicación social, sin perjuicio de las facultades que en su desarrollo y ejecución correspondan a las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/27 · Seq: 650 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/28 · Seq: 651 · Type: paragraph -->
-
-28.ª Defensa del patrimonio cultural, artístico y monumental español contra la exportación y la expoliación; museos, bibliotecas y archivos de titularidad estatal, sin perjuicio de su gestión por parte de las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/p/28 · Seq: 651 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/29 · Seq: 652 · Type: paragraph -->
-
-29.ª Seguridad pública, sin perjuicio de la posibilidad de creación de policías por las Comunidades Autónomas en la forma que se establezca en los respectivos Estatutos en el marco de lo que disponga una ley orgánica.
-
-<!-- End Path: /c/21/a/7/p/29 · Seq: 652 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/30 · Seq: 653 · Type: paragraph -->
-
-30.ª Regulación de las condiciones de obtención, expedición y homologación de títulos académicos y profesionales y normas básicas para el desarrollo del artículo 27 de la Constitución, a fin de garantizar el cumplimiento de las obligaciones de los poderes públicos en esta materia.
-
-<!-- End Path: /c/21/a/7/p/30 · Seq: 653 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/31 · Seq: 654 · Type: paragraph -->
-
-31.ª Estadística para fines estatales.
-
-<!-- End Path: /c/21/a/7/p/31 · Seq: 654 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/p/32 · Seq: 655 · Type: paragraph -->
-
-32.ª Autorización para la convocatoria de consultas populares por vía de referéndum.
-
-<!-- End Path: /c/21/a/7/p/32 · Seq: 655 · Type: paragraph -->
-
-<!-- Path: /c/21/a/7/sp/2 · Seq: 656 · Type: subparagraph -->
-
-2\) Sin perjuicio de las competencias que podrán asumir las Comunidades Autónomas, el Estado considerará el servicio de la cultura como deber y atribución esencial y facilitará la comunicación cultural entre las Comunidades Autónomas, de acuerdo con ellas.
-
-<!-- End Path: /c/21/a/7/sp/2 · Seq: 656 · Type: subparagraph -->
-
-<!-- Path: /c/21/a/7/sp/3 · Seq: 657 · Type: subparagraph -->
-
-3\) Las materias no atribuidas expresamente al Estado por esta Constitución podrán corresponder a las Comunidades Autónomas, en virtud de sus respectivos Estatutos. La competencia sobre las materias que no se hayan asumido por los Estatutos de Autonomía corresponderá al Estado, cuyas normas prevalecerán, en caso de conflicto, sobre las de las Comunidades Autónomas en todo lo que no esté atribuido a la exclusiva competencia de éstas. El derecho estatal será, en todo caso, supletorio del derecho de las Comunidades Autónomas.
-
-<!-- End Path: /c/21/a/7/sp/3 · Seq: 657 · Type: subparagraph -->
+<!-- End Path: /c/21/a/7/p/3 · Seq: 657 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/7 · Seq: 622 · Type: article -->
 
@@ -3994,43 +3994,43 @@ d) Las competencias asumidas dentro del marco establecido en la Constitución y 
 
 2\. En el supuesto previsto en el apartado anterior, el procedimiento para la elaboración del Estatuto será el siguiente:
 
+<!-- Path: /c/21/a/9/p/2/sp/1 · Seq: 665 · Type: subparagraph -->
+
+1º) El Gobierno convocará a todos los Diputados y Senadores elegidos en las circunscripciones comprendidas en el ámbito territorial que pretenda acceder al autogobierno, para que se constituyan en Asamblea, a los solos efectos de elaborar el correspondiente proyecto de Estatuto de autonomía, mediante el acuerdo de la mayoría absoluta de sus miembros.
+
+<!-- End Path: /c/21/a/9/p/2/sp/1 · Seq: 665 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/9/p/2/sp/2 · Seq: 666 · Type: subparagraph -->
+
+2º) Aprobado el proyecto de Estatuto por la Asamblea de Parlamentarios, se remitirá a la Comisión Constitucional del Congreso, la cual, dentro del plazo de dos meses, lo examinará con el concurso y asistencia de una delegación de la Asamblea proponente para determinar de común acuerdo su formulación definitiva.
+
+<!-- End Path: /c/21/a/9/p/2/sp/2 · Seq: 666 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/9/p/2/sp/3 · Seq: 667 · Type: subparagraph -->
+
+3º) Si se alcanzare dicho acuerdo, el texto resultante será sometido a referéndum del cuerpo electoral de las provincias comprendidas en el ámbito territorial del proyectado Estatuto.
+
+<!-- End Path: /c/21/a/9/p/2/sp/3 · Seq: 667 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/9/p/2/sp/4 · Seq: 668 · Type: subparagraph -->
+
+4º) Si el proyecto de Estatuto es aprobado en cada provincia por la mayoría de los votos válidamente emitidos, será elevado a las Cortes Generales. Los plenos de ambas Cámaras decidirán sobre el texto mediante un voto de ratificación. Aprobado el Estatuto, el Rey lo sancionará y lo promulgará como ley.
+
+<!-- End Path: /c/21/a/9/p/2/sp/4 · Seq: 668 · Type: subparagraph -->
+
+<!-- Path: /c/21/a/9/p/2/sp/5 · Seq: 669 · Type: subparagraph -->
+
+5º) De no alcanzarse el acuerdo a que se refiere el apartado 2 de este número, el proyecto de Estatuto será tramitado como proyecto de ley ante las Cortes Generales. El texto aprobado por éstas será sometido a referéndum del cuerpo electoral de las provincias comprendidas en el ámbito territorial del proyectado Estatuto. En caso de ser aprobado por la mayoría de los votos válidamente emitidos en cada provincia, procederá su promulgación en los términos del párrafo anterior.
+
+<!-- End Path: /c/21/a/9/p/2/sp/5 · Seq: 669 · Type: subparagraph -->
+
 <!-- End Path: /c/21/a/9/p/2 · Seq: 664 · Type: paragraph -->
 
-<!-- Path: /c/21/a/9/sp/1 · Seq: 665 · Type: subparagraph -->
+<!-- Path: /c/21/a/9/p/3 · Seq: 670 · Type: paragraph -->
 
-1\) º El Gobierno convocará a todos los Diputados y Senadores elegidos en las circunscripciones comprendidas en el ámbito territorial que pretenda acceder al autogobierno, para que se constituyan en Asamblea, a los solos efectos de elaborar el correspondiente proyecto de Estatuto de autonomía, mediante el acuerdo de la mayoría absoluta de sus miembros.
+3\. En los casos de los párrafos 4.º y 5.º del apartado anterior, la no aprobación del proyecto de Estatuto por una o varias provincias no impedirá la constitución entre las restantes de la Comunidad Autónoma proyectada, en la forma que establezca la ley orgánica prevista en el apartado 1 de este artículo.
 
-<!-- End Path: /c/21/a/9/sp/1 · Seq: 665 · Type: subparagraph -->
-
-<!-- Path: /c/21/a/9/p/3 · Seq: 666 · Type: paragraph -->
-
-2.º Aprobado el proyecto de Estatuto por la Asamblea de Parlamentarios, se remitirá a la Comisión Constitucional del Congreso, la cual, dentro del plazo de dos meses, lo examinará con el concurso y asistencia de una delegación de la Asamblea proponente para determinar de común acuerdo su formulación definitiva.
-
-<!-- End Path: /c/21/a/9/p/3 · Seq: 666 · Type: paragraph -->
-
-<!-- Path: /c/21/a/9/p/4 · Seq: 667 · Type: paragraph -->
-
-3.º Si se alcanzare dicho acuerdo, el texto resultante será sometido a referéndum del cuerpo electoral de las provincias comprendidas en el ámbito territorial del proyectado Estatuto.
-
-<!-- End Path: /c/21/a/9/p/4 · Seq: 667 · Type: paragraph -->
-
-<!-- Path: /c/21/a/9/p/5 · Seq: 668 · Type: paragraph -->
-
-4.º Si el proyecto de Estatuto es aprobado en cada provincia por la mayoría de los votos válidamente emitidos, será elevado a las Cortes Generales. Los plenos de ambas Cámaras decidirán sobre el texto mediante un voto de ratificación. Aprobado el Estatuto, el Rey lo sancionará y lo promulgará como ley.
-
-<!-- End Path: /c/21/a/9/p/5 · Seq: 668 · Type: paragraph -->
-
-<!-- Path: /c/21/a/9/p/6 · Seq: 669 · Type: paragraph -->
-
-5.º De no alcanzarse el acuerdo a que se refiere el apartado 2 de este número, el proyecto de Estatuto será tramitado como proyecto de ley ante las Cortes Generales. El texto aprobado por éstas será sometido a referéndum del cuerpo electoral de las provincias comprendidas en el ámbito territorial del proyectado Estatuto. En caso de ser aprobado por la mayoría de los votos válidamente emitidos en cada provincia, procederá su promulgación en los términos del párrafo anterior.
-
-<!-- End Path: /c/21/a/9/p/6 · Seq: 669 · Type: paragraph -->
-
-<!-- Path: /c/21/a/9/sp/2 · Seq: 670 · Type: subparagraph -->
-
-3\) En los casos de los párrafos 4.º y 5.º del apartado anterior, la no aprobación del proyecto de Estatuto por una o varias provincias no impedirá la constitución entre las restantes de la Comunidad Autónoma proyectada, en la forma que establezca la ley orgánica prevista en el apartado 1 de este artículo.
-
-<!-- End Path: /c/21/a/9/sp/2 · Seq: 670 · Type: subparagraph -->
+<!-- End Path: /c/21/a/9/p/3 · Seq: 670 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/9 · Seq: 662 · Type: article -->
 
@@ -4078,31 +4078,31 @@ Sin perjuicio de lo dispuesto en el artículo 123, las sucesivas instancias proc
 
 El control de la actividad de los órganos de las Comunidades Autónomas se ejercerá:
 
-<!-- End Path: /c/21/a/11/p/1 · Seq: 678 · Type: paragraph -->
-
-<!-- Path: /c/21/a/11/sp/1 · Seq: 679 · Type: subparagraph -->
+<!-- Path: /c/21/a/11/p/1/sp/1 · Seq: 679 · Type: subparagraph -->
 
 a) Por el Tribunal Constitucional, el relativo a la constitucionalidad de sus disposiciones normativas con fuerza de ley.
 
-<!-- End Path: /c/21/a/11/sp/1 · Seq: 679 · Type: subparagraph -->
+<!-- End Path: /c/21/a/11/p/1/sp/1 · Seq: 679 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/11/p/2 · Seq: 680 · Type: paragraph -->
+<!-- Path: /c/21/a/11/p/1/sp/2 · Seq: 680 · Type: subparagraph -->
 
 b) Por el Gobierno, previo dictamen del Consejo de Estado, el del ejercicio de funciones delegadas a que se refiere el apartado 2 del artículo 150.
 
-<!-- End Path: /c/21/a/11/p/2 · Seq: 680 · Type: paragraph -->
+<!-- End Path: /c/21/a/11/p/1/sp/2 · Seq: 680 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/11/p/3 · Seq: 681 · Type: paragraph -->
+<!-- Path: /c/21/a/11/p/1/sp/3 · Seq: 681 · Type: subparagraph -->
 
 c) Por la jurisdicción contencioso-administrativa, el de la administración autónoma y sus normas reglamentarias.
 
-<!-- End Path: /c/21/a/11/p/3 · Seq: 681 · Type: paragraph -->
+<!-- End Path: /c/21/a/11/p/1/sp/3 · Seq: 681 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/11/p/4 · Seq: 682 · Type: paragraph -->
+<!-- Path: /c/21/a/11/p/1/sp/4 · Seq: 682 · Type: subparagraph -->
 
 d) Por el Tribunal de Cuentas, el económico y presupuestario.
 
-<!-- End Path: /c/21/a/11/p/4 · Seq: 682 · Type: paragraph -->
+<!-- End Path: /c/21/a/11/p/1/sp/4 · Seq: 682 · Type: subparagraph -->
+
+<!-- End Path: /c/21/a/11/p/1 · Seq: 678 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/11 · Seq: 677 · Type: article -->
 
@@ -4162,49 +4162,49 @@ Un Delegado nombrado por el Gobierno dirigirá la Administración del Estado en 
 
 1\. Los recursos de las Comunidades Autónomas estarán constituidos por:
 
-<!-- End Path: /c/21/a/15/p/1 · Seq: 692 · Type: paragraph -->
-
-<!-- Path: /c/21/a/15/sp/1 · Seq: 693 · Type: subparagraph -->
+<!-- Path: /c/21/a/15/p/1/sp/1 · Seq: 693 · Type: subparagraph -->
 
 a) Impuestos cedidos total o parcialmente por el Estado; recargos sobre impuestos estatales y otras participaciones en los ingresos del Estado.
 
-<!-- End Path: /c/21/a/15/sp/1 · Seq: 693 · Type: subparagraph -->
+<!-- End Path: /c/21/a/15/p/1/sp/1 · Seq: 693 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/15/p/2 · Seq: 694 · Type: paragraph -->
+<!-- Path: /c/21/a/15/p/1/sp/2 · Seq: 694 · Type: subparagraph -->
 
 b) Sus propios impuestos, tasas y contribuciones especiales.
 
-<!-- End Path: /c/21/a/15/p/2 · Seq: 694 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/1/sp/2 · Seq: 694 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/15/p/3 · Seq: 695 · Type: paragraph -->
+<!-- Path: /c/21/a/15/p/1/sp/3 · Seq: 695 · Type: subparagraph -->
 
 c) Transferencias de un Fondo de Compensación interterritorial y otras asignaciones con cargo a los Presupuestos Generales del Estado.
 
-<!-- End Path: /c/21/a/15/p/3 · Seq: 695 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/1/sp/3 · Seq: 695 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/15/p/4 · Seq: 696 · Type: paragraph -->
+<!-- Path: /c/21/a/15/p/1/sp/4 · Seq: 696 · Type: subparagraph -->
 
 d) Rendimientos procedentes de su patrimonio e ingresos de derecho privado.
 
-<!-- End Path: /c/21/a/15/p/4 · Seq: 696 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/1/sp/4 · Seq: 696 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/15/p/5 · Seq: 697 · Type: paragraph -->
+<!-- Path: /c/21/a/15/p/1/sp/5 · Seq: 697 · Type: subparagraph -->
 
 e) El producto de las operaciones de crédito.
 
-<!-- End Path: /c/21/a/15/p/5 · Seq: 697 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/1/sp/5 · Seq: 697 · Type: subparagraph -->
 
-<!-- Path: /c/21/a/15/sp/2 · Seq: 698 · Type: subparagraph -->
+<!-- End Path: /c/21/a/15/p/1 · Seq: 692 · Type: paragraph -->
 
-2\) Las Comunidades Autónomas no podrán en ningún caso adoptar medidas tributarias sobre bienes situados fuera de su territorio o que supongan obstáculo para la libre circulación de mercancías o servicios.
+<!-- Path: /c/21/a/15/p/2 · Seq: 698 · Type: paragraph -->
 
-<!-- End Path: /c/21/a/15/sp/2 · Seq: 698 · Type: subparagraph -->
+2\. Las Comunidades Autónomas no podrán en ningún caso adoptar medidas tributarias sobre bienes situados fuera de su territorio o que supongan obstáculo para la libre circulación de mercancías o servicios.
 
-<!-- Path: /c/21/a/15/p/6 · Seq: 699 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/2 · Seq: 698 · Type: paragraph -->
+
+<!-- Path: /c/21/a/15/p/3 · Seq: 699 · Type: paragraph -->
 
 3\. Mediante ley orgánica podrá regularse el ejercicio de las competencias financieras enumeradas en el precedente apartado 1, las normas para resolver los conflictos que pudieran surgir y las posibles formas de colaboración financiera entre las Comunidades Autónomas y el Estado.
 
-<!-- End Path: /c/21/a/15/p/6 · Seq: 699 · Type: paragraph -->
+<!-- End Path: /c/21/a/15/p/3 · Seq: 699 · Type: paragraph -->
 
 <!-- End Path: /c/21/a/15 · Seq: 691 · Type: article -->
 
@@ -4300,37 +4300,37 @@ El Presidente del Tribunal Constitucional será nombrado entre sus miembros por 
 
 1\. El Tribunal Constitucional tiene jurisdicción en todo el territorio español y es competente para conocer:
 
-<!-- End Path: /c/22/a/3/p/1 · Seq: 715 · Type: paragraph -->
-
-<!-- Path: /c/22/a/3/sp/1 · Seq: 716 · Type: subparagraph -->
+<!-- Path: /c/22/a/3/p/1/sp/1 · Seq: 716 · Type: subparagraph -->
 
 a) Del recurso de inconstitucionalidad contra leyes y disposiciones normativas con fuerza de ley. La declaración de inconstitucionalidad de una norma jurídica con rango de ley, interpretada por la jurisprudencia, afectará a ésta, si bien la sentencia o sentencias recaídas no perderán el valor de cosa juzgada.
 
-<!-- End Path: /c/22/a/3/sp/1 · Seq: 716 · Type: subparagraph -->
+<!-- End Path: /c/22/a/3/p/1/sp/1 · Seq: 716 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/3/p/2 · Seq: 717 · Type: paragraph -->
+<!-- Path: /c/22/a/3/p/1/sp/2 · Seq: 717 · Type: subparagraph -->
 
 b) Del recurso de amparo por violación de los derechos y libertades referidos en el artículo 53, 2, de esta Constitución, en los casos y formas que la ley establezca.
 
-<!-- End Path: /c/22/a/3/p/2 · Seq: 717 · Type: paragraph -->
+<!-- End Path: /c/22/a/3/p/1/sp/2 · Seq: 717 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/3/p/3 · Seq: 718 · Type: paragraph -->
+<!-- Path: /c/22/a/3/p/1/sp/3 · Seq: 718 · Type: subparagraph -->
 
 c) De los conflictos de competencia entre el Estado y las Comunidades Autónomas o de los de éstas entre sí.
 
-<!-- End Path: /c/22/a/3/p/3 · Seq: 718 · Type: paragraph -->
+<!-- End Path: /c/22/a/3/p/1/sp/3 · Seq: 718 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/3/p/4 · Seq: 719 · Type: paragraph -->
+<!-- Path: /c/22/a/3/p/1/sp/4 · Seq: 719 · Type: subparagraph -->
 
 d) De las demás materias que le atribuyan la Constitución o las leyes orgánicas.
 
-<!-- End Path: /c/22/a/3/p/4 · Seq: 719 · Type: paragraph -->
+<!-- End Path: /c/22/a/3/p/1/sp/4 · Seq: 719 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/3/sp/2 · Seq: 720 · Type: subparagraph -->
+<!-- End Path: /c/22/a/3/p/1 · Seq: 715 · Type: paragraph -->
 
-2\) El Gobierno podrá impugnar ante el Tribunal Constitucional las disposiciones y resoluciones adoptadas por los órganos de las Comunidades Autónomas. La impugnación producirá la suspensión de la disposición o resolución recurrida, pero el Tribunal, en su caso, deberá ratificarla o levantarla en un plazo no superior a cinco meses.
+<!-- Path: /c/22/a/3/p/2 · Seq: 720 · Type: paragraph -->
 
-<!-- End Path: /c/22/a/3/sp/2 · Seq: 720 · Type: subparagraph -->
+2\. El Gobierno podrá impugnar ante el Tribunal Constitucional las disposiciones y resoluciones adoptadas por los órganos de las Comunidades Autónomas. La impugnación producirá la suspensión de la disposición o resolución recurrida, pero el Tribunal, en su caso, deberá ratificarla o levantarla en un plazo no superior a cinco meses.
+
+<!-- End Path: /c/22/a/3/p/2 · Seq: 720 · Type: paragraph -->
 
 <!-- End Path: /c/22/a/3 · Seq: 714 · Type: article -->
 
@@ -4342,25 +4342,25 @@ d) De las demás materias que le atribuyan la Constitución o las leyes orgánic
 
 1\. Están legitimados:
 
-<!-- End Path: /c/22/a/4/p/1 · Seq: 722 · Type: paragraph -->
-
-<!-- Path: /c/22/a/4/sp/1 · Seq: 723 · Type: subparagraph -->
+<!-- Path: /c/22/a/4/p/1/sp/1 · Seq: 723 · Type: subparagraph -->
 
 a) Para interponer el recurso de inconstitucionalidad, el Presidente del Gobierno, el Defensor del Pueblo, 50 Diputados, 50 Senadores, los órganos colegiados ejecutivos de las Comunidades Autónomas y, en su caso, las Asambleas de las mismas.
 
-<!-- End Path: /c/22/a/4/sp/1 · Seq: 723 · Type: subparagraph -->
+<!-- End Path: /c/22/a/4/p/1/sp/1 · Seq: 723 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/4/p/2 · Seq: 724 · Type: paragraph -->
+<!-- Path: /c/22/a/4/p/1/sp/2 · Seq: 724 · Type: subparagraph -->
 
 b) Para interponer el recurso de amparo, toda persona natural o jurídica que invoque un interés legítimo, así como el Defensor del Pueblo y el Ministerio Fiscal.
 
-<!-- End Path: /c/22/a/4/p/2 · Seq: 724 · Type: paragraph -->
+<!-- End Path: /c/22/a/4/p/1/sp/2 · Seq: 724 · Type: subparagraph -->
 
-<!-- Path: /c/22/a/4/sp/2 · Seq: 725 · Type: subparagraph -->
+<!-- End Path: /c/22/a/4/p/1 · Seq: 722 · Type: paragraph -->
 
-2\) En los demás casos, la ley orgánica determinará las personas y órganos legitimados.
+<!-- Path: /c/22/a/4/p/2 · Seq: 725 · Type: paragraph -->
 
-<!-- End Path: /c/22/a/4/sp/2 · Seq: 725 · Type: subparagraph -->
+2\. En los demás casos, la ley orgánica determinará las personas y órganos legitimados.
+
+<!-- End Path: /c/22/a/4/p/2 · Seq: 725 · Type: paragraph -->
 
 <!-- End Path: /c/22/a/4 · Seq: 721 · Type: article -->
 
@@ -4664,25 +4664,25 @@ Cuando se remitieran a la Comisión Constitucional del Congreso varios proyectos
 
 Los organismos provisionales autonómicos se considerarán disueltos en los siguientes casos:
 
-<!-- End Path: /c/25/a/7/p/1 · Seq: 772 · Type: paragraph -->
-
-<!-- Path: /c/25/a/7/sp/1 · Seq: 773 · Type: subparagraph -->
+<!-- Path: /c/25/a/7/p/1/sp/1 · Seq: 773 · Type: subparagraph -->
 
 a) Una vez constituidos los órganos que establezcan los Estatutos de Autonomía aprobados conforme a esta Constitución.
 
-<!-- End Path: /c/25/a/7/sp/1 · Seq: 773 · Type: subparagraph -->
+<!-- End Path: /c/25/a/7/p/1/sp/1 · Seq: 773 · Type: subparagraph -->
 
-<!-- Path: /c/25/a/7/p/2 · Seq: 774 · Type: paragraph -->
+<!-- Path: /c/25/a/7/p/1/sp/2 · Seq: 774 · Type: subparagraph -->
 
 b) En el supuesto de que la iniciativa del proceso autonómico no llegara a prosperar por no cumplir los requisitos previstos en el artículo 143.
 
-<!-- End Path: /c/25/a/7/p/2 · Seq: 774 · Type: paragraph -->
+<!-- End Path: /c/25/a/7/p/1/sp/2 · Seq: 774 · Type: subparagraph -->
 
-<!-- Path: /c/25/a/7/p/3 · Seq: 775 · Type: paragraph -->
+<!-- Path: /c/25/a/7/p/1/sp/3 · Seq: 775 · Type: subparagraph -->
 
 c) Si el organismo no hubiera ejercido el derecho que le reconoce la disposición transitoria primera en el plazo de tres años.
 
-<!-- End Path: /c/25/a/7/p/3 · Seq: 775 · Type: paragraph -->
+<!-- End Path: /c/25/a/7/p/1/sp/3 · Seq: 775 · Type: subparagraph -->
+
+<!-- End Path: /c/25/a/7/p/1 · Seq: 772 · Type: paragraph -->
 
 <!-- End Path: /c/25/a/7 · Seq: 771 · Type: article -->
 
@@ -4738,31 +4738,31 @@ A los tres años de la elección por vez primera de los miembros del Tribunal Co
 
 <!-- Path: /c/26 · Seq: 783 · Type: chapter -->
 
-<!-- End Path: /c/26 · Seq: 783 · Type: chapter -->
+<!-- Path: /c/26/p/1 · Seq: 784 · Type: paragraph -->
 
-<!-- Path: /p/3 · Seq: 784 · Type: preambulo -->
+1\. Queda derogada la Ley 1/1977, de 4 de enero, para la Reforma Política, así como, en tanto en cuanto no estuvieran ya derogadas por la anteriormente mencionada Ley, la de Principios del Movimiento Nacional, de 17 de mayo de 1958; el Fuero de los Españoles, de 17 de julio de 1945; el del Trabajo, de 9 de marzo de 1938; la Ley Constitutiva de las Cortes, de 17 de julio de 1942; la Ley de Sucesión en la Jefatura del Estado, de 26 de julio de 1947, todas ellas modificadas por la Ley Orgánica del Estado, de 10 de enero de 1967, y en los mismos términos esta última y la de Referéndum Nacional de 22 de octubre de 1945.
 
-Queda derogada la Ley 1/1977, de 4 de enero, para la Reforma Política, así como, en tanto en cuanto no estuvieran ya derogadas por la anteriormente mencionada Ley, la de Principios del Movimiento Nacional, de 17 de mayo de 1958; el Fuero de los Españoles, de 17 de julio de 1945; el del Trabajo, de 9 de marzo de 1938; la Ley Constitutiva de las Cortes, de 17 de julio de 1942; la Ley de Sucesión en la Jefatura del Estado, de 26 de julio de 1947, todas ellas modificadas por la Ley Orgánica del Estado, de 10 de enero de 1967, y en los mismos términos esta última y la de Referéndum Nacional de 22 de octubre de 1945.
+<!-- End Path: /c/26/p/1 · Seq: 784 · Type: paragraph -->
 
-<!-- End Path: /p/3 · Seq: 784 · Type: preambulo -->
-
-<!-- Path: /c/26/p/1 · Seq: 785 · Type: paragraph -->
+<!-- Path: /c/26/p/2 · Seq: 785 · Type: paragraph -->
 
 2\. En tanto en cuanto pudiera conservar alguna vigencia, se considera definitivamente derogada la Ley de 25 de octubre de 1839 en lo que pudiera afectar a las provincias de Álava, Guipúzcoa y Vizcaya.
 
-<!-- End Path: /c/26/p/1 · Seq: 785 · Type: paragraph -->
+<!-- End Path: /c/26/p/2 · Seq: 785 · Type: paragraph -->
 
-<!-- Path: /c/26/p/2 · Seq: 786 · Type: paragraph -->
+<!-- Path: /c/26/p/3 · Seq: 786 · Type: paragraph -->
 
 En los mismos términos se considera definitivamente derogada la Ley de 21 de julio de 1876.
 
-<!-- End Path: /c/26/p/2 · Seq: 786 · Type: paragraph -->
+<!-- End Path: /c/26/p/3 · Seq: 786 · Type: paragraph -->
 
-<!-- Path: /c/26/p/3 · Seq: 787 · Type: paragraph -->
+<!-- Path: /c/26/p/4 · Seq: 787 · Type: paragraph -->
 
 3\. Asimismo quedan derogadas cuantas disposiciones se opongan a lo establecido en esta Constitución.
 
-<!-- End Path: /c/26/p/3 · Seq: 787 · Type: paragraph -->
+<!-- End Path: /c/26/p/4 · Seq: 787 · Type: paragraph -->
+
+<!-- End Path: /c/26 · Seq: 783 · Type: chapter -->
 
 ## DISPOSICIÓN FINAL
 

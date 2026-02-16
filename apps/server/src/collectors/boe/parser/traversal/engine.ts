@@ -468,10 +468,49 @@ const handleSubparagraph = (
   }
 
   if (state.currentChapter !== undefined && state.currentArticle !== undefined) {
-    const key = `${state.currentChapter}:${state.currentArticle}`;
+    const articleKey = `${state.currentChapter}:${state.currentArticle}`;
+    const currentParagraphIndex = state.currentParagraphByArticle[articleKey];
+
+    if (currentParagraphIndex !== undefined) {
+      const paragraphKey = `${articleKey}:${currentParagraphIndex}`;
+      const [subparagraphIndex, nextSubparagraphs] = incrementCounter(
+        state.subparagraphByParagraph,
+        paragraphKey,
+      );
+      return {
+        state: {
+          ...state,
+          subparagraphByParagraph: nextSubparagraphs,
+        },
+        emits: [
+          makeSeed(
+            metadata,
+            [
+              Path.chapter(state.currentChapter),
+              Path.article(state.currentArticle),
+              Path.paragraph(currentParagraphIndex),
+              Path.subparagraph(subparagraphIndex),
+            ],
+            token.content,
+            "subparagraph",
+            {
+              legalNodePath:
+                state.currentArticleLegalPath !== undefined
+                  ? LegalNodePathString(
+                      `${state.currentArticleLegalPath}/p/${currentParagraphIndex}/sp/${subparagraphIndex}`,
+                    )
+                  : undefined,
+              nodeNumber: token.marker,
+              nodeTitle: state.currentArticleTitle,
+            },
+          ),
+        ],
+      };
+    }
+
     const [subparagraphIndex, nextSubparagraphs] = incrementCounter(
       state.subparagraphByArticle,
-      key,
+      articleKey,
     );
     return {
       state: {
@@ -554,10 +593,15 @@ const emitParagraph = (
   if (state.currentChapter !== undefined && state.currentArticle !== undefined) {
     const key = `${state.currentChapter}:${state.currentArticle}`;
     const [paragraphIndex, nextParagraphs] = incrementCounter(state.paragraphByArticle, key);
+    const nextCurrentParagraphByArticle = {
+      ...state.currentParagraphByArticle,
+      [key]: paragraphIndex,
+    };
     return {
       state: {
         ...state,
         paragraphByArticle: nextParagraphs,
+        currentParagraphByArticle: nextCurrentParagraphByArticle,
       },
       emits: [
         makeSeed(

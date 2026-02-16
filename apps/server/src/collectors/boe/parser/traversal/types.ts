@@ -34,6 +34,8 @@ interface SharedState {
   readonly articleByChapter: Record<string, number>;
   readonly paragraphByArticle: Record<string, number>;
   readonly subparagraphByArticle: Record<string, number>;
+  readonly subparagraphByParagraph: Record<string, number>;
+  readonly currentParagraphByArticle: Record<string, number>;
   readonly tableByArticle: Record<string, number>;
   readonly subsectionByChapter: Record<string, number>;
   readonly chapterParagraphByChapter: Record<string, number>;
@@ -83,6 +85,8 @@ export const initialState = (): MainState => ({
   articleByChapter: {},
   paragraphByArticle: {},
   subparagraphByArticle: {},
+  subparagraphByParagraph: {},
+  currentParagraphByArticle: {},
   tableByArticle: {},
   subsectionByChapter: {},
   chapterParagraphByChapter: {},

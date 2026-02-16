@@ -84,7 +84,7 @@ export const classifyBlock = (block: LinearBlock): ClassifiedBlock => {
 
   if (cls === "parrafo_2") {
     const subparagraph = normalizeSubparagraph(content);
-    if (subparagraph.marker.length > 0) {
+    if (isAlphabeticMarker(subparagraph.marker) || isOrdinalMarker(subparagraph.marker)) {
       return {
         _tag: "subparagraph",
         marker: subparagraph.marker,
@@ -94,7 +94,7 @@ export const classifyBlock = (block: LinearBlock): ClassifiedBlock => {
 
     return {
       _tag: "paragraph",
-      content: subparagraph.content,
+      content,
     };
   }
 
@@ -107,6 +107,15 @@ export const classifyBlock = (block: LinearBlock): ClassifiedBlock => {
   }
 
   if (cls === "parrafo") {
+    const subparagraph = normalizeSubparagraph(content);
+    if (isAlphabeticMarker(subparagraph.marker) || isOrdinalMarker(subparagraph.marker)) {
+      return {
+        _tag: "subparagraph",
+        marker: subparagraph.marker,
+        content: subparagraph.content,
+      };
+    }
+
     return { _tag: "paragraph", content };
   }
 
@@ -145,3 +154,6 @@ export const toTextNode = (token: ClassifiedBlock): BoeTextNode => {
       return { _tag: "raw", content: token.content };
   }
 };
+
+const isAlphabeticMarker = (marker: string): boolean => /^[a-z]$/i.test(marker);
+const isOrdinalMarker = (marker: string): boolean => /^\d+[ªº]$/i.test(marker);
