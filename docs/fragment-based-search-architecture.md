@@ -126,7 +126,7 @@ USING gin(to_tsvector('spanish', content));
 ```typescript
 // services/fragment-embedding/service.ts
 import { Effect, Layer } from "effect";
-import { JinaService } from "~/services/jina";
+import { EmbeddingService } from "~/services/embedding";
 import { DatabaseService } from "@canary/db/effect";
 
 // Domain models
@@ -147,9 +147,9 @@ export interface EmbeddedFragment extends Fragment {
 export class FragmentEmbeddingService extends Effect.Service<FragmentEmbeddingService>()(
   "FragmentEmbeddingService",
   {
-    dependencies: [JinaService.Default, DatabaseService.Default],
+    dependencies: [EmbeddingService.Default, DatabaseService.Default],
     effect: Effect.gen(function* () {
-      const jina = yield* JinaService;
+      const embedding = yield* EmbeddingService;
       const db = yield* DatabaseService;
 
       // ───────────────────────────────────────
@@ -159,7 +159,7 @@ export class FragmentEmbeddingService extends Effect.Service<FragmentEmbeddingSe
       const embedFragment = Effect.fn("FragmentEmbedding.embedFragment")((fragment: Fragment) =>
         Effect.gen(function* () {
           // Use Jina's late_chunking for multi-vector per document
-          const result = yield* jina.embed(fragment.content);
+          const result = yield* embedding.embed(fragment.content);
 
           // Handle both single and multi-vector results
           if (Array.isArray(result)) {
@@ -267,9 +267,9 @@ import { Effect, Stream, Schedule, Chunk } from "effect";
 export class FragmentPipeline extends Effect.Service<FragmentPipeline>()(
   "FragmentPipeline",
   {
-    dependencies: [JinaService.Default, DatabaseService.Default],
+    dependencies: [EmbeddingService.Default, DatabaseService.Default],
     effect: Effect.gen(function* () {
-      const jina = yield* JinaService;
+      const embedding = yield* EmbeddingService;
       const db = yield* DatabaseService;
 
       // ───────────────────────────────────────
@@ -295,7 +295,7 @@ export class FragmentPipeline extends Effect.Service<FragmentPipeline>()(
           Stream.mapEffect((batch) =>
             Effect.gen(function* () {
               const contents = Chunk.toArray(batch).map((f) => f.content);
-              const embeddings = yield* jina.embed(contents);
+              const embeddings = yield* embedding.embed(contents);
 
               return Chunk.map(batch, (fragment, idx) => ({
                 ...fragment,
@@ -380,8 +380,8 @@ const embedFragmentActivity = Workflow.makeActivity({
   name: "embedFragment",
   execute: (fragments: Fragment[]) =>
     Effect.gen(function* () {
-      const jina = yield* JinaService;
-      return yield* jina.embed(fragments.map((f) => f.content));
+      const embedding = yield* EmbeddingService;
+      return yield* embedding.embed(fragments.map((f) => f.content));
     }),
   retryPolicy: Schedule.exponential("100 millis").pipe(Schedule.intersect(Schedule.recurs(3))),
 });
@@ -605,7 +605,7 @@ const hierarchicalChunkingStrategy = (document: LegalNode): Fragment[] => {
 ```typescript
 // services/search/service.ts
 import { Effect, Option } from "effect";
-import { JinaService } from "~/services/jina";
+import { EmbeddingService } from "~/services/embedding";
 
 export interface SearchQuery {
   readonly query: string;
@@ -637,9 +637,9 @@ export interface SearchResult {
 }
 
 export class SearchService extends Effect.Service<SearchService>()("SearchService", {
-  dependencies: [JinaService.Default, DatabaseService.Default],
+  dependencies: [EmbeddingService.Default, DatabaseService.Default],
   effect: Effect.gen(function* () {
-    const jina = yield* JinaService;
+    const embedding = yield* EmbeddingService;
     const db = yield* DatabaseService;
 
     // ───────────────────────────────────────
@@ -649,7 +649,7 @@ export class SearchService extends Effect.Service<SearchService>()("SearchServic
     const vectorSearch = Effect.fn("Search.vector")((query: SearchQuery) =>
       Effect.gen(function* () {
         // Embed query
-        const queryEmb = yield* jina.embed(query.query);
+        const queryEmb = yield* embedding.embed(query.query);
         const embedding = Array.isArray(queryEmb) ? queryEmb[0].full : queryEmb.full;
 
         // Build base query
@@ -833,7 +833,7 @@ const findHighlights = (
 const findSemanticHighlights = async (
   text: string,
   queryEmbedding: number[],
-  jina: JinaService,
+  embedding: EmbeddingService,
 ) => {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
 

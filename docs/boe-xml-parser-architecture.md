@@ -381,16 +381,18 @@ const processBoeDocument = Effect.fn("processBoeDocument")((xmlUrl: string) =>
     const fragments = yield* parser.parseToFragments(xml);
 
     // Embed each fragment
-    const jina = yield* JinaService;
+    const embedding = yield* EmbeddingService;
 
     const embeddedFragments = yield* Effect.forEach(
       fragments,
       (fragment) =>
         Effect.gen(function* () {
-          const embedding = yield* jina.embed(fragment.content);
+          const embeddingResult = yield* embedding.embed(fragment.content);
           return {
             ...fragment,
-            embedding: Array.isArray(embedding) ? embedding[0].full! : embedding.full!,
+            embedding: Array.isArray(embeddingResult)
+              ? embeddingResult[0].full!
+              : embeddingResult.full!,
           };
         }),
       { concurrency: 5 },
