@@ -24,7 +24,10 @@ export function createFragmentBuilder(
   const make = (blocks: ReadonlyArray<LinearBlock>): FragmentBuilder => ({
     chapter: (title) => make([...blocks, paragraphBlock("capitulo", title)]),
     article: ({ number, title }) =>
-      make([...blocks, paragraphBlock("articulo", [number, title].filter(Boolean).join(" "))]),
+      make([
+        ...blocks,
+        paragraphBlock("articulo", title ? `Art. ${number}: ${title}` : `Art. ${number}`),
+      ]),
     paragraph: (content) => make([...blocks, paragraphBlock("parrafo", content)]),
     subparagraph: ({ marker, content }) =>
       make([...blocks, paragraphBlock("parrafo_2", `${marker}) ${content}`)]),

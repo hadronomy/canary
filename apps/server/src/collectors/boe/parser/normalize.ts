@@ -41,7 +41,7 @@ export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
 
 export function normalizeSubparagraph(text: string): NormalizedSubparagraph {
   const cleaned = normalizeTextContent(text);
-  const ordinalMatch = cleaned.match(/^(\d+)\.\s*([ªº])\s*(.*)$/i);
+  const ordinalMatch = cleaned.match(/^(\d+)\.?\s*([ªº])\s*(.*)$/i);
   if (ordinalMatch !== null) {
     return {
       marker: normalizeTextContent(`${ordinalMatch[1] ?? ""}${ordinalMatch[2] ?? ""}`),
