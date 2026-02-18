@@ -12,8 +12,8 @@
     "@effect/cli": "^0.73.0",
     "@effect/platform": "^0.94.4",
     "@effect/platform-bun": "^0.87.0",
-    "@opentui/core": "^0.1.74",
-    "@opentui/react": "^0.1.74",
+    "@opentui/core": "^0.1.80",
+    "@opentui/react": "^0.1.80",
     "react": "^19.2.3"
   },
   "devDependencies": {
