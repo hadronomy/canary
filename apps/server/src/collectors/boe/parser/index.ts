@@ -5,6 +5,7 @@ export * from "./format";
 export * from "./fragments";
 export * from "./invariants";
 export * from "./linearize";
+export * from "./ltree-path";
 export * from "./normalize";
 export * from "./query";
 export * from "./service";

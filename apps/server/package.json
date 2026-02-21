@@ -36,6 +36,7 @@
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@types/bun": "catalog:",
+    "fast-check": "^4.5.3",
     "tsdown": "^0.16.5",
     "typescript": "catalog:"
   }
