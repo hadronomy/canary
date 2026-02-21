@@ -1,4 +1,6 @@
-import type { BoeFragment, LegalNodePathString } from "./types";
+import { normalizeLegalPathSegment } from "./normalize";
+import { parseLegalPath, renderLegalPath } from "./path-query";
+import { type BoeFragment, type LegalNodePathString as LegalNodePath } from "./types";
 
 export type DispositionScope =
   | "general"
@@ -9,7 +11,7 @@ export type DispositionScope =
 
 export type LegalQuery =
   | { readonly _tag: "All" }
-  | { readonly _tag: "ByLegalPath"; readonly path: string }
+  | { readonly _tag: "ByLegalPath"; readonly path: LegalNodePath | string }
   | {
       readonly _tag: "Article";
       readonly article: string;
@@ -27,12 +29,12 @@ export type LegalQueryResult =
   | {
       readonly _tag: "Match";
       readonly fragments: ReadonlyArray<BoeFragment>;
-      readonly paths: ReadonlyArray<LegalNodePathString>;
+      readonly paths: ReadonlyArray<LegalNodePath>;
     }
   | {
       readonly _tag: "Ambiguous";
       readonly candidates: ReadonlyArray<{
-        readonly basePath: LegalNodePathString;
+        readonly basePath: LegalNodePath;
         readonly fragments: ReadonlyArray<BoeFragment>;
       }>;
     }
@@ -40,7 +42,7 @@ export type LegalQueryResult =
 
 export const Query = {
   all: (): LegalQuery => ({ _tag: "All" }),
-  byLegalPath: (path: string): LegalQuery => ({ _tag: "ByLegalPath", path }),
+  byLegalPath: (path: LegalNodePath | string): LegalQuery => ({ _tag: "ByLegalPath", path }),
   article: (
     article: string,
     options?: { readonly paragraph?: number; readonly scope?: DispositionScope },
@@ -64,9 +66,9 @@ export const Query = {
 
 export const selectByLegalPath = (
   fragments: ReadonlyArray<BoeFragment>,
-  legalPath: string,
+  legalPath: LegalNodePath | string,
 ): ReadonlyArray<BoeFragment> => {
-  const canonical = legalPath.endsWith("/") ? legalPath.slice(0, -1) : legalPath;
+  const canonical = toCanonicalLegalPath(legalPath);
   return fragments.filter((fragment) => {
     if (fragment.legalNodePath === undefined) {
       return false;
@@ -170,8 +172,8 @@ const withParagraphFilter = (
 const findArticleCandidates = (
   fragments: ReadonlyArray<BoeFragment>,
   articleKey: string,
-): ReadonlyArray<LegalNodePathString> => {
-  const bases = new Set<LegalNodePathString>();
+): ReadonlyArray<LegalNodePath> => {
+  const bases = new Set<LegalNodePath>();
 
   for (const fragment of fragments) {
     if (fragment.legalNodePath === undefined) {
@@ -190,35 +192,35 @@ const findArticleCandidates = (
 const toScopedArticlePath = (
   articleKey: string,
   scope: DispositionScope | undefined,
-): LegalNodePathString | undefined => {
-  if (scope === undefined || scope === "general") {
-    return scope === "general" ? (`/article/${articleKey}` as LegalNodePathString) : undefined;
-  }
-
-  return `/${scope}/article/${articleKey}` as LegalNodePathString;
-};
-
-const articleBasePath = (path: LegalNodePathString): LegalNodePathString | undefined => {
-  const value = String(path);
-  const markerIndex = value.indexOf("/article/");
-  if (markerIndex < 0) {
+): LegalNodePath | undefined => {
+  if (scope === undefined) {
     return undefined;
   }
 
-  const suffix = value.slice(markerIndex + "/article/".length);
-  const firstSegment = suffix.split("/")[0];
-  if (firstSegment === undefined || firstSegment.length === 0) {
+  const segments =
+    scope === "general"
+      ? [{ _tag: "article", value: articleKey } as const]
+      : [{ _tag: "scope", value: scope } as const, { _tag: "article", value: articleKey } as const];
+
+  return renderLegalPath({ segments });
+};
+
+const articleBasePath = (path: LegalNodePath): LegalNodePath | undefined => {
+  const parsed = parseLegalPath(path);
+  const scopeSegment = parsed.segments.find((segment) => segment._tag === "scope");
+  const articleSegment = parsed.segments.find((segment) => segment._tag === "article");
+
+  if (articleSegment === undefined) {
     return undefined;
   }
 
-  const prefix = value.slice(0, markerIndex);
-  return `${prefix}/article/${firstSegment}` as LegalNodePathString;
+  const segments = scopeSegment === undefined ? [articleSegment] : [scopeSegment, articleSegment];
+
+  return renderLegalPath({ segments });
 };
 
-const uniqueLegalPaths = (
-  fragments: ReadonlyArray<BoeFragment>,
-): ReadonlyArray<LegalNodePathString> => {
-  const set = new Set<LegalNodePathString>();
+const uniqueLegalPaths = (fragments: ReadonlyArray<BoeFragment>): ReadonlyArray<LegalNodePath> => {
+  const set = new Set<LegalNodePath>();
   for (const fragment of fragments) {
     if (fragment.legalNodePath !== undefined) {
       set.add(fragment.legalNodePath);
@@ -227,11 +229,10 @@ const uniqueLegalPaths = (
   return [...set];
 };
 
-const normalizeLegalToken = (raw: string): string => {
-  return raw
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
+function normalizeLegalToken(raw: string): string {
+  return normalizeLegalPathSegment(raw);
+}
+
+function toCanonicalLegalPath(path: LegalNodePath | string): string {
+  return String(renderLegalPath(parseLegalPath(path)));
+}

@@ -13,6 +13,15 @@ export const normalizeTextContent = (text: string): string => {
   return text.replace(/\s+/g, " ").trim();
 };
 
+export function normalizeLegalPathSegment(value: string): string {
+  return normalizeTextContent(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function normalizeChapterHeader(text: string): NormalizedChapterHeader {
   const isSpecial = text.includes("[encabezado]");
   return {

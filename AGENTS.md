@@ -56,3 +56,6 @@ Use this as an important reference implementation with opentui best practices.
 ## Code style
 
 - Always use the path alias for relative paths `~/*` -> `./src/*`
+- Prefer `function` declarations for named reusable functions.
+- Exception: when defining Effect-based service/runtime operations, prefer `const x = Effect.fn("...")` for traceable spans and ergonomic composition.
+- In test directories, extract repeated fixture/parser helpers into a local shared module (for example `test/collectors/<domain>/common.ts`) and import from there.

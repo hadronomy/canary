@@ -1,19 +1,10 @@
 import { remark } from "remark";
 
-import type {
-  BoeFragment,
-  CanonicalFragmentPathQuery,
-  FragmentPathQuery,
-  FragmentPathScope,
-} from "./types";
+import { isFragmentPathQuery, toCanonicalFragmentPathQuery } from "./path-query";
+import type { BoeMetadata, BoeFragment, FragmentPathQuery } from "./types";
 import { MarkdownString } from "./types";
 
-const FRAGMENT_PATH_SCOPES = [
-  "p",
-  "c",
-  "x",
-  "t",
-] as const satisfies ReadonlyArray<FragmentPathScope>;
+export { isFragmentPathQuery };
 
 const markdownProcessor = remark();
 type RemarkRoot = Parameters<typeof markdownProcessor.stringify>[0];
@@ -28,39 +19,13 @@ type RemarkList = Extract<RemarkRootContent, { type: "list" }>;
 type RemarkThematicBreak = Extract<RemarkRootContent, { type: "thematicBreak" }>;
 type RemarkHtml = Extract<RemarkRootContent, { type: "html" }>;
 
-export const isFragmentPathQuery = (value: string): value is FragmentPathQuery => {
-  if (value === "/") {
-    return true;
-  }
-
-  return FRAGMENT_PATH_SCOPES.some((scope) => value === `/${scope}` || value === `/${scope}/`);
-};
-
-type CanonicalizePathQuery<Q extends FragmentPathQuery> = Q extends "/"
-  ? "/"
-  : Q extends `/${FragmentPathScope}/`
-    ? Q
-    : `${Q}/`;
-
-export function normalizeFragmentPathQuery<Q extends FragmentPathQuery>(
-  query: Q,
-): CanonicalizePathQuery<Q> {
-  if (query === "/") {
-    return "/" as CanonicalizePathQuery<Q>;
-  }
-
-  if (query.endsWith("/")) {
-    return query as CanonicalizePathQuery<Q>;
-  }
-
-  return `${query}/` as CanonicalizePathQuery<Q>;
-}
+export const normalizeFragmentPathQuery = toCanonicalFragmentPathQuery;
 
 export const selectFragmentsByPathQuery = (
   fragments: ReadonlyArray<BoeFragment>,
   query: FragmentPathQuery,
 ): ReadonlyArray<BoeFragment> => {
-  const canonical = normalizeFragmentPathQuery(query) as CanonicalFragmentPathQuery;
+  const canonical = toCanonicalFragmentPathQuery(query);
   if (canonical === "/") {
     return fragments;
   }
@@ -71,10 +36,11 @@ export const selectFragmentsByPathQuery = (
 export const formatFragmentsAsMarkdown = (
   fragments: ReadonlyArray<BoeFragment>,
   query: FragmentPathQuery,
+  metadataOverride?: BoeMetadata,
 ): MarkdownString => {
-  const canonical = normalizeFragmentPathQuery(query) as CanonicalFragmentPathQuery;
+  const canonical = toCanonicalFragmentPathQuery(query);
   const selected = selectFragmentsByPathQuery(fragments, canonical);
-  const metadata = selected[0]?.metadata ?? fragments[0]?.metadata;
+  const metadata = metadataOverride ?? selected[0]?.metadata ?? fragments[0]?.metadata;
 
   const children: Array<RemarkRootContent> = [];
 

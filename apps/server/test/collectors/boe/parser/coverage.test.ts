@@ -4,20 +4,21 @@ import { Effect, Either } from "effect";
 
 import {
   BoeXmlParser,
-  classifyBlock,
   evaluateQuery,
   extractTableText,
   formatFragmentsAsMarkdown,
   linearizeOrderedTextBlocks,
   normalizeSubparagraph,
+  path,
   Query,
   selectByLegalPath,
-  toTextNode,
 } from "~/collectors/boe/parser";
 import { normalizeArticleHeader, normalizeChapterHeader } from "~/collectors/boe/parser/normalize";
+import { classifyBlock, toTextNode } from "~/collectors/boe/parser/traversal";
 
 import {
   boeParserMetadata as parserMetadata,
+  parseBoe,
   parseBoeDocument as parseDocument,
   parseBoeFragments as parseToFragments,
   readBoeFixture as readFixture,
@@ -219,15 +220,16 @@ describe("Parser edge-case coverage", () => {
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
 
-    const selected = selectByLegalPath(fragments, "/article/1");
+    const selected = selectByLegalPath(fragments, path<"legal">`/article/${1}`);
     expect(selected).toEqual([]);
   });
 
   test("queryLegal with paragraph filter returns NotFound when no match", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
       BoeXmlParser.queryLegal({
-        xml,
+        document,
         query: Query.article("1", { paragraph: 999 }),
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
@@ -388,7 +390,7 @@ describe("Parser edge-case coverage", () => {
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
 
-    const selected = selectByLegalPath(fragments, "/article/1");
+    const selected = selectByLegalPath(fragments, path<"legal">`/article/${1}`);
     expect(selected).toEqual([]);
   });
 
@@ -521,10 +523,11 @@ describe("Parser edge-case coverage", () => {
 
   test("queryLegal handles ByLegalPath query", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
       BoeXmlParser.queryLegal({
-        xml,
-        query: Query.byLegalPath("/article/1"),
+        document,
+        query: Query.byLegalPath(path<"legal">`/article/${1}`),
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
 
@@ -536,9 +539,10 @@ describe("Parser edge-case coverage", () => {
 
   test("queryLegal handles All query", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
       BoeXmlParser.queryLegal({
-        xml,
+        document,
         query: Query.all(),
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );

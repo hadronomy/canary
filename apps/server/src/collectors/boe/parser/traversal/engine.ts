@@ -1,7 +1,11 @@
 import type { NodeType } from "@canary/db/schema/legislation";
 
+import { legalScopeSegments, specialSectionNodeType } from "../legal-scope";
+import { normalizeLegalPathSegment } from "../normalize";
+import { renderLegalPath } from "../path-query";
 import type {
   BoeMetadata,
+  LegalPathSegment,
   LegalNodePathString as LegalNodePath,
   NodePath,
   ParsingStrategy,
@@ -89,7 +93,7 @@ const handleTitleHeading = (
     currentChapter: chapterIndex,
     currentArticle: undefined,
     currentArticleLegalPath: undefined,
-    legalArticleScopeBase: "/article",
+    legalArticleScopeBase: [],
   };
 
   return {
@@ -180,7 +184,7 @@ const handleAnnexNumber = (
     currentAnnex: annexIndex,
     currentArticle: undefined,
     currentArticleLegalPath: undefined,
-    legalArticleScopeBase: `/annex/${annexIndex}/article`,
+    legalArticleScopeBase: annexLegalScopeBase(annexIndex),
   };
 
   return {
@@ -235,7 +239,7 @@ const handleChapter = (
         currentAnnex: annexIndex,
         currentArticle: undefined,
         currentArticleLegalPath: undefined,
-        legalArticleScopeBase: `/annex/${annexIndex}/article`,
+        legalArticleScopeBase: annexLegalScopeBase(annexIndex),
       },
       emits: [
         makeSeed(metadata, [Path.annex(annexIndex)], token.title, "annex", {
@@ -266,7 +270,7 @@ const handleChapter = (
   }
 
   const chapterIndex = state.chapterIndex + 1;
-  const legalArticleScopeBase = chapterLegalScopeBase(token.title, token.isSpecial);
+  const legalArticleScopeBase = legalScopeSegments(token.title, token.isSpecial);
   const nextState: MainState = {
     ...state,
     mode: "main",
@@ -284,7 +288,7 @@ const handleChapter = (
         metadata,
         [Path.chapter(chapterIndex)],
         token.title,
-        toSpecialSectionNodeType(token.title, token.isSpecial),
+        specialSectionNodeType(token.title, token.isSpecial),
         {
           nodeTitle: token.title,
         },
@@ -703,7 +707,7 @@ const ensureAnnexState = (state: BuildState): AnnexState => {
     currentAnnex: annexIndex,
     currentArticle: undefined,
     currentArticleLegalPath: undefined,
-    legalArticleScopeBase: `/annex/${annexIndex}/article`,
+    legalArticleScopeBase: annexLegalScopeBase(annexIndex),
   };
 };
 
@@ -736,57 +740,24 @@ const makeSeed = (
   metadata,
 });
 
-const toLegalArticlePath = (rawNumber: string, scopeBase: string): LegalNodePath | undefined => {
-  const cleaned = rawNumber
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+const toLegalArticlePath = (
+  rawNumber: string,
+  scopeBase: ReadonlyArray<LegalPathSegment>,
+): LegalNodePath | undefined => {
+  const cleaned = normalizeLegalPathSegment(rawNumber);
 
   if (cleaned.length === 0) {
     return undefined;
   }
 
-  return LegalNodePathString(`${scopeBase}/${cleaned}`);
+  return renderLegalPath({
+    segments: [...scopeBase, { _tag: "article", value: cleaned }],
+  });
 };
 
-const chapterLegalScopeBase = (title: string, isSpecial: boolean): string => {
-  const normalized = title
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase();
-
-  if (!isSpecial) {
-    return "/article";
-  }
-
-  if (normalized.includes("ADICIONAL")) {
-    return "/disposicion-adicional/article";
-  }
-
-  if (normalized.includes("TRANSITORIA")) {
-    return "/disposicion-transitoria/article";
-  }
-
-  if (normalized.includes("FINAL")) {
-    return "/disposicion-final/article";
-  }
-
-  if (normalized.includes("DEROGATORIA")) {
-    return "/disposicion-derogatoria/article";
-  }
-
-  return "/article";
-};
-
-const toSpecialSectionNodeType = (title: string, isSpecial: boolean): NodeType => {
-  const normalized = title.toUpperCase();
-  if (isSpecial && normalized.includes("TRANSITORIA")) {
-    return "disposicion_transitoria";
-  }
-  if (isSpecial && normalized.includes("FINAL")) {
-    return "disposicion_final";
-  }
-  return "chapter";
-};
+function annexLegalScopeBase(annexIndex: number): ReadonlyArray<LegalPathSegment> {
+  return [
+    { _tag: "custom", value: "annex" },
+    { _tag: "custom", value: String(annexIndex) },
+  ];
+}

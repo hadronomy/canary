@@ -14,6 +14,7 @@ import {
   NodePathCollisionError,
   normalizeFragmentPathQuery,
   normalizeSubparagraph,
+  path,
   Query,
   selectByLegalPath,
   selectFragmentsByPathQuery,
@@ -118,19 +119,18 @@ describe("Parser formatting and path filters", () => {
     expect(selected.length).toBe(fragments.length);
   });
 
-  test("formatFragmentsAsMarkdown handles fragments without metadata title fallback", () => {
-    const fragmentsWithMetadata: Parameters<typeof formatFragmentsAsMarkdown>[0] = [
+  test("formatFragmentsAsMarkdown supports document-level metadata override", () => {
+    const fragments: Parameters<typeof formatFragmentsAsMarkdown>[0] = [
       {
         content: "Test content",
         contentNormalized: "Test content",
         nodePath: NodePathString("/p/1"),
         nodeType: "paragraph",
         sequenceIndex: 0,
-        metadata: parserMetadata,
       },
     ];
 
-    const markdown = formatFragmentsAsMarkdown(fragmentsWithMetadata, "/");
+    const markdown = formatFragmentsAsMarkdown(fragments, "/", parserMetadata);
     expect(markdown).toContain("# Documento de prueba");
     expect(markdown).toContain("Test content");
   });
@@ -143,7 +143,6 @@ describe("Parser formatting and path filters", () => {
         nodePath: NodePathString("/p/1"),
         nodeType: "paragraph",
         sequenceIndex: 0,
-        metadata: parserMetadata,
       },
     ];
 
@@ -346,7 +345,7 @@ describe("Parser query behavior and error handling", () => {
   });
 
   test("Query.byLegalPath() returns ByLegalPath query", () => {
-    const query = Query.byLegalPath("/article/1");
+    const query = Query.byLegalPath(path<"legal">`/article/${1}`);
     expect(query._tag).toBe("ByLegalPath");
     if (query._tag === "ByLegalPath") {
       expect(query.path).toBe("/article/1");
@@ -367,7 +366,7 @@ describe("Parser query behavior and error handling", () => {
   test("evaluateQuery handles ByLegalPath with existing path", async () => {
     const xml = await readFixture("constitution-1978.xml");
     const fragments = await parseToFragments(xml);
-    const result = evaluateQuery(fragments, Query.byLegalPath("/article/1"));
+    const result = evaluateQuery(fragments, Query.byLegalPath(path<"legal">`/article/${1}`));
 
     expect(result._tag).toBe("Match");
     if (result._tag === "Match") {
@@ -378,7 +377,10 @@ describe("Parser query behavior and error handling", () => {
   test("evaluateQuery handles ByLegalPath with non-existing path", async () => {
     const xml = await readFixture("constitution-1978.xml");
     const fragments = await parseToFragments(xml);
-    const result = evaluateQuery(fragments, Query.byLegalPath("/article/nonexistent"));
+    const result = evaluateQuery(
+      fragments,
+      Query.byLegalPath(path<"legal">`/article/${"nonexistent"}`),
+    );
 
     expect(result._tag).toBe("NotFound");
   });
@@ -387,7 +389,7 @@ describe("Parser query behavior and error handling", () => {
     const xml = await readFixture("constitution-1978.xml");
     const fragments = await parseToFragments(xml);
 
-    const selected = selectByLegalPath(fragments, "/article/1");
+    const selected = selectByLegalPath(fragments, path<"legal">`/article/${1}`);
     expect(selected.length).toBeGreaterThan(0);
     expect(selected.every((f) => f.legalNodePath?.startsWith("/article/1"))).toBe(true);
   });
@@ -396,7 +398,7 @@ describe("Parser query behavior and error handling", () => {
     const xml = await readFixture("constitution-1978.xml");
     const fragments = await parseToFragments(xml);
 
-    const selected = selectByLegalPath(fragments, "/article/1/");
+    const selected = selectByLegalPath(fragments, path<"legal">`/article/${1}`);
     expect(selected.length).toBeGreaterThan(0);
   });
 

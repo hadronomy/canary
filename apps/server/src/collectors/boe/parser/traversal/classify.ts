@@ -6,127 +6,24 @@ import {
 import type { BoeTextNode, LinearBlock } from "../types";
 import type { ClassifiedBlock } from "./types";
 
-export const classifyBlock = (block: LinearBlock): ClassifiedBlock => {
+export function classifyBlock(block: LinearBlock): ClassifiedBlock {
   if (block.kind === "table") {
     return { _tag: "table", content: block.text };
   }
 
-  const cls = block.className;
-  const content = block.text;
-
-  if (cls === "capitulo" || cls === "titulo" || cls === "centro_redonda") {
-    const chapter = normalizeChapterHeader(content);
-    return {
-      _tag: "chapter",
-      title: chapter.title,
-      isSpecial: chapter.isSpecial,
-    };
-  }
-
-  if (cls === "titulo_num") {
-    return {
-      _tag: "titleHeading",
-      title: content,
-    };
-  }
-
-  if (cls === "titulo_tit") {
-    return {
-      _tag: "paragraph",
-      content,
-    };
-  }
-
-  if (cls === "capitulo_num") {
-    const chapter = normalizeChapterHeader(content);
-    return {
-      _tag: "chapter",
-      title: chapter.title,
-      isSpecial: chapter.isSpecial,
-    };
-  }
-
-  if (cls === "capitulo_tit") {
-    return {
-      _tag: "paragraph",
-      content,
-    };
-  }
-
-  if (cls === "seccion") {
-    return {
-      _tag: "sectionHeading",
-      title: content,
-    };
-  }
-
-  if (cls === "articulo") {
-    const article = normalizeArticleHeader(content);
-    return {
-      _tag: "article",
-      number: article.number,
-      title: article.title,
-      content,
-    };
-  }
-
-  if (cls === "centro_cursiva") {
-    return { _tag: "subsection", title: content };
-  }
-
-  if (cls === "anexo_num") {
-    return { _tag: "annexNumber", number: content };
-  }
-
-  if (cls === "anexo_tit") {
-    return { _tag: "annexTitle", title: content };
-  }
-
-  if (cls === "parrafo_2") {
-    const subparagraph = normalizeSubparagraph(content);
-    if (isAlphabeticMarker(subparagraph.marker) || isOrdinalMarker(subparagraph.marker)) {
-      return {
-        _tag: "subparagraph",
-        marker: subparagraph.marker,
-        content: subparagraph.content,
-      };
-    }
-
-    return {
-      _tag: "paragraph",
-      content,
-    };
-  }
-
-  if (cls === "firma_rey" || cls === "firma_ministro") {
-    return {
-      _tag: "signature",
-      role: cls,
-      content,
-    };
-  }
-
-  if (cls === "parrafo") {
-    const subparagraph = normalizeSubparagraph(content);
-    if (isAlphabeticMarker(subparagraph.marker) || isOrdinalMarker(subparagraph.marker)) {
-      return {
-        _tag: "subparagraph",
-        marker: subparagraph.marker,
-        content: subparagraph.content,
-      };
-    }
-
-    return { _tag: "paragraph", content };
+  const handler = CLASSIFIER_RULES[block.className];
+  if (handler !== undefined) {
+    return handler(block.text, block.className);
   }
 
   return {
     _tag: "raw",
-    content,
-    className: cls,
+    content: block.text,
+    className: block.className,
   };
-};
+}
 
-export const toTextNode = (token: ClassifiedBlock): BoeTextNode => {
+export function toTextNode(token: ClassifiedBlock): BoeTextNode {
   switch (token._tag) {
     case "table":
       return { _tag: "raw", content: token.content };
@@ -153,7 +50,71 @@ export const toTextNode = (token: ClassifiedBlock): BoeTextNode => {
     case "raw":
       return { _tag: "raw", content: token.content };
   }
-};
+}
 
 const isAlphabeticMarker = (marker: string): boolean => /^[a-z]$/i.test(marker);
 const isOrdinalMarker = (marker: string): boolean => /^\d+[ªº]$/i.test(marker);
+
+type ClassifierRule = (content: string, className: string) => ClassifiedBlock;
+
+function chapterRule(content: string): ClassifiedBlock {
+  const chapter = normalizeChapterHeader(content);
+  return {
+    _tag: "chapter",
+    title: chapter.title,
+    isSpecial: chapter.isSpecial,
+  };
+}
+
+function paragraphOrSubparagraphRule(content: string): ClassifiedBlock {
+  const subparagraph = normalizeSubparagraph(content);
+  if (isAlphabeticMarker(subparagraph.marker) || isOrdinalMarker(subparagraph.marker)) {
+    return {
+      _tag: "subparagraph",
+      marker: subparagraph.marker,
+      content: subparagraph.content,
+    };
+  }
+
+  return {
+    _tag: "paragraph",
+    content,
+  };
+}
+
+function signatureRule(content: string, className: string): ClassifiedBlock {
+  return {
+    _tag: "signature",
+    role: className,
+    content,
+  };
+}
+
+function articleRule(content: string): ClassifiedBlock {
+  const article = normalizeArticleHeader(content);
+  return {
+    _tag: "article",
+    number: article.number,
+    title: article.title,
+    content,
+  };
+}
+
+export const CLASSIFIER_RULES: Readonly<Record<string, ClassifierRule>> = {
+  capitulo: chapterRule,
+  titulo: chapterRule,
+  centro_redonda: chapterRule,
+  capitulo_num: chapterRule,
+  titulo_num: (content) => ({ _tag: "titleHeading", title: content }),
+  titulo_tit: (content) => ({ _tag: "paragraph", content }),
+  capitulo_tit: (content) => ({ _tag: "paragraph", content }),
+  seccion: (content) => ({ _tag: "sectionHeading", title: content }),
+  articulo: articleRule,
+  centro_cursiva: (content) => ({ _tag: "subsection", title: content }),
+  anexo_num: (content) => ({ _tag: "annexNumber", number: content }),
+  anexo_tit: (content) => ({ _tag: "annexTitle", title: content }),
+  parrafo_2: paragraphOrSubparagraphRule,
+  parrafo: paragraphOrSubparagraphRule,
+  firma_rey: signatureRule,
+  firma_ministro: signatureRule,
+};

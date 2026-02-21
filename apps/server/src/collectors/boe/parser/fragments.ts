@@ -2,19 +2,27 @@ import type { BuildState } from "./traversal";
 import {
   applyToken,
   classifyBlock,
-  finalizeFragments,
+  finalizeAstDocument,
   initialState,
   toTextNode,
 } from "./traversal";
-import type { BoeFragment, BoeTextNode, BuildInput, LinearBlock } from "./types";
+import type { FragmentSeed } from "./traversal";
+import type { BoeAstDocument, BoeFragment, BoeTextNode, BuildInput, LinearBlock } from "./types";
 
 export function blocksToTextNodes(blocks: ReadonlyArray<LinearBlock>): ReadonlyArray<BoeTextNode> {
   return blocks.map(classifyBlock).map(toTextNode);
 }
 
 export function buildFragments(input: BuildInput): ReadonlyArray<BoeFragment> {
+  return buildAst(input).fragments;
+}
+
+export function buildAst(input: BuildInput): {
+  readonly ast: BoeAstDocument;
+  readonly fragments: ReadonlyArray<BoeFragment>;
+} {
   const tokens = input.blocks.map(classifyBlock);
-  const seeds = [] as Array<ReturnType<typeof applyToken>["emits"][number]>;
+  const seeds: Array<FragmentSeed> = [];
   let state: BuildState = initialState();
 
   for (const token of tokens) {
@@ -23,5 +31,5 @@ export function buildFragments(input: BuildInput): ReadonlyArray<BoeFragment> {
     seeds.push(...next.emits);
   }
 
-  return finalizeFragments(seeds);
+  return finalizeAstDocument(seeds);
 }

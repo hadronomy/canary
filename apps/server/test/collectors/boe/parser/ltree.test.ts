@@ -3,10 +3,17 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  legalPathAstToLtree,
   legalNodePathToLtree,
+  ltreeToLegalPathAst,
   ltreeToLegalNodePath,
+  ltreeToNodePathSegments,
   ltreeToNodePath,
+  normalizeLegalPathSegment,
+  nodePathSegmentsToLtree,
   nodePathToLtree,
+  parseLegalPath,
+  renderLegalPath,
 } from "~/collectors/boe/parser";
 import { LegalNodePathString, NodePathString } from "~/collectors/boe/parser/types";
 
@@ -25,7 +32,12 @@ function createStructuralPathArbitrary() {
 function createLegalPathArbitrary() {
   const segmentArbitrary = fc
     .string({ minLength: 1, maxLength: 20 })
-    .filter((value) => !value.includes("/") && value.trim().length > 0);
+    .filter(
+      (value) =>
+        !value.includes("/") &&
+        value.trim().length > 0 &&
+        normalizeLegalPathSegment(value).length > 0,
+    );
   return fc
     .array(segmentArbitrary, { minLength: 1, maxLength: 10 })
     .map((segments) => LegalNodePathString(`/${segments.join("/")}`));
@@ -38,7 +50,7 @@ describe("ltree path compatibility", () => {
     const decoded = ltreeToNodePath(encoded);
 
     expect(String(decoded)).toBe(String(source));
-    expect(String(encoded)).toBe("s_63.s_3232.s_61.s_33.s_70.s_31.s_7370.s_34");
+    expect(String(encoded)).toBe("n_c_22.n_a_3.n_p_1.n_sp_4");
   });
 
   test("round-trips legal parser path without loss", () => {
@@ -77,9 +89,23 @@ describe("ltree path compatibility", () => {
 
   test("rejects structural decode if ltree payload is not a structural path", () => {
     const encoded = legalNodePathToLtree(LegalNodePathString("/article/38"));
-    expect(() => ltreeToNodePath(encoded)).toThrow(
-      "Decoded path is not a valid structural node path",
-    );
+    expect(() => ltreeToNodePath(encoded)).toThrow("Unsupported structural ltree label");
+  });
+
+  test("round-trips structural AST path segments", () => {
+    const source = NodePathString("/c/2/a/1/p/3");
+    const encoded = nodePathSegmentsToLtree(ltreeToNodePathSegments(nodePathToLtree(source)));
+    const decoded = ltreeToNodePath(encoded);
+
+    expect(String(decoded)).toBe(String(source));
+  });
+
+  test("round-trips legal AST path segments", () => {
+    const source = parseLegalPath("/disposicion-final/article/primera/p/1");
+    const encoded = legalPathAstToLtree(source);
+    const decoded = ltreeToLegalPathAst(encoded);
+
+    expect(decoded).toEqual(source);
   });
 
   test("fuzz: structural paths round-trip deterministically", () => {
@@ -103,7 +129,8 @@ describe("ltree path compatibility", () => {
       fc.property(legalPathArbitrary, (source) => {
         const encoded = legalNodePathToLtree(source);
         const decoded = ltreeToLegalNodePath(encoded);
-        expect(String(decoded)).toBe(String(source));
+        const canonical = renderLegalPath(parseLegalPath(source));
+        expect(String(decoded)).toBe(String(canonical));
       }),
       {
         seed: 2444615283,

@@ -1,6 +1,6 @@
 import type { NodeType } from "@canary/db/schema/legislation";
 
-import type { BoeMetadata, LegalNodePathString, NodePath } from "../types";
+import type { BoeMetadata, LegalNodePathString, LegalPathSegment, NodePath } from "../types";
 
 export type ClassifiedBlock =
   | { readonly _tag: "table"; readonly content: string }
@@ -28,7 +28,7 @@ interface SharedState {
   readonly currentArticleNumber: string;
   readonly currentArticleTitle: string;
   readonly currentArticleLegalPath?: LegalNodePathString;
-  readonly legalArticleScopeBase: string;
+  readonly legalArticleScopeBase: ReadonlyArray<LegalPathSegment>;
   readonly preambuloParagraphIndex: number;
   readonly rootTableIndex: number;
   readonly articleByChapter: Record<string, number>;
@@ -79,7 +79,7 @@ export const initialState = (): MainState => ({
   currentArticleNumber: "",
   currentArticleTitle: "",
   currentArticleLegalPath: undefined,
-  legalArticleScopeBase: "/article",
+  legalArticleScopeBase: [],
   preambuloParagraphIndex: 0,
   rootTableIndex: 0,
   articleByChapter: {},

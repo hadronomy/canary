@@ -59,6 +59,45 @@ export interface BoeXmlDocument {
   readonly text: ReadonlyArray<BoeTextNode>;
 }
 
+export interface BoeParsedDocument extends BoeXmlDocument {
+  readonly strategy: ParsingStrategy;
+  readonly blocks: ReadonlyArray<LinearBlock>;
+  readonly ast: BoeAstDocument;
+  readonly fragments: ReadonlyArray<BoeFragment>;
+}
+
+export type AstNodeId = string & Brand.Brand<"AstNodeId">;
+export const AstNodeId = Brand.nominal<AstNodeId>();
+
+export interface BoeAstNode {
+  readonly id: AstNodeId;
+  readonly sequenceIndex: number;
+  readonly nodeType: NodeType;
+  readonly content: string;
+  readonly contentNormalized: string;
+  readonly nodePathSegments: NodePath;
+  readonly nodePath: NodePathString;
+  readonly legalPathAst?: LegalPathAst;
+  readonly legalNodePath?: LegalNodePathString;
+  readonly nodeNumber?: string;
+  readonly nodeTitle?: string;
+  readonly precedingContext?: string;
+  readonly followingContext?: string;
+  readonly parentNodeId?: AstNodeId;
+}
+
+export interface BoeAstIndexes {
+  readonly byNodePath: ReadonlyMap<NodePathString, ReadonlyArray<AstNodeId>>;
+  readonly byLegalPath: ReadonlyMap<LegalNodePathString, ReadonlyArray<AstNodeId>>;
+  readonly byFragmentScope: ReadonlyMap<CanonicalFragmentPathQuery, ReadonlyArray<AstNodeId>>;
+}
+
+export interface BoeAstDocument {
+  readonly nodes: ReadonlyArray<BoeAstNode>;
+  readonly nodeById: ReadonlyMap<AstNodeId, BoeAstNode>;
+  readonly indexes: BoeAstIndexes;
+}
+
 export interface BoeFragment {
   readonly content: string;
   readonly contentNormalized: string;
@@ -70,7 +109,7 @@ export interface BoeFragment {
   readonly precedingContext?: string;
   readonly followingContext?: string;
   readonly sequenceIndex: number;
-  readonly metadata: BoeMetadata;
+  readonly metadata?: BoeMetadata;
 }
 
 export interface FragmentTokenCount {
@@ -86,6 +125,7 @@ export interface FragmentTokenCountResult {
 
 export type NodeKind =
   | "preambulo"
+  | "title"
   | "chapter"
   | "section"
   | "subsection"
@@ -93,6 +133,8 @@ export type NodeKind =
   | "paragraph"
   | "subparagraph"
   | "annex"
+  | "disposicion_transitoria"
+  | "disposicion_final"
   | "signature"
   | "table"
   | "raw";
@@ -122,13 +164,67 @@ export type LegalNodePathString = string & Brand.Brand<"LegalNodePathString">;
 export const LegalNodePathString = Brand.nominal<LegalNodePathString>();
 export const LegalNodePathStringSchema = Schema.String.pipe(Schema.fromBrand(LegalNodePathString));
 
+export type DispositionPathScope =
+  | "disposicion-adicional"
+  | "disposicion-final"
+  | "disposicion-transitoria"
+  | "disposicion-derogatoria";
+
+export type LegalPathSegment =
+  | { readonly _tag: "scope"; readonly value: DispositionPathScope }
+  | { readonly _tag: "article"; readonly value: string }
+  | { readonly _tag: "paragraph"; readonly value: number }
+  | { readonly _tag: "custom"; readonly value: string };
+
+export interface LegalPathAst {
+  readonly segments: ReadonlyArray<LegalPathSegment>;
+}
+
 export type MarkdownString = string & Brand.Brand<"MarkdownString">;
 export const MarkdownString = Brand.nominal<MarkdownString>();
 export const MarkdownStringSchema = Schema.String.pipe(Schema.fromBrand(MarkdownString));
 
-export type FragmentPathScope = "p" | "c" | "x" | "t";
+export const FRAGMENT_PATH_SCOPE_MAP = {
+  preambulo: {
+    segment: "p",
+    nodeTypes: ["preambulo", "paragraph", "signature", "raw"] as const,
+  },
+  chapter: {
+    segment: "c",
+    nodeTypes: [
+      "title",
+      "chapter",
+      "section",
+      "subsection",
+      "article",
+      "paragraph",
+      "subparagraph",
+      "disposicion_transitoria",
+      "disposicion_final",
+    ] as const,
+  },
+  annex: {
+    segment: "x",
+    nodeTypes: ["annex", "subsection", "section", "paragraph", "subparagraph"] as const,
+  },
+  table: {
+    segment: "t",
+    nodeTypes: ["table"] as const,
+  },
+} as const satisfies Readonly<
+  Record<string, { readonly segment: string; readonly nodeTypes: ReadonlyArray<NodeKind> }>
+>;
+
+export type FragmentPathScope =
+  (typeof FRAGMENT_PATH_SCOPE_MAP)[keyof typeof FRAGMENT_PATH_SCOPE_MAP]["segment"];
 export type FragmentPathQuery = "/" | `/${FragmentPathScope}` | `/${FragmentPathScope}/`;
 export type CanonicalFragmentPathQuery = "/" | `/${FragmentPathScope}/`;
+
+export type PathMode = "legal" | "fragment";
+export type PathModeTypeMap = {
+  readonly legal: LegalNodePathString;
+  readonly fragment: FragmentPathQuery;
+};
 
 export type ParsingStrategy = "legislative" | "simple" | "announcement" | "generic";
 

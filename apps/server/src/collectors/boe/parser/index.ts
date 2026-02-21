@@ -1,4 +1,5 @@
 export * from "./api";
+export * from "./ast";
 export * from "./errors";
 export * from "./fluent";
 export * from "./format";
@@ -7,8 +8,8 @@ export * from "./invariants";
 export * from "./linearize";
 export * from "./ltree-path";
 export * from "./normalize";
+export * from "./path-query";
 export * from "./query";
 export * from "./service";
 export * from "./strategy";
-export * from "./traversal";
 export * from "./types";

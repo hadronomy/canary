@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { Effect, Either } from "effect";
 
-import { BoeXmlParser, Query } from "~/collectors/boe/parser";
+import { BoeXmlParser, path, Query } from "~/collectors/boe/parser";
 import { LegalNodePathString, NodePathString } from "~/collectors/boe/parser/types";
 
 import {
   boeParserMetadata as parserMetadata,
+  parseBoe,
   parseBoeDocument as parseDocument,
   parseBoeFragments as parseToFragments,
   readBoeFixture as readFixture,
@@ -250,8 +251,9 @@ describe("Parser integration flow", () => {
 
   test("classifies article 161 list markers as subparagraphs and numeric clause as paragraph", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
-      BoeXmlParser.queryLegal({ xml, query: Query.article("161") }).pipe(
+      BoeXmlParser.queryLegal({ document, query: Query.article("161") }).pipe(
         Effect.provide(BoeXmlParser.Default),
       ),
     );
@@ -279,8 +281,9 @@ describe("Parser integration flow", () => {
 
   test("classifies article 148 ordinal list as nested subparagraphs under paragraph 1", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
-      BoeXmlParser.queryLegal({ xml, query: Query.article("148") }).pipe(
+      BoeXmlParser.queryLegal({ document, query: Query.article("148") }).pipe(
         Effect.provide(BoeXmlParser.Default),
       ),
     );
@@ -323,10 +326,12 @@ describe("Parser integration flow", () => {
 
   test("selects by legal path including descendants", async () => {
     const xml = await readFixture("constitution-1978.xml");
+    const document = await parseBoe(xml);
     const selected = await Effect.runPromise(
-      BoeXmlParser.selectByLegalPath({ xml, legalPath: "/article/38" }).pipe(
-        Effect.provide(BoeXmlParser.Default),
-      ),
+      BoeXmlParser.selectByLegalPath({
+        document,
+        legalPath: path<"legal">`/article/${38}`,
+      }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
 
     expect(
@@ -338,8 +343,9 @@ describe("Parser integration flow", () => {
 
   test("returns ambiguous query result for primera without scope", async () => {
     const xml = await readFixture("real-boe-full.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
-      BoeXmlParser.queryLegal({ xml, query: Query.article("primera") }).pipe(
+      BoeXmlParser.queryLegal({ document, query: Query.article("primera") }).pipe(
         Effect.provide(BoeXmlParser.Default),
       ),
     );
@@ -362,9 +368,10 @@ describe("Parser integration flow", () => {
 
   test("resolves scoped disposition article query", async () => {
     const xml = await readFixture("real-boe-full.xml");
+    const document = await parseBoe(xml);
     const result = await Effect.runPromise(
       BoeXmlParser.queryLegal({
-        xml,
+        document,
         query: Query.dispositionArticle("disposicion-final", "primera", { paragraph: 1 }),
       }).pipe(Effect.provide(BoeXmlParser.Default)),
     );
@@ -379,13 +386,18 @@ describe("Parser integration flow", () => {
 
   test("selectByPath treats '/p' and '/p/' as equivalent", async () => {
     const xml = await readFixture("real-boe-full.xml");
+    const document = await parseBoe(xml);
 
     const fromNoSlash = await Effect.runPromise(
-      BoeXmlParser.selectByPath({ xml, query: "/p" }).pipe(Effect.provide(BoeXmlParser.Default)),
+      BoeXmlParser.selectByPath({ document, query: path<"fragment">`/p` }).pipe(
+        Effect.provide(BoeXmlParser.Default),
+      ),
     );
 
     const fromSlash = await Effect.runPromise(
-      BoeXmlParser.selectByPath({ xml, query: "/p/" }).pipe(Effect.provide(BoeXmlParser.Default)),
+      BoeXmlParser.selectByPath({ document, query: path<"fragment">`/p/` }).pipe(
+        Effect.provide(BoeXmlParser.Default),
+      ),
     );
 
     expect(fromNoSlash.map((fragment) => fragment.nodePath)).toEqual(
@@ -396,15 +408,16 @@ describe("Parser integration flow", () => {
 
   test("formatMarkdownByPath formats '/' and '/p' selections", async () => {
     const xml = await readFixture("real-boe-full.xml");
+    const document = await parseBoe(xml);
 
     const allMarkdown = await Effect.runPromise(
-      BoeXmlParser.formatMarkdownByPath({ xml, query: "/" }).pipe(
+      BoeXmlParser.formatMarkdownByPath({ document, query: path<"fragment">`/` }).pipe(
         Effect.provide(BoeXmlParser.Default),
       ),
     );
 
     const pMarkdown = await Effect.runPromise(
-      BoeXmlParser.formatMarkdownByPath({ xml, query: "/p" }).pipe(
+      BoeXmlParser.formatMarkdownByPath({ document, query: path<"fragment">`/p` }).pipe(
         Effect.provide(BoeXmlParser.Default),
       ),
     );

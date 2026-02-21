@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { Effect } from "effect";
 
-import { BoeXmlParser, classifyBlock, toTextNode } from "~/collectors/boe/parser";
+import { BoeXmlParser } from "~/collectors/boe/parser";
+import { classifyBlock, toTextNode } from "~/collectors/boe/parser/traversal";
 
 import {
   boeParserMetadata as parserMetadata,

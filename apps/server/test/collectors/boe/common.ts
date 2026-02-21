@@ -26,8 +26,14 @@ export function parseBoeFragments(xml: string) {
   );
 }
 
+export function parseBoe(xml: string) {
+  return Effect.runPromise(BoeXmlParser.parse({ xml }).pipe(Effect.provide(BoeXmlParser.Default)));
+}
+
 export function parseBoeDocument(xml: string) {
-  return Effect.runPromise(
-    BoeXmlParser.parseDocument({ xml }).pipe(Effect.provide(BoeXmlParser.Default)),
-  );
+  return parseBoe(xml).then((document) => ({
+    metadata: document.metadata,
+    analysis: document.analysis,
+    text: document.text,
+  }));
 }
