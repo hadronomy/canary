@@ -3,6 +3,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   boolean,
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -16,6 +17,12 @@ import {
   varchar,
   vector,
 } from "drizzle-orm/pg-core";
+
+export const ltree = customType<{ data: string }>({
+  dataType() {
+    return "ltree";
+  },
+});
 
 // ─── Enums ───
 export const jurisdictionEnum = pgEnum("jurisdiction", [
@@ -317,6 +324,8 @@ export const senseFragments = pgTable(
     content: text("content").notNull(),
     contentNormalized: text("content_normalized"),
     nodePath: varchar("node_path", { length: 500 }).notNull(),
+    nodePathLtree: ltree("node_path_ltree"),
+    legalNodePathLtree: ltree("legal_node_path_ltree"),
     nodeType: nodeTypeEnum("node_type").notNull(),
     nodeNumber: varchar("node_number", { length: 50 }),
     nodeTitle: varchar("node_title", { length: 500 }),
@@ -341,6 +350,7 @@ export const senseFragments = pgTable(
   },
   (table) => [
     uniqueIndex("idx_frag_doc_path").on(table.docId, table.nodePath),
+    uniqueIndex("idx_frag_doc_path_ltree").on(table.docId, table.nodePathLtree),
     index("idx_frag_256_hnsw")
       .using("hnsw", table.embedding256.op("vector_cosine_ops"))
       .with({ m: 16, ef_construction: 64 }),
@@ -349,6 +359,8 @@ export const senseFragments = pgTable(
       .with({ m: 16, ef_construction: 64 }),
     index("idx_frag_doc_version").on(table.docId, table.versionId),
     index("idx_frag_node_type").on(table.nodeType),
+    index("idx_frag_node_path_ltree_gist").using("gist", table.nodePathLtree),
+    index("idx_frag_legal_node_path_ltree_gist").using("gist", table.legalNodePathLtree),
     index("idx_frag_valid_window").on(table.validFrom, table.validUntil),
     uniqueIndex("idx_frag_doc_fingerprint").on(table.docId, table.contentFingerprint),
   ],
