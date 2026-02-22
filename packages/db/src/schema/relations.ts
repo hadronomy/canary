@@ -40,6 +40,10 @@ export const relations = defineRelations(schema, (r) => ({
       to: r.referenceAnchors.targetDocId,
       alias: "targetRefs",
     }),
+    fragmentIndexJobs: r.many.fragmentIndexJobs({
+      from: r.legalDocuments.docId,
+      to: r.fragmentIndexJobs.docId,
+    }),
     parentBulletin: r.one.legalDocuments({
       from: r.legalDocuments.parentBulletinId,
       to: r.legalDocuments.docId,
@@ -61,6 +65,10 @@ export const relations = defineRelations(schema, (r) => ({
     fragments: r.many.senseFragments({
       from: r.documentVersions.versionId,
       to: r.senseFragments.versionId,
+    }),
+    fragmentIndexJobs: r.many.fragmentIndexJobs({
+      from: r.documentVersions.versionId,
+      to: r.fragmentIndexJobs.versionId,
     }),
   },
   legislativeEvents: {
@@ -125,6 +133,16 @@ export const relations = defineRelations(schema, (r) => ({
     fragment: r.one.senseFragments({
       from: r.embeddingCache.fragmentId,
       to: r.senseFragments.fragmentId,
+    }),
+  },
+  fragmentIndexJobs: {
+    document: r.one.legalDocuments({
+      from: r.fragmentIndexJobs.docId,
+      to: r.legalDocuments.docId,
+    }),
+    version: r.one.documentVersions({
+      from: r.fragmentIndexJobs.versionId,
+      to: r.documentVersions.versionId,
     }),
   },
 }));

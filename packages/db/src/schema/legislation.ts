@@ -137,6 +137,13 @@ export const embeddingModelEnum = pgEnum("embedding_model", [
   "custom",
 ]);
 
+export const indexingJobStatusEnum = pgEnum("indexing_job_status", [
+  "pending",
+  "in_progress",
+  "ready",
+  "failed",
+]);
+
 // ─── 1. Legislative Sources ───
 export const legislativeSources = pgTable(
   "legislative_sources",
@@ -260,12 +267,18 @@ export const legalDocuments = pgTable(
     createdBy: varchar("created_by", { length: 100 }),
     updatedBy: varchar("updated_by", { length: 100 }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+
+    publishGate: boolean("publish_gate").notNull().default(false),
+    publishGateUpdatedAt: timestamp("publish_gate_updated_at", { withTimezone: true }),
+    publishGateReason: text("publish_gate_reason"),
   },
   (table) => [
     uniqueIndex("idx_doc_canonical").on(table.canonicalId),
     uniqueIndex("idx_doc_slug").on(table.shortSlug),
     index("idx_doc_stage").on(table.legislativeStage, table.contentType),
     index("idx_doc_bulletin").on(table.parentBulletinId),
+    index("idx_doc_publish_gate").on(table.publishGate),
+    index("idx_doc_publish_gate_updated").on(table.publishGateUpdatedAt),
     index("idx_doc_vector_hnsw").using("hnsw", table.summaryEmbedding.op("vector_cosine_ops")),
   ],
 );
@@ -512,6 +525,34 @@ export const embeddingCache = pgTable(
   ],
 );
 
+export const fragmentIndexJobs = pgTable(
+  "fragment_index_jobs",
+  {
+    jobId: uuid("job_id")
+      .primaryKey()
+      .default(sql`gen_random_uuid_v7()`),
+    docId: uuid("doc_id")
+      .references(() => legalDocuments.docId, { onDelete: "cascade" })
+      .notNull(),
+    versionId: uuid("version_id")
+      .references(() => documentVersions.versionId, { onDelete: "cascade" })
+      .notNull(),
+    status: indexingJobStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    metadata: jsonb("metadata").default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_fragment_index_job_doc_ver").on(table.docId, table.versionId),
+    index("idx_fragment_index_job_status_started").on(table.status, table.startedAt),
+    index("idx_fragment_index_job_doc").on(table.docId, table.versionId, table.status),
+  ],
+);
+
 // ─── Types ───
 export type LegislativeSource = typeof legislativeSources.$inferSelect;
 export type NewLegislativeSource = typeof legislativeSources.$inferInsert;
@@ -546,6 +587,9 @@ export type NewSyncRun = typeof syncRuns.$inferInsert;
 export type EmbeddingsCacheEntry = typeof embeddingCache.$inferSelect;
 export type NewEmbeddingsCacheEntry = typeof embeddingCache.$inferInsert;
 
+export type FragmentIndexJob = typeof fragmentIndexJobs.$inferSelect;
+export type NewFragmentIndexJob = typeof fragmentIndexJobs.$inferInsert;
+
 // ─── Enums Types ───
 export type Jurisdiction = (typeof jurisdictionEnum.enumValues)[number];
 export type LegislativeStage = (typeof legislativeStageEnum.enumValues)[number];
@@ -555,3 +599,4 @@ export type NodeType = (typeof nodeTypeEnum.enumValues)[number];
 export type RelationType = (typeof relationTypeEnum.enumValues)[number];
 export type ExtractionMethod = (typeof extractionMethodEnum.enumValues)[number];
 export type EmbeddingModel = (typeof embeddingModelEnum.enumValues)[number];
+export type IndexingJobStatus = (typeof indexingJobStatusEnum.enumValues)[number];

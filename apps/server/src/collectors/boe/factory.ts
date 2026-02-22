@@ -1,4 +1,5 @@
 import {
+  Either,
   Cause,
   Chunk,
   Clock,
@@ -37,11 +38,13 @@ import {
 } from "~/services/collector/schema";
 
 import { BoeCollectorConfig } from "./config";
+import { BoeIndexingWorkflow, IndexingTriggerPayload } from "./indexing";
 import { mapBoeLawToDocument, parseBoeDate, parseBoeDateTime } from "./mapping";
 import { BoeResponseSchema, normalizeBoeItems, type BoeLawItem } from "./schemas";
 
 const decodeBoeResponse = Schema.decodeUnknown(BoeResponseSchema);
 const decodeDateTimeUtc = Schema.decodeSync(Schema.DateTimeUtc);
+const decodeIndexingTriggerPayload = Schema.decodeUnknown(IndexingTriggerPayload);
 
 const capabilities: Capabilities = new Set([
   "FullSync",
@@ -89,10 +92,49 @@ const toMetadataRecord = (value: unknown): Record<string, unknown> => {
 const createContentHash = (content: string): string =>
   new Bun.CryptoHasher("sha256").update(content).digest("hex");
 
-const toTextEndpoint = (baseUrl: string, identifier: string): string => {
-  const origin = new URL(baseUrl).origin;
-  return `${origin}/datosabiertos/api/legislacion-consolidada/id/${identifier}/texto`;
-};
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
+const CANONICAL_ID_MAX_LENGTH = 150;
+const EXISTING_DOCUMENTS_CHUNK_SIZE = 100;
+const EXISTING_DOCUMENTS_FALLBACK_CHUNK_SIZE = 10;
+const LOG_TEXT_MAX_LENGTH = 600;
+
+function truncateLogText(value: string): string {
+  if (value.length <= LOG_TEXT_MAX_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, LOG_TEXT_MAX_LENGTH)}...`;
+}
+
+function sanitizeCanonicalId(candidate: string): string | null {
+  const normalized = candidate.normalize("NFKC").replace(CONTROL_CHARACTERS, "").trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+  if (normalized.length > CANONICAL_ID_MAX_LENGTH) {
+    return null;
+  }
+  return normalized;
+}
+
+function describeQueryCause(cause: unknown): Record<string, unknown> {
+  if (cause instanceof Error) {
+    const nested = (cause as { cause?: unknown }).cause;
+    const nestedMessage =
+      nested instanceof Error ? nested.message : nested === undefined ? undefined : String(nested);
+    return {
+      name: cause.name,
+      message: truncateLogText(cause.message),
+      cause: nestedMessage === undefined ? undefined : truncateLogText(nestedMessage),
+    };
+  }
+
+  return {
+    message: truncateLogText(String(cause)),
+  };
+}
+
+const toBoeDocumentoXmlEndpoint = (identifier: string): string =>
+  `https://www.boe.es/diario_boe/xml.php?id=${identifier}`;
 
 const zeroStats: SyncStats = {
   inserted: 0,
@@ -190,6 +232,19 @@ const buildDocument = (
     kind,
   });
 
+const toBatchDocument = (document: CollectedDocument): CollectedDocument =>
+  new CollectedDocument({
+    externalId: document.externalId,
+    title: document.title,
+    content: "",
+    metadata: {},
+    publishedAt: document.publishedAt,
+    updatedAt: document.updatedAt,
+    sourceUrl: document.sourceUrl,
+    contentHash: Option.none(),
+    kind: document.kind,
+  });
+
 export const BoeLawsCollectorFactory = defineFactory({
   id: "boe-laws",
   name: "BOE Laws Collector",
@@ -199,6 +254,7 @@ export const BoeLawsCollectorFactory = defineFactory({
   make: ({ collectorId, config }) =>
     Effect.gen(function* () {
       const db = yield* DatabaseService.client();
+      const indexingWorkflow = yield* BoeIndexingWorkflow;
 
       const sourceId = config.sourceId;
       const requestTimeout = config.timeout;
@@ -343,7 +399,7 @@ export const BoeLawsCollectorFactory = defineFactory({
         (identifier: string, runId: CollectionRunId) =>
           config.ingestTextVersions
             ? Effect.gen(function* () {
-                const sourceUrl = toTextEndpoint(config.baseUrl, identifier);
+                const sourceUrl = toBoeDocumentoXmlEndpoint(identifier);
 
                 const fetchOnce = Effect.tryPromise({
                   try: async () => {
@@ -578,44 +634,139 @@ export const BoeLawsCollectorFactory = defineFactory({
       const loadExistingDocuments = Effect.fn("BoeCollector.loadExistingDocuments")(
         (page: ReadonlyArray<BoeLawItem>, runId: CollectionRunId) =>
           Effect.gen(function* () {
-            const canonicalIds = Array.from(
-              new Set(page.map((law) => canonicalIdFromIdentifier(law.identificador))),
+            const [rejectedCanonicalIdsChunk, acceptedCanonicalIdsChunk] = Chunk.partitionMap(
+              Chunk.fromIterable(page),
+              (law) => {
+                const candidate = canonicalIdFromIdentifier(law.identificador);
+                const sanitized = sanitizeCanonicalId(candidate);
+                return sanitized === null ? Either.left(candidate) : Either.right(sanitized);
+              },
             );
 
-            if (canonicalIds.length === 0) {
+            const canonicalIdsChunk = Chunk.dedupe(acceptedCanonicalIdsChunk);
+            const rejectedCanonicalIds = Chunk.toReadonlyArray(rejectedCanonicalIdsChunk);
+
+            if (rejectedCanonicalIdsChunk.length > 0) {
+              yield* Effect.logWarning(
+                "Filtered invalid canonical identifiers before existing-documents query",
+                {
+                  collectorId,
+                  runId,
+                  rejectedCount: rejectedCanonicalIdsChunk.length,
+                  rejectedPreview: rejectedCanonicalIds.slice(0, 5),
+                },
+              );
+            }
+
+            if (canonicalIdsChunk.length === 0) {
               return new Map<string, ExistingLegalDocument>();
             }
 
-            const rows = yield* db
-              .select({
-                docId: legalDocuments.docId,
-                canonicalId: legalDocuments.canonicalId,
-                firstSeenAt: legalDocuments.firstSeenAt,
-                metadataHash: legalDocuments.metadataHash,
-                contentHash: legalDocuments.contentHash,
-              })
-              .from(legalDocuments)
-              .where(
-                and(
-                  eq(legalDocuments.sourceId, sourceId),
-                  inArray(legalDocuments.canonicalId, canonicalIds),
-                ),
-              )
-              .pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new CollectionError({
+            const queryChunk = Effect.fn("BoeCollector.queryExistingDocumentsChunk")(
+              (canonicalIds: ReadonlyArray<string>) =>
+                db
+                  .select({
+                    docId: legalDocuments.docId,
+                    canonicalId: legalDocuments.canonicalId,
+                    firstSeenAt: legalDocuments.firstSeenAt,
+                    metadataHash: legalDocuments.metadataHash,
+                    contentHash: legalDocuments.contentHash,
+                  })
+                  .from(legalDocuments)
+                  .where(
+                    and(
+                      eq(legalDocuments.sourceId, sourceId),
+                      inArray(legalDocuments.canonicalId, canonicalIds),
+                    ),
+                  )
+                  .pipe(
+                    Effect.retry({
+                      schedule: Schedule.exponential(Duration.millis(150)).pipe(
+                        Schedule.compose(Schedule.recurs(2)),
+                      ),
+                      while: (error) =>
+                        typeof error === "object" &&
+                        error !== null &&
+                        "_tag" in error &&
+                        error._tag === "EffectDrizzleQueryError",
+                    }),
+                  ),
+            );
+
+            const chunks = Chunk.chunksOf(canonicalIdsChunk, EXISTING_DOCUMENTS_CHUNK_SIZE);
+
+            const rowsByChunk = yield* Effect.forEach(chunks, (chunk, chunkIndex) =>
+              Effect.gen(function* () {
+                const chunkIds = Chunk.toReadonlyArray(chunk);
+                const rows = yield* queryChunk(chunkIds).pipe(
+                  Effect.tapError((cause) =>
+                    Effect.logError("Existing-documents query chunk failed", {
                       collectorId,
                       runId,
-                      reason: "Unable to load existing page documents",
-                      cause,
-                      message: `Collection error [${collectorId}]: Unable to load existing page documents`,
+                      chunkIndex,
+                      chunkSize: chunk.length,
+                      chunkPreview: chunkIds.slice(0, 5),
+                      ...describeQueryCause(cause),
                     }),
+                  ),
+                );
+                return Chunk.fromIterable(rows);
+              }).pipe(
+                Effect.catchAll((chunkCause) =>
+                  Effect.gen(function* () {
+                    const fallbackChunks = Chunk.chunksOf(
+                      chunk,
+                      EXISTING_DOCUMENTS_FALLBACK_CHUNK_SIZE,
+                    );
+                    const recoveredChunkRows = yield* Effect.forEach(
+                      fallbackChunks,
+                      (fallbackChunk) =>
+                        queryChunk(Chunk.toReadonlyArray(fallbackChunk)).pipe(Effect.option),
+                    );
+
+                    const validRows = recoveredChunkRows
+                      .filter(Option.isSome)
+                      .flatMap((result) => result.value);
+
+                    const chunkIds = Chunk.toReadonlyArray(chunk);
+
+                    const recoveredCount = validRows.length;
+                    const failedCount = chunkIds.length - recoveredCount;
+
+                    if (recoveredCount === 0) {
+                      return yield* new CollectionError({
+                        collectorId,
+                        runId,
+                        reason: "Unable to load existing page documents",
+                        cause: chunkCause,
+                        message: `Collection error [${collectorId}]: Unable to load existing page documents`,
+                      });
+                    }
+
+                    yield* Effect.logWarning(
+                      "Recovered existing-documents chunk via single-id fallback",
+                      {
+                        collectorId,
+                        runId,
+                        chunkIndex,
+                        chunkSize: chunkIds.length,
+                        fallbackChunkSize: EXISTING_DOCUMENTS_FALLBACK_CHUNK_SIZE,
+                        recoveredCount,
+                        failedCount,
+                      },
+                    );
+
+                    return Chunk.fromIterable(validRows);
+                  }),
                 ),
-              );
+              ),
+            );
+
+            const rows = Chunk.toReadonlyArray(Chunk.flatten(Chunk.fromIterable(rowsByChunk)));
+            const safeRows = rows.filter((row): row is ExistingLegalDocument => row !== undefined);
 
             return new Map<string, ExistingLegalDocument>(
-              rows.map((row) => [row.canonicalId, row]),
+              safeRows.map((row) => [row.canonicalId, row]),
             );
           }).pipe(
             Effect.withSpan("BoeCollector.loadExistingDocuments", {
@@ -700,6 +851,15 @@ export const BoeLawsCollectorFactory = defineFactory({
           Effect.gen(function* () {
             const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
 
+            const sourceByDocAndContent = new Map<
+              string,
+              {
+                readonly kind: "New" | "Update";
+                readonly canonicalId: string;
+                readonly contentHash: string | null;
+              }
+            >();
+
             const newVersionRows: Array<{
               readonly docId: string;
               readonly versionNumber: number;
@@ -743,15 +903,32 @@ export const BoeLawsCollectorFactory = defineFactory({
                   validFrom,
                   validUntil: null,
                 });
+                sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
+                  kind: "New",
+                  canonicalId,
+                  contentHash: item.contentHash,
+                });
               } else {
                 updateCandidates.push({ docId, validFrom, contentText: item.contentText });
+                sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
+                  kind: "Update",
+                  canonicalId,
+                  contentHash: item.contentHash,
+                });
               }
             }
 
+            const indexingPayloads: Array<typeof IndexingTriggerPayload.Type> = [];
+
             if (newVersionRows.length > 0) {
-              yield* db
+              const insertedNewVersions = yield* db
                 .insert(documentVersions)
                 .values(newVersionRows)
+                .returning({
+                  versionId: documentVersions.versionId,
+                  docId: documentVersions.docId,
+                  contentText: documentVersions.contentText,
+                })
                 .pipe(
                   Effect.mapError(
                     (cause) =>
@@ -764,10 +941,42 @@ export const BoeLawsCollectorFactory = defineFactory({
                       }),
                   ),
                 );
+
+              for (const row of insertedNewVersions) {
+                if (row.contentText === null) {
+                  continue;
+                }
+                const source = sourceByDocAndContent.get(`${row.docId}:${row.contentText}`);
+                if (source === undefined) {
+                  continue;
+                }
+                indexingPayloads.push(
+                  yield* decodeIndexingTriggerPayload({
+                    runId,
+                    docId: row.docId,
+                    versionId: row.versionId,
+                    canonicalId: source.canonicalId,
+                    contentHash: source.contentHash,
+                    kind: source.kind,
+                    requestedAt: now.toISOString(),
+                  }).pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CollectionError({
+                          collectorId,
+                          runId,
+                          reason: "Unable to decode indexing trigger payload for initial version",
+                          cause,
+                          message: `Collection error [${collectorId}]: Unable to decode indexing trigger payload for initial version`,
+                        }),
+                    ),
+                  ),
+                );
+              }
             }
 
             if (updateCandidates.length === 0) {
-              return;
+              return indexingPayloads as ReadonlyArray<typeof IndexingTriggerPayload.Type>;
             }
 
             const updateDocIds = updateCandidates.map((candidate) => candidate.docId);
@@ -841,9 +1050,14 @@ export const BoeLawsCollectorFactory = defineFactory({
             });
 
             if (updateVersionRows.length > 0) {
-              yield* db
+              const insertedUpdateVersions = yield* db
                 .insert(documentVersions)
                 .values(updateVersionRows)
+                .returning({
+                  versionId: documentVersions.versionId,
+                  docId: documentVersions.docId,
+                  contentText: documentVersions.contentText,
+                })
                 .pipe(
                   Effect.mapError(
                     (cause) =>
@@ -856,7 +1070,41 @@ export const BoeLawsCollectorFactory = defineFactory({
                       }),
                   ),
                 );
+
+              for (const row of insertedUpdateVersions) {
+                if (row.contentText === null) {
+                  continue;
+                }
+                const source = sourceByDocAndContent.get(`${row.docId}:${row.contentText}`);
+                if (source === undefined) {
+                  continue;
+                }
+                indexingPayloads.push(
+                  yield* decodeIndexingTriggerPayload({
+                    runId,
+                    docId: row.docId,
+                    versionId: row.versionId,
+                    canonicalId: source.canonicalId,
+                    contentHash: source.contentHash,
+                    kind: source.kind,
+                    requestedAt: now.toISOString(),
+                  }).pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CollectionError({
+                          collectorId,
+                          runId,
+                          reason: "Unable to decode indexing trigger payload for updated version",
+                          cause,
+                          message: `Collection error [${collectorId}]: Unable to decode indexing trigger payload for updated version`,
+                        }),
+                    ),
+                  ),
+                );
+              }
             }
+
+            return indexingPayloads as ReadonlyArray<typeof IndexingTriggerPayload.Type>;
           }).pipe(Effect.withSpan("BoeCollector.ingestDocumentVersions")),
       );
 
@@ -872,7 +1120,26 @@ export const BoeLawsCollectorFactory = defineFactory({
             const docIdByCanonicalId = new Map(upserted.map((row) => [row.canonicalId, row.docId]));
 
             if (config.ingestTextVersions) {
-              yield* ingestDocumentVersions(persistable, docIdByCanonicalId, runId);
+              const payloads = yield* ingestDocumentVersions(
+                persistable,
+                docIdByCanonicalId,
+                runId,
+              );
+              if (payloads.length > 0) {
+                yield* indexingWorkflow.startMany(payloads).pipe(
+                  Effect.tapError((cause) =>
+                    Effect.logWarning(
+                      "Boe indexing workflow trigger failed; continuing collector run",
+                      {
+                        collectorId,
+                        runId,
+                        payloadCount: payloads.length,
+                        ...describeQueryCause(cause),
+                      },
+                    ),
+                  ),
+                );
+              }
             }
           }).pipe(
             Effect.withSpan("BoeCollector.persistPreparedLaws", {
@@ -1032,6 +1299,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   yield* persistPreparedLaws(preparedLaws, runId);
 
                   const documents = successes.map((s) => s.document);
+                  const batchDocuments = documents.map(toBatchDocument);
                   const inserted = successes.reduce((acc, s) => acc + s.inserted, 0);
                   const updated = successes.reduce((acc, s) => acc + s.updated, 0);
                   const failed = failures.length;
@@ -1063,7 +1331,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   }
 
                   const batch = new CollectionBatch({
-                    documents,
+                    documents: batchDocuments,
                     cursor: Option.some(
                       new CollectionCursor({
                         value: String(nextOffset),

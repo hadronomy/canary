@@ -17,6 +17,7 @@ import {
 
 import { DatabaseService } from "@canary/db/effect";
 import {
+  BoeIndexingWorkflow,
   BoeLawsCollectorFactory,
   countDocumentsForSource,
   ensureBoeCollector,
@@ -221,7 +222,7 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
     config: {
       sourceId,
       requestDelay: Duration.millis(50),
-      perPageConcurrency: 16,
+      perPageConcurrency: 4,
       textFetchMaxAttempts: 3,
       textRetryBase: Duration.millis(250),
     },
@@ -293,10 +294,15 @@ const runCollectorCli = Effect.fn("cli.runCollector")(function* () {
 
 const DatabaseLive = DatabaseService.Default;
 
-const CollectorRuntimeLive = Layer.mergeAll(
+const CollectorCoreLive = Layer.mergeAll(
   CollectorLiveWithFactories(bootstrapFactory),
   CollectorEventBus.Default,
-).pipe(Layer.provide(DatabaseLive), Layer.provide(AxiomTelemetryLive));
+).pipe(Layer.provideMerge(BoeIndexingWorkflow.Default));
+
+const CollectorRuntimeLive = CollectorCoreLive.pipe(
+  Layer.provide(DatabaseLive),
+  Layer.provide(AxiomTelemetryLive),
+);
 
 const AllLayers = Layer.provide(
   Layer.mergeAll(

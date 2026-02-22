@@ -135,7 +135,7 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
           batchSize: 250,
           timeout: Duration.seconds(30),
           requestDelay: Duration.millis(50),
-          perPageConcurrency: 16,
+          perPageConcurrency: 4,
           ingestTextVersions: true,
           textFetchMaxAttempts: 3,
           textRetryBase: Duration.millis(250),
