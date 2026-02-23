@@ -1,10 +1,10 @@
 import {
-  Either,
   Cause,
   Chunk,
   Clock,
   Duration,
   Effect,
+  Either,
   Exit,
   Option,
   Ref,
@@ -19,6 +19,7 @@ import {
   documentVersions,
   legalDocuments,
   legislativeSources,
+  referenceAnchors,
   syncRuns,
 } from "@canary/db/schema/legislation";
 import {
@@ -842,6 +843,39 @@ export const BoeLawsCollectorFactory = defineFactory({
           }).pipe(Effect.withSpan("BoeCollector.upsertLegalDocuments")),
       );
 
+      const resolveReferenceAnchorsForCollectorRun = Effect.fn(
+        "BoeCollector.resolveReferenceAnchorsForCollectorRun",
+      )((runId: CollectionRunId) =>
+        db
+          .execute(sql`
+            update ${referenceAnchors} as ra
+            set
+              ${sql.raw(`"${referenceAnchors.targetDocId.name}"`)} = target.${sql.raw(`"${legalDocuments.docId.name}"`)},
+              ${sql.raw(`"${referenceAnchors.resolvedAt.name}"`)} = now()
+            from ${legalDocuments} as target
+            where
+              ra.${sql.raw(`"${referenceAnchors.targetDocId.name}"`)} is null
+              and target.${sql.raw(`"${legalDocuments.canonicalId.name}"`)} = ra.${sql.raw(`"${referenceAnchors.targetCanonicalId.name}"`)}
+              and ra.${sql.raw(`"${referenceAnchors.sourceDocId.name}"`)} in (
+                select source.${sql.raw(`"${legalDocuments.docId.name}"`)}
+                from ${legalDocuments} as source
+                where source.${sql.raw(`"${legalDocuments.sourceId.name}"`)} = ${sourceId}
+              )
+          `)
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new CollectionError({
+                  collectorId,
+                  runId,
+                  reason: "Unable to resolve unresolved reference anchors",
+                  cause,
+                  message: `Collection error [${collectorId}]: Unable to resolve unresolved reference anchors`,
+                }),
+            ),
+          ),
+      );
+
       const ingestDocumentVersions = Effect.fn("BoeCollector.ingestDocumentVersions")(
         (
           persistable: ReadonlyArray<PreparedLaw>,
@@ -1377,6 +1411,17 @@ export const BoeLawsCollectorFactory = defineFactory({
                           message: Cause.pretty(exit.cause),
                         },
                       ];
+
+                  yield* resolveReferenceAnchorsForCollectorRun(runId).pipe(
+                    Effect.catchTag("CollectionError", (error) =>
+                      Effect.logWarning("BoeCollector reference anchor reconciliation failed", {
+                        collectorId,
+                        runId,
+                        reason: error.reason,
+                        ...describeQueryCause(error.cause),
+                      }),
+                    ),
+                  );
 
                   yield* finishSyncRun({
                     runId,
