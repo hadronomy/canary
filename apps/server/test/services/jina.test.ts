@@ -56,6 +56,8 @@ function readHeaderFromFetchCall(call: readonly [unknown, unknown?], name: strin
 }
 
 describe("EmbeddingService", () => {
+  const mockEmbedding1024 = Array.from({ length: 1024 }, (_, index) => index / 1024);
+
   describe("normalizeInput", () => {
     it("should normalize plain text", async () => {
       const result = await Effect.runPromise(normalizeInput("hello world"));
@@ -102,7 +104,7 @@ describe("EmbeddingService", () => {
       new Response(
         JSON.stringify({
           model: "jina-embeddings-v4",
-          data: [{ embedding: [0.1, 0.2], multi_vector: [[0.3, 0.4]], index: 0 }],
+          data: [{ embedding: mockEmbedding1024, index: 0 }],
           usage: { total_tokens: 2, prompt_tokens: 2 },
         }),
       ),
@@ -124,9 +126,8 @@ describe("EmbeddingService", () => {
     expect(mockFetch).toHaveBeenCalled();
     const lastCall = mockFetch.mock.calls.at(-1)!;
     expect(readHeaderFromFetchCall(lastCall, "Authorization")).toBe("Bearer test-key");
-    expect(result.full).toEqual([0.1, 0.2]);
-    expect(result.scout).toEqual([0.1, 0.2]);
-    expect(result.multi).toEqual([[0.3, 0.4]]);
+    expect(result.full).toEqual(mockEmbedding1024);
+    expect(result.scout).toEqual(mockEmbedding1024.slice(0, 256));
 
     mockFetch.mockRestore();
   });
@@ -142,7 +143,6 @@ describe("EmbeddingService", () => {
 
     expect(result.scout).toBeDefined();
     expect(result.full).toBeDefined();
-    expect(result.multi).toBeDefined();
   });
 
   it("should rerank documents using Test layer", async () => {
@@ -174,7 +174,7 @@ describe("EmbeddingService", () => {
       new Response(
         JSON.stringify({
           model: "jina-embeddings-v4",
-          data: [{ embedding: [0.1], index: 0 }],
+          data: [{ embedding: mockEmbedding1024, index: 0 }],
           usage: { total_tokens: 1, prompt_tokens: 1 },
         }),
       ),
@@ -212,7 +212,7 @@ describe("EmbeddingService", () => {
       new Response(
         JSON.stringify({
           model: "jina-embeddings-v4",
-          data: [{ embedding: [0.1], index: 0 }],
+          data: [{ embedding: mockEmbedding1024, index: 0 }],
           usage: { total_tokens: 1, prompt_tokens: 1 },
         }),
       ),
