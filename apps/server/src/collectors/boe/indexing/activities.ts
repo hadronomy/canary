@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Chunk, Config, Effect, Schema, Stream } from "effect";
 
 import { and, eq, sql } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
@@ -8,11 +8,23 @@ import {
   nodeTypeEnum,
   senseFragments,
 } from "@canary/db/schema/legislation";
-import { astNodePaths, BoeXmlParser } from "~/collectors/boe/parser";
+import {
+  BoeXmlParser,
+  legalNodePathToLtree,
+  nodePathToLtree,
+  type BoeFragment,
+} from "~/collectors/boe/parser";
 import { EmbeddingService, EmbeddingServiceLive } from "~/services/embedding";
 
 import { IndexingWorkflowError } from "./errors";
 import type { IndexingTriggerPayload } from "./schema";
+
+const IndexingConfig = Config.all({
+  dbUpdateConcurrency: Config.number("DB_UPDATE_CONCURRENCY").pipe(Config.withDefault(4)),
+  upsertBatchSize: Config.number("INDEXING_UPSERT_BATCH_SIZE").pipe(Config.withDefault(250)),
+  embedBatchSize: Config.number("INDEXING_EMBED_BATCH_SIZE").pipe(Config.withDefault(64)),
+  profileMemory: Config.boolean("INDEXING_PROFILE_MEMORY").pipe(Config.withDefault(false)),
+});
 
 export const FragmentRowSchema = Schema.Struct({
   fragmentId: Schema.String,
@@ -63,6 +75,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
       const db = yield* DatabaseService.client();
       const parser = yield* BoeXmlParser;
       const embedding = yield* EmbeddingService;
+      const config = yield* IndexingConfig;
 
       const markInProgress = Effect.fn("BoeIndexingActivities.markInProgress")(
         (payload: IndexingTriggerPayload, executionId: string) =>
@@ -206,56 +219,45 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           }),
       );
 
-      const parseDocument = Effect.fn("BoeIndexingActivities.parseDocument")(
-        (payload: IndexingTriggerPayload, executionId: string, xml: string) =>
-          Effect.gen(function* () {
-            const parsed = yield* parser
-              .parse({ xml })
-              .pipe(
-                Effect.mapError((cause) =>
-                  toWorkflowError(
-                    payload,
-                    executionId,
-                    "parse-document",
-                    cause,
-                    "Unable to parse BOE XML document",
-                  ),
-                ),
-              );
+      const mapNodeToParsedFragment = (
+        payload: IndexingTriggerPayload,
+        fragment: BoeFragment,
+      ): ParsedFragment => {
+        const nodePath = fragment.nodePath;
+        const legalNodePath = fragment.legalNodePath;
+        return {
+          content: fragment.content,
+          contentNormalized: fragment.contentNormalized,
+          nodePath,
+          nodePathLtree: String(nodePathToLtree(nodePath)),
+          legalNodePathLtree:
+            legalNodePath === undefined ? null : String(legalNodePathToLtree(legalNodePath)),
+          nodeType: fragment.nodeType,
+          nodeNumber: fragment.nodeNumber ?? null,
+          nodeTitle: fragment.nodeTitle ?? null,
+          precedingContext: fragment.precedingContext ?? null,
+          followingContext: fragment.followingContext ?? null,
+          sequenceIndex: fragment.sequenceIndex,
+          contentFingerprint: createContentFingerprint(
+            payload.docId,
+            payload.versionId,
+            nodePath,
+            fragment.contentNormalized,
+          ),
+        };
+      };
 
-            return parsed.ast.nodes.map((node) => {
-              const paths = astNodePaths(node);
-              return {
-                content: node.content,
-                contentNormalized: node.contentNormalized,
-                nodePath: String(node.nodePath),
-                nodePathLtree: String(paths.nodePathLtree),
-                legalNodePathLtree:
-                  paths.legalNodePathLtree === undefined ? null : String(paths.legalNodePathLtree),
-                nodeType: node.nodeType,
-                nodeNumber: node.nodeNumber ?? null,
-                nodeTitle: node.nodeTitle ?? null,
-                precedingContext: node.precedingContext ?? null,
-                followingContext: node.followingContext ?? null,
-                sequenceIndex: node.sequenceIndex,
-                contentFingerprint: createContentFingerprint(
-                  payload.docId,
-                  payload.versionId,
-                  String(node.nodePath),
-                  node.contentNormalized,
-                ),
-              } satisfies ParsedFragment;
-            });
-          }),
-      );
-
-      const upsertFragments = Effect.fn("BoeIndexingActivities.upsertFragments")(
+      const upsertFragmentBatch = Effect.fn("BoeIndexingActivities.upsertFragmentBatch")(
         (
           payload: IndexingTriggerPayload,
           executionId: string,
           parsedFragments: ReadonlyArray<ParsedFragment>,
         ) =>
           Effect.gen(function* () {
+            if (parsedFragments.length === 0) {
+              return [] as ReadonlyArray<FragmentRow>;
+            }
+
             const now = new Date();
             const rows = parsedFragments.map((fragment) => ({
               docId: payload.docId,
@@ -275,11 +277,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               updatedAt: now,
             }));
 
-            if (rows.length === 0) {
-              return [] as ReadonlyArray<FragmentRow>;
-            }
-
-            yield* db
+            return yield* db
               .insert(senseFragments)
               .values(rows)
               .onConflictDoUpdate({
@@ -299,6 +297,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   updatedAt: sql`excluded.updated_at`,
                 },
               })
+              .returning({ fragmentId: senseFragments.fragmentId, content: senseFragments.content })
               .pipe(
                 Effect.mapError((cause) =>
                   toWorkflowError(
@@ -310,91 +309,146 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   ),
                 ),
               );
-
-            return yield* db
-              .select({ fragmentId: senseFragments.fragmentId, content: senseFragments.content })
-              .from(senseFragments)
-              .where(
-                and(
-                  eq(senseFragments.docId, payload.docId),
-                  eq(senseFragments.versionId, payload.versionId),
-                ),
-              )
-              .pipe(
-                Effect.mapError((cause) =>
-                  toWorkflowError(
-                    payload,
-                    executionId,
-                    "upsert-fragments",
-                    cause,
-                    "Unable to list upserted sense fragments",
-                  ),
-                ),
-              );
           }),
       );
 
-      const embedFragments = Effect.fn("BoeIndexingActivities.embedFragments")(
+      const embedFragmentRows = Effect.fn("BoeIndexingActivities.embedFragmentRows")(
         (payload: IndexingTriggerPayload, executionId: string, rows: ReadonlyArray<FragmentRow>) =>
-          Effect.gen(function* () {
-            if (rows.length === 0) {
-              return;
-            }
+          Stream.fromIterable(rows).pipe(
+            Stream.grouped(config.embedBatchSize),
+            Stream.mapEffect(
+              (batch) => {
+                const batchRows = Chunk.toReadonlyArray(batch);
+                return Effect.gen(function* () {
+                  const vectors = yield* embedding
+                    .embed(batchRows.map((row) => row.content))
+                    .pipe(
+                      Effect.mapError((cause) =>
+                        toWorkflowError(
+                          payload,
+                          executionId,
+                          "embed-fragments",
+                          cause,
+                          "Unable to generate embeddings for fragments",
+                        ),
+                      ),
+                    );
 
-            const vectors = yield* embedding
-              .embed(rows.map((row) => row.content))
+                  if (!Array.isArray(vectors) || vectors.length !== batchRows.length) {
+                    return yield* toWorkflowError(
+                      payload,
+                      executionId,
+                      "embed-fragments",
+                      undefined,
+                      "Embedding service returned unexpected vector cardinality",
+                    );
+                  }
+
+                  yield* Effect.forEach(
+                    batchRows,
+                    (row, index) => {
+                      const vector = vectors[index];
+                      if (vector === undefined) {
+                        return Effect.fail(
+                          toWorkflowError(
+                            payload,
+                            executionId,
+                            "embed-fragments",
+                            undefined,
+                            `Missing embedding vector for fragment ${row.fragmentId} at index ${index}`,
+                          ),
+                        );
+                      }
+
+                      return db
+                        .update(senseFragments)
+                        .set({
+                          embedding1024: vector.full,
+                          embedding256: vector.scout,
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(senseFragments.fragmentId, row.fragmentId))
+                        .pipe(
+                          Effect.mapError((cause) =>
+                            toWorkflowError(
+                              payload,
+                              executionId,
+                              "embed-fragments",
+                              cause,
+                              "Unable to persist generated fragment embedding",
+                            ),
+                          ),
+                          Effect.asVoid,
+                        );
+                    },
+                    { discard: true, concurrency: config.dbUpdateConcurrency },
+                  );
+
+                  if (config.profileMemory) {
+                    const usage = process.memoryUsage();
+                    yield* Effect.logInfo("indexing.embed.batch.completed", {
+                      docId: payload.docId,
+                      versionId: payload.versionId,
+                      batchSize: batchRows.length,
+                      rssMb: Math.round(usage.rss / (1024 * 1024)),
+                      heapUsedMb: Math.round(usage.heapUsed / (1024 * 1024)),
+                    });
+                  }
+                });
+              },
+              { concurrency: 1 },
+            ),
+            Stream.runDrain,
+          ),
+      );
+
+      const processFragments = Effect.fn("BoeIndexingActivities.processFragments")(
+        (payload: IndexingTriggerPayload, executionId: string, xml: string) =>
+          Effect.gen(function* () {
+            const fragments = yield* parser
+              .parseForIndexing({ xml })
               .pipe(
                 Effect.mapError((cause) =>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "embed-fragments",
+                    "parse-document",
                     cause,
-                    "Unable to generate embeddings for fragments",
+                    "Unable to parse BOE XML document",
                   ),
                 ),
               );
 
-            if (!Array.isArray(vectors) || vectors.length !== rows.length) {
-              return yield* toWorkflowError(
-                payload,
-                executionId,
-                "embed-fragments",
-                undefined,
-                "Embedding service returned unexpected vector cardinality",
-              );
-            }
+            yield* Stream.fromIterable(fragments).pipe(
+              Stream.map((fragment) => mapNodeToParsedFragment(payload, fragment)),
+              Stream.grouped(config.upsertBatchSize),
+              Stream.mapEffect(
+                (batch) => {
+                  const parsedBatch = Chunk.toReadonlyArray(batch);
+                  return Effect.gen(function* () {
+                    const persistedRows = yield* upsertFragmentBatch(
+                      payload,
+                      executionId,
+                      parsedBatch,
+                    );
+                    yield* embedFragmentRows(payload, executionId, persistedRows);
 
-            yield* Effect.forEach(
-              rows,
-              (row, index) => {
-                const vector = vectors[index];
-                if (vector === undefined) {
-                  return Effect.void;
-                }
-
-                return db
-                  .update(senseFragments)
-                  .set({
-                    embedding1024: vector.full,
-                    embedding256: vector.scout,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(senseFragments.fragmentId, row.fragmentId))
-                  .pipe(
-                    Effect.mapError((cause) =>
-                      toWorkflowError(
-                        payload,
-                        executionId,
-                        "embed-fragments",
-                        cause,
-                        "Unable to persist generated fragment embedding",
-                      ),
-                    ),
-                    Effect.asVoid,
-                  );
-              },
-              { discard: true, concurrency: 4 },
+                    if (config.profileMemory) {
+                      const usage = process.memoryUsage();
+                      yield* Effect.logInfo("indexing.fragment.batch.completed", {
+                        docId: payload.docId,
+                        versionId: payload.versionId,
+                        parsedBatchSize: parsedBatch.length,
+                        persistedBatchSize: persistedRows.length,
+                        rssMb: Math.round(usage.rss / (1024 * 1024)),
+                        heapUsedMb: Math.round(usage.heapUsed / (1024 * 1024)),
+                      });
+                    }
+                  });
+                },
+                { concurrency: 1 },
+              ),
+              Stream.runDrain,
             );
           }),
       );
@@ -447,6 +501,17 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             )
             .pipe(
               Effect.asVoid,
+              Effect.tapError((cause) =>
+                Effect.logError(
+                  "BoeIndexingActivities.finalizeFailed could not persist failed status",
+                  {
+                    docId: payload.docId,
+                    versionId: payload.versionId,
+                    reason,
+                    cause: String(cause),
+                  },
+                ),
+              ),
               Effect.catchAll(() => Effect.void),
             ),
       );
@@ -455,9 +520,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
         markInProgress,
         ensureLatestVersion,
         loadVersionContent,
-        parseDocument,
-        upsertFragments,
-        embedFragments,
+        processFragments,
         finalizeReady,
         finalizeFailed,
       };

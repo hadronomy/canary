@@ -119,6 +119,16 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       ),
     );
 
+    const parseForIndexing = Effect.fn("BoeXmlParser.parseForIndexing")((input: ParseInput) =>
+      Effect.gen(function* () {
+        const raw = yield* parseRaw(input.xml);
+        const metadata = yield* decodeMetadata(raw.documentoEntries);
+        const blocks = yield* linearizeBlocks(raw.ordered);
+        const strategy = determineParsingStrategy(metadata);
+        return yield* buildFragmentsFromInput({ metadata, strategy, blocks });
+      }),
+    );
+
     const buildAstFromInput = Effect.fn("BoeXmlParser.buildAst")((input: BuildInput) =>
       Effect.gen(function* () {
         const built = buildAst(input);
@@ -132,7 +142,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
     );
 
     const parseToFragments = Effect.fn("BoeXmlParser.parseToFragments")((input: ParseInput) =>
-      parse(input).pipe(Effect.map((document) => document.fragments)),
+      parseForIndexing(input),
     );
 
     const fragmentBuilder = Effect.fn("BoeXmlParser.fragmentBuilder")(
@@ -211,6 +221,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       parse,
       buildAst: buildAstFromInput,
       parseDocument,
+      parseForIndexing,
       buildFragments: buildFragmentsFromInput,
       parseToFragments,
       selectByPath,

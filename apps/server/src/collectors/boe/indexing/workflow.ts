@@ -23,9 +23,7 @@ export class BoeIndexingWorkflow extends Effect.Service<BoeIndexingWorkflow>()(
       );
 
       const start = Effect.fn("BoeIndexingWorkflow.start")((payload: IndexingTriggerPayload) =>
-        BoeDocumentIndexWorkflow.execute(payload, { discard: true }).pipe(
-          Effect.provide(workflowContext),
-        ),
+        BoeDocumentIndexWorkflow.execute(payload).pipe(Effect.provide(workflowContext)),
       );
 
       const startMany = Effect.fn("BoeIndexingWorkflow.startMany")(

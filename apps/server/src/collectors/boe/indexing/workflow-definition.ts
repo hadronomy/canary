@@ -1,7 +1,7 @@
 import { Activity, Workflow } from "@effect/workflow";
 import { Effect, Schema } from "effect";
 
-import { BoeIndexingActivities, FragmentRowSchema, ParsedFragmentSchema } from "./activities";
+import { BoeIndexingActivities } from "./activities";
 import { IndexingWorkflowError } from "./errors";
 import { IndexingTriggerPayload } from "./schema";
 
@@ -36,25 +36,11 @@ export const BoeDocumentIndexWorkflowLayer = BoeDocumentIndexWorkflow.toLayer(
         execute: activities.loadVersionContent(payload, executionId),
       }).pipe(retryTransient);
 
-      const fragments = yield* Activity.make({
-        name: "BoeIndexing.ParseDocument",
-        success: Schema.Array(ParsedFragmentSchema),
-        error: IndexingWorkflowError,
-        execute: activities.parseDocument(payload, executionId, contentText),
-      }).pipe(retryTransient);
-
-      const persistedFragments = yield* Activity.make({
-        name: "BoeIndexing.UpsertFragments",
-        success: Schema.Array(FragmentRowSchema),
-        error: IndexingWorkflowError,
-        execute: activities.upsertFragments(payload, executionId, fragments),
-      }).pipe(retryTransient);
-
       yield* Activity.make({
-        name: "BoeIndexing.EmbedFragments",
+        name: "BoeIndexing.ProcessFragments",
         success: Schema.Void,
         error: IndexingWorkflowError,
-        execute: activities.embedFragments(payload, executionId, persistedFragments),
+        execute: activities.processFragments(payload, executionId, contentText),
       }).pipe(retryTransient);
 
       yield* Activity.make({

@@ -32,6 +32,9 @@ export interface BoeFragmentBuilderApi {
 export interface BoeXmlParserApi extends BoeFragmentBuilderApi {
   readonly parse: (input: ParseInput) => Effect.Effect<BoeParsedDocument, BoeParseError>;
   readonly parseDocument: (input: ParseInput) => Effect.Effect<BoeXmlDocument, BoeParseError>;
+  readonly parseForIndexing: (
+    input: ParseInput,
+  ) => Effect.Effect<ReadonlyArray<BoeFragment>, BoeParseError>;
   readonly parseToFragments: (
     input: ParseInput,
   ) => Effect.Effect<ReadonlyArray<BoeFragment>, BoeParseError>;
