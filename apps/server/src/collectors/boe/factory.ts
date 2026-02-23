@@ -38,7 +38,7 @@ import {
 } from "~/services/collector/schema";
 
 import { BoeCollectorConfig } from "./config";
-import { BoeIndexingWorkflow, IndexingTriggerPayload } from "./indexing";
+import { BoeIndexingQueue, IndexingTriggerPayload } from "./indexing";
 import { mapBoeLawToDocument, parseBoeDate, parseBoeDateTime } from "./mapping";
 import { BoeResponseSchema, normalizeBoeItems, type BoeLawItem } from "./schemas";
 
@@ -254,7 +254,7 @@ export const BoeLawsCollectorFactory = defineFactory({
   make: ({ collectorId, config }) =>
     Effect.gen(function* () {
       const db = yield* DatabaseService.client();
-      const indexingWorkflow = yield* BoeIndexingWorkflow;
+      const indexingQueue = yield* BoeIndexingQueue;
 
       const sourceId = config.sourceId;
       const requestTimeout = config.timeout;
@@ -1126,17 +1126,24 @@ export const BoeLawsCollectorFactory = defineFactory({
                 runId,
               );
               if (payloads.length > 0) {
-                yield* indexingWorkflow.startMany(payloads).pipe(
+                yield* indexingQueue.enqueueMany(payloads).pipe(
                   Effect.tapError((cause) =>
-                    Effect.logWarning(
-                      "Boe indexing workflow trigger failed; continuing collector run",
-                      {
+                    Effect.logWarning("Boe indexing enqueue failed; continuing collector run", {
+                      collectorId,
+                      runId,
+                      payloadCount: payloads.length,
+                      ...describeQueryCause(cause),
+                    }),
+                  ),
+                  Effect.mapError(
+                    (cause) =>
+                      new CollectionError({
                         collectorId,
                         runId,
-                        payloadCount: payloads.length,
-                        ...describeQueryCause(cause),
-                      },
-                    ),
+                        reason: "Unable to enqueue BOE indexing jobs",
+                        cause,
+                        message: `Collection error [${collectorId}]: Unable to enqueue BOE indexing jobs`,
+                      }),
                   ),
                 );
               }

@@ -4,3 +4,4 @@ export * from "./errors";
 export * from "./schema";
 export * from "./workflow";
 export * from "./workflow-definition";
+export * from "./queue";
