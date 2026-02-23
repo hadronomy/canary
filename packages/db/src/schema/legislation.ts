@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   boolean,
-  check,
   customType,
   index,
   integer,
@@ -24,7 +23,6 @@ export const ltree = customType<{ data: string }>({
   },
 });
 
-// ─── Enums ───
 export const jurisdictionEnum = pgEnum("jurisdiction", [
   "estatal",
   "andalucia",
@@ -144,7 +142,6 @@ export const indexingJobStatusEnum = pgEnum("indexing_job_status", [
   "failed",
 ]);
 
-// ─── 1. Legislative Sources ───
 export const legislativeSources = pgTable(
   "legislative_sources",
   {
@@ -188,7 +185,6 @@ export const legislativeSources = pgTable(
   ],
 );
 
-// ─── 2. Legal Documents ───
 export const legalDocuments = pgTable(
   "legal_documents",
   {
@@ -283,7 +279,6 @@ export const legalDocuments = pgTable(
   ],
 );
 
-// ─── 3. Document Versions ───
 export const documentVersions = pgTable(
   "document_versions",
   {
@@ -303,7 +298,6 @@ export const documentVersions = pgTable(
   (table) => [uniqueIndex("idx_version_doc_num").on(table.docId, table.versionNumber)],
 );
 
-// ─── 4. Legislative Events (ULID) ───
 export const legislativeEvents = pgTable(
   "legislative_events",
   {
@@ -322,7 +316,6 @@ export const legislativeEvents = pgTable(
   (table) => [index("idx_event_doc").on(table.docId, table.occurredAt)],
 );
 
-// ─── 5. Sense Fragments ───
 export const senseFragments = pgTable(
   "sense_fragments",
   {
@@ -379,7 +372,6 @@ export const senseFragments = pgTable(
   ],
 );
 
-// ─── 6. Reference Anchors (ULID) ───
 export const referenceAnchors = pgTable(
   "reference_anchors",
   {
@@ -409,29 +401,6 @@ export const referenceAnchors = pgTable(
   ],
 );
 
-// ─── 7. Legal Paths ───
-export const legalPaths = pgTable(
-  "legal_paths",
-  {
-    pathId: uuid("path_id")
-      .primaryKey()
-      .default(sql`gen_random_uuid_v7()`),
-    startDocId: uuid("start_doc_id")
-      .references(() => legalDocuments.docId)
-      .notNull(),
-    endDocId: uuid("end_doc_id")
-      .references(() => legalDocuments.docId)
-      .notNull(),
-    pathType: varchar("path_type", { length: 50 }).notNull(),
-    pathLength: integer("path_length").notNull(),
-    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("idx_path_endpoints").on(table.startDocId, table.endDocId, table.pathType),
-  ],
-);
-
-// ─── 8. Query Cache (NanoID) ───
 export const queryCacheEntries = pgTable(
   "query_cache_entries",
   {
@@ -449,27 +418,6 @@ export const queryCacheEntries = pgTable(
   ],
 );
 
-// ─── 9. Audit Log (ULID) ───
-export const auditLog = pgTable(
-  "audit_logs",
-  {
-    logId: varchar("log_id", { length: 26 })
-      .primaryKey()
-      .default(sql`generate_ulid()`),
-    eventType: varchar("event_type", { length: 50 }).notNull(),
-    entityType: varchar("entity_type", { length: 50 }).notNull(),
-    entityId: uuid("entity_id").notNull(),
-    actorId: varchar("actor_id", { length: 100 }),
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
-    metadata: jsonb("metadata").default({}),
-  },
-  (table) => [
-    index("idx_audit_entity").on(table.entityType, table.entityId, table.occurredAt),
-    sql`CREATE INDEX idx_audit_time_brin ON ${table} USING BRIN (${table.occurredAt})`,
-  ],
-);
-
-// ─── 10. Sync Runs ───
 export const syncRuns = pgTable(
   "sync_runs",
   {
@@ -490,39 +438,6 @@ export const syncRuns = pgTable(
     metadata: jsonb("metadata").default({}),
   },
   (table) => [index("idx_sync_source_time").on(table.sourceId, table.startedAt)],
-);
-
-// ─── 11. Embeddings Cache ───
-export const embeddingCache = pgTable(
-  "embedding_cache",
-  {
-    embeddingId: uuid("embedding_id")
-      .primaryKey()
-      .default(sql`gen_random_uuid_v7()`),
-    fragmentId: uuid("fragment_id")
-      .references(() => senseFragments.fragmentId, { onDelete: "cascade" })
-      .notNull(),
-    modelName: embeddingModelEnum("model_name").notNull(),
-    dimensions: integer("dimensions").notNull(),
-    embeddingVector: vector("embedding_vector", { dimensions: 1536 }),
-    embeddingBinary: jsonb("embedding_binary"),
-    computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow(),
-    computeDurationMs: integer("compute_duration_ms"),
-  },
-  (table) => [
-    uniqueIndex("idx_embedding_fragment_model").on(table.fragmentId, table.modelName),
-    index("idx_embedding_vector_hnsw").using("hnsw", table.embeddingVector.op("vector_cosine_ops")),
-    check(
-      "chk_embeddings_model_dims",
-      sql`(
-        (${table.modelName} = 'jina-embeddings-v4' and ${table.dimensions} in (256, 1024, 1536))
-        or (${table.modelName} = 'openai_3_small' and ${table.dimensions} in (256, 1024, 1536))
-        or (${table.modelName} = 'openai_3_large' and ${table.dimensions} in (256, 1024, 1536))
-        or (${table.modelName} = 'e5_multilingual' and ${table.dimensions} in (256, 384, 768, 1024))
-        or (${table.modelName} = 'custom' and ${table.dimensions} > 0 and ${table.dimensions} <= 1536)
-      )`,
-    ),
-  ],
 );
 
 export const fragmentIndexJobs = pgTable(
@@ -553,7 +468,6 @@ export const fragmentIndexJobs = pgTable(
   ],
 );
 
-// ─── Types ───
 export type LegislativeSource = typeof legislativeSources.$inferSelect;
 export type NewLegislativeSource = typeof legislativeSources.$inferInsert;
 
@@ -572,25 +486,15 @@ export type NewSenseFragment = typeof senseFragments.$inferInsert;
 export type ReferenceAnchor = typeof referenceAnchors.$inferSelect;
 export type NewReferenceAnchor = typeof referenceAnchors.$inferInsert;
 
-export type LegalPath = typeof legalPaths.$inferSelect;
-export type NewLegalPath = typeof legalPaths.$inferInsert;
-
 export type QueryCacheEntry = typeof queryCacheEntries.$inferSelect;
 export type NewQueryCacheEntry = typeof queryCacheEntries.$inferInsert;
-
-export type AuditLogEntry = typeof auditLog.$inferSelect;
-export type NewAuditLogEntry = typeof auditLog.$inferInsert;
 
 export type SyncRun = typeof syncRuns.$inferSelect;
 export type NewSyncRun = typeof syncRuns.$inferInsert;
 
-export type EmbeddingsCacheEntry = typeof embeddingCache.$inferSelect;
-export type NewEmbeddingsCacheEntry = typeof embeddingCache.$inferInsert;
-
 export type FragmentIndexJob = typeof fragmentIndexJobs.$inferSelect;
 export type NewFragmentIndexJob = typeof fragmentIndexJobs.$inferInsert;
 
-// ─── Enums Types ───
 export type Jurisdiction = (typeof jurisdictionEnum.enumValues)[number];
 export type LegislativeStage = (typeof legislativeStageEnum.enumValues)[number];
 export type ContentType = (typeof contentTypeEnum.enumValues)[number];

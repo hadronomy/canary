@@ -91,10 +91,6 @@ export const relations = defineRelations(schema, (r) => ({
       to: r.referenceAnchors.sourceFragmentId,
       alias: "fragmentSourceRefs",
     }),
-    embeddings: r.many.embeddingCache({
-      from: r.senseFragments.fragmentId,
-      to: r.embeddingCache.fragmentId,
-    }),
   },
   referenceAnchors: {
     sourceDoc: r.one.legalDocuments({
@@ -113,26 +109,10 @@ export const relations = defineRelations(schema, (r) => ({
       alias: "fragmentSourceRefs",
     }),
   },
-  legalPaths: {
-    startDoc: r.one.legalDocuments({
-      from: r.legalPaths.startDocId,
-      to: r.legalDocuments.docId,
-    }),
-    endDoc: r.one.legalDocuments({
-      from: r.legalPaths.endDocId,
-      to: r.legalDocuments.docId,
-    }),
-  },
   syncRuns: {
     source: r.one.legislativeSources({
       from: r.syncRuns.sourceId,
       to: r.legislativeSources.sourceId,
-    }),
-  },
-  embeddingCache: {
-    fragment: r.one.senseFragments({
-      from: r.embeddingCache.fragmentId,
-      to: r.senseFragments.fragmentId,
     }),
   },
   fragmentIndexJobs: {
