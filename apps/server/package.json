@@ -44,6 +44,7 @@
     "@canary/config": "workspace:*",
     "@types/bun": "catalog:",
     "fast-check": "^4.5.3",
+    "mitata": "^1.0.34",
     "tsdown": "^0.16.5",
     "typescript": "catalog:"
   }
