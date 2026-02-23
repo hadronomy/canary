@@ -59,3 +59,52 @@ Use this as an important reference implementation with opentui best practices.
 - Prefer `function` declarations for named reusable functions.
 - Exception: when defining Effect-based service/runtime operations, prefer `const x = Effect.fn("...")` for traceable spans and ergonomic composition.
 - In test directories, extract repeated fixture/parser helpers into a local shared module (for example `test/collectors/<domain>/common.ts`) and import from there.
+
+## Database Best Practices (Drizzle)
+
+**IMPORTANT:** Never write manual SQL migrations.
+
+1. Update the TypeScript Drizzle schema files (in `packages/db/src/schema/`)
+2. Run `bun db:generate` (or equivalent) to auto-generate migrations
+3. Review the generated migration files before applying
+4. Run `bun db:migrate` to apply migrations
+
+**Anti-patterns to avoid:**
+
+- ❌ Writing `.sql` migration files manually
+- ❌ Editing generated migration files (unless fixing a bug)
+- ❌ Using raw SQL for schema changes when Drizzle DSL can express them
+
+**When to use raw SQL:**
+
+- Complex PostgreSQL-specific features not yet supported by Drizzle
+- Performance optimizations requiring custom indexes
+- Data migrations/transformations (not schema changes)
+
+## Dependency Management
+
+**Always use `bun add` to install dependencies.** Never manually edit `package.json`.
+
+**Adding production dependencies:**
+
+```bash
+bun add <package-name>
+```
+
+**Adding development dependencies:**
+
+```bash
+bun add -d <package-name>
+```
+
+**Anti-patterns to avoid:**
+
+- ❌ Manually editing `package.json` to add dependencies
+- ❌ Manually editing `package.json` to add version numbers
+- ❌ Using `npm install` or `pnpm add` (inconsistent lockfiles)
+
+**Why this matters:**
+
+- `bun add` updates both `package.json` AND `bun.lockb` consistently
+- Manual edits can lead to lockfile desynchronization
+- Version resolution and peer dependency handling is done correctly
