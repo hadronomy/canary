@@ -81,7 +81,8 @@ const AxiomNodeSdkLive = Layer.unwrapEffect(
         },
       },
       spanProcessor: new BatchSpanProcessor(traceExporter, {
-        maxQueueSize: 2048,
+        maxQueueSize: 512,
+        maxExportBatchSize: 128,
         scheduledDelayMillis: 1000,
         exportTimeoutMillis: 30000,
       }),
