@@ -129,6 +129,25 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       }),
     );
 
+    const parseForIndexingWithReferences = Effect.fn("BoeXmlParser.parseForIndexingWithReferences")(
+      (input: ParseInput) =>
+        Effect.gen(function* () {
+          const raw = yield* parseRaw(input.xml);
+          const metadata = yield* decodeMetadata(raw.documentoEntries);
+          const analysis = extractAnalysis(raw.documentoEntries);
+          const blocks = yield* linearizeBlocks(raw.ordered);
+          const strategy = determineParsingStrategy(metadata);
+          const fragments = yield* buildFragmentsFromInput({ metadata, strategy, blocks });
+
+          // Memory optimization: returning only what is needed lets the V8 garbage collector
+          // aggressively free the massive XML object and the AST tree structure.
+          return {
+            fragments,
+            references: analysis.priorReferences,
+          };
+        }),
+    );
+
     const buildAstFromInput = Effect.fn("BoeXmlParser.buildAst")((input: BuildInput) =>
       Effect.gen(function* () {
         const built = buildAst(input);
@@ -222,6 +241,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       buildAst: buildAstFromInput,
       parseDocument,
       parseForIndexing,
+      parseForIndexingWithReferences,
       buildFragments: buildFragmentsFromInput,
       parseToFragments,
       selectByPath,
@@ -311,17 +331,57 @@ function extractMetadata(documentoEntries: ReadonlyArray<unknown>): BoeMetadata 
 function extractAnalysis(documentoEntries: ReadonlyArray<unknown>): BoeAnalysis {
   const analysisEntries = getChildEntries(documentoEntries, "analisis");
   const analysis = asRecord(orderedEntriesToRecord(analysisEntries));
+  const priorReferenceEntries = extractReferenceRecords(analysisEntries, "anteriores", "anterior");
+  const posteriorReferenceEntries = extractReferenceRecords(
+    analysisEntries,
+    "posteriores",
+    "posterior",
+  );
 
   return {
     subjects: extractTextArray(asRecord(analysis.materias).materia),
     notes: extractTextArray(asRecord(analysis.notas).nota),
-    priorReferences: extractReferences(
-      asRecord(asRecord(analysis.referencias).anteriores).anterior,
-    ),
-    posteriorReferences: extractReferences(
-      asRecord(asRecord(analysis.referencias).posteriores).posterior,
-    ),
+    priorReferences:
+      priorReferenceEntries.length > 0
+        ? extractReferences(priorReferenceEntries)
+        : extractReferences(asRecord(asRecord(analysis.referencias).anteriores).anterior),
+    posteriorReferences:
+      posteriorReferenceEntries.length > 0
+        ? extractReferences(posteriorReferenceEntries)
+        : extractReferences(asRecord(asRecord(analysis.referencias).posteriores).posterior),
   };
+}
+
+function extractReferenceRecords(
+  analysisEntries: ReadonlyArray<unknown>,
+  sectionTag: "anteriores" | "posteriores",
+  itemTag: "anterior" | "posterior",
+): ReadonlyArray<Record<string, unknown>> {
+  const sectionEntries = getChildEntries(
+    getChildEntries(analysisEntries, "referencias"),
+    sectionTag,
+  );
+  const records: Array<Record<string, unknown>> = [];
+
+  for (const sectionEntry of sectionEntries) {
+    if (!isRecord(sectionEntry)) {
+      continue;
+    }
+
+    const itemValue = sectionEntry[itemTag];
+    if (itemValue === undefined) {
+      continue;
+    }
+
+    const bodyRecord = orderedEntriesToRecord(asArray(itemValue));
+    const attributeRecord = asRecord(sectionEntry[":@"]);
+    records.push({
+      ...bodyRecord,
+      ...attributeRecord,
+    });
+  }
+
+  return records;
 }
 
 function extractReferences(input: unknown): ReadonlyArray<LegalReference> {
@@ -329,10 +389,14 @@ function extractReferences(input: unknown): ReadonlyArray<LegalReference> {
   return entries
     .map((entry): LegalReference | null => {
       const record = asRecord(entry);
-      const reference = asText(record.referencia);
-      const type = asText(record.tipo);
-      const text = asText(record["#text"]);
-      if (reference.length === 0 && text.length === 0) {
+      const referenceRaw = asText(record.referencia ?? record["@_referencia"]);
+      const type = asText(record.tipo ?? record.palabra ?? record["@_tipo"]);
+      const text = asText(record.text ?? record.texto ?? record["#text"]);
+
+      const reference =
+        normalizeReferenceIdentifier(referenceRaw) ?? extractReferenceIdentifierFromText(text);
+
+      if (reference === null) {
         return null;
       }
 
@@ -343,6 +407,21 @@ function extractReferences(input: unknown): ReadonlyArray<LegalReference> {
       };
     })
     .filter((entry): entry is LegalReference => entry !== null);
+}
+
+function normalizeReferenceIdentifier(reference: string): string | null {
+  const trimmed = reference.trim();
+  if (trimmed.length === 0 || /^-+$/.test(trimmed)) {
+    return null;
+  }
+
+  const normalized = trimmed.replace(/^boe:/i, "").toUpperCase();
+  return /^[A-Z]+-[A-Z]-\d{1,}-\d+$/.test(normalized) ? normalized : null;
+}
+
+function extractReferenceIdentifierFromText(text: string): string | null {
+  const match = text.toUpperCase().match(/\b([A-Z]+-[A-Z]-\d{1,}-\d+)\b/);
+  return match?.[1] ?? null;
 }
 
 function extractTextArray(input: unknown): ReadonlyArray<string> {

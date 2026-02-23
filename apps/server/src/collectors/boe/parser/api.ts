@@ -13,6 +13,7 @@ import type {
   FragmentPathQuery,
   FragmentTokenCountResult,
   LegalNodePathString,
+  LegalReference,
   MarkdownString,
   ParseInput,
 } from "./types";
@@ -35,6 +36,13 @@ export interface BoeXmlParserApi extends BoeFragmentBuilderApi {
   readonly parseForIndexing: (
     input: ParseInput,
   ) => Effect.Effect<ReadonlyArray<BoeFragment>, BoeParseError>;
+  readonly parseForIndexingWithReferences: (input: ParseInput) => Effect.Effect<
+    {
+      readonly fragments: ReadonlyArray<BoeFragment>;
+      readonly references: ReadonlyArray<LegalReference>;
+    },
+    BoeParseError
+  >;
   readonly parseToFragments: (
     input: ParseInput,
   ) => Effect.Effect<ReadonlyArray<BoeFragment>, BoeParseError>;
