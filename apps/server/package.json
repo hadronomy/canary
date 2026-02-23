@@ -7,7 +7,8 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.js"
+    "reset": "bun -e 'const { readdir, unlink } = await import(\"node:fs/promises\"); for (const f of await readdir(\".\")) if (f.match(/\\.sqlite/)) await unlink(f)'",
+    "start": "bun reset; bun run src/index.ts"
   },
   "dependencies": {
     "@canary/db": "workspace:*",
