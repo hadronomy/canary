@@ -12,6 +12,8 @@
   "dependencies": {
     "@canary/db": "workspace:*",
     "@canary/env": "workspace:*",
+    "@effect/ai": "^0.33.2",
+    "@effect/ai-openai": "^0.37.2",
     "@effect/cli": "^0.73.0",
     "@effect/cluster": "^0.56.4",
     "@effect/experimental": "^0.58.0",
