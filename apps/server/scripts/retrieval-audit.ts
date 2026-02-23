@@ -1,5 +1,7 @@
 import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
+import ansis from "ansis";
 import { ConfigProvider, Effect, Layer } from "effect";
+import { barplot, bench, boxplot, group, run, summary } from "mitata";
 import { Client } from "pg";
 
 import { EmbeddingService, EmbeddingServiceLive } from "~/services/embedding";
@@ -21,6 +23,13 @@ type SearchHit = {
   score: number;
 };
 
+type SearchHitRow = Omit<SearchHit, "rerank_1024" | "semantic_256" | "hop_distance" | "score"> & {
+  rerank_1024: number | string;
+  semantic_256: number | string;
+  hop_distance: number | string;
+  score: number | string;
+};
+
 type QueryEmbedding = {
   scout: number[];
   full: number[];
@@ -32,12 +41,52 @@ type RetrievalStrategy = {
   authorityHintNormalized: string | null;
 };
 
-type LatencyStats = {
+type BenchmarkStats = {
   minMs: number;
-  p50Ms: number;
-  p90Ms: number;
+  p75Ms: number;
+  p99Ms: number;
+  p999Ms: number;
   maxMs: number;
   avgMs: number;
+};
+
+type QueryAuditResult = {
+  query: string;
+  normalizedQuery: string;
+  stats: BenchmarkStats;
+  hits: SearchHit[];
+};
+
+type MitataRunStats = {
+  avg: number;
+  min: number;
+  p75: number;
+  p99: number;
+  p999: number;
+  max: number;
+};
+
+type MitataRunResult = {
+  name: string;
+  stats?: MitataRunStats;
+  error?: unknown;
+};
+
+type MitataBenchmark = {
+  runs: MitataRunResult[];
+};
+
+type MitataSummary = {
+  benchmarks: MitataBenchmark[];
+  context?: {
+    runtime?: string;
+    version?: string;
+    arch?: string;
+    cpu?: {
+      name?: string;
+      freq?: number;
+    };
+  };
 };
 
 const queries = [
@@ -49,42 +98,84 @@ const queries = [
   "artículo 12 de la constitución española",
 ];
 
-const benchmarkRuns = Number.parseInt(Bun.env.RETRIEVAL_BENCH_RUNS ?? "6", 10);
-const annCandidates = Number.parseInt(Bun.env.RETRIEVAL_ANN_CANDIDATES ?? "64", 10);
-const rerankCandidates = Number.parseInt(Bun.env.RETRIEVAL_RERANK_CANDIDATES ?? "16", 10);
-const seedCount = Number.parseInt(Bun.env.RETRIEVAL_LTREE_SEEDS ?? "4", 10);
-const neighborsPerSeed = Number.parseInt(Bun.env.RETRIEVAL_LTREE_NEIGHBORS ?? "6", 10);
-const hnswEfSearch = Number.parseInt(Bun.env.RETRIEVAL_HNSW_EF_SEARCH ?? "48", 10);
-const expansionMinRerank = Number.parseFloat(Bun.env.RETRIEVAL_EXPANSION_MIN_RERANK ?? "0.45");
-const maxPerNode = Number.parseInt(Bun.env.RETRIEVAL_MAX_PER_NODE ?? "2", 10);
-const finalLimit = Number.parseInt(Bun.env.RETRIEVAL_FINAL_LIMIT ?? "12", 10);
-const citationExactBoost = Number.parseFloat(Bun.env.RETRIEVAL_CITATION_EXACT_BOOST ?? "0.14");
-const citationMismatchPenalty = Number.parseFloat(
-  Bun.env.RETRIEVAL_CITATION_MISMATCH_PENALTY ?? "0.1",
+function parseIntegerEnv(key: string, fallback: number): number {
+  const raw = Bun.env[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  const trimmed = raw.trim();
+  if (!/^-?\d+$/.test(trimmed)) {
+    return fallback;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function parseIntegerEnvWithMin(key: string, fallback: number, min: number): number {
+  const parsed = parseIntegerEnv(key, fallback);
+  return Math.max(min, parsed);
+}
+
+function parseFloatEnv(key: string, fallback: number): number {
+  const raw = Bun.env[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  const trimmed = raw.trim();
+  if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) {
+    return fallback;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+const annCandidates = parseIntegerEnvWithMin("RETRIEVAL_ANN_CANDIDATES", 64, 1);
+const rerankCandidates = parseIntegerEnvWithMin("RETRIEVAL_RERANK_CANDIDATES", 16, 1);
+const seedCount = parseIntegerEnvWithMin("RETRIEVAL_LTREE_SEEDS", 4, 1);
+const neighborsPerSeed = parseIntegerEnvWithMin("RETRIEVAL_LTREE_NEIGHBORS", 6, 1);
+const hnswEfSearch = parseIntegerEnvWithMin("RETRIEVAL_HNSW_EF_SEARCH", 48, 1);
+const expansionMinRerank = parseFloatEnv("RETRIEVAL_EXPANSION_MIN_RERANK", 0.45);
+const maxPerNode = parseIntegerEnvWithMin("RETRIEVAL_MAX_PER_NODE", 2, 1);
+const finalLimit = parseIntegerEnvWithMin("RETRIEVAL_FINAL_LIMIT", 12, 1);
+const citationExactBoost = parseFloatEnv("RETRIEVAL_CITATION_EXACT_BOOST", 0.14);
+const citationMismatchPenalty = parseFloatEnv("RETRIEVAL_CITATION_MISMATCH_PENALTY", 0.1);
+const authorityHintBoost = parseFloatEnv(
+  "RETRIEVAL_AUTHORITY_HINT_BOOST",
+  parseFloatEnv("RETRIEVAL_CONSTITUTION_HINT_BOOST", 0.12),
 );
-const authorityHintBoost = Number.parseFloat(
-  Bun.env.RETRIEVAL_AUTHORITY_HINT_BOOST ?? Bun.env.RETRIEVAL_CONSTITUTION_HINT_BOOST ?? "0.12",
+const authorityMismatchPenalty = parseFloatEnv(
+  "RETRIEVAL_AUTHORITY_MISMATCH_PENALTY",
+  parseFloatEnv("RETRIEVAL_CONSTITUTION_MISMATCH_PENALTY", 0.08),
 );
-const authorityMismatchPenalty = Number.parseFloat(
-  Bun.env.RETRIEVAL_AUTHORITY_MISMATCH_PENALTY ??
-    Bun.env.RETRIEVAL_CONSTITUTION_MISMATCH_PENALTY ??
-    "0.08",
-);
-const citationCandidates = Number.parseInt(Bun.env.RETRIEVAL_CITATION_CANDIDATES ?? "8", 10);
+const citationCandidates = parseIntegerEnvWithMin("RETRIEVAL_CITATION_CANDIDATES", 8, 1);
 
 const embeddingLayer = EmbeddingServiceLive.pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provideMerge(Layer.setConfigProvider(ConfigProvider.fromEnv())),
 );
 
-const tokenLimitPauseMs = Number.parseInt(Bun.env.RETRIEVAL_TOKEN_LIMIT_PAUSE_MS ?? "65000", 10);
-const concurrencyBaseBackoffMs = Number.parseInt(
-  Bun.env.RETRIEVAL_CONCURRENCY_BACKOFF_MS ?? "1200",
-  10,
+const tokenLimitPauseMs = parseIntegerEnvWithMin("RETRIEVAL_TOKEN_LIMIT_PAUSE_MS", 65000, 0);
+const concurrencyBaseBackoffMs = parseIntegerEnvWithMin(
+  "RETRIEVAL_CONCURRENCY_BACKOFF_MS",
+  1200,
+  0,
 );
 
+const outputFormat = (Bun.env.RETRIEVAL_AUDIT_OUTPUT_FORMAT ?? "pretty").toLowerCase();
+
 function toVectorLiteral(vector: number[]): string {
-  return `[${vector.map((value) => Number(value).toFixed(8)).join(",")}]`;
+  return `[${vector
+    .map((value) => {
+      if (!Number.isFinite(value)) {
+        throw new Error("Embedding vector contains a non-finite number");
+      }
+      return value.toFixed(8);
+    })
+    .join(",")}]`;
 }
 
 function normalizeQueryText(query: string): string {
@@ -136,22 +227,241 @@ function buildRetrievalStrategy(query: string): RetrievalStrategy {
   };
 }
 
-function computeStats(samples: number[]): LatencyStats {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const minMs = sorted[0] ?? 0;
-  const maxMs = sorted[sorted.length - 1] ?? 0;
-  const p50Ms = sorted[Math.floor((sorted.length - 1) * 0.5)] ?? 0;
-  const p90Ms = sorted[Math.floor((sorted.length - 1) * 0.9)] ?? 0;
-  const avgMs =
-    sorted.length === 0 ? 0 : sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+function roundMs(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function toMilliseconds(nanoseconds: number): number {
+  return roundMs(nanoseconds / 1_000_000);
+}
+
+function formatMs(valueMs: number): string {
+  return `${valueMs.toFixed(2)}ms`;
+}
+
+function formatScore(value: number): string {
+  return value.toFixed(4);
+}
+
+function toBenchmarkStats(stats: MitataRunStats): BenchmarkStats {
   return {
-    minMs: Math.round(minMs * 100) / 100,
-    p50Ms: Math.round(p50Ms * 100) / 100,
-    p90Ms: Math.round(p90Ms * 100) / 100,
-    maxMs: Math.round(maxMs * 100) / 100,
-    avgMs: Math.round(avgMs * 100) / 100,
+    minMs: toMilliseconds(stats.min),
+    p75Ms: toMilliseconds(stats.p75),
+    p99Ms: toMilliseconds(stats.p99),
+    p999Ms: toMilliseconds(stats.p999),
+    maxMs: toMilliseconds(stats.max),
+    avgMs: toMilliseconds(stats.avg),
   };
 }
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return JSON.stringify(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseMitataSummary(input: unknown): MitataSummary {
+  if (!isRecord(input)) {
+    throw new Error("Mitata did not return a structured benchmark payload");
+  }
+
+  const rawBenchmarks = input.benchmarks;
+  if (!Array.isArray(rawBenchmarks)) {
+    throw new Error("Mitata benchmark payload is missing 'benchmarks'");
+  }
+
+  const benchmarks = rawBenchmarks.map((rawBenchmark): MitataBenchmark => {
+    if (!isRecord(rawBenchmark) || !Array.isArray(rawBenchmark.runs)) {
+      throw new Error("Mitata benchmark entry is missing 'runs'");
+    }
+
+    const runs = rawBenchmark.runs.map((rawRun): MitataRunResult => {
+      if (!isRecord(rawRun) || typeof rawRun.name !== "string") {
+        throw new Error("Mitata run entry is invalid");
+      }
+
+      const rawStats = rawRun.stats;
+      if (!isRecord(rawStats)) {
+        return {
+          name: rawRun.name,
+          error: rawRun.error,
+        };
+      }
+
+      const values = {
+        avg: rawStats.avg,
+        min: rawStats.min,
+        p75: rawStats.p75,
+        p99: rawStats.p99,
+        p999: rawStats.p999,
+        max: rawStats.max,
+      };
+
+      if (
+        typeof values.avg !== "number" ||
+        typeof values.min !== "number" ||
+        typeof values.p75 !== "number" ||
+        typeof values.p99 !== "number" ||
+        typeof values.p999 !== "number" ||
+        typeof values.max !== "number"
+      ) {
+        throw new Error(`Mitata stats are incomplete for benchmark '${rawRun.name}'`);
+      }
+
+      return {
+        name: rawRun.name,
+        stats: {
+          avg: values.avg,
+          min: values.min,
+          p75: values.p75,
+          p99: values.p99,
+          p999: values.p999,
+          max: values.max,
+        },
+        error: rawRun.error,
+      };
+    });
+
+    return { runs };
+  });
+
+  const context = isRecord(input.context) ? input.context : undefined;
+  const runtime = typeof context?.runtime === "string" ? context.runtime : undefined;
+  const version = typeof context?.version === "string" ? context.version : undefined;
+  const arch = typeof context?.arch === "string" ? context.arch : undefined;
+  const cpuRecord = isRecord(context?.cpu) ? context.cpu : undefined;
+
+  return {
+    benchmarks,
+    context: {
+      runtime,
+      version,
+      arch,
+      cpu: {
+        name: typeof cpuRecord?.name === "string" ? cpuRecord.name : undefined,
+        freq: typeof cpuRecord?.freq === "number" ? cpuRecord.freq : undefined,
+      },
+    },
+  };
+}
+
+function renderPrettyReport(summaryPayload: MitataSummary, queryResults: QueryAuditResult[]): void {
+  const border = "=".repeat(96);
+  console.log(ansis.cyan(border));
+  console.log(ansis.bold.cyan("Retrieval Audit Report"));
+
+  const context = summaryPayload.context;
+  const runtimeText = [context?.runtime, context?.version].filter(Boolean).join(" ").trim();
+  const hardwareText = [context?.cpu?.name, context?.arch].filter(Boolean).join(" | ").trim();
+  if (runtimeText.length > 0) {
+    console.log(`${ansis.gray("Runtime:")} ${ansis.white(runtimeText)}`);
+  }
+  if (hardwareText.length > 0) {
+    console.log(`${ansis.gray("Host:")}    ${ansis.white(hardwareText)}`);
+  }
+
+  console.log(ansis.cyan(border));
+  console.log(
+    `${ansis.bold("Bench Config")} ann=${annCandidates} rerank=${rerankCandidates} seeds=${seedCount} neighbors=${neighborsPerSeed} ef_search=${hnswEfSearch}`,
+  );
+  console.log(
+    `${ansis.bold("Scoring")} citationBoost=${citationExactBoost} citationPenalty=${citationMismatchPenalty} authorityBoost=${authorityHintBoost} authorityPenalty=${authorityMismatchPenalty}`,
+  );
+  console.log(
+    `${ansis.bold("Limits")} maxPerNode=${maxPerNode} finalLimit=${finalLimit} citationCandidates=${citationCandidates} expansionMinRerank=${expansionMinRerank}`,
+  );
+  console.log(ansis.cyan("-".repeat(96)));
+
+  const title = `${"Query".padEnd(34)} ${"Avg".padStart(10)} ${"P75".padStart(10)} ${"P99".padStart(10)} ${"P999".padStart(10)} ${"Max".padStart(10)}`;
+  console.log(ansis.bold.white(title));
+  console.log(ansis.gray("-".repeat(96)));
+
+  for (const result of queryResults) {
+    const queryLabel =
+      result.normalizedQuery.length > 34
+        ? `${result.normalizedQuery.slice(0, 31)}...`
+        : result.normalizedQuery;
+    const row = [
+      queryLabel.padEnd(34),
+      formatMs(result.stats.avgMs).padStart(10),
+      formatMs(result.stats.p75Ms).padStart(10),
+      formatMs(result.stats.p99Ms).padStart(10),
+      formatMs(result.stats.p999Ms).padStart(10),
+      formatMs(result.stats.maxMs).padStart(10),
+    ].join(" ");
+    console.log(ansis.white(row));
+  }
+
+  console.log(ansis.cyan("-".repeat(96)));
+  console.log(ansis.bold("Top Results Snapshot"));
+
+  for (const result of queryResults) {
+    console.log(`- ${ansis.bold(result.query)}`);
+    if (result.hits.length === 0) {
+      console.log(`  ${ansis.gray("No hits returned")}`);
+      continue;
+    }
+
+    for (const [index, hit] of result.hits.slice(0, 3).entries()) {
+      const nodeLabel = [hit.node_type, hit.node_number].filter(Boolean).join(" ").trim();
+      const nodeText = nodeLabel.length > 0 ? nodeLabel : hit.node_path;
+      const snippet = hit.snippet.replace(/\s+/g, " ").trim();
+      const preview = snippet.length > 132 ? `${snippet.slice(0, 129)}...` : snippet;
+      console.log(
+        `  ${index + 1}. ${ansis.yellow(hit.canonical_id)} | ${ansis.green(nodeText)} | score=${formatScore(hit.score)}`,
+      );
+      console.log(`     ${ansis.gray(preview)}`);
+    }
+  }
+
+  console.log(ansis.cyan(border));
+}
+
+function renderJsonReport(queryResults: QueryAuditResult[]): void {
+  console.log(
+    JSON.stringify(
+      {
+        config: {
+          annCandidates,
+          rerankCandidates,
+          seedCount,
+          neighborsPerSeed,
+          hnswEfSearch,
+          expansionMinRerank,
+          maxPerNode,
+          finalLimit,
+          citationExactBoost,
+          citationMismatchPenalty,
+          authorityHintBoost,
+          authorityMismatchPenalty,
+          citationCandidates,
+          tokenLimitPauseMs,
+          concurrencyBaseBackoffMs,
+        },
+        results: queryResults,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+type QueryScenario = {
+  query: string;
+  normalizedQuery: string;
+  strategy: RetrievalStrategy;
+  vector256Literal: string;
+  vector1024Literal: string;
+  benchmarkName: string;
+};
 
 async function embedQuery(query: string): Promise<QueryEmbedding> {
   const maxAttempts = 8;
@@ -489,7 +799,7 @@ async function runFastQuery(
   vector1024Literal: string,
   strategy: RetrievalStrategy,
 ): Promise<SearchHit[]> {
-  const result = await client.query<SearchHit>(fastSql, [
+  const result = await client.query<SearchHitRow>(fastSql, [
     vector256Literal,
     vector1024Literal,
     annCandidates,
@@ -510,34 +820,26 @@ async function runFastQuery(
     citationCandidates,
     strategy.authorityHintNormalized ?? "",
   ]);
-  return result.rows;
+
+  return result.rows.map((row) => ({
+    ...row,
+    rerank_1024: toFiniteNumber(row.rerank_1024, "rerank_1024"),
+    semantic_256: toFiniteNumber(row.semantic_256, "semantic_256"),
+    hop_distance: toFiniteNumber(row.hop_distance, "hop_distance"),
+    score: toFiniteNumber(row.score, "score"),
+  }));
 }
 
-async function benchmarkQuery(
-  client: Client,
-  vector256Literal: string,
-  vector1024Literal: string,
-  strategy: RetrievalStrategy,
-): Promise<{ stats: LatencyStats; hits: SearchHit[] }> {
-  // await runFastQuery(client, vector256Literal, vector1024Literal);
-
-  const samples: number[] = [];
-  let finalHits: SearchHit[] = [];
-  for (let index = 0; index < benchmarkRuns; index += 1) {
-    const startedAt = performance.now();
-    finalHits = await runFastQuery(client, vector256Literal, vector1024Literal, strategy);
-    const latencyMs = performance.now() - startedAt;
-    samples.push(latencyMs);
+function toFiniteNumber(value: number | string, label: string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Non-finite numeric value returned for '${label}'`);
   }
-
-  return {
-    stats: computeStats(samples),
-    hits: finalHits,
-  };
+  return parsed;
 }
 
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = Bun.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
@@ -548,48 +850,91 @@ async function main() {
   try {
     await client.query(`SET hnsw.ef_search = ${hnswEfSearch}`);
 
-    const output: Record<string, { dbLatency: LatencyStats; hits: SearchHit[] }> = {};
-    for (const query of queries) {
+    const scenarios: QueryScenario[] = [];
+    for (const [index, query] of queries.entries()) {
       const normalizedQuery = normalizeQueryText(query);
       const strategy = buildRetrievalStrategy(normalizedQuery);
       const embedding = await embedQuery(normalizedQuery);
-      const vector256Literal = toVectorLiteral(embedding.scout);
-      const vector1024Literal = toVectorLiteral(embedding.full);
-
-      const benchmark = await benchmarkQuery(client, vector256Literal, vector1024Literal, strategy);
-      output[query] = {
-        dbLatency: benchmark.stats,
-        hits: benchmark.hits,
-      };
+      scenarios.push({
+        query,
+        normalizedQuery,
+        strategy,
+        vector256Literal: toVectorLiteral(embedding.scout),
+        vector1024Literal: toVectorLiteral(embedding.full),
+        benchmarkName: `Q${index + 1}: ${normalizedQuery}`,
+      });
     }
 
-    console.log(
-      JSON.stringify(
-        {
-          config: {
-            benchmarkRuns,
-            annCandidates,
-            rerankCandidates,
-            seedCount,
-            neighborsPerSeed,
-            hnswEfSearch,
-            expansionMinRerank,
-            maxPerNode,
-            finalLimit,
-            citationExactBoost,
-            citationMismatchPenalty,
-            authorityHintBoost,
-            authorityMismatchPenalty,
-            citationCandidates,
-            tokenLimitPauseMs,
-            concurrencyBaseBackoffMs,
-          },
-          results: output,
-        },
-        null,
-        2,
-      ),
-    );
+    const latestHitsByBenchmarkName = new Map<string, SearchHit[]>();
+
+    group("retrieval", () => {
+      barplot(() => {
+        boxplot(() => {
+          summary(() => {
+            for (const scenario of scenarios) {
+              bench(scenario.benchmarkName, async () => {
+                const hits = await runFastQuery(
+                  client,
+                  scenario.vector256Literal,
+                  scenario.vector1024Literal,
+                  scenario.strategy,
+                );
+                latestHitsByBenchmarkName.set(scenario.benchmarkName, hits);
+              });
+            }
+          });
+        });
+      });
+    });
+
+    const rawSummary =
+      outputFormat === "json"
+        ? await run({
+            format: "json",
+            colors: false,
+            print: () => {},
+          })
+        : await run({
+            format: "mitata",
+            colors: true,
+          });
+
+    const summaryPayload = parseMitataSummary(rawSummary);
+    const statsByBenchmarkName = new Map<string, BenchmarkStats>();
+    const errorsByBenchmarkName = new Map<string, string>();
+    for (const benchmark of summaryPayload.benchmarks) {
+      for (const runResult of benchmark.runs) {
+        if (runResult.stats) {
+          statsByBenchmarkName.set(runResult.name, toBenchmarkStats(runResult.stats));
+        } else if (runResult.error !== undefined) {
+          errorsByBenchmarkName.set(runResult.name, formatUnknownError(runResult.error));
+        }
+      }
+    }
+
+    const queryResults: QueryAuditResult[] = scenarios.map((scenario) => {
+      const stats = statsByBenchmarkName.get(scenario.benchmarkName);
+      if (!stats) {
+        const benchmarkError = errorsByBenchmarkName.get(scenario.benchmarkName);
+        if (benchmarkError) {
+          throw new Error(`Mitata benchmark '${scenario.benchmarkName}' failed: ${benchmarkError}`);
+        }
+        throw new Error(`Missing mitata stats for benchmark '${scenario.benchmarkName}'`);
+      }
+
+      return {
+        query: scenario.query,
+        normalizedQuery: scenario.normalizedQuery,
+        stats,
+        hits: latestHitsByBenchmarkName.get(scenario.benchmarkName) ?? [],
+      };
+    });
+
+    if (outputFormat === "json") {
+      renderJsonReport(queryResults);
+    } else {
+      renderPrettyReport(summaryPayload, queryResults);
+    }
   } finally {
     await client.end();
   }
