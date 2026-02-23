@@ -17,9 +17,10 @@ import {
 
 import { DatabaseService } from "@canary/db/effect";
 import {
-  BoeIndexingWorkflow,
   BoeIndexingQueue,
+  BoeIndexingWorkflow,
   BoeLawsCollectorFactory,
+  BoeXmlParser,
   countDocumentsForSource,
   ensureBoeCollector,
   ensureBoeSource,
@@ -298,7 +299,10 @@ const DatabaseLive = DatabaseService.Default;
 const CollectorCoreLive = Layer.mergeAll(
   CollectorLiveWithFactories(bootstrapFactory),
   CollectorEventBus.Default,
-).pipe(Layer.provideMerge(Layer.mergeAll(BoeIndexingWorkflow.Default, BoeIndexingQueue.Default)));
+).pipe(
+  Layer.provideMerge(BoeXmlParser.Default),
+  Layer.provideMerge(Layer.mergeAll(BoeIndexingWorkflow.Default, BoeIndexingQueue.Default)),
+);
 
 const CollectorRuntimeLive = CollectorCoreLive.pipe(
   Layer.provide(DatabaseLive),

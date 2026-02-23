@@ -21,6 +21,7 @@ import {
   legislativeSources,
   referenceAnchors,
   syncRuns,
+  type RelationType,
 } from "@canary/db/schema/legislation";
 import {
   CollectionError,
@@ -41,6 +42,7 @@ import {
 import { BoeCollectorConfig } from "./config";
 import { BoeIndexingQueue, IndexingTriggerPayload } from "./indexing";
 import { mapBoeLawToDocument, parseBoeDate, parseBoeDateTime } from "./mapping";
+import { BoeXmlParser } from "./parser";
 import { BoeResponseSchema, normalizeBoeItems, type BoeLawItem } from "./schemas";
 
 const decodeBoeResponse = Schema.decodeUnknown(BoeResponseSchema);
@@ -132,6 +134,33 @@ function describeQueryCause(cause: unknown): Record<string, unknown> {
   return {
     message: truncateLogText(String(cause)),
   };
+}
+
+function mapReferenceRelationType(type: string): RelationType {
+  const t = type.toUpperCase();
+  if (t.includes("DEROGA")) return "deroga_total";
+  if (t.includes("MODIFICA")) return "modifica";
+  if (t.includes("DESARROLLA") || t.includes("COMPLEMENTA") || t.includes("RELACION")) {
+    return "complementa";
+  }
+  if (t.includes("DECLARA") || t.includes("INTERPRETA") || t.includes("NULIDAD")) {
+    return "interpreta";
+  }
+  return "cita_explicita";
+}
+
+function normalizeTargetCanonicalId(reference: string): string | null {
+  const trimmed = reference.trim();
+  if (trimmed.length === 0 || /^-+$/.test(trimmed)) {
+    return null;
+  }
+
+  const withoutPrefix = trimmed.replace(/^boe:/i, "").toUpperCase();
+  if (/^BOE-[A-Z]-\d{1,}-\d+$/.test(withoutPrefix)) {
+    return `boe:${withoutPrefix}`;
+  }
+
+  return null;
 }
 
 const toBoeDocumentoXmlEndpoint = (identifier: string): string =>
@@ -256,6 +285,7 @@ export const BoeLawsCollectorFactory = defineFactory({
     Effect.gen(function* () {
       const db = yield* DatabaseService.client();
       const indexingQueue = yield* BoeIndexingQueue;
+      const parser = yield* BoeXmlParser;
 
       const sourceId = config.sourceId;
       const requestTimeout = config.timeout;
@@ -876,6 +906,157 @@ export const BoeLawsCollectorFactory = defineFactory({
           ),
       );
 
+      // TODO: Make this work in chunks like with all the other elements
+      const populateReferenceAnchorsForAllSourceDocuments = Effect.fn(
+        "BoeCollector.populateReferenceAnchorsForAllSourceDocuments",
+      )((runId: CollectionRunId) =>
+        Effect.gen(function* () {
+          const latestVersions = yield* db
+            .execute(sql`
+              select distinct on (dv.${sql.raw(`"${documentVersions.docId.name}"`)})
+                dv.${sql.raw(`"${documentVersions.docId.name}"`)} as doc_id,
+                dv.${sql.raw(`"${documentVersions.versionId.name}"`)} as version_id,
+                dv.${sql.raw(`"${documentVersions.contentText.name}"`)} as content_text
+              from ${documentVersions} as dv
+              join ${legalDocuments} as ld
+                on ld.${sql.raw(`"${legalDocuments.docId.name}"`)} = dv.${sql.raw(`"${documentVersions.docId.name}"`)}
+              where ld.${sql.raw(`"${legalDocuments.sourceId.name}"`)} = ${sourceId}
+                and dv.${sql.raw(`"${documentVersions.contentText.name}"`)} is not null
+              order by dv.${sql.raw(`"${documentVersions.docId.name}"`)}, dv.${sql.raw(`"${documentVersions.versionNumber.name}"`)} desc
+            `)
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new CollectionError({
+                    collectorId,
+                    runId,
+                    reason: "Unable to load latest versions for reference anchor population",
+                    cause,
+                    message: `Collection error [${collectorId}]: Unable to load latest versions for reference anchor population`,
+                  }),
+              ),
+            );
+
+          yield* Effect.forEach(
+            latestVersions as ReadonlyArray<{
+              readonly doc_id: string;
+              readonly version_id: string;
+              readonly content_text: string | null;
+            }>,
+            (row) =>
+              Effect.gen(function* () {
+                if (row.content_text === null || row.content_text.length === 0) {
+                  return;
+                }
+
+                const parsed = yield* parser
+                  .parseForIndexingWithReferences({ xml: row.content_text })
+                  .pipe(
+                    Effect.catchAll((cause) =>
+                      Effect.logWarning("BoeCollector reference parse failed for document", {
+                        collectorId,
+                        runId,
+                        docId: row.doc_id,
+                        versionId: row.version_id,
+                        ...describeQueryCause(cause),
+                      }).pipe(Effect.as({ references: [] as const })),
+                    ),
+                  );
+
+                const dedupedRows = new Map<
+                  string,
+                  {
+                    readonly sourceDocId: string;
+                    readonly targetCanonicalId: string;
+                    readonly relationType: RelationType;
+                    readonly extractionConfidence: number;
+                    readonly targetDocId: null;
+                    readonly resolvedAt: null;
+                  }
+                >();
+
+                for (const ref of parsed.references) {
+                  const targetCanonicalId = normalizeTargetCanonicalId(ref.reference);
+                  if (targetCanonicalId === null) {
+                    continue;
+                  }
+
+                  const relationType = mapReferenceRelationType(ref.type);
+                  const dedupeKey = `${targetCanonicalId}:${relationType}`;
+                  dedupedRows.set(dedupeKey, {
+                    sourceDocId: row.doc_id,
+                    targetCanonicalId,
+                    relationType,
+                    extractionConfidence: 1,
+                    targetDocId: null,
+                    resolvedAt: null,
+                  });
+                }
+
+                yield* db
+                  .delete(referenceAnchors)
+                  .where(
+                    and(
+                      eq(referenceAnchors.sourceDocId, row.doc_id),
+                      sql`${referenceAnchors.sourceFragmentId} IS NULL`,
+                    ),
+                  );
+
+                const values = [...dedupedRows.values()];
+                if (values.length === 0) {
+                  return;
+                }
+
+                yield* db
+                  .insert(referenceAnchors)
+                  .values(values)
+                  .pipe(
+                    Effect.mapError(
+                      (cause) =>
+                        new CollectionError({
+                          collectorId,
+                          runId,
+                          reason: "Unable to insert populated reference anchors",
+                          cause,
+                          message: `Collection error [${collectorId}]: Unable to insert populated reference anchors`,
+                        }),
+                    ),
+                  );
+              }).pipe(
+                Effect.catchTag("CollectionError", (error) =>
+                  Effect.logWarning(
+                    "BoeCollector reference anchor population failed for document",
+                    {
+                      collectorId,
+                      runId,
+                      reason: error.reason,
+                      ...describeQueryCause(error.cause),
+                    },
+                  ),
+                ),
+              ),
+            {
+              concurrency: Math.max(1, Math.min(4, config.perPageConcurrency)),
+              discard: true,
+            },
+          );
+        }).pipe(
+          Effect.withSpan("BoeCollector.populateReferenceAnchorsForAllSourceDocuments", {
+            attributes: { runId },
+          }),
+          Effect.mapError(
+            (cause) =>
+              new CollectionError({
+                collectorId,
+                runId,
+                reason: "Unable to populate reference anchors for all source documents",
+                cause,
+                message: `Collection error [${collectorId}]: Unable to populate reference anchors for all source documents`,
+              }),
+          ),
+        ),
+      );
+
       const ingestDocumentVersions = Effect.fn("BoeCollector.ingestDocumentVersions")(
         (
           persistable: ReadonlyArray<PreparedLaw>,
@@ -1411,6 +1592,18 @@ export const BoeLawsCollectorFactory = defineFactory({
                           message: Cause.pretty(exit.cause),
                         },
                       ];
+
+                  // TODO: This should be done in chunks as well to avoid potential timeouts and memory issues with large numbers of documents
+                  yield* populateReferenceAnchorsForAllSourceDocuments(runId).pipe(
+                    Effect.catchTag("CollectionError", (error) =>
+                      Effect.logWarning("BoeCollector full reference anchor population failed", {
+                        collectorId,
+                        runId,
+                        reason: error.reason,
+                        ...describeQueryCause(error.cause),
+                      }),
+                    ),
+                  );
 
                   yield* resolveReferenceAnchorsForCollectorRun(runId).pipe(
                     Effect.catchTag("CollectionError", (error) =>

@@ -3,10 +3,10 @@ import { Effect, Layer, Schema } from "effect";
 import { ValidationError } from "./errors";
 import { CollectorFactoryRegistry, type CollectorFactory, type ConfigType } from "./factory";
 import { CollectorOrchestrator } from "./orchestrator";
-import { CollectorRepository, CollectorFilter } from "./repository";
+import { CollectorFilter, CollectorRepository } from "./repository";
 import { CollectorScheduler, type ScheduleStartOptions } from "./scheduler";
-import { CollectorId as CollectorIdBrand, FactoryId } from "./schema";
 import type { CollectionMode, CollectionRunId, CollectorId } from "./schema";
+import { CollectorId as CollectorIdBrand, FactoryId } from "./schema";
 import { CollectorStateManager } from "./state";
 
 type AnySchema = Schema.Schema.AnyNoContext;
