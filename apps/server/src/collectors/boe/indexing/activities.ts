@@ -1,4 +1,4 @@
-import { Chunk, Config, Effect, Schema, Stream } from "effect";
+import { Chunk, Config, Effect, Schedule, Schema, Stream } from "effect";
 
 import { and, eq, sql } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
@@ -20,9 +20,9 @@ import { IndexingWorkflowError } from "./errors";
 import type { IndexingTriggerPayload } from "./schema";
 
 const IndexingConfig = Config.all({
-  dbUpdateConcurrency: Config.number("DB_UPDATE_CONCURRENCY").pipe(Config.withDefault(4)),
   upsertBatchSize: Config.number("INDEXING_UPSERT_BATCH_SIZE").pipe(Config.withDefault(250)),
   embedBatchSize: Config.number("INDEXING_EMBED_BATCH_SIZE").pipe(Config.withDefault(64)),
+  embedConcurrency: Config.number("INDEXING_EMBED_CONCURRENCY").pipe(Config.withDefault(2)),
   profileMemory: Config.boolean("INDEXING_PROFILE_MEMORY").pipe(Config.withDefault(false)),
 });
 
@@ -312,6 +312,79 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           }),
       );
 
+      const persistEmbeddingBatch = Effect.fn("BoeIndexingActivities.persistEmbeddingBatch")(
+        (
+          payload: IndexingTriggerPayload,
+          executionId: string,
+          rows: ReadonlyArray<{
+            readonly fragmentId: string;
+            readonly embedding1024: ReadonlyArray<number>;
+            readonly embedding256: ReadonlyArray<number>;
+          }>,
+        ) =>
+          Effect.gen(function* () {
+            if (rows.length === 0) {
+              return;
+            }
+
+            const toVectorLiteral = (vector: ReadonlyArray<number>) => `[${vector.join(",")}]`;
+            const updatedAt = new Date();
+            const fragmentIdColumn = sql.raw(`"${senseFragments.fragmentId.name}"`);
+            const embedding1024Column = sql.raw(`"${senseFragments.embedding1024.name}"`);
+            const embedding256Column = sql.raw(`"${senseFragments.embedding256.name}"`);
+            const updatedAtColumn = sql.raw(`"${senseFragments.updatedAt.name}"`);
+
+            const fragmentIds = rows.map((row) => row.fragmentId);
+            const embedding1024Values = rows.map((row) => toVectorLiteral(row.embedding1024));
+            const embedding256Values = rows.map((row) => toVectorLiteral(row.embedding256));
+
+            yield* db
+              .execute(sql`
+                update ${senseFragments} as sf
+                set
+                  ${embedding1024Column} = v.embedding_1024_text::vector,
+                  ${embedding256Column} = v.embedding_256_text::vector,
+                  ${updatedAtColumn} = ${updatedAt}
+                from (
+                  select *
+                  from unnest(
+                    array[${sql.join(
+                      fragmentIds.map((id) => sql`${id}::uuid`),
+                      sql`, `,
+                    )}]::uuid[],
+                    array[${sql.join(
+                      embedding1024Values.map((value) => sql`${value}`),
+                      sql`, `,
+                    )}]::text[],
+                    array[${sql.join(
+                      embedding256Values.map((value) => sql`${value}`),
+                      sql`, `,
+                    )}]::text[]
+                  ) as t(fragment_id, embedding_1024_text, embedding_256_text)
+                ) as v
+                where sf.${fragmentIdColumn} = v.fragment_id
+              `)
+              .pipe(
+                Effect.retry({
+                  schedule: Schedule.intersect(
+                    Schedule.exponential("100 millis"),
+                    Schedule.recurs(2),
+                  ).pipe(Schedule.jittered),
+                }),
+                Effect.mapError((cause) =>
+                  toWorkflowError(
+                    payload,
+                    executionId,
+                    "embed-fragments",
+                    cause,
+                    "Unable to persist generated fragment embeddings batch",
+                  ),
+                ),
+                Effect.asVoid,
+              );
+          }),
+      );
+
       const embedFragmentRows = Effect.fn("BoeIndexingActivities.embedFragmentRows")(
         (payload: IndexingTriggerPayload, executionId: string, rows: ReadonlyArray<FragmentRow>) =>
           Stream.fromIterable(rows).pipe(
@@ -344,45 +417,30 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                     );
                   }
 
-                  yield* Effect.forEach(
-                    batchRows,
-                    (row, index) => {
-                      const vector = vectors[index];
-                      if (vector === undefined) {
-                        return Effect.fail(
-                          toWorkflowError(
-                            payload,
-                            executionId,
-                            "embed-fragments",
-                            undefined,
-                            `Missing embedding vector for fragment ${row.fragmentId} at index ${index}`,
-                          ),
-                        );
-                      }
+                  const embeddingRows = batchRows.map((row, index) => {
+                    const vector = vectors[index];
+                    if (vector === undefined) {
+                      return Effect.fail(
+                        toWorkflowError(
+                          payload,
+                          executionId,
+                          "embed-fragments",
+                          undefined,
+                          `Missing embedding vector for fragment ${row.fragmentId} at index ${index}`,
+                        ),
+                      );
+                    }
 
-                      return db
-                        .update(senseFragments)
-                        .set({
-                          embedding1024: vector.full,
-                          embedding256: vector.scout,
-                          updatedAt: new Date(),
-                        })
-                        .where(eq(senseFragments.fragmentId, row.fragmentId))
-                        .pipe(
-                          Effect.mapError((cause) =>
-                            toWorkflowError(
-                              payload,
-                              executionId,
-                              "embed-fragments",
-                              cause,
-                              "Unable to persist generated fragment embedding",
-                            ),
-                          ),
-                          Effect.asVoid,
-                        );
-                    },
-                    { discard: true, concurrency: config.dbUpdateConcurrency },
-                  );
+                    return Effect.succeed({
+                      fragmentId: row.fragmentId,
+                      embedding1024: vector.full,
+                      embedding256: vector.scout,
+                    });
+                  });
+
+                  const rowsToPersist = yield* Effect.all(embeddingRows);
+
+                  yield* persistEmbeddingBatch(payload, executionId, rowsToPersist);
 
                   if (config.profileMemory) {
                     const usage = process.memoryUsage();
@@ -396,7 +454,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   }
                 });
               },
-              { concurrency: 1 },
+              { concurrency: Math.min(2, Math.max(1, config.embedConcurrency)) },
             ),
             Stream.runDrain,
           ),

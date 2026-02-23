@@ -5,9 +5,15 @@ import type {
 } from "./types";
 
 const articlePatterns = [
+  /Disposición\s+(adicional|final|transitoria|derogatoria)\s+([\p{L}\d]+)\.?\s*(.*)?/iu,
   /\[?precepto\]?\s*(Primera|Segunda|Tercera|Cuarta|Quinta|Sexta|Disposición\s+transitoria\s+única)\.?\s*(.*)?/i,
-  /Art\.?\s*(?:ículo\s*)?(\d+[\s.]?º?)(?:\s*[.:]\s*(.+))?/i,
+  /Art\.?\s*(?:ículo\s*)?(\d+[\s.]?º?)(?:(?:\s*[.:]\s*)|\s+)?(.*)?/i,
 ];
+
+const articlePrefixPattern = /^Art\.?\s*(?:[íi]culo\s*)?/i;
+const articleNumberLeadPattern = /^(\d+[a-z]?[ºª]?)(?:\s+(.*))?$/i;
+const articleWordLeadPattern = /^([\p{L}\d]+(?:\s+[\p{L}\d]+){0,2})(?:\s+(.*))?$/u;
+const NODE_NUMBER_MAX_LENGTH = 50;
 
 export const normalizeTextContent = (text: string): string => {
   return text.replace(/\s+/g, " ").trim();
@@ -32,20 +38,74 @@ export function normalizeChapterHeader(text: string): NormalizedChapterHeader {
 
 export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
   const cleaned = normalizeTextContent(text);
+
   for (const pattern of articlePatterns) {
     const match = cleaned.match(pattern);
     if (match !== null) {
+      const number =
+        match.length >= 3 && /^disposición\s+/i.test(cleaned)
+          ? `Disposición ${match[1] ?? ""} ${match[2] ?? ""}`.trim()
+          : (match[1] ?? cleaned);
+      const title =
+        match.length >= 3 && /^disposición\s+/i.test(cleaned) ? (match[3] ?? "") : (match[2] ?? "");
+
       return {
-        number: normalizeTextContent(match[1] ?? cleaned),
-        title: normalizeTextContent(match[2] ?? ""),
+        number: normalizeNodeNumber(number),
+        title: normalizeTextContent(title),
+      };
+    }
+  }
+
+  if (articlePrefixPattern.test(cleaned)) {
+    const descriptor = normalizeTextContent(cleaned.replace(articlePrefixPattern, ""));
+
+    const withSeparator = /^(.+?)[.:]\s*(.+)$/.exec(descriptor);
+    if (withSeparator !== null) {
+      return {
+        number: normalizeNodeNumber(withSeparator[1] ?? descriptor),
+        title: normalizeTextContent(withSeparator[2] ?? ""),
+      };
+    }
+
+    const numericLead = articleNumberLeadPattern.exec(descriptor);
+    if (numericLead !== null) {
+      return {
+        number: normalizeNodeNumber(numericLead[1] ?? descriptor),
+        title: normalizeTextContent(numericLead[2] ?? ""),
+      };
+    }
+
+    const wordLead = articleWordLeadPattern.exec(descriptor);
+    if (wordLead !== null) {
+      return {
+        number: normalizeNodeNumber(wordLead[1] ?? descriptor),
+        title: normalizeTextContent(wordLead[2] ?? ""),
       };
     }
   }
 
   return {
-    number: cleaned,
+    number: normalizeNodeNumber(cleaned),
     title: "",
   };
+}
+
+function normalizeNodeNumber(value: string): string {
+  const normalized = normalizeTextContent(value);
+  if (normalized.length <= NODE_NUMBER_MAX_LENGTH) {
+    return normalized;
+  }
+
+  const firstToken = normalized.split(" ")[0]?.trim();
+  if (
+    firstToken !== undefined &&
+    firstToken.length > 0 &&
+    firstToken.length <= NODE_NUMBER_MAX_LENGTH
+  ) {
+    return firstToken;
+  }
+
+  return normalized.slice(0, NODE_NUMBER_MAX_LENGTH);
 }
 
 export function normalizeSubparagraph(text: string): NormalizedSubparagraph {

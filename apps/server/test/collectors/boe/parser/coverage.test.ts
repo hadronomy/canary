@@ -505,6 +505,37 @@ describe("Parser edge-case coverage", () => {
     expect(result.title).toBe("");
   });
 
+  test("normalizeArticleHeader extracts number and title from long spanish article heading", () => {
+    const result = normalizeArticleHeader(
+      "Artículo quinto. Se modifican los siguientes artículos de la Ley Foral 10/1996, de 2 de julio",
+    );
+
+    expect(result.number).toBe("quinto");
+    expect(result.title).toBe(
+      "Se modifican los siguientes artículos de la Ley Foral 10/1996, de 2 de julio",
+    );
+    expect(result.number.length).toBeLessThanOrEqual(50);
+  });
+
+  test("normalizeArticleHeader keeps short numeric article number when no punctuation separator", () => {
+    const result = normalizeArticleHeader(
+      "Artículo 44 del Texto Refundido de la Ley Foral del Impuesto sobre la Renta",
+    );
+
+    expect(result.number).toBe("44");
+    expect(result.title).toBe("del Texto Refundido de la Ley Foral del Impuesto sobre la Renta");
+  });
+
+  test("normalizeArticleHeader extracts disposition-style article numbers", () => {
+    const result = normalizeArticleHeader(
+      "Disposición adicional tercera. Modificación de la tabla de coeficientes",
+    );
+
+    expect(result.number).toBe("Disposición adicional tercera");
+    expect(result.title).toBe("Modificación de la tabla de coeficientes");
+    expect(result.number.length).toBeLessThanOrEqual(50);
+  });
+
   test("formatFragmentsAsMarkdown handles annex with header path", async () => {
     const fragments = await Effect.runPromise(
       BoeXmlParser.buildFragments({

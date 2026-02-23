@@ -39,6 +39,7 @@ const queries = [
   "competencias del gobierno y potestad reglamentaria",
   "disposicion final deroga leyes anteriores",
   "canarias derechos autonomicos competencias exclusivas",
+  "artículo 14 constitución",
 ];
 
 const benchmarkRuns = Number.parseInt(Bun.env.RETRIEVAL_BENCH_RUNS ?? "6", 10);

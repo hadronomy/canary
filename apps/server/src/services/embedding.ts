@@ -247,31 +247,24 @@ export const EmbeddingServiceLive = Layer.effect(
           HttpClientRequest.setHeader("Content-Type", "application/json"),
         );
 
-        const vectorRequest = yield* baseRequest.pipe(
-          HttpClientRequest.bodyJson({
-            model: EmbeddingService.DefaultModelName,
-            input: normalizedInputs,
-            dimensions: embeddingConfig.dimensions,
-            late_chunking: embeddingConfig.lateChunking,
-          }),
-          Effect.retry({
-            schedule: Schedule.intersect(
-              Schedule.exponential(Duration.millis(100)),
-              Schedule.recurs(3),
+        const vectorResponse = yield* Effect.gen(function* () {
+          const vectorRequest = yield* baseRequest.pipe(
+            HttpClientRequest.bodyJson({
+              model: EmbeddingService.DefaultModelName,
+              input: normalizedInputs,
+              dimensions: embeddingConfig.dimensions,
+              late_chunking: embeddingConfig.lateChunking,
+            }),
+            Effect.mapError(
+              (cause) =>
+                new EmbeddingServiceError({
+                  message: "Failed to serialize vector request body",
+                  cause,
+                }),
             ),
-          }),
-          Effect.mapError(
-            (cause) =>
-              new EmbeddingServiceError({
-                message: "Failed to serialize vector request body",
-                cause,
-              }),
-          ),
-        );
+          );
 
-        const vectorHttp = yield* client
-          .execute(vectorRequest)
-          .pipe(
+          const vectorHttp = yield* client.execute(vectorRequest).pipe(
             Effect.mapError(
               (cause) =>
                 new EmbeddingServiceError({
@@ -281,25 +274,31 @@ export const EmbeddingServiceLive = Layer.effect(
             ),
           );
 
-        if (vectorHttp.status < 200 || vectorHttp.status >= 300) {
-          const errorBody = yield* vectorHttp.text.pipe(
-            Effect.orElseSucceed(() => "<unable to read error body>"),
-          );
-          return yield* new EmbeddingServiceError({
-            message: `Vector embedding request failed with status ${vectorHttp.status}: ${errorBody.slice(0, 500)}`,
-          });
-        }
+          if (vectorHttp.status < 200 || vectorHttp.status >= 300) {
+            const errorBody = yield* vectorHttp.text.pipe(
+              Effect.orElseSucceed(() => "<unable to read error body>"),
+            );
+            return yield* new EmbeddingServiceError({
+              message: `Vector embedding request failed with status ${vectorHttp.status}: ${errorBody.slice(0, 500)}`,
+            });
+          }
 
-        const vectorResponse = yield* HttpClientResponse.schemaBodyJson(EmbeddingResponseSchema)(
-          vectorHttp,
-        ).pipe(
-          Effect.mapError(
-            (cause) =>
-              new EmbeddingServiceError({
-                message: "Vector embedding response schema validation failed",
-                cause,
-              }),
-          ),
+          return yield* HttpClientResponse.schemaBodyJson(EmbeddingResponseSchema)(vectorHttp).pipe(
+            Effect.mapError(
+              (cause) =>
+                new EmbeddingServiceError({
+                  message: "Vector embedding response schema validation failed",
+                  cause,
+                }),
+            ),
+          );
+        }).pipe(
+          Effect.retry({
+            schedule: Schedule.intersect(
+              Schedule.exponential(Duration.millis(250)),
+              Schedule.recurs(4),
+            ).pipe(Schedule.jittered),
+          }),
         );
 
         if (!vectorResponse.data || vectorResponse.data.length === 0) {
