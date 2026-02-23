@@ -395,6 +395,7 @@ export const referenceAnchors = pgTable(
   },
   (table) => [
     index("idx_ref_source_doc").on(table.sourceDocId, table.relationType),
+    index("idx_ref_target_canonical").on(table.targetCanonicalId),
     index("idx_ref_unresolved")
       .on(table.sourceDocId)
       .where(sql`${table.targetDocId} IS NULL`),
