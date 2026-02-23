@@ -1,11 +1,14 @@
-import { Chunk, Config, Effect, Schedule, Schema, Stream } from "effect";
+import { Cause, Chunk, Config, DateTime, Effect, Schedule, Schema, Stream } from "effect";
 
-import { and, eq, sql } from "@canary/db/drizzle";
+import { and, eq, inArray, sql } from "@canary/db/drizzle";
 import { DatabaseService } from "@canary/db/effect";
+import type { RelationType } from "@canary/db/schema/legislation";
 import {
   documentVersions,
   fragmentIndexJobs,
+  legalDocuments,
   nodeTypeEnum,
+  referenceAnchors,
   senseFragments,
 } from "@canary/db/schema/legislation";
 import {
@@ -13,6 +16,7 @@ import {
   legalNodePathToLtree,
   nodePathToLtree,
   type BoeFragment,
+  type LegalReference,
 } from "~/collectors/boe/parser";
 import { EmbeddingService, EmbeddingServiceLive } from "~/services/embedding";
 
@@ -44,6 +48,8 @@ export const ParsedFragmentSchema = Schema.Struct({
   followingContext: Schema.NullOr(Schema.String),
   sequenceIndex: Schema.Number,
   contentFingerprint: Schema.String,
+  validFrom: Schema.DateFromSelf,
+  validUntil: Schema.NullOr(Schema.DateFromSelf),
 });
 
 interface ParsedFragment {
@@ -59,6 +65,8 @@ interface ParsedFragment {
   readonly followingContext: string | null;
   readonly sequenceIndex: number;
   readonly contentFingerprint: string;
+  readonly validFrom: Date;
+  readonly validUntil: Date | null;
 }
 
 interface FragmentRow {
@@ -76,60 +84,159 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
       const parser = yield* BoeXmlParser;
       const embedding = yield* EmbeddingService;
       const config = yield* IndexingConfig;
+      const buildJobMetadata = (
+        payload: IndexingTriggerPayload,
+        executionId: string,
+      ): Record<string, unknown> => ({
+        runId: payload.runId,
+        executionId,
+        canonicalId: payload.canonicalId,
+        contentHash: payload.contentHash,
+        requestedAt: DateTime.formatIso(payload.requestedAt),
+        kind: payload.kind,
+      });
 
-      const markInProgress = Effect.fn("BoeIndexingActivities.markInProgress")(
-        (payload: IndexingTriggerPayload, executionId: string) =>
-          db
-            .insert(fragmentIndexJobs)
-            .values({
-              docId: payload.docId,
-              versionId: payload.versionId,
-              status: "in_progress",
-              attempts: 1,
-              metadata: {
-                runId: payload.runId,
-                executionId,
-                canonicalId: payload.canonicalId,
-                contentHash: payload.contentHash,
-                requestedAt: payload.requestedAt,
-                kind: payload.kind,
-              },
-            })
-            .onConflictDoUpdate({
-              target: [fragmentIndexJobs.docId, fragmentIndexJobs.versionId],
-              set: {
-                status: "in_progress",
-                attempts: sql`${fragmentIndexJobs.attempts} + 1`,
-                updatedAt: sql`now()`,
-                lastError: null,
-                metadata: {
-                  runId: payload.runId,
-                  executionId,
-                  canonicalId: payload.canonicalId,
-                  contentHash: payload.contentHash,
-                  requestedAt: payload.requestedAt,
-                  kind: payload.kind,
-                },
-              },
-            })
+      const ensureIndexingTargetsExist = Effect.fn(
+        "BoeIndexingActivities.ensureIndexingTargetsExist",
+      )((payload: IndexingTriggerPayload, executionId: string) =>
+        Effect.gen(function* () {
+          const versionRows = yield* db
+            .select({ docId: documentVersions.docId })
+            .from(documentVersions)
+            .where(eq(documentVersions.versionId, payload.versionId))
             .pipe(
               Effect.mapError((cause) =>
                 toWorkflowError(
                   payload,
                   executionId,
-                  "mark-in-progress",
+                  "mark-in-progress-target-check",
                   cause,
-                  "Unable to mark indexing job in progress",
+                  "Unable to verify document version before marking indexing in progress",
                 ),
               ),
-              Effect.asVoid,
+            );
+
+          const versionDocId = versionRows[0]?.docId;
+          if (versionDocId === undefined) {
+            return yield* toWorkflowError(
+              payload,
+              executionId,
+              "mark-in-progress-target-check",
+              undefined,
+              "Indexing payload references missing document version",
+            );
+          }
+
+          if (versionDocId !== payload.docId) {
+            return yield* toWorkflowError(
+              payload,
+              executionId,
+              "mark-in-progress-target-check",
+              undefined,
+              `Indexing payload doc/version mismatch. versionId belongs to docId ${versionDocId}, payload has ${payload.docId}`,
+            );
+          }
+
+          const documentRows = yield* db
+            .select({ docId: legalDocuments.docId })
+            .from(legalDocuments)
+            .where(eq(legalDocuments.docId, payload.docId))
+            .pipe(
+              Effect.mapError((cause) =>
+                toWorkflowError(
+                  payload,
+                  executionId,
+                  "mark-in-progress-target-check",
+                  cause,
+                  "Unable to verify legal document before marking indexing in progress",
+                ),
+              ),
+            );
+
+          if (documentRows[0] === undefined) {
+            return yield* toWorkflowError(
+              payload,
+              executionId,
+              "mark-in-progress-target-check",
+              undefined,
+              "Indexing payload references missing legal document",
+            );
+          }
+        }),
+      );
+
+      const markInProgress = Effect.fn("BoeIndexingActivities.markInProgress")(
+        (payload: IndexingTriggerPayload, executionId: string) =>
+          Effect.gen(function* () {
+            yield* ensureIndexingTargetsExist(payload, executionId).pipe(
+              Effect.retry({
+                schedule: Schedule.intersect(
+                  Schedule.exponential("100 millis"),
+                  Schedule.recurs(5),
+                ).pipe(Schedule.jittered),
+                while: isRetryableTargetCheckError,
+              }),
+            );
+
+            yield* db
+              .insert(fragmentIndexJobs)
+              .values({
+                docId: payload.docId,
+                versionId: payload.versionId,
+                status: "in_progress",
+                attempts: 1,
+                startedAt: new Date(),
+                metadata: buildJobMetadata(payload, executionId),
+              })
+              .onConflictDoUpdate({
+                target: [fragmentIndexJobs.docId, fragmentIndexJobs.versionId],
+                set: {
+                  status: "in_progress",
+                  attempts: sql`${fragmentIndexJobs.attempts} + 1`,
+                  updatedAt: sql`now()`,
+                  lastError: null,
+                  metadata: sql`excluded.metadata`,
+                },
+              })
+              .pipe(
+                Effect.retry({
+                  schedule: Schedule.intersect(
+                    Schedule.exponential("100 millis"),
+                    Schedule.recurs(5),
+                  ).pipe(Schedule.jittered),
+                  while: isForeignKeyViolationCause,
+                }),
+                Effect.mapError((cause) =>
+                  toWorkflowError(
+                    payload,
+                    executionId,
+                    "mark-in-progress",
+                    cause,
+                    "Unable to mark indexing job in progress",
+                  ),
+                ),
+              );
+          }).pipe(
+            Effect.tapError((cause) =>
+              Effect.logWarning("BoeIndexingActivities.markInProgress failed", {
+                docId: payload.docId,
+                versionId: payload.versionId,
+                executionId,
+                cause: formatUnknownCause(cause),
+              }),
             ),
+            Effect.asVoid,
+          ),
       );
 
       const loadVersionContent = Effect.fn("BoeIndexingActivities.loadVersionContent")(
         (payload: IndexingTriggerPayload, executionId: string) =>
           db
-            .select({ contentText: documentVersions.contentText })
+            .select({
+              contentText: documentVersions.contentText,
+              validFrom: documentVersions.validFrom,
+              validUntil: documentVersions.validUntil,
+            })
             .from(documentVersions)
             .where(eq(documentVersions.versionId, payload.versionId))
             .pipe(
@@ -143,8 +250,8 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 ),
               ),
               Effect.flatMap((rows) => {
-                const content = rows[0]?.contentText;
-                if (content === undefined || content === null || content.trim().length === 0) {
+                const row = rows[0];
+                if (!row || row.contentText === null || row.contentText.trim().length === 0) {
                   return Effect.fail(
                     toWorkflowError(
                       payload,
@@ -155,7 +262,11 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                     ),
                   );
                 }
-                return Effect.succeed(content);
+                return Effect.succeed({
+                  contentText: row.contentText,
+                  validFrom: row.validFrom,
+                  validUntil: row.validUntil,
+                });
               }),
             ),
       );
@@ -222,6 +333,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
       const mapNodeToParsedFragment = (
         payload: IndexingTriggerPayload,
         fragment: BoeFragment,
+        versionData: { readonly validFrom: Date; readonly validUntil: Date | null },
       ): ParsedFragment => {
         const nodePath = fragment.nodePath;
         const legalNodePath = fragment.legalNodePath;
@@ -244,6 +356,8 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             nodePath,
             fragment.contentNormalized,
           ),
+          validFrom: versionData.validFrom,
+          validUntil: versionData.validUntil,
         };
       };
 
@@ -274,6 +388,8 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               followingContext: fragment.followingContext,
               sequenceIndex: fragment.sequenceIndex,
               contentFingerprint: fragment.contentFingerprint,
+              validFrom: fragment.validFrom,
+              validUntil: fragment.validUntil,
               updatedAt: now,
             }));
 
@@ -294,6 +410,8 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   followingContext: sql`excluded.following_context`,
                   sequenceIndex: sql`excluded.sequence_index`,
                   contentFingerprint: sql`excluded.content_fingerprint`,
+                  validFrom: sql`excluded.valid_from`,
+                  validUntil: sql`excluded.valid_until`,
                   updatedAt: sql`excluded.updated_at`,
                 },
               })
@@ -460,11 +578,143 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           ),
       );
 
-      const processFragments = Effect.fn("BoeIndexingActivities.processFragments")(
-        (payload: IndexingTriggerPayload, executionId: string, xml: string) =>
+      const upsertDocumentReferences = Effect.fn("BoeIndexingActivities.upsertDocumentReferences")(
+        (
+          payload: IndexingTriggerPayload,
+          executionId: string,
+          references: ReadonlyArray<LegalReference>,
+        ) =>
           Effect.gen(function* () {
-            const fragments = yield* parser
-              .parseForIndexing({ xml })
+            if (references.length === 0) {
+              yield* Effect.logInfo("indexing.references.empty", {
+                docId: payload.docId,
+                versionId: payload.versionId,
+                executionId,
+              });
+              return;
+            }
+
+            const mapRelationType = (type: string): RelationType => {
+              const t = type.toUpperCase();
+              if (t.includes("DEROGA")) return "deroga_total";
+              if (t.includes("MODIFICA")) return "modifica";
+              if (t.includes("DESARROLLA") || t.includes("COMPLEMENTA") || t.includes("RELACION"))
+                return "complementa";
+              if (t.includes("DECLARA") || t.includes("INTERPRETA") || t.includes("NULIDAD"))
+                return "interpreta";
+              return "cita_explicita";
+            };
+
+            const invalidReferenceInputs: Array<string> = [];
+            const dedupedRows = new Map<
+              string,
+              {
+                readonly sourceDocId: string;
+                readonly targetCanonicalId: string;
+                readonly relationType: RelationType;
+                readonly extractionConfidence: number;
+              }
+            >();
+
+            for (const ref of references) {
+              const normalizedTargetCanonicalId = toTargetCanonicalId(ref.reference);
+              if (normalizedTargetCanonicalId === null) {
+                invalidReferenceInputs.push(ref.reference);
+                continue;
+              }
+
+              const relationType = mapRelationType(ref.type);
+              const dedupeKey = `${normalizedTargetCanonicalId}:${relationType}`;
+              dedupedRows.set(dedupeKey, {
+                sourceDocId: payload.docId,
+                targetCanonicalId: normalizedTargetCanonicalId,
+                relationType,
+                extractionConfidence: 1.0,
+              });
+            }
+
+            if (invalidReferenceInputs.length > 0) {
+              yield* Effect.logWarning("indexing.references.invalid", {
+                docId: payload.docId,
+                versionId: payload.versionId,
+                executionId,
+                invalidCount: invalidReferenceInputs.length,
+                invalidSample: invalidReferenceInputs.slice(0, 10),
+              });
+            }
+
+            const rows = [...dedupedRows.values()];
+            if (rows.length === 0) {
+              yield* Effect.logWarning("indexing.references.no-valid-targets", {
+                docId: payload.docId,
+                versionId: payload.versionId,
+                executionId,
+                totalParsedReferences: references.length,
+              });
+              return;
+            }
+
+            const targetCanonicalIds = rows.map((row) => row.targetCanonicalId);
+            const resolvedTargets = yield* db
+              .select({
+                docId: legalDocuments.docId,
+                canonicalId: legalDocuments.canonicalId,
+              })
+              .from(legalDocuments)
+              .where(inArray(legalDocuments.canonicalId, targetCanonicalIds));
+
+            const targetDocIdByCanonicalId = new Map(
+              resolvedTargets.map((target) => [target.canonicalId, target.docId]),
+            );
+
+            const rowsWithResolvedTarget = rows.map((row) => ({
+              ...row,
+              targetDocId: targetDocIdByCanonicalId.get(row.targetCanonicalId) ?? null,
+              resolvedAt: targetDocIdByCanonicalId.has(row.targetCanonicalId) ? new Date() : null,
+            }));
+
+            // Make the operation idempotent by clearing previous document-level anchors for this doc
+            yield* db
+              .delete(referenceAnchors)
+              .where(
+                and(
+                  eq(referenceAnchors.sourceDocId, payload.docId),
+                  sql`${referenceAnchors.sourceFragmentId} IS NULL`,
+                ),
+              );
+
+            yield* db.insert(referenceAnchors).values(rowsWithResolvedTarget);
+          }).pipe(
+            Effect.mapError((cause) =>
+              toWorkflowError(
+                payload,
+                executionId,
+                "upsert-references",
+                cause,
+                "Unable to upsert document references",
+              ),
+            ),
+          ),
+      );
+
+      const processFragments = Effect.fn("BoeIndexingActivities.processFragments")(
+        (
+          payload: IndexingTriggerPayload,
+          executionId: string,
+          versionData: {
+            readonly contentText: string;
+            readonly validFrom: Date;
+            readonly validUntil: Date | null;
+          },
+        ) =>
+          Effect.gen(function* () {
+            // Extract dates here to prevent the massive `versionData` object (and its `contentText` XML)
+            // from being captured and retained in the Stream's closure below.
+            const validFrom = versionData.validFrom;
+            const validUntil = versionData.validUntil;
+
+            const { fragments, references } = yield* parser
+              .parseForIndexingWithReferences({ xml: versionData.contentText })
               .pipe(
                 Effect.mapError((cause) =>
                   toWorkflowError(
@@ -477,8 +727,12 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 ),
               );
 
+            yield* upsertDocumentReferences(payload, executionId, references);
+
             yield* Stream.fromIterable(fragments).pipe(
-              Stream.map((fragment) => mapNodeToParsedFragment(payload, fragment)),
+              Stream.map((fragment) =>
+                mapNodeToParsedFragment(payload, fragment, { validFrom, validUntil }),
+              ),
               Stream.grouped(config.upsertBatchSize),
               Stream.mapEffect(
                 (batch) => {
@@ -613,4 +867,35 @@ function toWorkflowError(
     message,
     cause,
   });
+}
+
+function formatUnknownCause(cause: unknown): string {
+  if (Cause.isCause(cause)) {
+    return Cause.pretty(cause, { renderErrorCause: true });
+  }
+  if (cause instanceof Error) {
+    return `${cause.name}: ${cause.message}`;
+  }
+  return String(cause);
+}
+
+function isForeignKeyViolationCause(cause: unknown): boolean {
+  const rendered = formatUnknownCause(cause).toLowerCase();
+  return rendered.includes("foreign key") || rendered.includes("violates foreign key constraint");
+}
+
+function isRetryableTargetCheckError(cause: unknown): boolean {
+  return (
+    cause instanceof IndexingWorkflowError &&
+    cause.stage === "mark-in-progress-target-check" &&
+    cause.message.startsWith("Indexing payload references missing")
+  );
+}
+
+function toTargetCanonicalId(reference: string): string | null {
+  const trimmed = reference.trim();
+  if (trimmed.length === 0 || /^-+$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
 }

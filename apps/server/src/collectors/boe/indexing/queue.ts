@@ -1,7 +1,7 @@
 import { PersistedQueue } from "@effect/experimental";
 import { SqlPersistedQueue } from "@effect/sql";
 import { SqliteClient } from "@effect/sql-sqlite-bun";
-import { Config, Duration, Effect, Layer, Schema } from "effect";
+import { Cause, Config, Duration, Effect, Layer, Schema } from "effect";
 
 import { IndexingWorkflowError } from "./errors";
 import { IndexingTriggerPayload } from "./schema";
@@ -76,7 +76,11 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
 
     const summarizeCause = (cause: unknown): string => {
       if (cause instanceof IndexingWorkflowError) {
-        return `${cause._tag}:${cause.stage}:${cause.message}`;
+        const inner = cause.cause === undefined ? "" : `: ${summarizeCause(cause.cause)}`;
+        return `${cause._tag}:${cause.stage}:${cause.message}${inner}`;
+      }
+      if (Cause.isCause(cause)) {
+        return Cause.pretty(cause, { renderErrorCause: true });
       }
       if (cause instanceof Error) {
         return `${cause.name}: ${cause.message}`;

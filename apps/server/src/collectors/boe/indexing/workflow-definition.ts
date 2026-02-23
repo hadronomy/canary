@@ -21,6 +21,12 @@ export const BoeDocumentIndexWorkflowLayer = BoeDocumentIndexWorkflow.toLayer(
 
     const retryTransient = Activity.retry({ times: 4 });
 
+    const VersionDataSchema = Schema.Struct({
+      contentText: Schema.String,
+      validFrom: Schema.DateFromSelf,
+      validUntil: Schema.NullOr(Schema.DateFromSelf),
+    });
+
     const run = Effect.gen(function* () {
       yield* Activity.make({
         name: "BoeIndexing.EnsureLatestVersion",
@@ -29,9 +35,9 @@ export const BoeDocumentIndexWorkflowLayer = BoeDocumentIndexWorkflow.toLayer(
         execute: activities.ensureLatestVersion(payload, executionId),
       }).pipe(retryTransient);
 
-      const contentText = yield* Activity.make({
+      const versionData = yield* Activity.make({
         name: "BoeIndexing.LoadVersionContent",
-        success: Schema.String,
+        success: VersionDataSchema,
         error: IndexingWorkflowError,
         execute: activities.loadVersionContent(payload, executionId),
       }).pipe(retryTransient);
@@ -40,7 +46,7 @@ export const BoeDocumentIndexWorkflowLayer = BoeDocumentIndexWorkflow.toLayer(
         name: "BoeIndexing.ProcessFragments",
         success: Schema.Void,
         error: IndexingWorkflowError,
-        execute: activities.processFragments(payload, executionId, contentText),
+        execute: activities.processFragments(payload, executionId, versionData),
       }).pipe(retryTransient);
 
       yield* Activity.make({
