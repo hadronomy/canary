@@ -512,7 +512,10 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 const batchRows = Chunk.toReadonlyArray(batch);
                 return Effect.gen(function* () {
                   const vectors = yield* embedding
-                    .embed(batchRows.map((row) => row.content))
+                    .embed(
+                      batchRows.map((row) => row.content),
+                      { task: "retrieval" },
+                    )
                     .pipe(
                       Effect.mapError((cause) =>
                         toWorkflowError(

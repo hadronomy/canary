@@ -41,6 +41,12 @@ export interface EmbeddedResult {
   readonly full: number[];
 }
 
+export type EmbeddingTask = "retrieval" | "classification" | "clustering" | "text-matching";
+
+export interface EmbedOptions {
+  readonly task?: EmbeddingTask;
+}
+
 export interface TokenCountResult {
   readonly model: string;
   readonly counts: ReadonlyArray<number>;
@@ -159,8 +165,14 @@ interface EmbeddingServiceShape {
    * @returns One embedding result for single input; an array for batch input.
    */
   readonly embed: {
-    (input: EmbeddingInput): Effect.Effect<EmbeddedResult, EmbeddingServiceError>;
-    (input: EmbeddingInput[]): Effect.Effect<EmbeddedResult[], EmbeddingServiceError>;
+    (
+      input: EmbeddingInput,
+      options?: EmbedOptions,
+    ): Effect.Effect<EmbeddedResult, EmbeddingServiceError>;
+    (
+      input: EmbeddingInput[],
+      options?: EmbedOptions,
+    ): Effect.Effect<EmbeddedResult[], EmbeddingServiceError>;
   };
 
   /**
@@ -226,8 +238,9 @@ export const EmbeddingServiceLive = Layer.effect(
 
     const embedOne = (
       input: EmbeddingInput,
+      options: EmbedOptions = {},
     ): Effect.Effect<EmbeddedResult, EmbeddingServiceError, never> =>
-      embedMany([input]).pipe(
+      embedMany([input], options).pipe(
         Effect.flatMap((results) =>
           results[0]
             ? Effect.succeed(results[0])
@@ -238,6 +251,7 @@ export const EmbeddingServiceLive = Layer.effect(
 
     const embedMany = (
       inputs: EmbeddingInput[],
+      options: EmbedOptions = {},
     ): Effect.Effect<EmbeddedResult[], EmbeddingServiceError, never> =>
       Effect.gen(function* () {
         const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
@@ -254,6 +268,7 @@ export const EmbeddingServiceLive = Layer.effect(
               input: normalizedInputs,
               dimensions: embeddingConfig.dimensions,
               late_chunking: embeddingConfig.lateChunking,
+              task: options.task,
             }),
             Effect.mapError(
               (cause) =>
@@ -329,8 +344,10 @@ export const EmbeddingServiceLive = Layer.effect(
         );
       }).pipe(Effect.withSpan("EmbeddingService.embedMany"));
 
-    const embed = ((input: EmbeddingInput | EmbeddingInput[]) =>
-      Array.isArray(input) ? embedMany(input) : embedOne(input)) as EmbeddingServiceShape["embed"];
+    const embed = ((input: EmbeddingInput | EmbeddingInput[], options: EmbedOptions = {}) =>
+      Array.isArray(input)
+        ? embedMany(input, options)
+        : embedOne(input, options)) as EmbeddingServiceShape["embed"];
 
     const rerank = Effect.fn("EmbeddingService.rerank")(function* (query: string, docs: string[]) {
       const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/rerank").pipe(
