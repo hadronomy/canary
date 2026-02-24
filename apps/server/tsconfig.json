@@ -2,6 +2,7 @@
   "extends": "@canary/config/tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "noEmit": true,
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
