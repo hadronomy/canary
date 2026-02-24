@@ -25,7 +25,6 @@
     "@effect/sql-pg": "^0.50.3",
     "@effect/sql-sqlite-bun": "^0.50.2",
     "@effect/workflow": "^0.16.0",
-    "@elysiajs/cors": "^1.4.1",
     "@huggingface/transformers": "^3.8.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.211.0",
@@ -36,7 +35,6 @@
     "dotenv": "catalog:",
     "drizzle-orm": "1.0.0-beta.15-90d1d1a",
     "effect": "^3.19.16",
-    "elysia": "^1.4.21",
     "fast-xml-parser": "^5.3.3",
     "remark": "^15.0.1",
     "zod": "catalog:"
