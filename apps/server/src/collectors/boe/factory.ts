@@ -851,7 +851,7 @@ export const BoeLawsCollectorFactory = defineFactory({
           Effect.gen(function* () {
             const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
 
-            const sourceByDocAndContent = new Map<
+            const sourceByDocId = new Map<
               string,
               {
                 readonly kind: "New" | "Update";
@@ -903,14 +903,14 @@ export const BoeLawsCollectorFactory = defineFactory({
                   validFrom,
                   validUntil: null,
                 });
-                sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
+                sourceByDocId.set(docId, {
                   kind: "New",
                   canonicalId,
                   contentHash: item.contentHash,
                 });
               } else {
                 updateCandidates.push({ docId, validFrom, contentText: item.contentText });
-                sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
+                sourceByDocId.set(docId, {
                   kind: "Update",
                   canonicalId,
                   contentHash: item.contentHash,
@@ -927,7 +927,6 @@ export const BoeLawsCollectorFactory = defineFactory({
                 .returning({
                   versionId: documentVersions.versionId,
                   docId: documentVersions.docId,
-                  contentText: documentVersions.contentText,
                 })
                 .pipe(
                   Effect.mapError(
@@ -943,10 +942,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 );
 
               for (const row of insertedNewVersions) {
-                if (row.contentText === null) {
-                  continue;
-                }
-                const source = sourceByDocAndContent.get(`${row.docId}:${row.contentText}`);
+                const source = sourceByDocId.get(row.docId);
                 if (source === undefined) {
                   continue;
                 }
@@ -1056,7 +1052,6 @@ export const BoeLawsCollectorFactory = defineFactory({
                 .returning({
                   versionId: documentVersions.versionId,
                   docId: documentVersions.docId,
-                  contentText: documentVersions.contentText,
                 })
                 .pipe(
                   Effect.mapError(
@@ -1072,10 +1067,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 );
 
               for (const row of insertedUpdateVersions) {
-                if (row.contentText === null) {
-                  continue;
-                }
-                const source = sourceByDocAndContent.get(`${row.docId}:${row.contentText}`);
+                const source = sourceByDocId.get(row.docId);
                 if (source === undefined) {
                   continue;
                 }

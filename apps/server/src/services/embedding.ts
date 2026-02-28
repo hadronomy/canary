@@ -271,8 +271,8 @@ export const EmbeddingServiceLive = Layer.effect(
         }
 
         return response.data.map((item) => ({
-          full: [...item.embedding],
-          multi: item.multi_vector ? item.multi_vector.map((vector) => [...vector]) : undefined,
+          full: item.embedding,
+          multi: item.multi_vector,
           scout: item.embedding.slice(0, 256),
         }));
       }).pipe(Effect.withSpan("EmbeddingService.embedMany"));

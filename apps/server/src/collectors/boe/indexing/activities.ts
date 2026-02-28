@@ -54,6 +54,8 @@ interface FragmentRow {
   readonly content: string;
 }
 
+const EMBEDDING_BATCH_SIZE = 32;
+
 export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>()(
   "BoeIndexingActivities",
   {
@@ -279,7 +281,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               return [] as ReadonlyArray<FragmentRow>;
             }
 
-            yield* db
+            const persistedRows = yield* db
               .insert(senseFragments)
               .values(rows)
               .onConflictDoUpdate({
@@ -299,6 +301,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   updatedAt: sql`excluded.updated_at`,
                 },
               })
+              .returning({ fragmentId: senseFragments.fragmentId, content: senseFragments.content })
               .pipe(
                 Effect.mapError((cause) =>
                   toWorkflowError(
@@ -311,26 +314,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 ),
               );
 
-            return yield* db
-              .select({ fragmentId: senseFragments.fragmentId, content: senseFragments.content })
-              .from(senseFragments)
-              .where(
-                and(
-                  eq(senseFragments.docId, payload.docId),
-                  eq(senseFragments.versionId, payload.versionId),
-                ),
-              )
-              .pipe(
-                Effect.mapError((cause) =>
-                  toWorkflowError(
-                    payload,
-                    executionId,
-                    "upsert-fragments",
-                    cause,
-                    "Unable to list upserted sense fragments",
-                  ),
-                ),
-              );
+            return persistedRows;
           }),
       );
 
@@ -341,60 +325,70 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               return;
             }
 
-            const vectors = yield* embedding
-              .embed(rows.map((row) => row.content))
-              .pipe(
-                Effect.mapError((cause) =>
-                  toWorkflowError(
-                    payload,
-                    executionId,
-                    "embed-fragments",
-                    cause,
-                    "Unable to generate embeddings for fragments",
-                  ),
-                ),
-              );
-
-            if (!Array.isArray(vectors) || vectors.length !== rows.length) {
-              return yield* toWorkflowError(
-                payload,
-                executionId,
-                "embed-fragments",
-                undefined,
-                "Embedding service returned unexpected vector cardinality",
-              );
+            const buffered: Array<ReadonlyArray<FragmentRow>> = [];
+            for (let index = 0; index < rows.length; index += EMBEDDING_BATCH_SIZE) {
+              buffered.push(rows.slice(index, index + EMBEDDING_BATCH_SIZE));
             }
 
             yield* Effect.forEach(
-              rows,
-              (row, index) => {
-                const vector = vectors[index];
-                if (vector === undefined) {
-                  return Effect.void;
-                }
-
-                return db
-                  .update(senseFragments)
-                  .set({
-                    embedding1024: vector.full,
-                    embedding256: vector.scout,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(senseFragments.fragmentId, row.fragmentId))
-                  .pipe(
+              buffered,
+              (batch) =>
+                Effect.gen(function* () {
+                  const vectors = yield* embedding.embed(batch.map((row) => row.content)).pipe(
                     Effect.mapError((cause) =>
                       toWorkflowError(
                         payload,
                         executionId,
                         "embed-fragments",
                         cause,
-                        "Unable to persist generated fragment embedding",
+                        "Unable to generate embeddings for fragments",
                       ),
                     ),
-                    Effect.asVoid,
                   );
-              },
-              { discard: true, concurrency: 4 },
+
+                  if (!Array.isArray(vectors) || vectors.length !== batch.length) {
+                    return yield* toWorkflowError(
+                      payload,
+                      executionId,
+                      "embed-fragments",
+                      undefined,
+                      "Embedding service returned unexpected vector cardinality",
+                    );
+                  }
+
+                  yield* Effect.forEach(
+                    batch,
+                    (row, index) => {
+                      const vector = vectors[index];
+                      if (vector === undefined) {
+                        return Effect.void;
+                      }
+
+                      return db
+                        .update(senseFragments)
+                        .set({
+                          embedding1024: vector.full,
+                          embedding256: vector.scout,
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(senseFragments.fragmentId, row.fragmentId))
+                        .pipe(
+                          Effect.mapError((cause) =>
+                            toWorkflowError(
+                              payload,
+                              executionId,
+                              "embed-fragments",
+                              cause,
+                              "Unable to persist generated fragment embedding",
+                            ),
+                          ),
+                          Effect.asVoid,
+                        );
+                    },
+                    { discard: true, concurrency: 4 },
+                  );
+                }),
+              { discard: true, concurrency: 1 },
             );
           }),
       );
