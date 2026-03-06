@@ -1,48 +1,253 @@
-import { codec, createSseServer, defineEventRegistryFromMap } from "@canary/agent";
-import type { AnyEventEnvelope, EventMap } from "@canary/agent";
+import { os } from "@orpc/server";
+import { withEventMeta } from "@orpc/server";
+import { RPCHandler } from "@orpc/server/fetch";
+import { createPubsubClient } from "@restatedev/pubsub-client";
+import { z } from "zod";
+
+import {
+  codec,
+  defineEventRegistryFromMap,
+  type AnyEventEnvelope,
+  type EventMap,
+} from "@canary/agent";
+
+import { createOrchestratorClient } from "./shared";
 
 interface AuthContext {
   readonly userId: string;
   readonly token: string;
 }
 
-interface RunBody {
-  readonly sessionId: string;
-  readonly idempotencyKey: string;
-  readonly agent: string;
-  readonly input: {
-    readonly question: string;
-  };
-}
-
-interface ContinueBody {
-  readonly sessionId: string;
-  readonly idempotencyKey: string;
-  readonly agent: string;
-}
-
-interface SessionCommandBody {
-  readonly sessionId: string;
-  readonly content?: string;
-}
-
-interface HistoryQuery {
-  readonly sessionId: string;
-  readonly offset?: number;
-}
-
 const authToken = process.env.EXAMPLE_AGENT_API_TOKEN ?? "dev-token";
-const sessionOwners = new Map<string, string>();
+const debugStreaming = (process.env.EXAMPLE_AGENT_DEBUG_STREAMING ?? "false") === "true";
 const restateIngressUrl = (process.env.RESTATE_INGRESS_URL ?? "http://127.0.0.1:8080").replace(
   /\/$/,
   "",
 );
-const orchestratorService = "agent-orchestrator";
-const sse = createSseServer({
-  eventRegistry: defineEventRegistryFromMap({
-    defaultCodec: codec.superJson,
-  }),
+const pubsubName = process.env.RESTATE_PUBSUB_NAME ?? "pubsub";
+const orchestrator = createOrchestratorClient({ baseUrl: restateIngressUrl });
+const pubsubClient = createPubsubClient({
+  url: restateIngressUrl,
+  name: pubsubName,
+  pullInterval: {
+    milliseconds: 10,
+  },
 });
+const eventRegistry = defineEventRegistryFromMap({ defaultCodec: codec.superJson });
+const sessionOwners = new Map<string, string>();
+
+interface WireEnvelope {
+  readonly type: string;
+  readonly index: number;
+  readonly turnId: string;
+  readonly sessionId: string;
+  readonly ts: string;
+  readonly payload: unknown;
+}
+
+function toWireEnvelope(message: unknown, fallbackSessionId: string): WireEnvelope | undefined {
+  if (!message || typeof message !== "object") {
+    return undefined;
+  }
+
+  const candidate = message as Partial<AnyEventEnvelope<EventMap>>;
+  if (typeof candidate.type !== "string") {
+    return undefined;
+  }
+
+  const eventType = candidate.type as keyof EventMap;
+  const definition = eventRegistry[eventType];
+  if (!definition) {
+    return undefined;
+  }
+
+  const eventIndex = Number(candidate.index);
+  if (!Number.isFinite(eventIndex) || eventIndex < 0) {
+    return undefined;
+  }
+
+  const payload = (() => {
+    const payloadCandidate: unknown = candidate.payload;
+
+    if (typeof payloadCandidate === "string") {
+      return payloadCandidate;
+    }
+
+    return codec.superJson.encode(payloadCandidate);
+  })();
+
+  return {
+    type: candidate.type,
+    index: eventIndex,
+    turnId: String(candidate.turnId ?? ""),
+    sessionId: String(candidate.sessionId ?? fallbackSessionId),
+    ts: String(candidate.ts ?? new Date().toISOString()),
+    payload,
+  };
+}
+
+const runResponseSchema = z.object({
+  output: z.unknown(),
+  turnId: z.string(),
+  nextIndex: z.number(),
+});
+
+const sessionCommandResultSchema = z.object({
+  ok: z.boolean(),
+});
+
+function ensureSessionAccess(sessionId: string, userId: string): void {
+  const owner = sessionOwners.get(sessionId);
+  if (!owner) {
+    sessionOwners.set(sessionId, userId);
+    return;
+  }
+
+  if (owner !== userId) {
+    throw new Error(`Session '${sessionId}' belongs to a different user`);
+  }
+}
+
+const pub = os.$context<AuthContext>();
+
+export const appRouter = pub.router({
+  run: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        idempotencyKey: z.string(),
+        agent: z.string(),
+        input: z.unknown(),
+      }),
+    )
+    .output(runResponseSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      return orchestrator.call(
+        input.sessionId,
+        "run",
+        {
+          ...input,
+          context: {
+            userId: context.userId,
+          },
+        },
+        { idempotencyKey: input.idempotencyKey, signal },
+      );
+    }),
+
+  continue: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        idempotencyKey: z.string(),
+        agent: z.string(),
+      }),
+    )
+    .output(runResponseSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      return orchestrator.call(input.sessionId, "continue", input, {
+        idempotencyKey: input.idempotencyKey,
+        signal,
+      });
+    }),
+
+  steer: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        content: z.string().optional(),
+      }),
+    )
+    .output(sessionCommandResultSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      await orchestrator.call(input.sessionId, "steer", input, { signal });
+      return { ok: true };
+    }),
+
+  followUp: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        content: z.string().optional(),
+      }),
+    )
+    .output(sessionCommandResultSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      await orchestrator.call(input.sessionId, "followUp", input, { signal });
+      return { ok: true };
+    }),
+
+  cancel: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        content: z.string().optional(),
+      }),
+    )
+    .output(sessionCommandResultSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      await orchestrator.call(input.sessionId, "cancel", input, { signal });
+      return { ok: true };
+    }),
+
+  events: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        offset: z.number().optional(),
+      }),
+    )
+    .handler(async function* ({ input, context, signal, lastEventId }) {
+      ensureSessionAccess(input.sessionId, context.userId);
+      let nextOffset =
+        typeof lastEventId === "string" && lastEventId.length > 0
+          ? Number(lastEventId) + 1
+          : (input.offset ?? 0);
+      if (!Number.isFinite(nextOffset) || nextOffset < 0) {
+        nextOffset = input.offset ?? 0;
+      }
+
+      const stream = pubsubClient.pull({
+        topic: input.sessionId,
+        offset: nextOffset,
+        signal,
+      });
+
+      for await (const message of stream) {
+        const envelope = toWireEnvelope(message, input.sessionId);
+        if (!envelope) {
+          continue;
+        }
+
+        const eventIndex = envelope.index;
+
+        if (debugStreaming) {
+          const nowIso = new Date().toISOString();
+          const lagMs =
+            envelope.ts && !Number.isNaN(Date.parse(envelope.ts))
+              ? Date.now() - Date.parse(envelope.ts)
+              : undefined;
+          console.log(
+            `[edge-stream][${nowIso}] session=${input.sessionId} idx=${eventIndex} type=${envelope.type} eventTs=${envelope.ts ?? "n/a"} lagMs=${lagMs ?? "n/a"}`,
+          );
+        }
+
+        yield withEventMeta(envelope, {
+          id: String(eventIndex),
+        });
+
+        nextOffset = eventIndex + 1;
+      }
+    }),
+});
+
+export type AppRouter = typeof appRouter;
+const rpcHandler = new RPCHandler(appRouter);
 
 function unauthorized(message = "Unauthorized"): Response {
   return new Response(message, {
@@ -51,10 +256,6 @@ function unauthorized(message = "Unauthorized"): Response {
       "www-authenticate": 'Bearer realm="agent-example"',
     },
   });
-}
-
-function forbidden(message = "Forbidden"): Response {
-  return new Response(message, { status: 403 });
 }
 
 function extractAuthContext(request: Request, url: URL): AuthContext | Response {
@@ -80,127 +281,9 @@ function extractAuthContext(request: Request, url: URL): AuthContext | Response 
   };
 }
 
-function ensureSessionAccess(sessionId: string, userId: string): Response | null {
-  const owner = sessionOwners.get(sessionId);
-  if (!owner) {
-    sessionOwners.set(sessionId, userId);
-    return null;
-  }
-
-  if (owner !== userId) {
-    return forbidden(`Session '${sessionId}' belongs to a different user`);
-  }
-
-  return null;
-}
-
-function toIngressUrl(sessionId: string, handler: string): string {
-  return `${restateIngressUrl}/${orchestratorService}/${encodeURIComponent(sessionId)}/${handler}`;
-}
-
-async function callOrchestrator<T>(
-  sessionId: string,
-  handler: string,
-  body: unknown,
-  options?: {
-    readonly idempotencyKey?: string;
-    readonly signal?: AbortSignal;
-  },
-): Promise<T> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
-  if (options?.idempotencyKey) {
-    headers["idempotency-key"] = options.idempotencyKey;
-  }
-
-  const response = await fetch(toIngressUrl(sessionId, handler), {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: options?.signal,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Orchestrator ${handler} failed (${response.status}): ${text}`);
-  }
-
-  return response.json() as Promise<T>;
-}
-
-function createEventsProxyStream(options: {
-  readonly sessionId: string;
-  readonly offset?: number;
-  readonly signal: AbortSignal;
-}): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  let nextOffset = options.offset ?? 0;
-  const sseSession = sse.session(options.sessionId);
-
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      let closed = false;
-      let inFlight = false;
-
-      const close = () => {
-        if (closed) {
-          return;
-        }
-
-        closed = true;
-        controller.close();
-      };
-
-      const tick = async () => {
-        if (closed || inFlight) {
-          return;
-        }
-
-        inFlight = true;
-        try {
-          const events = await callOrchestrator<ReadonlyArray<AnyEventEnvelope<EventMap>>>(
-            options.sessionId,
-            "getEvents",
-            {
-              sessionId: options.sessionId,
-              offset: nextOffset,
-            },
-            { signal: options.signal },
-          );
-
-          for (const event of events) {
-            controller.enqueue(
-              encoder.encode(
-                sseSession.event(event.type, event.payload, {
-                  index: event.index,
-                  turnId: event.turnId,
-                }),
-              ),
-            );
-            nextOffset = Number(event.index) + 1;
-          }
-        } catch {
-          close();
-        } finally {
-          inFlight = false;
-        }
-      };
-
-      controller.enqueue(encoder.encode(": connected\n\n"));
-      const interval = setInterval(() => void tick(), 500);
-      void tick();
-
-      options.signal.addEventListener("abort", () => {
-        clearInterval(interval);
-        close();
-      });
-    },
-  });
-}
-
 Bun.serve({
   port: 3000,
+  idleTimeout: 120,
   async fetch(request) {
     const url = new URL(request.url);
     const auth = extractAuthContext(request, url);
@@ -208,116 +291,10 @@ Bun.serve({
       return auth;
     }
 
-    if (url.pathname === "/run" && request.method === "POST") {
-      const body = (await request.json()) as RunBody;
-      const denial = ensureSessionAccess(body.sessionId, auth.userId);
-      if (denial) {
-        return denial;
-      }
+    const result = await rpcHandler.handle(request, { context: auth });
 
-      const payload = await callOrchestrator(
-        body.sessionId,
-        "run",
-        {
-          ...body,
-          context: {
-            userId: auth.userId,
-          },
-        },
-        {
-          idempotencyKey: body.idempotencyKey,
-          signal: request.signal,
-        },
-      );
-
-      return Response.json(payload);
-    }
-
-    if (url.pathname === "/continue" && request.method === "POST") {
-      const body = (await request.json()) as ContinueBody;
-      const denial = ensureSessionAccess(body.sessionId, auth.userId);
-      if (denial) {
-        return denial;
-      }
-
-      const payload = await callOrchestrator(body.sessionId, "continue", body, {
-        idempotencyKey: body.idempotencyKey,
-        signal: request.signal,
-      });
-      return Response.json(payload);
-    }
-
-    if (url.pathname === "/events" && request.method === "GET") {
-      const sessionId = url.searchParams.get("sessionId");
-      if (!sessionId) {
-        return new Response("sessionId query param is required", { status: 400 });
-      }
-
-      const denial = ensureSessionAccess(sessionId, auth.userId);
-      if (denial) {
-        return denial;
-      }
-
-      const offsetRaw = url.searchParams.get("offset");
-      const offset = offsetRaw ? Number(offsetRaw) : undefined;
-      const stream = createEventsProxyStream({
-        sessionId,
-        offset,
-        signal: request.signal,
-      });
-
-      return new Response(stream, {
-        headers: {
-          "content-type": "text/event-stream",
-          "cache-control": "no-cache",
-          connection: "keep-alive",
-        },
-      });
-    }
-
-    if (url.pathname === "/history" && request.method === "GET") {
-      const sessionId = url.searchParams.get("sessionId");
-      if (!sessionId) {
-        return new Response("sessionId query param is required", { status: 400 });
-      }
-
-      const denial = ensureSessionAccess(sessionId, auth.userId);
-      if (denial) {
-        return denial;
-      }
-
-      const offsetRaw = url.searchParams.get("offset");
-      const offset = offsetRaw ? Number(offsetRaw) : undefined;
-      const query: HistoryQuery = {
-        sessionId,
-        offset,
-      };
-
-      const events = await callOrchestrator<ReadonlyArray<AnyEventEnvelope<EventMap>>>(
-        sessionId,
-        "getEvents",
-        query,
-        { signal: request.signal },
-      );
-
-      return Response.json(events);
-    }
-
-    if (
-      (url.pathname === "/steer" || url.pathname === "/follow-up" || url.pathname === "/cancel") &&
-      request.method === "POST"
-    ) {
-      const body = (await request.json()) as SessionCommandBody;
-      const denial = ensureSessionAccess(body.sessionId, auth.userId);
-      if (denial) {
-        return denial;
-      }
-
-      const handler =
-        url.pathname === "/follow-up" ? "followUp" : url.pathname === "/steer" ? "steer" : "cancel";
-
-      await callOrchestrator(body.sessionId, handler, body, { signal: request.signal });
-      return Response.json({ ok: true });
+    if (result.matched) {
+      return result.response;
     }
 
     return new Response("Not found", { status: 404 });

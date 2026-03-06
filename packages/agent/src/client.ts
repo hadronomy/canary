@@ -207,7 +207,7 @@ export function createSseClient<
         };
 
         const envelope = decodeSseWithRegistry(frame, options.eventRegistry);
-        options.resume?.setOffset?.(Number(envelope.index));
+        options.resume?.setOffset?.(Number(envelope.index) + 1);
         queue.push(envelope);
       };
 

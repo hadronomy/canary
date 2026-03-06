@@ -8,10 +8,20 @@ import {
 } from "@mariozechner/pi-agent-core";
 import type { Model, ThinkingBudgets, Transport } from "@mariozechner/pi-ai";
 
+import { createFetchHarnessAdapter } from "~/adapters/fetch";
+import type {
+  CreateFetchHarnessAdapterOptions,
+  HarnessClientAdapter,
+  HarnessClientRoutes,
+  HarnessEventSourceFactory,
+  HarnessFetch,
+  HarnessFetchOptions,
+  WireEventEnvelope,
+} from "~/adapters/types";
 import { createRestateApi, type RestateApi } from "~/api";
 import type { Codec } from "~/codec";
 import { codec } from "~/codec";
-import { CLIENT_ERROR_CODE, TURN_ERROR_CODE, TURN_ERROR_STAGE } from "~/errors";
+import { TURN_ERROR_CODE, TURN_ERROR_STAGE } from "~/errors";
 import { createSessionOrchestrator, type SessionOrchestrator } from "~/orchestrator";
 import {
   defineEventRegistryFromMap,
@@ -29,7 +39,7 @@ import {
   type TurnId,
 } from "~/protocol";
 import type { Runtime } from "~/runtime";
-import { createSseServer, decodeSseWithRegistry } from "~/stream";
+import { createSseServer } from "~/stream";
 import { createEventFlow, createPiEventMapper, mapAgentEventToPiEvent } from "~/workflow";
 
 export interface HarnessAgentConfig {
@@ -195,6 +205,7 @@ export interface HarnessRunResponse<TOutputWire> {
 
 export interface HarnessAdapters {
   readonly topicForSession?: (sessionId: string) => string;
+  readonly onPublish?: (sessionId: string, envelope: AnyEventEnvelope<EventMap>) => void;
   readonly createOrchestrator?: (options: {
     readonly runtime: Runtime<unknown, unknown, unknown, unknown, unknown>;
     readonly pubsub: {
@@ -292,6 +303,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     const session = getSession(sessionId);
     session.events.push(envelope);
     session.nextIndex = Math.max(session.nextIndex, Number(envelope.index) + 1);
+    options.adapters?.onPublish?.(sessionId, envelope);
 
     const sessionStream = sse.session(toSessionId(sessionId));
     const chunk = sessionStream.event(envelope.type, envelope.payload, {
@@ -770,24 +782,54 @@ export function createHarness<TAgents extends HarnessAgents>(
         const sessionStream = sse.session(streamOptions.sessionId);
         controller.enqueue(encoder.encode(sessionStream.comment("connected")));
 
-        for (const event of session.events) {
-          if (Number(event.index) >= offset) {
-            controller.enqueue(
-              encoder.encode(
-                sessionStream.event(event.type, event.payload, {
-                  index: event.index,
-                  turnId: event.turnId,
-                }),
-              ),
-            );
+        let nextReplayIndex = offset;
+
+        const emitEvent = (event: AnyEventEnvelope<EventMap>): void => {
+          if (Number(event.index) < nextReplayIndex) {
+            return;
           }
+
+          controller.enqueue(
+            encoder.encode(
+              sessionStream.event(event.type, event.payload, {
+                index: event.index,
+                turnId: event.turnId,
+              }),
+            ),
+          );
+
+          nextReplayIndex = Number(event.index) + 1;
+        };
+
+        const replayUpperBound = session.nextIndex;
+        for (const event of session.events) {
+          if (Number(event.index) >= replayUpperBound) {
+            break;
+          }
+
+          emitEvent(event);
         }
+
+        const gapReplayStart = session.nextIndex;
 
         const listener = (chunk: string) => {
           controller.enqueue(encoder.encode(chunk));
         };
 
         session.listeners.add(listener);
+
+        for (const event of session.events) {
+          const index = Number(event.index);
+          if (index < gapReplayStart) {
+            continue;
+          }
+
+          if (index >= session.nextIndex) {
+            break;
+          }
+
+          emitEvent(event);
+        }
 
         const cleanup = () => {
           session.listeners.delete(listener);
@@ -820,15 +862,6 @@ export function createHarness<TAgents extends HarnessAgents>(
   };
 }
 
-type HarnessClientRoutes = {
-  readonly run?: string;
-  readonly continue?: string;
-  readonly events?: string;
-  readonly steer?: string;
-  readonly followUp?: string;
-  readonly cancel?: string;
-};
-
 type HarnessClientSharedOptions<TAgents extends HarnessClientAgents> = {
   readonly agents: TAgents;
   readonly queryParams?: Record<string, string>;
@@ -837,17 +870,7 @@ type HarnessClientSharedOptions<TAgents extends HarnessClientAgents> = {
   readonly sseOptions?: () => {
     readonly queryParams?: Record<string, string>;
   };
-  readonly createEventSource?: (url: string) => {
-    onmessage:
-      | ((event: {
-          readonly data: string;
-          readonly lastEventId: string;
-          readonly type: string;
-        }) => void)
-      | null;
-    onerror: ((event: unknown) => void) | null;
-    close: () => void;
-  };
+  readonly createEventSource?: HarnessEventSourceFactory;
   readonly resume?: {
     readonly getOffset?: () => number;
     readonly setOffset?: (offset: number) => void;
@@ -858,17 +881,9 @@ type HarnessClientSharedOptions<TAgents extends HarnessClientAgents> = {
 type HarnessClientBaseUrlOptions = {
   readonly baseUrl: string | URL;
   readonly routes?: HarnessClientRoutes;
-  readonly eventsUrl?: never;
-  readonly runUrl?: never;
-  readonly continueUrl?: never;
-  readonly steerUrl?: never;
-  readonly followUpUrl?: never;
-  readonly cancelUrl?: never;
 };
 
 type HarnessClientLegacyUrlOptions = {
-  readonly baseUrl?: never;
-  readonly routes?: never;
   readonly eventsUrl: string | URL;
   readonly runUrl: string | URL;
   readonly continueUrl?: string | URL;
@@ -877,46 +892,28 @@ type HarnessClientLegacyUrlOptions = {
   readonly cancelUrl?: string | URL;
 };
 
-export type CreateHarnessClientOptions<TAgents extends HarnessClientAgents> =
-  HarnessClientSharedOptions<TAgents> &
-    (HarnessClientBaseUrlOptions | HarnessClientLegacyUrlOptions);
-
-type HarnessFetchInit = {
-  readonly method?: RequestInit["method"];
-  readonly headers?: RequestInit["headers"];
-  readonly body?: RequestInit["body"];
-  readonly signal?: AbortSignal;
-} & Omit<RequestInit, "method" | "headers" | "body" | "signal">;
-
-type HarnessFetchOptions = Omit<HarnessFetchInit, "method" | "body" | "signal">;
-
-type HarnessFetchResponse = {
-  readonly ok: boolean;
-  readonly status: number;
-  readonly json: <T>() => Promise<T>;
-  readonly text: () => Promise<string>;
+type HarnessClientAdapterOptions = {
+  readonly adapter: HarnessClientAdapter;
 };
 
-type HarnessFetch = (input: string | URL, init?: HarnessFetchInit) => Promise<HarnessFetchResponse>;
+export type CreateHarnessClientOptions<TAgents extends HarnessClientAgents> =
+  HarnessClientSharedOptions<TAgents> &
+    (HarnessClientAdapterOptions | HarnessClientBaseUrlOptions | HarnessClientLegacyUrlOptions);
 
 type HarnessClientAgents = Record<
   string,
   {
-    readonly input: Codec<any, any>;
-    readonly output: Codec<any, any>;
+    readonly input: Codec<any, unknown>;
+    readonly output: Codec<any, unknown>;
   }
 >;
 
-type HarnessClientInput<TAgent> = TAgent extends { readonly input: Codec<infer TInput, any> }
+type HarnessClientInput<TAgent> = TAgent extends { readonly input: Codec<infer TInput, unknown> }
   ? TInput
   : never;
 
-type HarnessClientOutput<TAgent> = TAgent extends { readonly output: Codec<infer TOutput, any> }
+type HarnessClientOutput<TAgent> = TAgent extends { readonly output: Codec<infer TOutput, unknown> }
   ? TOutput
-  : never;
-
-type HarnessClientOutputWire<TAgent> = TAgent extends { readonly output: Codec<any, infer TWire> }
-  ? TWire
   : never;
 
 export interface AgentSession<TAgent extends HarnessClientAgents[string]> {
@@ -937,297 +934,45 @@ export interface AgentSession<TAgent extends HarnessClientAgents[string]> {
   readonly waitForIdle: (options?: { readonly signal?: AbortSignal }) => Promise<void>;
 }
 
-function resolveEventUrl(
-  base: string | URL,
-  options?: {
-    readonly offset?: number;
-    readonly sessionId?: string;
-    readonly queryParams?: Record<string, string>;
-  },
-): string {
-  const offset = options?.offset;
-  const sessionId = options?.sessionId;
-  const queryParams = options?.queryParams;
-
-  if (offset === undefined && sessionId === undefined && !queryParams) {
-    return base instanceof URL ? base.toString() : base;
-  }
-
-  const parsed = new URL(base instanceof URL ? base.toString() : base, "http://localhost");
-  if (queryParams) {
-    for (const [key, value] of Object.entries(queryParams)) {
-      parsed.searchParams.set(key, value);
-    }
-  }
-  if (offset !== undefined) {
-    parsed.searchParams.set("offset", String(offset));
-  }
-  if (sessionId !== undefined) {
-    parsed.searchParams.set("sessionId", sessionId);
-  }
-
-  if (base instanceof URL) {
-    return parsed.toString();
-  }
-
-  if (base.startsWith("http://") || base.startsWith("https://")) {
-    return parsed.toString();
-  }
-
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-}
-
-function resolveCommandUrl(
-  base: string | URL,
-  override: string | URL | undefined,
-  suffix: string,
-): string {
-  if (override) {
-    return override instanceof URL ? override.toString() : override;
-  }
-
-  const normalizedSuffix = suffix.replace(/^\/+/, "");
-
-  const applySiblingPath = (url: URL): URL => {
-    const currentPath = url.pathname;
-    const parentPath =
-      currentPath.endsWith("/") || currentPath.length === 0
-        ? currentPath
-        : currentPath.slice(0, currentPath.lastIndexOf("/") + 1);
-    const joined = `${parentPath}${normalizedSuffix}`.replace(/\/{2,}/g, "/");
-
-    const next = new URL(url.toString());
-    next.pathname = joined.startsWith("/") ? joined : `/${joined}`;
-    return next;
+type CreateHarnessClientFromAdapterOptions<TAgents extends HarnessClientAgents> = {
+  readonly agents: TAgents;
+  readonly adapter: HarnessClientAdapter;
+  readonly eventRegistry: EventRegistry<EventMap>;
+  readonly resume?: {
+    readonly getOffset?: () => number;
+    readonly setOffset?: (offset: number) => void;
   };
-
-  if (base instanceof URL) {
-    return applySiblingPath(base).toString();
-  }
-
-  if (base.startsWith("http://") || base.startsWith("https://")) {
-    return applySiblingPath(new URL(base)).toString();
-  }
-
-  const parsed = new URL(base, "http://localhost");
-  const resolved = applySiblingPath(parsed);
-  return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-}
-
-type HarnessRouteName = "run" | "continue" | "events" | "steer" | "followUp" | "cancel";
-
-type HarnessClientResolvedUrls = Record<HarnessRouteName, string>;
-
-const harnessDefaultRoutes: Record<HarnessRouteName, string> = {
-  run: "/run",
-  continue: "/continue",
-  events: "/events",
-  steer: "/steer",
-  followUp: "/follow-up",
-  cancel: "/cancel",
 };
 
-function resolvePathFromBase(base: string | URL, path: string): string {
-  const normalizedPath = path.replace(/^\/+/, "");
-  const joinPath = (basePath: string): string => {
-    const prefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
-    return `${prefix}${normalizedPath}`.replace(/\/{2,}/g, "/");
-  };
-
-  if (base instanceof URL) {
-    const next = new URL(base.toString());
-    next.pathname = joinPath(next.pathname);
-    return next.toString();
+function decodeEventEnvelope(
+  eventRegistry: EventRegistry<EventMap>,
+  wireEvent: WireEventEnvelope,
+  fallbackSessionId?: string,
+): AnyEventEnvelope<EventMap> {
+  const definition = eventRegistry[wireEvent.type as keyof EventMap];
+  if (!definition) {
+    throw new TypeError(`Unknown event type '${wireEvent.type}'`);
   }
 
-  if (base.startsWith("http://") || base.startsWith("https://")) {
-    const next = new URL(base);
-    next.pathname = joinPath(next.pathname);
-    return next.toString();
+  const resolvedSessionId = wireEvent.sessionId ?? fallbackSessionId;
+  if (!resolvedSessionId) {
+    throw new TypeError("SSE envelope is missing a valid sessionId");
   }
-
-  const parsed = new URL(base, "http://localhost");
-  const next = new URL(parsed.toString());
-  next.pathname = joinPath(next.pathname);
-  return `${next.pathname}${next.search}${next.hash}`;
-}
-
-function resolveClientUrls<TAgents extends HarnessClientAgents>(
-  options: CreateHarnessClientOptions<TAgents>,
-): HarnessClientResolvedUrls {
-  if (options.baseUrl !== undefined) {
-    const routes = options.routes;
-    return {
-      run: resolvePathFromBase(options.baseUrl, routes?.run ?? harnessDefaultRoutes.run),
-      continue: resolvePathFromBase(
-        options.baseUrl,
-        routes?.continue ?? harnessDefaultRoutes.continue,
-      ),
-      events: resolvePathFromBase(options.baseUrl, routes?.events ?? harnessDefaultRoutes.events),
-      steer: resolvePathFromBase(options.baseUrl, routes?.steer ?? harnessDefaultRoutes.steer),
-      followUp: resolvePathFromBase(
-        options.baseUrl,
-        routes?.followUp ?? harnessDefaultRoutes.followUp,
-      ),
-      cancel: resolvePathFromBase(options.baseUrl, routes?.cancel ?? harnessDefaultRoutes.cancel),
-    };
-  }
-
-  if (!options.runUrl || !options.eventsUrl) {
-    throw new TypeError(
-      "createHarnessClient requires either baseUrl, or both runUrl and eventsUrl for legacy configuration.",
-    );
-  }
-
-  const continueUrl =
-    options.continueUrl !== undefined
-      ? resolveCommandUrl(options.runUrl, options.continueUrl, "/continue")
-      : options.runUrl instanceof URL
-        ? options.runUrl.toString()
-        : options.runUrl;
-  const steerUrl = resolveCommandUrl(options.runUrl, options.steerUrl, "/steer");
-  const followUpUrl = resolveCommandUrl(options.runUrl, options.followUpUrl, "/follow-up");
-  const cancelUrl = resolveCommandUrl(options.runUrl, options.cancelUrl, "/cancel");
 
   return {
-    run: options.runUrl instanceof URL ? options.runUrl.toString() : options.runUrl,
-    continue: continueUrl,
-    events: options.eventsUrl instanceof URL ? options.eventsUrl.toString() : options.eventsUrl,
-    steer: steerUrl,
-    followUp: followUpUrl,
-    cancel: cancelUrl,
-  };
+    type: wireEvent.type as keyof EventMap,
+    index: toEventIndex(wireEvent.index),
+    turnId: wireEvent.turnId,
+    sessionId: toSessionId(resolvedSessionId),
+    ts: wireEvent.ts ?? new Date().toISOString(),
+    payload: definition.codec.decode(wireEvent.payload),
+    schemaVersion: 1,
+  } as AnyEventEnvelope<EventMap>;
 }
 
-function createQueue<T>() {
-  const items: Array<T> = [];
-  const waiters: Array<(result: IteratorResult<T>) => void> = [];
-  let done = false;
-
-  function push(item: T): void {
-    const waiter = waiters.shift();
-    if (waiter) {
-      waiter({ value: item, done: false });
-      return;
-    }
-
-    items.push(item);
-  }
-
-  function close(): void {
-    done = true;
-    for (const waiter of waiters.splice(0)) {
-      waiter({ value: undefined, done: true });
-    }
-  }
-
-  function next(): Promise<IteratorResult<T>> {
-    if (items.length > 0) {
-      const value = items.shift() as T;
-      return Promise.resolve({ value, done: false });
-    }
-
-    if (done) {
-      return Promise.resolve({ value: undefined, done: true });
-    }
-
-    return new Promise<IteratorResult<T>>((resolve) => waiters.push(resolve));
-  }
-
-  return { push, close, next };
-}
-
-function normalizeHeaders(headers?: RequestInit["headers"]): Record<string, string> {
-  if (!headers) {
-    return {};
-  }
-
-  const normalized = new Headers(headers);
-  const result: Record<string, string> = {};
-  normalized.forEach((value, key) => {
-    result[key] = value;
-  });
-
-  return result;
-}
-
-function defaultEventSourceFactory() {
-  const ctor = (
-    globalThis as {
-      readonly EventSource?: new (url: string) => {
-        onmessage:
-          | ((event: {
-              readonly data: string;
-              readonly lastEventId: string;
-              readonly type: string;
-            }) => void)
-          | null;
-        onerror: ((event: unknown) => void) | null;
-        close: () => void;
-      };
-    }
-  ).EventSource;
-
-  if (!ctor) {
-    throw new TypeError(
-      "No EventSource implementation available. Pass createEventSource explicitly.",
-    );
-  }
-
-  return (url: string) => new ctor(url);
-}
-
-export function createHarnessClient<TAgents extends HarnessClientAgents>(
-  options: CreateHarnessClientOptions<TAgents>,
+function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
+  options: CreateHarnessClientFromAdapterOptions<TAgents>,
 ) {
-  const eventRegistry =
-    options.eventRegistry ??
-    defineEventRegistryFromMap({
-      defaultCodec: codec.superJson,
-    });
-
-  const createEventSource = options.createEventSource ?? defaultEventSourceFactory();
-  const urls = resolveClientUrls(options);
-  const requestQueryParams = options.queryParams;
-  const sseQueryParams = options.sseOptions?.().queryParams;
-  const eventQueryParams = {
-    ...requestQueryParams,
-    ...sseQueryParams,
-  };
-
-  const defaultFetch: HarnessFetch = async (input, init) => {
-    const response = await fetch(typeof input === "string" ? input : input.toString(), {
-      method: init?.method,
-      headers: init?.headers,
-      body: init?.body,
-      signal: init?.signal,
-    });
-
-    return {
-      ok: response.ok,
-      status: response.status,
-      json: <T>() => response.json() as Promise<T>,
-      text: () => response.text(),
-    };
-  };
-
-  const fetcher: HarnessFetch = options.fetch ?? defaultFetch;
-
-  async function request(
-    input: string | URL,
-    init?: HarnessFetchInit,
-  ): Promise<HarnessFetchResponse> {
-    const requestDefaults = (await options.fetchOptions?.()) ?? {};
-    return fetcher(resolveEventUrl(input, { queryParams: requestQueryParams }), {
-      ...requestDefaults,
-      ...init,
-      headers: {
-        ...normalizeHeaders(requestDefaults.headers),
-        ...normalizeHeaders(init?.headers),
-      },
-    });
-  }
-
   function getAgentDefinition<TKey extends keyof TAgents & string>(key: TKey): TAgents[TKey] {
     const agent = options.agents[key];
     if (!agent) {
@@ -1235,34 +980,6 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
     }
 
     return agent;
-  }
-
-  async function decodeRunResponse<TKey extends keyof TAgents & string>(
-    agent: TKey,
-    response: HarnessFetchResponse,
-  ): Promise<{
-    readonly output: HarnessClientOutput<TAgents[TKey]>;
-    readonly turnId: string;
-    readonly nextIndex: number;
-  }> {
-    if (!response.ok) {
-      throw new TypeError(
-        `${CLIENT_ERROR_CODE.HARNESS_HTTP_RUN_FAILED}: status ${response.status}`,
-      );
-    }
-
-    const payload = (await response.json()) as HarnessRunResponse<
-      HarnessClientOutputWire<TAgents[TKey]>
-    > & {
-      readonly nextOffset?: number;
-    };
-    const agentDefinition = getAgentDefinition(agent);
-
-    return {
-      output: agentDefinition.output.decode(payload.output) as HarnessClientOutput<TAgents[TKey]>,
-      turnId: payload.turnId,
-      nextIndex: payload.nextIndex ?? payload.nextOffset ?? 0,
-    };
   }
 
   async function runAgent<TKey extends keyof TAgents & string>(
@@ -1278,21 +995,18 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
     readonly nextIndex: number;
   }> {
     const agentDefinition = getAgentDefinition(agent);
-    const response = await request(urls.run, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        sessionId: runOptions.sessionId,
-        idempotencyKey: runOptions.idempotencyKey,
-        agent,
-        intent: "run",
-        input: agentDefinition.input.encode(runOptions.input),
-      }),
+    const response = await options.adapter.run({
+      sessionId: runOptions.sessionId,
+      idempotencyKey: runOptions.idempotencyKey,
+      agent,
+      input: agentDefinition.input.encode(runOptions.input),
     });
 
-    return decodeRunResponse(agent, response);
+    return {
+      output: agentDefinition.output.decode(response.output) as HarnessClientOutput<TAgents[TKey]>,
+      turnId: response.turnId,
+      nextIndex: response.nextIndex,
+    };
   }
 
   async function continueAgent<TKey extends keyof TAgents & string>(
@@ -1306,79 +1020,56 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
     readonly turnId: string;
     readonly nextIndex: number;
   }> {
-    const response = await request(urls.continue, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        sessionId: runOptions.sessionId,
-        idempotencyKey: runOptions.idempotencyKey,
-        agent,
-        intent: "continue",
-      }),
-    });
-
-    return decodeRunResponse(agent, response);
-  }
-
-  async function sendSessionCommand(
-    url: string,
-    body: { readonly sessionId: string; readonly content?: string },
-  ): Promise<void> {
-    const response = await request(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new TypeError(
-        `${CLIENT_ERROR_CODE.HARNESS_HTTP_SESSION_COMMAND_FAILED}: status ${response.status}`,
-      );
-    }
-  }
-
-  function openEventsStream(
-    url: string,
-    eventOptions?: { readonly signal?: AbortSignal },
-  ): AsyncIterable<AnyEventEnvelope<EventMap>> {
-    const queue = createQueue<AnyEventEnvelope<EventMap>>();
-    const source = createEventSource(url);
-
-    source.onmessage = (message) => {
-      const envelope = decodeSseWithRegistry(
-        {
-          id: message.lastEventId || undefined,
-          event: message.type || undefined,
-          data: message.data,
-        },
-        eventRegistry,
-      );
-
-      options.resume?.setOffset?.(Number(envelope.index) + 1);
-      queue.push(envelope);
-    };
-
-    source.onerror = () => {
-      source.close();
-      queue.close();
-    };
-
-    eventOptions?.signal?.addEventListener("abort", () => {
-      source.close();
-      queue.close();
+    const agentDefinition = getAgentDefinition(agent);
+    const response = await options.adapter.continue({
+      sessionId: runOptions.sessionId,
+      idempotencyKey: runOptions.idempotencyKey,
+      agent,
     });
 
     return {
-      [Symbol.asyncIterator]() {
-        return {
-          next: queue.next,
-        };
+      output: agentDefinition.output.decode(response.output) as HarnessClientOutput<TAgents[TKey]>,
+      turnId: response.turnId,
+      nextIndex: response.nextIndex,
+    };
+  }
+
+  function streamEvents(
+    request: {
+      readonly sessionId?: string;
+      readonly offset?: number;
+    },
+    eventOptions?: { readonly signal?: AbortSignal },
+  ): AsyncIterable<AnyEventEnvelope<EventMap>> {
+    const eventRegistry = options.eventRegistry;
+    const wireStream = options.adapter.events(request, { signal: eventOptions?.signal });
+
+    return {
+      async *[Symbol.asyncIterator]() {
+        for await (const wireEvent of wireStream) {
+          const envelope = decodeEventEnvelope(eventRegistry, wireEvent, request.sessionId);
+          options.resume?.setOffset?.(Number(envelope.index) + 1);
+          yield envelope;
+        }
       },
     };
+  }
+
+  async function sendSessionCommand(
+    type: "steer" | "followUp" | "cancel",
+    body: { readonly sessionId: string; readonly content?: string },
+  ): Promise<void> {
+    if (type === "steer") {
+      await options.adapter.steer(body);
+      return;
+    }
+
+    if (type === "followUp") {
+      await options.adapter.followUp(body);
+      return;
+    }
+
+    await options.adapter.cancel(body);
   }
 
   return {
@@ -1388,10 +1079,7 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
 
     events(eventOptions?: { readonly signal?: AbortSignal }) {
       const offset = options.resume?.getOffset?.();
-      return openEventsStream(
-        resolveEventUrl(urls.events, { offset, queryParams: eventQueryParams }),
-        eventOptions,
-      );
+      return streamEvents({ offset }, eventOptions);
     },
 
     session<TKey extends keyof TAgents & string>(
@@ -1402,12 +1090,11 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
         sessionId,
         events: (eventOptions) => {
           const offset = options.resume?.getOffset?.();
-          return openEventsStream(
-            resolveEventUrl(urls.events, {
-              offset,
+          return streamEvents(
+            {
               sessionId,
-              queryParams: eventQueryParams,
-            }),
+              offset,
+            },
             eventOptions,
           );
         },
@@ -1427,13 +1114,13 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
           return result.output;
         },
         async steer(content) {
-          await sendSessionCommand(urls.steer, { sessionId, content });
+          await sendSessionCommand("steer", { sessionId, content });
         },
         async followUp(content) {
-          await sendSessionCommand(urls.followUp, { sessionId, content });
+          await sendSessionCommand("followUp", { sessionId, content });
         },
         async cancel(reason) {
-          await sendSessionCommand(urls.cancel, { sessionId, content: reason });
+          await sendSessionCommand("cancel", { sessionId, content: reason });
         },
         async waitForIdle(waitOptions) {
           for await (const event of this.events(waitOptions)) {
@@ -1449,4 +1136,40 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
       };
     },
   };
+}
+
+export function createHarnessClient<TAgents extends HarnessClientAgents>(
+  options: CreateHarnessClientOptions<TAgents>,
+) {
+  const eventRegistry =
+    options.eventRegistry ??
+    defineEventRegistryFromMap({
+      defaultCodec: codec.superJson,
+    });
+
+  const adapter =
+    "adapter" in options && options.adapter
+      ? options.adapter
+      : createFetchHarnessAdapter({
+          baseUrl: "baseUrl" in options ? options.baseUrl : undefined,
+          routes: "routes" in options ? options.routes : undefined,
+          eventsUrl: "eventsUrl" in options ? options.eventsUrl : undefined,
+          runUrl: "runUrl" in options ? options.runUrl : undefined,
+          continueUrl: "continueUrl" in options ? options.continueUrl : undefined,
+          steerUrl: "steerUrl" in options ? options.steerUrl : undefined,
+          followUpUrl: "followUpUrl" in options ? options.followUpUrl : undefined,
+          cancelUrl: "cancelUrl" in options ? options.cancelUrl : undefined,
+          queryParams: options.queryParams,
+          fetch: options.fetch,
+          fetchOptions: options.fetchOptions,
+          sseOptions: options.sseOptions,
+          createEventSource: options.createEventSource,
+        } satisfies CreateFetchHarnessAdapterOptions);
+
+  return createHarnessClientFromAdapter({
+    agents: options.agents,
+    adapter,
+    eventRegistry,
+    resume: options.resume,
+  });
 }
