@@ -37,12 +37,25 @@ export type ToolExecutionResultPayload =
 
 export interface BaseEventMap {
   readonly session_opened: { readonly sessionId: SessionId };
+  readonly agent_start: { readonly sessionId: SessionId; readonly configuration: unknown };
+  readonly agent_end: { readonly sessionId: SessionId; readonly finalState: unknown };
   readonly turn_queued: { readonly turnId: TurnId };
   readonly turn_started: { readonly turnId: TurnId };
+  readonly turn_queue_cleared: { readonly turnId: TurnId };
+  readonly message_start: {
+    readonly turnId: TurnId;
+    readonly messageId: MessageId;
+    readonly role: "user" | "assistant" | "system" | "toolResult";
+  };
   readonly user_message: {
     readonly turnId: TurnId;
     readonly messageId: MessageId;
     readonly content: string;
+  };
+  readonly message_end: {
+    readonly turnId: TurnId;
+    readonly messageId: MessageId;
+    readonly role: "user" | "assistant" | "system" | "toolResult";
   };
   readonly assistant_message_start: {
     readonly turnId: TurnId;
@@ -217,9 +230,14 @@ export interface EventRegistryBuilder<TMap extends object = EventMap> {
 
 export const baseEventTypes = [
   "session_opened",
+  "agent_start",
+  "agent_end",
   "turn_queued",
   "turn_started",
+  "turn_queue_cleared",
+  "message_start",
   "user_message",
+  "message_end",
   "assistant_message_start",
   "assistant_text_delta",
   "assistant_thinking_delta",

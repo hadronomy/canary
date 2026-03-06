@@ -9,6 +9,9 @@ export type CommandInput<TCommand extends CommandDefinition<string, unknown, unk
 export type CommandOutput<TCommand extends CommandDefinition<string, unknown, unknown, unknown>> =
   TCommand extends CommandDefinition<string, unknown, infer TOutput, unknown> ? TOutput : never;
 
+/**
+ * @deprecated Use `createHarnessClient` from `~/harness` for typed session-first APIs.
+ */
 export interface AgentLink<
   TMap extends object = EventMap,
   TCommands extends CommandMap = CommandMap,
@@ -24,6 +27,9 @@ export interface AgentLink<
   readonly close?: () => Promise<void> | void;
 }
 
+/**
+ * @deprecated Use `createHarnessClient` from `~/harness`.
+ */
 export function createAgentClient<
   TMap extends object = EventMap,
   TCommands extends CommandMap = CommandMap,
@@ -37,12 +43,18 @@ export function createAgentClient<
   };
 }
 
+/**
+ * @deprecated Use `CreateHarnessClientOptions` from `~/harness`.
+ */
 export interface FetchLikeResponse {
   readonly ok: boolean;
   readonly status: number;
   readonly json: () => Promise<unknown>;
 }
 
+/**
+ * @deprecated Use `createHarnessClient` fetch override from `~/harness`.
+ */
 export interface FetchLike {
   (
     input: string | URL,
@@ -55,22 +67,34 @@ export interface FetchLike {
   ): Promise<FetchLikeResponse>;
 }
 
+/**
+ * @deprecated Use `createHarnessClient` event stream abstractions from `~/harness`.
+ */
 export interface EventSourceMessageLike {
   readonly data: string;
   readonly lastEventId: string;
   readonly type: string;
 }
 
+/**
+ * @deprecated Use `createHarnessClient` event stream abstractions from `~/harness`.
+ */
 export interface EventSourceLike {
   onmessage: ((event: EventSourceMessageLike) => void) | null;
   onerror: ((event: unknown) => void) | null;
   close(): void;
 }
 
+/**
+ * @deprecated Use `createHarnessClient` event stream abstractions from `~/harness`.
+ */
 export interface EventSourceFactory {
   (url: string): EventSourceLike;
 }
 
+/**
+ * @deprecated Use `CreateHarnessClientOptions` + `createHarnessClient` from `~/harness`.
+ */
 export interface CreateSseClientOptions<
   TMap extends object = EventMap,
   TCommands extends CommandMap = CommandMap,
@@ -159,6 +183,9 @@ function createQueue<T>() {
   return { next, push, finish };
 }
 
+/**
+ * @deprecated Use `createHarnessClient` from `~/harness`.
+ */
 export function createSseClient<
   TMap extends object = EventMap,
   TCommands extends CommandMap = CommandMap,

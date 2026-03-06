@@ -20,6 +20,7 @@
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@types/bun": "^1.2.0",
+    "ansis": "^4.2.0",
     "typescript": "catalog:"
   }
 }
