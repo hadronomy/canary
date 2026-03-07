@@ -1,6 +1,11 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { Serde } from "@restatedev/restate-sdk";
-import { TerminalError, type Context, type RunOptions } from "@restatedev/restate-sdk";
+import {
+  TerminalError,
+  type Context,
+  type ObjectContext,
+  type RunOptions,
+} from "@restatedev/restate-sdk";
 
 import type { SessionApi } from "~/api";
 import { defineCodec, SuperJsonCodec, type Codec } from "~/codec";
@@ -104,10 +109,32 @@ export interface CreateRestateDurableRuntimeOptions<TMap extends object = EventM
 }
 
 export function createRestateDurableRuntime<TMap extends object = EventMap>(
-  ctx: Context,
+  ctx: ObjectContext,
   options?: CreateRestateDurableRuntimeOptions<TMap>,
 ): DurableRuntime<TMap> {
-  const fallbackState = new Map<string, unknown>();
+  const signalWaitersPrefix = "signal:waiters:";
+  const signalResolvedPrefix = "signal:resolved:";
+
+  function signalWaitersKey(key: string): string {
+    return `${signalWaitersPrefix}${key}`;
+  }
+
+  function signalResolvedKey(key: string): string {
+    return `${signalResolvedPrefix}${key}`;
+  }
+
+  async function getSignalWaiters(key: string): Promise<Array<string>> {
+    const waiters = await ctx.get<Array<string>>(
+      signalWaitersKey(key),
+      getSuperJsonSerde<Array<string>>(),
+    );
+    return waiters ?? [];
+  }
+
+  async function getResolvedSignalValue<T>(key: string): Promise<T | undefined> {
+    const value = await ctx.get<T>(signalResolvedKey(key), getSuperJsonSerde<T>());
+    return value ?? undefined;
+  }
 
   return {
     run: <T>(idempotencyKey: string, fn: () => Promise<T>) =>
@@ -116,36 +143,52 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
       if (ms <= 0) {
         return;
       }
+      if (!signal) {
+        await ctx.sleep(ms);
+        return;
+      }
 
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          signal?.removeEventListener("abort", onAbort);
-          resolve();
-        }, ms);
+      if (signal.aborted) {
+        throw signal.reason ?? new Error("Sleep aborted");
+      }
 
-        const onAbort = () => {
-          clearTimeout(timer);
-          reject(signal?.reason ?? new Error("Sleep aborted"));
-        };
+      await Promise.race([
+        ctx.sleep(ms),
+        new Promise<never>((_, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              reject(signal.reason ?? new Error("Sleep aborted"));
+            },
+            { once: true },
+          );
+        }),
+      ]);
+    },
+    state: {
+      get: async <T>(key: string) => {
+        if (options?.state?.get) {
+          return options.state.get<T>(key);
+        }
 
-        if (signal?.aborted) {
-          onAbort();
+        const value = await ctx.get<T>(key, getSuperJsonSerde<T>());
+        return value ?? undefined;
+      },
+      set: async <T>(key: string, value: T) => {
+        if (options?.state?.set) {
+          await options.state.set<T>(key, value);
           return;
         }
 
-        signal?.addEventListener("abort", onAbort, { once: true });
-      });
-    },
-    state: {
-      get: async <T>(key: string) =>
-        (await options?.state?.get?.<T>(key)) ?? (fallbackState.get(key) as T | undefined),
-      set: async <T>(key: string, value: T) => {
-        fallbackState.set(key, value);
-        await options?.state?.set?.(key, value);
+        ctx.set<T>(key, value, getSuperJsonSerde<T>());
       },
       delete: async (key: string) => {
-        fallbackState.delete(key);
-        await options?.state?.delete?.(key);
+        if (options?.state?.delete) {
+          await options.state.delete(key);
+          return;
+        }
+
+        ctx.clear(key);
       },
     },
     sideEffect: <T>(name: string, fn: () => Promise<T>) =>
@@ -155,6 +198,48 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
         await options?.publish?.(topic, event, idempotencyKey);
       },
       subscribe: (_topic: string, _handler: (event: AnyEventEnvelope<TMap>) => void) => () => {},
+    },
+    rand: {
+      uuid: () => ctx.rand.uuidv4(),
+    },
+    signals: {
+      forKey: <T>(key: string) => {
+        return {
+          wait: async (): Promise<T> => {
+            const resolved = await getResolvedSignalValue<T>(key);
+            if (resolved !== undefined) {
+              return resolved;
+            }
+
+            const awakeable = ctx.awakeable<T>(getSuperJsonSerde<T>());
+            const waiters = await getSignalWaiters(key);
+            ctx.set(
+              signalWaitersKey(key),
+              [...waiters, awakeable.id],
+              getSuperJsonSerde<Array<string>>(),
+            );
+            return await awakeable.promise;
+          },
+          resolve: async (value: T): Promise<void> => {
+            ctx.set(signalResolvedKey(key), value, getSuperJsonSerde<T>());
+            const waiters = await getSignalWaiters(key);
+            for (const waiterId of waiters) {
+              ctx.resolveAwakeable(waiterId, value, getSuperJsonSerde<T>());
+            }
+            ctx.clear(signalWaitersKey(key));
+          },
+          reject: async (reason: string): Promise<void> => {
+            const waiters = await getSignalWaiters(key);
+            for (const waiterId of waiters) {
+              ctx.rejectAwakeable(waiterId, reason);
+            }
+            ctx.clear(signalWaitersKey(key));
+          },
+          peek: async (): Promise<T | undefined> => {
+            return await getResolvedSignalValue<T>(key);
+          },
+        };
+      },
     },
   };
 }

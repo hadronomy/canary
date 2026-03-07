@@ -93,14 +93,20 @@ export function createEventFlow<TMap extends object = EventMap>(
   let indexCounter = Number(normalizeEventIndex(options.startIndex ?? 0));
   let activeTurnId: TurnId | undefined;
   let assistantMessageId: MessageId | undefined;
+  let generatedTurnCounter = 0;
+  let generatedMessageCounter = 0;
 
   const ids: EventFlowIds = {
     turn: () =>
-      options.turnIdFactory ? options.turnIdFactory() : toTurnId(`turn-${crypto.randomUUID()}`),
+      options.turnIdFactory
+        ? options.turnIdFactory()
+        : toTurnId(`turn-${String(sessionId)}-${indexCounter}-${generatedTurnCounter++}`),
     message: (kind) =>
       options.messageIdFactory
         ? options.messageIdFactory(kind)
-        : toMessageId(`${kind ?? "msg"}-${crypto.randomUUID()}`),
+        : toMessageId(
+            `${kind ?? "msg"}-${String(sessionId)}-${indexCounter}-${generatedMessageCounter++}`,
+          ),
     toolExecution: (turnId, toolCallOrdinal, toolName) =>
       options.toolExecutionIdFactory
         ? options.toolExecutionIdFactory(turnId, toolCallOrdinal, toolName)
@@ -224,6 +230,28 @@ function toProtocolRole(role: string): "user" | "assistant" | "system" | "toolRe
   return "user";
 }
 
+let mappedEventMessageCounter = 0;
+
+function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+
+  return (hash >>> 0).toString(16);
+}
+
+function toDeterministicMappedMessageId(event: AgentEvent): string {
+  if ("message" in event) {
+    return `msg-${hashString(JSON.stringify(event.message))}`;
+  }
+
+  const fallback = mappedEventMessageCounter;
+  mappedEventMessageCounter += 1;
+  return `msg-fallback-${fallback}`;
+}
+
 export function mapAgentEventToPiEvent(event: AgentEvent): PiAgentEvent | null {
   const eventType = String(event.type);
 
@@ -250,7 +278,7 @@ export function mapAgentEventToPiEvent(event: AgentEvent): PiAgentEvent | null {
   if (event.type === "message_start") {
     return {
       type: "message_start",
-      messageId: `msg-${crypto.randomUUID()}`,
+      messageId: toDeterministicMappedMessageId(event),
       role: toProtocolRole(event.message.role),
     };
   }
@@ -258,7 +286,7 @@ export function mapAgentEventToPiEvent(event: AgentEvent): PiAgentEvent | null {
   if (event.type === "message_end") {
     return {
       type: "message_end",
-      messageId: `msg-${crypto.randomUUID()}`,
+      messageId: toDeterministicMappedMessageId(event),
       role: toProtocolRole(event.message.role),
     };
   }

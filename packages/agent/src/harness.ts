@@ -21,12 +21,14 @@ import type {
 import { createSessionApi, type SessionApi } from "~/api";
 import type { Codec } from "~/codec";
 import { codec } from "~/codec";
+import { createMemoryDurableRuntime, type DurableRuntime } from "~/durable";
 import { TURN_ERROR_CODE, TURN_ERROR_STAGE } from "~/errors";
 import { createSessionOrchestrator, type SessionOrchestrator } from "~/orchestrator";
 import {
   defineEventRegistryFromMap,
   toEventIndex,
   toIdempotencyKey,
+  toMessageId,
   toTurnId,
   toSessionId,
   type AnyEventEnvelope,
@@ -286,6 +288,7 @@ export interface CreateHarnessOptions<TAgents extends HarnessAgents> {
   readonly transport?: Transport;
   readonly adapters?: HarnessAdapters;
   readonly contextStore?: ContextStore<HarnessSessionSnapshot<TAgents>>;
+  readonly durableRuntime?: DurableRuntime<EventMap>;
 }
 
 export function createHarness<TAgents extends HarnessAgents>(
@@ -298,8 +301,8 @@ export function createHarness<TAgents extends HarnessAgents>(
     });
 
   const sessions = new Map<string, HarnessSessionState>();
-  const runResults = new Map<string, StoredRunResult<TAgents>>();
   const sessionSnapshots = new Map<string, HarnessSessionSnapshot<TAgents>>();
+  const durableRuntime = options.durableRuntime ?? createMemoryDurableRuntime<EventMap>();
   const sse = createSseServer({ eventRegistry });
 
   type SubmitMetadata = {
@@ -314,8 +317,8 @@ export function createHarness<TAgents extends HarnessAgents>(
     return `${sessionId}:${String(turnId)}`;
   }
 
-  function settleRunResult(key: string, stored: StoredRunResult<TAgents>): void {
-    runResults.set(key, stored);
+  async function settleRunResult(key: string, stored: StoredRunResult<TAgents>): Promise<void> {
+    await durableRuntime.signals.forKey<StoredRunResult<TAgents>>(key).resolve(stored);
   }
 
   async function loadStoredRunResultFromSnapshot(
@@ -349,22 +352,18 @@ export function createHarness<TAgents extends HarnessAgents>(
   ): Promise<StoredRunResult<TAgents>> {
     const key = runResultKey(sessionId, turnId);
 
-    const existing = runResults.get(key);
+    const signal = durableRuntime.signals.forKey<StoredRunResult<TAgents>>(key);
+    const existing = await signal.peek?.();
     if (existing) {
       return existing;
     }
 
-    while (true) {
-      const fromSnapshot = await loadStoredRunResultFromSnapshot(sessionId, turnId);
-      if (fromSnapshot) {
-        runResults.set(key, fromSnapshot);
-        return fromSnapshot;
-      }
-
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 50);
-      });
+    const fromSnapshot = await loadStoredRunResultFromSnapshot(sessionId, turnId);
+    if (fromSnapshot) {
+      return fromSnapshot;
     }
+
+    return await signal.wait();
   }
 
   function snapshotForAgent<TKey extends keyof TAgents & string>(
@@ -506,6 +505,8 @@ export function createHarness<TAgents extends HarnessAgents>(
     const flow = createEventFlow<EventMap>({
       sessionId: runOptions.sessionId,
       startIndex: session.nextIndex,
+      turnIdFactory: () => toTurnId(`turn-${durableRuntime.rand.uuid()}`),
+      messageIdFactory: (kind) => toMessageId(`${kind ?? "msg"}-${durableRuntime.rand.uuid()}`),
     });
 
     const turnId = flow.beginTurn(runOptions.turnId);
@@ -710,7 +711,7 @@ export function createHarness<TAgents extends HarnessAgents>(
             turnId: metadata.turnId ? toTurnId(metadata.turnId) : undefined,
           });
 
-    settleRunResult(runResultKey(String(input.sessionId), result.turnId), {
+    await settleRunResult(runResultKey(String(input.sessionId), result.turnId), {
       agent: key,
       outputWire: agentDefinition.output.encode(result.output) as HarnessAgentOutputWire<
         TAgents[TKey]

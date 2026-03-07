@@ -11,6 +11,7 @@ import {
   createHarness,
   createPubsubBridge,
   createRestateApi,
+  createRestateDurableRuntime,
   createRestateTurnRuntime,
   toSessionId,
   type EventMap,
@@ -123,6 +124,12 @@ function getRequestHarness(ctx: restate.ObjectContext): {
   readonly harness: ReturnType<typeof createHarness<typeof agents>>;
   readonly getInternalApi: () => RestateApi<EventMap, undefined>;
 } {
+  const durableRuntime = createRestateDurableRuntime(ctx, {
+    publish: async (topic, event, idempotencyKey) => {
+      await pubsubClient.publish(topic, event, idempotencyKey);
+    },
+  });
+
   const pubsubBridge = createPubsubBridge({
     publisher: {
       publish: async (topic, envelope, idempotencyKey) => {
@@ -138,11 +145,13 @@ function getRequestHarness(ctx: restate.ObjectContext): {
 
   const harness = createHarness({
     agents,
+    durableRuntime,
     contextStore: {
       load: async () =>
-        (await ctx.get<HarnessSessionSnapshot<typeof agents>>(snapshotStateKey)) ?? undefined,
+        (await durableRuntime.state.get<HarnessSessionSnapshot<typeof agents>>(snapshotStateKey)) ??
+        undefined,
       save: async (_sessionId, state) => {
-        ctx.set(snapshotStateKey, state);
+        await durableRuntime.state.set(snapshotStateKey, state);
       },
     },
     adapters: {
