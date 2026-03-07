@@ -42,6 +42,8 @@ import type { Runtime } from "~/runtime";
 import { createSseServer } from "~/stream";
 import { createEventFlow, createPiEventMapper, mapAgentEventToPiEvent } from "~/workflow";
 
+import type { MakeExclusive } from "./types";
+
 export interface HarnessAgentConfig {
   readonly systemPrompt: string;
   readonly model: Model<any>;
@@ -896,9 +898,14 @@ type HarnessClientAdapterOptions = {
   readonly adapter: HarnessClientAdapter;
 };
 
+type HarnessNetworkingOptions = MakeExclusive<{
+  "'adapter'": HarnessClientAdapterOptions;
+  "'baseUrl'": HarnessClientBaseUrlOptions;
+  "legacy URLs": HarnessClientLegacyUrlOptions;
+}>;
+
 export type CreateHarnessClientOptions<TAgents extends HarnessClientAgents> =
-  HarnessClientSharedOptions<TAgents> &
-    (HarnessClientAdapterOptions | HarnessClientBaseUrlOptions | HarnessClientLegacyUrlOptions);
+  HarnessClientSharedOptions<TAgents> & HarnessNetworkingOptions;
 
 type HarnessClientAgents = Record<
   string,
@@ -1141,35 +1148,38 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
 export function createHarnessClient<TAgents extends HarnessClientAgents>(
   options: CreateHarnessClientOptions<TAgents>,
 ) {
+  const opts = options as HarnessClientSharedOptions<TAgents> &
+    (HarnessClientAdapterOptions | HarnessClientBaseUrlOptions | HarnessClientLegacyUrlOptions);
+
   const eventRegistry =
-    options.eventRegistry ??
+    opts.eventRegistry ??
     defineEventRegistryFromMap({
       defaultCodec: codec.superJson,
     });
 
   const adapter =
-    "adapter" in options && options.adapter
-      ? options.adapter
+    "adapter" in opts && opts.adapter
+      ? opts.adapter
       : createFetchHarnessAdapter({
-          baseUrl: "baseUrl" in options ? options.baseUrl : undefined,
-          routes: "routes" in options ? options.routes : undefined,
-          eventsUrl: "eventsUrl" in options ? options.eventsUrl : undefined,
-          runUrl: "runUrl" in options ? options.runUrl : undefined,
-          continueUrl: "continueUrl" in options ? options.continueUrl : undefined,
-          steerUrl: "steerUrl" in options ? options.steerUrl : undefined,
-          followUpUrl: "followUpUrl" in options ? options.followUpUrl : undefined,
-          cancelUrl: "cancelUrl" in options ? options.cancelUrl : undefined,
-          queryParams: options.queryParams,
-          fetch: options.fetch,
-          fetchOptions: options.fetchOptions,
-          sseOptions: options.sseOptions,
-          createEventSource: options.createEventSource,
+          baseUrl: "baseUrl" in opts ? opts.baseUrl : undefined,
+          routes: "routes" in opts ? opts.routes : undefined,
+          eventsUrl: "eventsUrl" in opts ? opts.eventsUrl : undefined,
+          runUrl: "runUrl" in opts ? opts.runUrl : undefined,
+          continueUrl: "continueUrl" in opts ? opts.continueUrl : undefined,
+          steerUrl: "steerUrl" in opts ? opts.steerUrl : undefined,
+          followUpUrl: "followUpUrl" in opts ? opts.followUpUrl : undefined,
+          cancelUrl: "cancelUrl" in opts ? opts.cancelUrl : undefined,
+          queryParams: opts.queryParams,
+          fetch: opts.fetch,
+          fetchOptions: opts.fetchOptions,
+          sseOptions: opts.sseOptions,
+          createEventSource: opts.createEventSource,
         } satisfies CreateFetchHarnessAdapterOptions);
 
   return createHarnessClientFromAdapter({
-    agents: options.agents,
+    agents: opts.agents,
     adapter,
     eventRegistry,
-    resume: options.resume,
+    resume: opts.resume,
   });
 }
