@@ -96,6 +96,10 @@ const runResponseSchema = z.object({
   nextIndex: z.number(),
 });
 
+const submitResponseSchema = z.object({
+  turnId: z.string(),
+});
+
 const sessionCommandResultSchema = z.object({
   ok: z.boolean(),
 });
@@ -169,6 +173,45 @@ export const appRouter = pub.router({
         },
         { idempotencyKey: input.idempotencyKey, signal },
       );
+    }),
+
+  submit: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        idempotencyKey: z.string(),
+        agent: z.string(),
+        input: z.unknown(),
+      }),
+    )
+    .output(submitResponseSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      return orchestrator.call(
+        input.sessionId,
+        "submit",
+        {
+          ...input,
+          context: {
+            userId: context.userId,
+          },
+        },
+        { idempotencyKey: input.idempotencyKey, signal },
+      );
+    }),
+
+  result: pub
+    .input(
+      z.object({
+        sessionId: z.string(),
+        turnId: z.string(),
+        agent: z.string(),
+      }),
+    )
+    .output(runResponseSchema)
+    .handler(async ({ input, context, signal }) => {
+      ensureSessionAccess(input.sessionId, context.userId);
+      return orchestrator.call(input.sessionId, "result", input, { signal });
     }),
 
   continue: pub

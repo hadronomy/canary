@@ -12,6 +12,8 @@ import { CLIENT_ERROR_CODE } from "~/errors";
 
 const harnessDefaultRoutes: Record<HarnessRouteName, string> = {
   run: "/run",
+  submit: "/submit",
+  result: "/result",
   continue: "/continue",
   events: "/events",
   steer: "/steer",
@@ -126,6 +128,8 @@ function resolveClientUrls(options: CreateFetchHarnessAdapterOptions): HarnessCl
     const routes = options.routes;
     return {
       run: resolvePathFromBase(options.baseUrl, routes?.run ?? harnessDefaultRoutes.run),
+      submit: resolvePathFromBase(options.baseUrl, routes?.submit ?? harnessDefaultRoutes.submit),
+      result: resolvePathFromBase(options.baseUrl, routes?.result ?? harnessDefaultRoutes.result),
       continue: resolvePathFromBase(
         options.baseUrl,
         routes?.continue ?? harnessDefaultRoutes.continue,
@@ -153,8 +157,13 @@ function resolveClientUrls(options: CreateFetchHarnessAdapterOptions): HarnessCl
         ? options.runUrl.toString()
         : options.runUrl;
 
+  const submitUrl = resolveCommandUrl(options.runUrl, options.submitUrl, "/submit");
+  const resultUrl = resolveCommandUrl(options.runUrl, options.resultUrl, "/result");
+
   return {
     run: options.runUrl instanceof URL ? options.runUrl.toString() : options.runUrl,
+    submit: submitUrl,
+    result: resultUrl,
     continue: continueUrl,
     events: options.eventsUrl instanceof URL ? options.eventsUrl.toString() : options.eventsUrl,
     steer: resolveCommandUrl(options.runUrl, options.steerUrl, "/steer"),
@@ -316,6 +325,26 @@ function ensureRunResponse(payload: unknown): {
   };
 }
 
+function ensureSubmitResponse(payload: unknown): {
+  readonly turnId: string;
+} {
+  if (typeof payload !== "object" || payload === null) {
+    throw new TypeError("Invalid submit response: expected object");
+  }
+
+  const candidate = payload as {
+    readonly turnId?: unknown;
+  };
+
+  if (typeof candidate.turnId !== "string") {
+    throw new TypeError("Invalid submit response: missing turnId");
+  }
+
+  return {
+    turnId: candidate.turnId,
+  };
+}
+
 export function createFetchHarnessAdapter(
   options: CreateFetchHarnessAdapterOptions,
 ): HarnessClientAdapter {
@@ -395,6 +424,44 @@ export function createFetchHarnessAdapter(
           ...requestOptions,
           intent: "run",
         }),
+        signal: signalOptions?.signal,
+      });
+
+      if (!response.ok) {
+        throw new TypeError(
+          `${CLIENT_ERROR_CODE.HARNESS_HTTP_RUN_FAILED}: status ${response.status}`,
+        );
+      }
+
+      return ensureRunResponse(await response.json());
+    },
+
+    async submit(requestOptions, signalOptions) {
+      const response = await request(urls.submit, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(requestOptions),
+        signal: signalOptions?.signal,
+      });
+
+      if (!response.ok) {
+        throw new TypeError(
+          `${CLIENT_ERROR_CODE.HARNESS_HTTP_RUN_FAILED}: status ${response.status}`,
+        );
+      }
+
+      return ensureSubmitResponse(await response.json());
+    },
+
+    async result(requestOptions, signalOptions) {
+      const response = await request(urls.result, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(requestOptions),
         signal: signalOptions?.signal,
       });
 

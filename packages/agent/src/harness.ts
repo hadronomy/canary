@@ -27,6 +27,7 @@ import {
   defineEventRegistryFromMap,
   toEventIndex,
   toIdempotencyKey,
+  toTurnId,
   toSessionId,
   type AnyEventEnvelope,
   type EventMap,
@@ -109,6 +110,15 @@ export type HarnessSessionSnapshot<TAgents extends HarnessAgents> = {
     readonly inputWire: HarnessAgentInputWire<TAgents[K]>;
     readonly context: HarnessAgentContext<TAgents[K]>;
     readonly agentState: AgentState;
+    readonly completedRuns?: Readonly<
+      Record<
+        string,
+        {
+          readonly outputWire: HarnessAgentOutputWire<TAgents[K]>;
+          readonly nextIndex: number;
+        }
+      >
+    >;
   };
 }[keyof TAgents & string];
 
@@ -191,6 +201,23 @@ export interface HarnessRunOptions<TInput, TContext> {
   readonly idempotencyKey: string;
   readonly input: TInput;
   readonly context: TContext;
+  readonly turnId?: string;
+}
+
+export interface HarnessSubmitOptions<TInput, TContext> {
+  readonly sessionId: string;
+  readonly idempotencyKey: string;
+  readonly input: TInput;
+  readonly context: TContext;
+}
+
+export interface HarnessResultOptions {
+  readonly sessionId: string;
+  readonly turnId: string;
+}
+
+export interface HarnessSubmitResult {
+  readonly turnId: TurnId;
 }
 
 export interface HarnessRunResult<TOutput> {
@@ -280,10 +307,64 @@ export function createHarness<TAgents extends HarnessAgents>(
     readonly intent?: "run" | "continue";
     readonly input?: unknown;
     readonly context?: unknown;
+    readonly turnId?: string;
   };
 
   function runResultKey(sessionId: string, turnId: TurnId): string {
     return `${sessionId}:${String(turnId)}`;
+  }
+
+  function settleRunResult(key: string, stored: StoredRunResult<TAgents>): void {
+    runResults.set(key, stored);
+  }
+
+  async function loadStoredRunResultFromSnapshot(
+    sessionId: string,
+    turnId: TurnId,
+  ): Promise<StoredRunResult<TAgents> | undefined> {
+    const snapshot = await loadSessionSnapshot(sessionId, { refresh: true });
+    if (!snapshot) {
+      return undefined;
+    }
+
+    const completedRuns = snapshot.completedRuns as
+      | Readonly<Record<string, { readonly outputWire: unknown; readonly nextIndex: number }>>
+      | undefined;
+    const completed = completedRuns?.[String(turnId)];
+
+    if (!completed) {
+      return undefined;
+    }
+
+    return {
+      agent: snapshot.agent,
+      outputWire: completed.outputWire,
+      nextIndex: completed.nextIndex,
+    } as StoredRunResult<TAgents>;
+  }
+
+  async function waitForStoredRunResult(
+    sessionId: string,
+    turnId: TurnId,
+  ): Promise<StoredRunResult<TAgents>> {
+    const key = runResultKey(sessionId, turnId);
+
+    const existing = runResults.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    while (true) {
+      const fromSnapshot = await loadStoredRunResultFromSnapshot(sessionId, turnId);
+      if (fromSnapshot) {
+        runResults.set(key, fromSnapshot);
+        return fromSnapshot;
+      }
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
   }
 
   function snapshotForAgent<TKey extends keyof TAgents & string>(
@@ -352,9 +433,12 @@ export function createHarness<TAgents extends HarnessAgents>(
 
   async function loadSessionSnapshot(
     sessionId: string,
+    loadOptions?: {
+      readonly refresh?: boolean;
+    },
   ): Promise<HarnessSessionSnapshot<TAgents> | undefined> {
     const cached = sessionSnapshots.get(sessionId);
-    if (cached) {
+    if (cached && !loadOptions?.refresh) {
       return cached;
     }
 
@@ -382,6 +466,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       readonly intent: "run" | "continue";
       readonly input?: HarnessAgentInput<TAgents[TKey]>;
       readonly context?: HarnessAgentContext<TAgents[TKey]>;
+      readonly turnId?: TurnId;
     },
   ): Promise<HarnessRunResult<HarnessAgentOutput<TAgents[TKey]>>> {
     const agentDefinition = getAgentDefinition(key);
@@ -423,7 +508,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       startIndex: session.nextIndex,
     });
 
-    const turnId = flow.beginTurn();
+    const turnId = flow.beginTurn(runOptions.turnId);
     const userMessageId = flow.ids.message("user");
     const assistantMessageId = flow.setAssistantMessageId();
 
@@ -564,17 +649,40 @@ export function createHarness<TAgents extends HarnessAgents>(
       text: generatedText,
     });
 
+    const outputWire = agentDefinition.output.encode(output) as HarnessAgentOutputWire<
+      TAgents[TKey]
+    >;
+    const persistedCompletedRuns =
+      persistedSnapshot?.completedRuns ??
+      ({} as Readonly<
+        Record<
+          string,
+          {
+            readonly outputWire: HarnessAgentOutputWire<TAgents[TKey]>;
+            readonly nextIndex: number;
+          }
+        >
+      >);
+    const nextIndex = Number(flow.nextIndex());
+
     await saveSessionSnapshot(runOptions.sessionId, {
       agent: key,
       inputWire: agentDefinition.input.encode(input) as HarnessAgentInputWire<TAgents[TKey]>,
       context,
       agentState: piAgent.state,
+      completedRuns: {
+        ...persistedCompletedRuns,
+        [String(turnId)]: {
+          outputWire,
+          nextIndex,
+        },
+      },
     });
 
     return {
       output: output as HarnessAgentOutput<TAgents[TKey]>,
       turnId,
-      nextIndex: Number(flow.nextIndex()),
+      nextIndex,
     };
   }
 
@@ -584,7 +692,6 @@ export function createHarness<TAgents extends HarnessAgents>(
     input: SubmitTurnInput,
   ): Promise<SubmitTurnResult> {
     const agentDefinition = getAgentDefinition(key);
-
     const result =
       metadata.intent === "continue"
         ? await runInternal(key, {
@@ -600,9 +707,10 @@ export function createHarness<TAgents extends HarnessAgents>(
               metadata.input as HarnessAgentInputWire<TAgents[TKey]>,
             ) as HarnessAgentInput<TAgents[TKey]>,
             context: metadata.context as HarnessAgentContext<TAgents[TKey]>,
+            turnId: metadata.turnId ? toTurnId(metadata.turnId) : undefined,
           });
 
-    runResults.set(runResultKey(String(input.sessionId), result.turnId), {
+    settleRunResult(runResultKey(String(input.sessionId), result.turnId), {
       agent: key,
       outputWire: agentDefinition.output.encode(result.output) as HarnessAgentOutputWire<
         TAgents[TKey]
@@ -747,13 +855,11 @@ export function createHarness<TAgents extends HarnessAgents>(
         intent: "run",
         input: agentDefinition.input.encode(runOptions.input),
         context: runOptions.context,
+        turnId: runOptions.turnId,
       },
     });
 
-    const stored = runResults.get(runResultKey(runOptions.sessionId, submit.turnId));
-    if (!stored) {
-      throw new TypeError(`No run result found for turn '${submit.turnId}'`);
-    }
+    const stored = await waitForStoredRunResult(runOptions.sessionId, submit.turnId);
 
     const narrowed = storedResultForAgent(stored, key);
 
@@ -784,10 +890,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       },
     });
 
-    const stored = runResults.get(runResultKey(runOptions.sessionId, submit.turnId));
-    if (!stored) {
-      throw new TypeError(`No continue result found for turn '${submit.turnId}'`);
-    }
+    const stored = await waitForStoredRunResult(runOptions.sessionId, submit.turnId);
 
     const narrowed = storedResultForAgent(stored, key);
 
@@ -796,6 +899,49 @@ export function createHarness<TAgents extends HarnessAgents>(
         TAgents[TKey]
       >,
       turnId: submit.turnId,
+      nextIndex: narrowed.nextIndex,
+    };
+  }
+
+  async function submit<TKey extends keyof TAgents & string>(
+    key: TKey,
+    runOptions: HarnessSubmitOptions<
+      HarnessAgentInput<TAgents[TKey]>,
+      HarnessAgentContext<TAgents[TKey]>
+    >,
+  ): Promise<HarnessSubmitResult> {
+    const agentDefinition = getAgentDefinition(key);
+    const submitResult = await turnRuntime.submitTurn({
+      sessionId: toSessionId(runOptions.sessionId),
+      idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
+      content: "harness.submit",
+      metadata: {
+        agent: key,
+        intent: "run",
+        input: agentDefinition.input.encode(runOptions.input),
+        context: runOptions.context,
+      },
+    });
+
+    return {
+      turnId: submitResult.turnId,
+    };
+  }
+
+  async function result<TKey extends keyof TAgents & string>(
+    key: TKey,
+    runOptions: HarnessResultOptions,
+  ): Promise<HarnessRunResult<HarnessAgentOutput<TAgents[TKey]>>> {
+    const agentDefinition = getAgentDefinition(key);
+    const turnId = toTurnId(runOptions.turnId);
+    const stored = await waitForStoredRunResult(runOptions.sessionId, turnId);
+    const narrowed = storedResultForAgent(stored, key);
+
+    return {
+      output: agentDefinition.output.decode(narrowed.outputWire) as HarnessAgentOutput<
+        TAgents[TKey]
+      >,
+      turnId,
       nextIndex: narrowed.nextIndex,
     };
   }
@@ -877,6 +1023,8 @@ export function createHarness<TAgents extends HarnessAgents>(
     agents: options.agents,
     eventRegistry,
     run,
+    submit,
+    result,
     continue: continueRun,
     eventsStream,
     encodeRunResponse<TKey extends keyof TAgents & string>(
@@ -918,6 +1066,8 @@ type HarnessClientBaseUrlOptions = {
 type HarnessClientLegacyUrlOptions = {
   readonly eventsUrl: string | URL;
   readonly runUrl: string | URL;
+  readonly submitUrl?: string | URL;
+  readonly resultUrl?: string | URL;
   readonly continueUrl?: string | URL;
   readonly steerUrl?: string | URL;
   readonly followUpUrl?: string | URL;
@@ -1306,6 +1456,11 @@ export function createHarnessEventViews(
 export interface AgentSession<TAgent extends HarnessClientAgents[string]> {
   readonly sessionId: string;
   readonly events: (options?: { readonly signal?: AbortSignal }) => HarnessEventViews<EventMap>;
+  readonly submit: (
+    input: HarnessClientInput<TAgent>,
+    options?: { readonly idempotencyKey?: string },
+  ) => Promise<{ readonly turnId: string }>;
+  readonly result: (turnId: string) => Promise<HarnessClientOutput<TAgent>>;
   readonly run: (
     input: HarnessClientInput<TAgent>,
     options?: { readonly idempotencyKey?: string },
@@ -1385,6 +1540,52 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
       idempotencyKey: runOptions.idempotencyKey,
       agent,
       input: agentDefinition.input.encode(runOptions.input),
+    });
+
+    return {
+      output: agentDefinition.output.decode(response.output) as HarnessClientOutput<TAgents[TKey]>,
+      turnId: response.turnId,
+      nextIndex: response.nextIndex,
+    };
+  }
+
+  async function submitAgent<TKey extends keyof TAgents & string>(
+    agent: TKey,
+    runOptions: {
+      readonly sessionId: string;
+      readonly idempotencyKey: string;
+      readonly input: HarnessClientInput<TAgents[TKey]>;
+    },
+  ): Promise<{ readonly turnId: string }> {
+    const agentDefinition = getAgentDefinition(agent);
+    const response = await options.adapter.submit({
+      sessionId: runOptions.sessionId,
+      idempotencyKey: runOptions.idempotencyKey,
+      agent,
+      input: agentDefinition.input.encode(runOptions.input),
+    });
+
+    return {
+      turnId: response.turnId,
+    };
+  }
+
+  async function resultAgent<TKey extends keyof TAgents & string>(
+    agent: TKey,
+    runOptions: {
+      readonly sessionId: string;
+      readonly turnId: string;
+    },
+  ): Promise<{
+    readonly output: HarnessClientOutput<TAgents[TKey]>;
+    readonly turnId: string;
+    readonly nextIndex: number;
+  }> {
+    const agentDefinition = getAgentDefinition(agent);
+    const response = await options.adapter.result({
+      sessionId: runOptions.sessionId,
+      turnId: runOptions.turnId,
+      agent,
     });
 
     return {
@@ -1546,6 +1747,20 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
           });
           return result.output;
         },
+        async submit(input, runOptions) {
+          return submitAgent(agent, {
+            sessionId,
+            idempotencyKey: runOptions?.idempotencyKey ?? crypto.randomUUID(),
+            input,
+          });
+        },
+        async result(turnId) {
+          const result = await resultAgent(agent, {
+            sessionId,
+            turnId,
+          });
+          return result.output;
+        },
         async continue(runOptions) {
           const result = await continueAgent(agent, {
             sessionId,
@@ -1598,6 +1813,8 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
           routes: "routes" in opts ? opts.routes : undefined,
           eventsUrl: "eventsUrl" in opts ? opts.eventsUrl : undefined,
           runUrl: "runUrl" in opts ? opts.runUrl : undefined,
+          submitUrl: "submitUrl" in opts ? opts.submitUrl : undefined,
+          resultUrl: "resultUrl" in opts ? opts.resultUrl : undefined,
           continueUrl: "continueUrl" in opts ? opts.continueUrl : undefined,
           steerUrl: "steerUrl" in opts ? opts.steerUrl : undefined,
           followUpUrl: "followUpUrl" in opts ? opts.followUpUrl : undefined,

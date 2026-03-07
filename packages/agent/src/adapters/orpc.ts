@@ -1,8 +1,11 @@
 import type {
+  HarnessAdapterSubmitResponse,
   HarnessAdapterRunResponse,
   HarnessClientAdapter,
   HarnessContinueRequest,
+  HarnessResultRequest,
   HarnessRunRequest,
+  HarnessSubmitRequest,
   HarnessSessionCommandRequest,
   WireEventEnvelope,
 } from "~/adapters/types";
@@ -10,6 +13,14 @@ import type {
 export interface ORPCHarnessRouter {
   readonly run: (
     input: HarnessRunRequest,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<HarnessAdapterRunResponse>;
+  readonly submit: (
+    input: HarnessSubmitRequest,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<HarnessAdapterSubmitResponse>;
+  readonly result: (
+    input: HarnessResultRequest,
     options?: { readonly signal?: AbortSignal },
   ) => Promise<HarnessAdapterRunResponse>;
   readonly continue: (
@@ -39,6 +50,8 @@ export function createORPCAdapter<TClient extends ORPCHarnessRouter>(
 ): HarnessClientAdapter {
   return {
     run: (request, options) => client.run(request, options),
+    submit: (request, options) => client.submit(request, options),
+    result: (request, options) => client.result(request, options),
     continue: (request, options) => client.continue(request, options),
     steer: async (request, options) => {
       await client.steer(request, options);

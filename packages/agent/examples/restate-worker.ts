@@ -32,6 +32,7 @@ interface RunRequest {
   readonly idempotencyKey: string;
   readonly agent: string;
   readonly input: unknown;
+  readonly turnId?: string;
   readonly context?: {
     readonly userId?: string;
   };
@@ -40,6 +41,12 @@ interface RunRequest {
 interface ContinueRequest {
   readonly sessionId: string;
   readonly idempotencyKey: string;
+  readonly agent: string;
+}
+
+interface ResultRequest {
+  readonly sessionId: string;
+  readonly turnId: string;
   readonly agent: string;
 }
 
@@ -193,6 +200,31 @@ function resolveSessionId(ctx: restate.ObjectContext, requestSessionId: string):
   return keySessionId;
 }
 
+function dispatchRunInBackground(
+  ctx: restate.ObjectContext,
+  sessionId: string,
+  request: RunRequest,
+): void {
+  try {
+    const sender = ctx.objectSendClient<{
+      readonly run: (_ctx: unknown, input: RunRequest) => void;
+    }>({ name: "agent-orchestrator" }, sessionId);
+
+    sender.run(
+      request,
+      restate.rpc.sendOpts({
+        idempotencyKey: `${request.idempotencyKey}:run-dispatch`,
+        name: "dispatch-background-run",
+      }),
+    );
+  } catch (error) {
+    throw new restate.TerminalError(
+      `Failed to dispatch background run: ${error instanceof Error ? error.message : String(error)}`,
+      { errorCode: 500 },
+    );
+  }
+}
+
 const orchestratorService = restate.object({
   name: "agent-orchestrator",
   handlers: {
@@ -220,6 +252,50 @@ const orchestratorService = restate.object({
         context: {
           userId: request.context?.userId ?? "demo-user",
         },
+        turnId: request.turnId,
+      });
+
+      return harness.encodeRunResponse(key, result) as HarnessRunResponse<unknown>;
+    },
+
+    submit: async (ctx: restate.ObjectContext, request: RunRequest) => {
+      const key = getAgentKey(request.agent);
+      const agentDefinition = agents[key];
+      if (typeof request.input !== "string") {
+        throw new restate.TerminalError("Invalid submit input payload", { errorCode: 400 });
+      }
+
+      (() => {
+        try {
+          agentDefinition.input.decode(request.input);
+        } catch {
+          throw new restate.TerminalError("Failed to decode submit input payload", {
+            errorCode: 400,
+          });
+        }
+      })();
+
+      const sessionId = resolveSessionId(ctx, request.sessionId);
+      const turnId = request.turnId ?? `turn-submit-${request.idempotencyKey}`;
+
+      dispatchRunInBackground(ctx, sessionId, {
+        ...request,
+        sessionId,
+        turnId,
+      });
+
+      return {
+        turnId,
+      };
+    },
+
+    result: async (ctx: restate.ObjectContext, request: ResultRequest) => {
+      const key = getAgentKey(request.agent);
+      const sessionId = resolveSessionId(ctx, request.sessionId);
+      const { harness } = getRequestHarness(ctx);
+      const result = await harness.result(key, {
+        sessionId,
+        turnId: request.turnId,
       });
 
       return harness.encodeRunResponse(key, result) as HarnessRunResponse<unknown>;

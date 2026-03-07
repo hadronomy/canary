@@ -162,17 +162,29 @@ async function runLongEssayBenchmark(): Promise<void> {
   })();
 
   const resultTask = views.result();
+  let turnId: string | undefined;
 
-  let result: Awaited<ReturnType<SupportSession["run"]>>;
   try {
-    result = await session.run({ question: prompt });
+    const submitResult = await session.submit(
+      { question: prompt },
+      {
+        idempotencyKey: crypto.randomUUID(),
+      },
+    );
+    turnId = submitResult.turnId;
+
     const streamResult = await resultTask;
-    streamedChars = streamResult.text.length;
+    streamedChars = streamResult.text.trim().length;
   } finally {
     controller.abort();
     await Promise.allSettled([deltaTask]);
     process.stderr.write("\r");
   }
+
+  if (!turnId) {
+    throw new Error("Submit did not return a turnId");
+  }
+
   const totalMs = Date.now() - startedAtMs;
 
   if (ttftMs === null) {
@@ -180,6 +192,7 @@ async function runLongEssayBenchmark(): Promise<void> {
   }
 
   printRule();
+  console.log(`${ui.title("Turn ID")}: ${turnId}`);
   console.log(`${ui.title("Long Essay total time")}: ${ui.ok(`${totalMs}ms`)}`);
   console.log(`${ui.title("Long Essay TTFT")}: ${ui.ok(`${ttftMs}ms`)}`);
   if (streamedChars === 0) {
@@ -190,7 +203,7 @@ async function runLongEssayBenchmark(): Promise<void> {
     );
   }
   console.log(`${ui.title("Streamed chars")}: ${ui.stream(String(streamedChars))}`);
-  console.log(`${ui.title("Final answer chars")}: ${ui.assistant(String(result.answer.length))}`);
+  console.log(`${ui.title("Final answer chars")}: ${ui.assistant(String(streamedChars))}`);
 }
 
 async function runSingleClient(): Promise<void> {

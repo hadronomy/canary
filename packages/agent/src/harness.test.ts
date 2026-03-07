@@ -202,6 +202,14 @@ describe("createHarnessClient events ordering", () => {
         turnId,
         nextIndex: 0,
       }),
+      submit: async () => ({
+        turnId,
+      }),
+      result: async () => ({
+        output: {},
+        turnId,
+        nextIndex: 0,
+      }),
       continue: async () => ({
         output: {},
         turnId,

@@ -16,6 +16,13 @@ export interface HarnessRunRequest {
   readonly input: unknown;
 }
 
+export interface HarnessSubmitRequest {
+  readonly sessionId: string;
+  readonly idempotencyKey: string;
+  readonly agent: string;
+  readonly input: unknown;
+}
+
 export interface HarnessContinueRequest {
   readonly sessionId: string;
   readonly idempotencyKey: string;
@@ -28,6 +35,16 @@ export interface HarnessAdapterRunResponse {
   readonly nextIndex: number;
 }
 
+export interface HarnessAdapterSubmitResponse {
+  readonly turnId: string;
+}
+
+export interface HarnessResultRequest {
+  readonly sessionId: string;
+  readonly turnId: string;
+  readonly agent: string;
+}
+
 export interface HarnessSessionCommandRequest {
   readonly sessionId: string;
   readonly content?: string;
@@ -36,6 +53,14 @@ export interface HarnessSessionCommandRequest {
 export interface HarnessClientAdapter {
   readonly run: (
     request: HarnessRunRequest,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<HarnessAdapterRunResponse>;
+  readonly submit: (
+    request: HarnessSubmitRequest,
+    options?: { readonly signal?: AbortSignal },
+  ) => Promise<HarnessAdapterSubmitResponse>;
+  readonly result: (
+    request: HarnessResultRequest,
     options?: { readonly signal?: AbortSignal },
   ) => Promise<HarnessAdapterRunResponse>;
   readonly continue: (
@@ -99,6 +124,8 @@ export interface HarnessEventSourceFactory {
 
 export type HarnessClientRoutes = {
   readonly run?: string;
+  readonly submit?: string;
+  readonly result?: string;
   readonly continue?: string;
   readonly events?: string;
   readonly steer?: string;
@@ -106,7 +133,15 @@ export type HarnessClientRoutes = {
   readonly cancel?: string;
 };
 
-export type HarnessRouteName = "run" | "continue" | "events" | "steer" | "followUp" | "cancel";
+export type HarnessRouteName =
+  | "run"
+  | "submit"
+  | "result"
+  | "continue"
+  | "events"
+  | "steer"
+  | "followUp"
+  | "cancel";
 
 export type HarnessClientResolvedUrls = Record<HarnessRouteName, string>;
 
@@ -115,6 +150,8 @@ export interface CreateFetchHarnessAdapterOptions {
   readonly routes?: HarnessClientRoutes;
   readonly eventsUrl?: string | URL;
   readonly runUrl?: string | URL;
+  readonly submitUrl?: string | URL;
+  readonly resultUrl?: string | URL;
   readonly continueUrl?: string | URL;
   readonly steerUrl?: string | URL;
   readonly followUpUrl?: string | URL;
