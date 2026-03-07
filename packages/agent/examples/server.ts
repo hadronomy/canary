@@ -1,5 +1,4 @@
-import { os } from "@orpc/server";
-import { withEventMeta } from "@orpc/server";
+import { ORPCError, os, withEventMeta } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { createPubsubClient } from "@restatedev/pubsub-client";
 import { z } from "zod";
@@ -16,6 +15,11 @@ import { createOrchestratorClient } from "./shared";
 interface AuthContext {
   readonly userId: string;
   readonly token: string;
+}
+
+interface RequestContext {
+  readonly request: Request;
+  readonly url: URL;
 }
 
 const authToken = process.env.EXAMPLE_AGENT_API_TOKEN ?? "dev-token";
@@ -108,7 +112,38 @@ function ensureSessionAccess(sessionId: string, userId: string): void {
   }
 }
 
-const pub = os.$context<AuthContext>();
+const pub = os.$context<RequestContext>().use(({ context, next }) => {
+  const header = context.request.headers.get("authorization");
+  const bearerToken = header?.startsWith("Bearer ")
+    ? header.slice("Bearer ".length).trim()
+    : undefined;
+  const queryToken = context.url.searchParams.get("token") ?? undefined;
+  const token = bearerToken ?? queryToken;
+
+  if (!token) {
+    throw new ORPCError("UNAUTHORIZED", {
+      message: "Missing bearer token",
+    });
+  }
+
+  if (token.length === 0 || token !== authToken) {
+    throw new ORPCError("UNAUTHORIZED", {
+      message: "Invalid bearer token",
+    });
+  }
+
+  const userId =
+    context.request.headers.get("x-user-id") ??
+    context.url.searchParams.get("userId") ??
+    "demo-user";
+
+  return next({
+    context: {
+      userId,
+      token,
+    } satisfies AuthContext,
+  });
+});
 
 export const appRouter = pub.router({
   run: pub
@@ -249,49 +284,17 @@ export const appRouter = pub.router({
 export type AppRouter = typeof appRouter;
 const rpcHandler = new RPCHandler(appRouter);
 
-function unauthorized(message = "Unauthorized"): Response {
-  return new Response(message, {
-    status: 401,
-    headers: {
-      "www-authenticate": 'Bearer realm="agent-example"',
-    },
-  });
-}
-
-function extractAuthContext(request: Request, url: URL): AuthContext | Response {
-  const header = request.headers.get("authorization");
-  const bearerToken = header?.startsWith("Bearer ")
-    ? header.slice("Bearer ".length).trim()
-    : undefined;
-  const queryToken = url.searchParams.get("token") ?? undefined;
-  const token = bearerToken ?? queryToken;
-
-  if (!token) {
-    return unauthorized("Missing bearer token");
-  }
-
-  if (token.length === 0 || token !== authToken) {
-    return unauthorized("Invalid bearer token");
-  }
-
-  const userId = request.headers.get("x-user-id") ?? url.searchParams.get("userId") ?? "demo-user";
-  return {
-    userId,
-    token,
-  };
-}
-
 Bun.serve({
   port: 3000,
   idleTimeout: 120,
   async fetch(request) {
     const url = new URL(request.url);
-    const auth = extractAuthContext(request, url);
-    if (auth instanceof Response) {
-      return auth;
-    }
-
-    const result = await rpcHandler.handle(request, { context: auth });
+    const result = await rpcHandler.handle(request, {
+      context: {
+        request,
+        url,
+      },
+    });
 
     if (result.matched) {
       return result.response;
