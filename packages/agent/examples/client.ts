@@ -35,17 +35,8 @@ function printRule(): void {
   console.log(ansis.hex("#334155")("─".repeat(72)));
 }
 
-function logDeltaLive(options: {
-  readonly label: string;
-  readonly startedAtMs: number;
-  readonly index: number;
-  readonly delta: string;
-}): void {
-  const elapsedMs = Date.now() - options.startedAtMs;
-  const payload = JSON.stringify(options.delta);
-  console.log(
-    `${ui.subtitle(`[${elapsedMs}ms]`)} ${ui.title(options.label)} idx=${options.index} delta(${options.delta.length}): ${ui.stream(payload)}`,
-  );
+function writeStreamingDelta(delta: string): void {
+  process.stdout.write(ui.stream(delta));
 }
 
 function createConfiguredClient() {
@@ -70,43 +61,34 @@ async function listenForStreaming(
   label: string,
   startedAtMs: number,
 ): Promise<string> {
-  let text = "";
   let sawAny = false;
   const controller = new AbortController();
+  const views = session.events({ signal: controller.signal });
+
+  const deltaTask = (async () => {
+    for await (const delta of views.deltas()) {
+      if (!sawAny) {
+        sawAny = true;
+        console.log(`${ui.title(label)} TTFT: ${ui.ok(`${Date.now() - startedAtMs}ms`)}`);
+        process.stdout.write(`${ui.title(label)} ${ui.stream("streaming")}: `);
+      }
+
+      writeStreamingDelta(delta);
+    }
+
+    if (sawAny) {
+      process.stdout.write("\n");
+    }
+  })();
 
   try {
-    for await (const event of session.events({ signal: controller.signal })) {
-      if (event.type === "assistant_text_delta") {
-        if (!sawAny) {
-          sawAny = true;
-          console.log(`${ui.title(label)} TTFT: ${ui.ok(`${Date.now() - startedAtMs}ms`)}`);
-          console.log(`${ui.title(label)} ${ui.stream("streaming")}:`);
-        }
-
-        text += event.payload.delta;
-        logDeltaLive({
-          label,
-          startedAtMs,
-          index: Number(event.index),
-          delta: event.payload.delta,
-        });
-        continue;
-      }
-
-      if (
-        event.type === "turn_done" ||
-        event.type === "turn_error" ||
-        event.type === "turn_cancelled"
-      ) {
-        controller.abort();
-        break;
-      }
-    }
+    const result = await views.result();
+    controller.abort();
+    await deltaTask;
+    return result.text.trim();
   } finally {
     controller.abort();
   }
-
-  return text.trim();
 }
 
 async function runTwoClientVerification(): Promise<void> {
@@ -143,7 +125,7 @@ async function runLongEssayBenchmark(): Promise<void> {
   const benchmarkSessionId = `${sessionId}-long-essay-${Date.now()}`;
   const session = client.session(benchmarkSessionId, "supportAgent");
   const prompt =
-    "Write a concise essay (about 300 words) on the evolution of distributed systems, including key trade-offs and modern best practices.";
+    "Write a concise, coherent essay (about 300 words) on the evolution of distributed systems, including key trade-offs and modern best practices. Avoid repetition and keep a clean narrative flow.";
 
   console.log(`\n${ui.banner("Long Essay Benchmark")}`);
   console.log(ui.subtitle("Fresh session to measure TTFT and total generation time."));
@@ -155,56 +137,41 @@ async function runLongEssayBenchmark(): Promise<void> {
   let streamedChars = 0;
   let sawAny = false;
   const controller = new AbortController();
-  const progressTimer = setInterval(() => {
-    const elapsed = Date.now() - startedAtMs;
-    console.log(ui.subtitle(`Long Essay elapsed: ${elapsed}ms`));
-  }, 5000);
+  const views = session.events({ signal: controller.signal });
 
-  const streamPromise = (async () => {
-    try {
-      for await (const event of session.events({ signal: controller.signal })) {
-        if (event.type === "assistant_text_delta") {
-          if (ttftMs === null) {
-            ttftMs = Date.now() - startedAtMs;
-            console.log(`${ui.title("Long Essay")} TTFT: ${ui.ok(`${ttftMs}ms`)}`);
-            console.log(ui.subtitle("Streaming long answer..."));
-          }
-
-          if (!sawAny) {
-            sawAny = true;
-            console.log(`\n${ui.title("Long Essay")} ${ui.stream("streaming")}:`);
-          }
-
-          streamedChars += event.payload.delta.length;
-          logDeltaLive({
-            label: "Long Essay",
-            startedAtMs,
-            index: Number(event.index),
-            delta: event.payload.delta,
-          });
-          continue;
-        }
-
-        if (
-          event.type === "turn_done" ||
-          event.type === "turn_error" ||
-          event.type === "turn_cancelled"
-        ) {
-          controller.abort();
-          break;
-        }
+  const deltaTask = (async () => {
+    for await (const delta of views.deltas()) {
+      if (ttftMs === null) {
+        ttftMs = Date.now() - startedAtMs;
+        console.log(`${ui.title("Long Essay")} TTFT: ${ui.ok(`${ttftMs}ms`)}`);
+        console.log(ui.subtitle("Streaming long answer..."));
       }
-    } finally {
-      controller.abort();
+
+      if (!sawAny) {
+        sawAny = true;
+        process.stdout.write(`\n${ui.title("Long Essay")} ${ui.stream("streaming")}: `);
+      }
+
+      streamedChars += delta.length;
+      writeStreamingDelta(delta);
+    }
+
+    if (sawAny) {
+      process.stdout.write("\n");
     }
   })();
+
+  const resultTask = views.result();
 
   let result: Awaited<ReturnType<SupportSession["run"]>>;
   try {
     result = await session.run({ question: prompt });
-    await streamPromise;
+    const streamResult = await resultTask;
+    streamedChars = streamResult.text.length;
   } finally {
-    clearInterval(progressTimer);
+    controller.abort();
+    await Promise.allSettled([deltaTask]);
+    process.stderr.write("\r");
   }
   const totalMs = Date.now() - startedAtMs;
 

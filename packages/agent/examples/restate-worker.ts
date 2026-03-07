@@ -11,6 +11,7 @@ import {
   createHarness,
   createPubsubBridge,
   createRestateApi,
+  createRestateTurnRuntime,
   toSessionId,
   type EventMap,
   type HarnessRunResponse,
@@ -97,7 +98,7 @@ async function ensureOpenAICodexAccessToken(): Promise<string> {
 const openAIAccessToken = await ensureOpenAICodexAccessToken();
 process.env.OPENAI_API_KEY = openAIAccessToken;
 
-const agents = createExampleAgents(getModel("openai-codex", "gpt-5.3-codex"), {
+const agents = createExampleAgents(getModel("openai-codex", "gpt-5.2"), {
   getApiKey: () => openAIAccessToken,
 });
 const snapshotStateKey = "snapshot";
@@ -148,6 +149,11 @@ function getRequestHarness(ctx: restate.ObjectContext): {
         internalApi = api;
         return api;
       },
+      createTurnRuntime: ({ sessionApi }) =>
+        createRestateTurnRuntime({
+          sessionApi,
+          context: undefined,
+        }),
     },
   });
 

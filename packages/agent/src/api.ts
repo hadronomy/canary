@@ -23,12 +23,12 @@ export interface RestateAuthz<TContext = unknown> {
   ) => Promise<void> | void;
 }
 
-export interface CreateRestateApiOptions<TMap extends object = EventMap, TContext = unknown> {
+export interface CreateSessionApiOptions<TMap extends object = EventMap, TContext = unknown> {
   readonly orchestrator: SessionOrchestrator<TMap, TContext>;
   readonly authz?: RestateAuthz<TContext>;
 }
 
-export interface RestateApi<TMap extends object = EventMap, TContext = unknown> {
+export interface SessionApi<TMap extends object = EventMap, TContext = unknown> {
   readonly createSession: (context: TContext) => Promise<SessionMutationResult>;
   readonly submitTurn: (input: SubmitTurnInput, context: TContext) => Promise<SubmitTurnResult>;
   readonly steer: (input: SessionCommandInput, context: TContext) => Promise<SessionMutationResult>;
@@ -54,9 +54,9 @@ export interface RestateApi<TMap extends object = EventMap, TContext = unknown> 
   ) => Promise<ReadonlyArray<AnyEventEnvelope<TMap>>>;
 }
 
-export function createRestateApi<TMap extends object = EventMap, TContext = unknown>(
-  options: CreateRestateApiOptions<TMap, TContext>,
-): RestateApi<TMap, TContext> {
+export function createSessionApi<TMap extends object = EventMap, TContext = unknown>(
+  options: CreateSessionApiOptions<TMap, TContext>,
+): SessionApi<TMap, TContext> {
   return {
     createSession: async (context) => {
       await options.authz?.createSession?.(context);
@@ -92,3 +92,15 @@ export function createRestateApi<TMap extends object = EventMap, TContext = unkn
     },
   };
 }
+
+export type CreateRestateApiOptions<
+  TMap extends object = EventMap,
+  TContext = unknown,
+> = CreateSessionApiOptions<TMap, TContext>;
+
+export type RestateApi<TMap extends object = EventMap, TContext = unknown> = SessionApi<
+  TMap,
+  TContext
+>;
+
+export const createRestateApi = createSessionApi;

@@ -18,7 +18,7 @@ import type {
   HarnessFetchOptions,
   WireEventEnvelope,
 } from "~/adapters/types";
-import { createRestateApi, type RestateApi } from "~/api";
+import { createSessionApi, type SessionApi } from "~/api";
 import type { Codec } from "~/codec";
 import { codec } from "~/codec";
 import { TURN_ERROR_CODE, TURN_ERROR_STAGE } from "~/errors";
@@ -218,7 +218,39 @@ export interface HarnessAdapters {
   }) => SessionOrchestrator<EventMap, undefined>;
   readonly createApi?: (options: {
     readonly orchestrator: SessionOrchestrator<EventMap, undefined>;
-  }) => RestateApi<EventMap, undefined>;
+  }) => SessionApi<EventMap, undefined>;
+  readonly createTurnRuntime?: (options: {
+    readonly execute: (input: SubmitTurnInput) => Promise<SubmitTurnResult>;
+    readonly sessionApi: SessionApi<EventMap, undefined>;
+  }) => HarnessTurnRuntime;
+}
+
+export interface HarnessTurnRuntime {
+  readonly submitTurn: (input: SubmitTurnInput) => Promise<SubmitTurnResult>;
+}
+
+export function createInMemoryHarnessTurnRuntime(
+  execute: (input: SubmitTurnInput) => Promise<SubmitTurnResult>,
+): HarnessTurnRuntime {
+  const turnByIdempotency = new Map<string, Promise<SubmitTurnResult>>();
+
+  return {
+    async submitTurn(input: SubmitTurnInput): Promise<SubmitTurnResult> {
+      const dedupeKey = `${String(input.sessionId)}:${String(input.idempotencyKey)}`;
+      const existing = turnByIdempotency.get(dedupeKey);
+      if (existing) {
+        return existing;
+      }
+
+      const pending = execute(input).catch((error) => {
+        turnByIdempotency.delete(dedupeKey);
+        throw error;
+      });
+
+      turnByIdempotency.set(dedupeKey, pending);
+      return pending;
+    },
+  };
 }
 
 export interface CreateHarnessOptions<TAgents extends HarnessAgents> {
@@ -691,8 +723,12 @@ export function createHarness<TAgents extends HarnessAgents>(
       handlers: orchestrationHandlers,
     });
 
-  const restateApi =
-    options.adapters?.createApi?.({ orchestrator }) ?? createRestateApi({ orchestrator });
+  const sessionApi =
+    options.adapters?.createApi?.({ orchestrator }) ?? createSessionApi({ orchestrator });
+
+  const turnRuntime =
+    options.adapters?.createTurnRuntime?.({ execute: runViaSubmit, sessionApi }) ??
+    createInMemoryHarnessTurnRuntime((input) => sessionApi.submitTurn(input, undefined));
 
   async function run<TKey extends keyof TAgents & string>(
     key: TKey,
@@ -702,20 +738,17 @@ export function createHarness<TAgents extends HarnessAgents>(
     >,
   ): Promise<HarnessRunResult<HarnessAgentOutput<TAgents[TKey]>>> {
     const agentDefinition = getAgentDefinition(key);
-    const submit = await restateApi.submitTurn(
-      {
-        sessionId: toSessionId(runOptions.sessionId),
-        idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
-        content: "harness.run",
-        metadata: {
-          agent: key,
-          intent: "run",
-          input: agentDefinition.input.encode(runOptions.input),
-          context: runOptions.context,
-        },
+    const submit = await turnRuntime.submitTurn({
+      sessionId: toSessionId(runOptions.sessionId),
+      idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
+      content: "harness.run",
+      metadata: {
+        agent: key,
+        intent: "run",
+        input: agentDefinition.input.encode(runOptions.input),
+        context: runOptions.context,
       },
-      undefined,
-    );
+    });
 
     const stored = runResults.get(runResultKey(runOptions.sessionId, submit.turnId));
     if (!stored) {
@@ -741,18 +774,15 @@ export function createHarness<TAgents extends HarnessAgents>(
     },
   ): Promise<HarnessRunResult<HarnessAgentOutput<TAgents[TKey]>>> {
     const agentDefinition = getAgentDefinition(key);
-    const submit = await restateApi.submitTurn(
-      {
-        sessionId: toSessionId(runOptions.sessionId),
-        idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
-        content: "harness.continue",
-        metadata: {
-          agent: key,
-          intent: "continue",
-        },
+    const submit = await turnRuntime.submitTurn({
+      sessionId: toSessionId(runOptions.sessionId),
+      idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
+      content: "harness.continue",
+      metadata: {
+        agent: key,
+        intent: "continue",
       },
-      undefined,
-    );
+    });
 
     const stored = runResults.get(runResultKey(runOptions.sessionId, submit.turnId));
     if (!stored) {
@@ -923,11 +953,359 @@ type HarnessClientOutput<TAgent> = TAgent extends { readonly output: Codec<infer
   ? TOutput
   : never;
 
+export type HarnessProgressUpdate =
+  | { readonly type: "text"; readonly content: string }
+  | { readonly type: "thinking"; readonly content: string }
+  | {
+      readonly type: "tool";
+      readonly content: {
+        readonly status: "running" | "done";
+        readonly toolExecutionId: string;
+        readonly name?: string;
+        readonly result?: unknown;
+        readonly error?: unknown;
+      };
+    };
+
+export interface HarnessToolUpdate {
+  readonly toolExecutionId: string;
+  readonly name?: string;
+  readonly status: "running" | "done";
+  readonly result?: unknown;
+  readonly error?: unknown;
+}
+
+export interface HarnessEventResult {
+  readonly text: string;
+  readonly events: ReadonlyArray<AnyEventEnvelope<EventMap>>;
+  readonly terminal: "done" | "error" | "cancelled" | "stream_end";
+  readonly turnId?: string;
+}
+
+export interface HarnessEventViews<TMap extends object = EventMap> extends AsyncIterable<
+  AnyEventEnvelope<TMap>
+> {
+  readonly deltas: () => AsyncIterable<string>;
+  readonly progress: () => AsyncIterable<HarnessProgressUpdate>;
+  readonly tools: () => AsyncIterable<HarnessToolUpdate>;
+  readonly result: () => Promise<HarnessEventResult>;
+}
+
+export function createHarnessEventViews(
+  streamFactory: () => AsyncIterable<AnyEventEnvelope<EventMap>>,
+): HarnessEventViews<EventMap> {
+  interface StreamSubscriber {
+    readonly push: (event: AnyEventEnvelope<EventMap>) => void;
+    readonly close: () => void;
+    readonly fail: (error: unknown) => void;
+  }
+
+  function isAbortError(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      (error as { readonly name?: unknown }).name === "AbortError"
+    );
+  }
+
+  const subscribers = new Set<StreamSubscriber>();
+  const eventsList: Array<AnyEventEnvelope<EventMap>> = [];
+  let text = "";
+  let started = false;
+  let finished = false;
+
+  let resolveResult: ((value: HarnessEventResult) => void) | undefined;
+  let rejectResult: ((reason?: unknown) => void) | undefined;
+  const resultPromise = new Promise<HarnessEventResult>((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+
+  function emitToSubscribers(event: AnyEventEnvelope<EventMap>): void {
+    for (const subscriber of subscribers) {
+      subscriber.push(event);
+    }
+  }
+
+  function closeSubscribers(): void {
+    for (const subscriber of subscribers) {
+      subscriber.close();
+    }
+    subscribers.clear();
+  }
+
+  function failSubscribers(error: unknown): void {
+    for (const subscriber of subscribers) {
+      subscriber.fail(error);
+    }
+    subscribers.clear();
+  }
+
+  function finish(terminal: HarnessEventResult["terminal"], turnId?: string): void {
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+    resolveResult?.({
+      text,
+      events: eventsList,
+      terminal,
+      turnId,
+    });
+    closeSubscribers();
+  }
+
+  function fail(error: unknown): void {
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+    rejectResult?.(error);
+    failSubscribers(error);
+  }
+
+  function ensureStarted(): void {
+    if (started) {
+      return;
+    }
+
+    started = true;
+    void (async () => {
+      try {
+        for await (const event of streamFactory()) {
+          eventsList.push(event);
+          if (event.type === "assistant_text_delta") {
+            text += event.payload.delta;
+          }
+
+          emitToSubscribers(event);
+
+          if (event.type === "turn_done") {
+            finish("done", event.turnId ? String(event.turnId) : undefined);
+            return;
+          }
+
+          if (event.type === "turn_error") {
+            finish("error", event.turnId ? String(event.turnId) : undefined);
+            return;
+          }
+
+          if (event.type === "turn_cancelled") {
+            finish("cancelled", event.turnId ? String(event.turnId) : undefined);
+            return;
+          }
+        }
+
+        finish("stream_end", undefined);
+      } catch (error) {
+        if (isAbortError(error)) {
+          finish("stream_end", undefined);
+          return;
+        }
+
+        fail(error);
+      }
+    })();
+  }
+
+  function events(): AsyncIterable<AnyEventEnvelope<EventMap>> {
+    const items: Array<AnyEventEnvelope<EventMap>> = [];
+    const waiters: Array<{
+      readonly resolve: (value: IteratorResult<AnyEventEnvelope<EventMap>>) => void;
+      readonly reject: (reason?: unknown) => void;
+    }> = [];
+    let closed = false;
+    let failure: unknown;
+
+    const subscriber: StreamSubscriber = {
+      push: (event) => {
+        if (closed || failure !== undefined) {
+          return;
+        }
+
+        const waiter = waiters.shift();
+        if (waiter) {
+          waiter.resolve({ value: event, done: false });
+          return;
+        }
+
+        items.push(event);
+      },
+      close: () => {
+        if (closed) {
+          return;
+        }
+
+        closed = true;
+        for (const waiter of waiters.splice(0)) {
+          waiter.resolve({ value: undefined, done: true });
+        }
+      },
+      fail: (error) => {
+        if (closed) {
+          return;
+        }
+
+        failure = error;
+        for (const waiter of waiters.splice(0)) {
+          waiter.reject(error);
+        }
+      },
+    };
+
+    subscribers.add(subscriber);
+    ensureStarted();
+
+    return {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            if (items.length > 0) {
+              const item = items.shift();
+              if (item === undefined) {
+                return Promise.resolve({ value: undefined, done: true });
+              }
+              return Promise.resolve({ value: item, done: false });
+            }
+
+            if (failure !== undefined) {
+              return Promise.reject(failure);
+            }
+
+            if (closed) {
+              return Promise.resolve({ value: undefined, done: true });
+            }
+
+            return new Promise<IteratorResult<AnyEventEnvelope<EventMap>>>((resolve, reject) => {
+              waiters.push({ resolve, reject });
+            });
+          },
+          return() {
+            subscribers.delete(subscriber);
+            subscriber.close();
+            return Promise.resolve({ value: undefined, done: true });
+          },
+        };
+      },
+    };
+  }
+
+  function deltas(): AsyncIterable<string> {
+    return {
+      async *[Symbol.asyncIterator]() {
+        for await (const event of events()) {
+          if (event.type === "assistant_text_delta") {
+            yield event.payload.delta;
+          }
+        }
+      },
+    };
+  }
+
+  function progress(): AsyncIterable<HarnessProgressUpdate> {
+    const toolNames = new Map<string, string>();
+
+    return {
+      async *[Symbol.asyncIterator]() {
+        for await (const event of events()) {
+          if (event.type === "assistant_text_delta") {
+            yield { type: "text", content: event.payload.delta };
+            continue;
+          }
+
+          if (event.type === "assistant_thinking_delta") {
+            yield { type: "thinking", content: event.payload.delta };
+            continue;
+          }
+
+          if (event.type === "tool_execution_start") {
+            const toolExecutionId = String(event.payload.toolExecutionId);
+            const name = event.payload.toolName;
+            toolNames.set(toolExecutionId, name);
+            yield {
+              type: "tool",
+              content: {
+                status: "running",
+                toolExecutionId,
+                name,
+              },
+            };
+            continue;
+          }
+
+          if (event.type === "tool_execution_result") {
+            const toolExecutionId = String(event.payload.toolExecutionId);
+            yield {
+              type: "tool",
+              content: {
+                status: "done",
+                toolExecutionId,
+                name: toolNames.get(toolExecutionId),
+                result: event.payload.ok ? event.payload.output : undefined,
+                error: event.payload.ok ? undefined : event.payload.error,
+              },
+            };
+          }
+        }
+      },
+    };
+  }
+
+  function tools(): AsyncIterable<HarnessToolUpdate> {
+    const toolNames = new Map<string, string>();
+
+    return {
+      async *[Symbol.asyncIterator]() {
+        for await (const event of events()) {
+          if (event.type === "tool_execution_start") {
+            const toolExecutionId = String(event.payload.toolExecutionId);
+            const name = event.payload.toolName;
+            toolNames.set(toolExecutionId, name);
+            yield {
+              toolExecutionId,
+              name,
+              status: "running",
+            };
+            continue;
+          }
+
+          if (event.type === "tool_execution_result") {
+            const toolExecutionId = String(event.payload.toolExecutionId);
+            yield {
+              toolExecutionId,
+              name: toolNames.get(toolExecutionId),
+              status: "done",
+              result: event.payload.ok ? event.payload.output : undefined,
+              error: event.payload.ok ? undefined : event.payload.error,
+            };
+          }
+        }
+      },
+    };
+  }
+
+  async function result(): Promise<HarnessEventResult> {
+    ensureStarted();
+    return resultPromise;
+  }
+
+  return {
+    deltas,
+    progress,
+    tools,
+    result,
+    [Symbol.asyncIterator]() {
+      return events()[Symbol.asyncIterator]();
+    },
+  };
+}
+
 export interface AgentSession<TAgent extends HarnessClientAgents[string]> {
   readonly sessionId: string;
-  readonly events: (options?: {
-    readonly signal?: AbortSignal;
-  }) => AsyncIterable<AnyEventEnvelope<EventMap>>;
+  readonly events: (options?: { readonly signal?: AbortSignal }) => HarnessEventViews<EventMap>;
   readonly run: (
     input: HarnessClientInput<TAgent>,
     options?: { readonly idempotencyKey?: string },
@@ -1053,10 +1431,63 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
 
     return {
       async *[Symbol.asyncIterator]() {
+        const bufferedByIndex = new Map<number, AnyEventEnvelope<EventMap>>();
+        let nextExpectedIndex = request.offset ?? 0;
+
+        const emitInOrder = function* (
+          envelope: AnyEventEnvelope<EventMap>,
+        ): Generator<AnyEventEnvelope<EventMap>> {
+          const eventIndex = Number(envelope.index);
+
+          if (eventIndex < nextExpectedIndex) {
+            return;
+          }
+
+          if (eventIndex > nextExpectedIndex) {
+            if (!bufferedByIndex.has(eventIndex)) {
+              bufferedByIndex.set(eventIndex, envelope);
+            }
+            return;
+          }
+
+          options.resume?.setOffset?.(eventIndex + 1);
+          yield envelope;
+          nextExpectedIndex += 1;
+
+          while (true) {
+            const nextEnvelope = bufferedByIndex.get(nextExpectedIndex);
+            if (!nextEnvelope) {
+              break;
+            }
+
+            bufferedByIndex.delete(nextExpectedIndex);
+            options.resume?.setOffset?.(nextExpectedIndex + 1);
+            yield nextEnvelope;
+            nextExpectedIndex += 1;
+          }
+        };
+
         for await (const wireEvent of wireStream) {
           const envelope = decodeEventEnvelope(eventRegistry, wireEvent, request.sessionId);
-          options.resume?.setOffset?.(Number(envelope.index) + 1);
-          yield envelope;
+
+          for (const orderedEnvelope of emitInOrder(envelope)) {
+            yield orderedEnvelope;
+          }
+        }
+
+        if (bufferedByIndex.size === 0) {
+          return;
+        }
+
+        const remainingIndexes = [...bufferedByIndex.keys()].sort((left, right) => left - right);
+        for (const remainingIndex of remainingIndexes) {
+          const remainingEnvelope = bufferedByIndex.get(remainingIndex);
+          if (!remainingEnvelope) {
+            continue;
+          }
+
+          options.resume?.setOffset?.(remainingIndex + 1);
+          yield remainingEnvelope;
         }
       },
     };
@@ -1086,7 +1517,7 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
 
     events(eventOptions?: { readonly signal?: AbortSignal }) {
       const offset = options.resume?.getOffset?.();
-      return streamEvents({ offset }, eventOptions);
+      return createHarnessEventViews(() => streamEvents({ offset }, eventOptions));
     },
 
     session<TKey extends keyof TAgents & string>(
@@ -1097,12 +1528,14 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
         sessionId,
         events: (eventOptions) => {
           const offset = options.resume?.getOffset?.();
-          return streamEvents(
-            {
-              sessionId,
-              offset,
-            },
-            eventOptions,
+          return createHarnessEventViews(() =>
+            streamEvents(
+              {
+                sessionId,
+                offset,
+              },
+              eventOptions,
+            ),
           );
         },
         async run(input, runOptions) {

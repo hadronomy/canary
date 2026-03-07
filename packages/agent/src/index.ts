@@ -1,6 +1,6 @@
 export * from "./api";
-export * from "./client";
 export * from "./codec";
+export * from "./durable";
 export * from "./errors";
 export * from "./harness";
 export * from "./orchestrator";
