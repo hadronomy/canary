@@ -11,7 +11,6 @@ import {
   createHarness,
   createPubsubBridge,
   createRestateApi,
-  createRestateDurableRuntime,
   createRestateTurnRuntime,
   toSessionId,
   type EventMap,
@@ -120,15 +119,39 @@ const pubsubClient = createPubsubClient({
   name: pubsubName,
 });
 
-function getRequestHarness(ctx: restate.ObjectContext): {
-  readonly harness: ReturnType<typeof createHarness<typeof agents>>;
+type HarnessForAgents = ReturnType<typeof createHarness<typeof agents>>;
+const harnessCache = new Map<string, HarnessForAgents>();
+const apiCache = new Map<string, RestateApi<EventMap, undefined>>();
+const latestCtxCache = new Map<string, restate.ObjectContext>();
+
+function getLatestCtx(sessionId: string): restate.ObjectContext {
+  const ctx = latestCtxCache.get(sessionId);
+  if (!ctx) {
+    throw new restate.TerminalError("Session runtime is not initialized", { errorCode: 409 });
+  }
+
+  return ctx;
+}
+
+function getRequestHarness(
+  ctx: restate.ObjectContext | restate.ObjectSharedContext,
+  sessionId: string,
+): {
+  readonly harness: HarnessForAgents;
   readonly getInternalApi: () => RestateApi<EventMap, undefined>;
 } {
-  const durableRuntime = createRestateDurableRuntime(ctx, {
-    publish: async (topic, event, idempotencyKey) => {
-      await pubsubClient.publish(topic, event, idempotencyKey);
-    },
-  });
+  if ("set" in ctx) {
+    latestCtxCache.set(sessionId, ctx as restate.ObjectContext);
+  }
+
+  const cachedHarness = harnessCache.get(sessionId);
+  const cachedApi = apiCache.get(sessionId);
+  if (cachedHarness && cachedApi) {
+    return {
+      harness: cachedHarness,
+      getInternalApi: () => cachedApi,
+    };
+  }
 
   const pubsubBridge = createPubsubBridge({
     publisher: {
@@ -145,13 +168,13 @@ function getRequestHarness(ctx: restate.ObjectContext): {
 
   const harness = createHarness({
     agents,
-    durableRuntime,
     contextStore: {
       load: async () =>
-        (await durableRuntime.state.get<HarnessSessionSnapshot<typeof agents>>(snapshotStateKey)) ??
-        undefined,
+        (await getLatestCtx(sessionId).get<HarnessSessionSnapshot<typeof agents>>(
+          snapshotStateKey,
+        )) ?? undefined,
       save: async (_sessionId, state) => {
-        await durableRuntime.state.set(snapshotStateKey, state);
+        getLatestCtx(sessionId).set(snapshotStateKey, state);
       },
     },
     adapters: {
@@ -173,15 +196,18 @@ function getRequestHarness(ctx: restate.ObjectContext): {
     },
   });
 
+  if (!internalApi) {
+    throw new Error("Harness API not initialized");
+  }
+
+  const initializedApi = internalApi;
+
+  harnessCache.set(sessionId, harness);
+  apiCache.set(sessionId, initializedApi);
+
   return {
     harness,
-    getInternalApi: () => {
-      if (!internalApi) {
-        throw new Error("Harness API not initialized");
-      }
-
-      return internalApi;
-    },
+    getInternalApi: () => initializedApi,
   };
 }
 
@@ -197,7 +223,10 @@ function getAgentKey(value: string): keyof typeof agents & string {
   return value;
 }
 
-function resolveSessionId(ctx: restate.ObjectContext, requestSessionId: string): string {
+function resolveSessionId(
+  ctx: restate.ObjectContext | restate.ObjectSharedContext,
+  requestSessionId: string,
+): string {
   const keySessionId = String(ctx.key);
   if (requestSessionId !== keySessionId) {
     throw new restate.TerminalError(
@@ -253,7 +282,7 @@ const orchestratorService = restate.object({
       })();
 
       const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { harness } = getRequestHarness(ctx);
+      const { harness } = getRequestHarness(ctx, sessionId);
       const result = await harness.run(key, {
         sessionId,
         idempotencyKey: request.idempotencyKey,
@@ -301,7 +330,7 @@ const orchestratorService = restate.object({
     result: async (ctx: restate.ObjectContext, request: ResultRequest) => {
       const key = getAgentKey(request.agent);
       const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { harness } = getRequestHarness(ctx);
+      const { harness } = getRequestHarness(ctx, sessionId);
       const result = await harness.result(key, {
         sessionId,
         turnId: request.turnId,
@@ -313,7 +342,7 @@ const orchestratorService = restate.object({
     continue: async (ctx: restate.ObjectContext, request: ContinueRequest) => {
       const key = getAgentKey(request.agent);
       const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { harness } = getRequestHarness(ctx);
+      const { harness } = getRequestHarness(ctx, sessionId);
       const result = await harness.continue(key, {
         sessionId,
         idempotencyKey: request.idempotencyKey,
@@ -322,60 +351,68 @@ const orchestratorService = restate.object({
       return harness.encodeRunResponse(key, result) as HarnessRunResponse<unknown>;
     },
 
-    steer: async (ctx: restate.ObjectContext, request: CommandRequest) => {
-      const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { getInternalApi } = getRequestHarness(ctx);
-      await getInternalApi().steer(
-        {
-          sessionId: toSessionId(sessionId),
-          content: request.content,
-        },
-        undefined,
-      );
+    steer: restate.handlers.object.shared(
+      async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
+        const sessionId = resolveSessionId(ctx, request.sessionId);
+        const { getInternalApi } = getRequestHarness(ctx, sessionId);
+        await getInternalApi().steer(
+          {
+            sessionId: toSessionId(sessionId),
+            content: request.content,
+          },
+          undefined,
+        );
 
-      return { ok: true };
-    },
+        return { ok: true };
+      },
+    ),
 
-    followUp: async (ctx: restate.ObjectContext, request: CommandRequest) => {
-      const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { getInternalApi } = getRequestHarness(ctx);
-      await getInternalApi().followUp(
-        {
-          sessionId: toSessionId(sessionId),
-          content: request.content,
-        },
-        undefined,
-      );
+    followUp: restate.handlers.object.shared(
+      async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
+        const sessionId = resolveSessionId(ctx, request.sessionId);
+        const { getInternalApi } = getRequestHarness(ctx, sessionId);
+        await getInternalApi().followUp(
+          {
+            sessionId: toSessionId(sessionId),
+            content: request.content,
+          },
+          undefined,
+        );
 
-      return { ok: true };
-    },
+        return { ok: true };
+      },
+    ),
 
-    cancel: async (ctx: restate.ObjectContext, request: CommandRequest) => {
-      const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { getInternalApi } = getRequestHarness(ctx);
-      await getInternalApi().cancel(
-        {
-          sessionId: toSessionId(sessionId),
-          content: request.content,
-        },
-        undefined,
-      );
+    cancel: restate.handlers.object.shared(
+      async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
+        const sessionId = resolveSessionId(ctx, request.sessionId);
+        const { getInternalApi } = getRequestHarness(ctx, sessionId);
+        await getInternalApi().cancel(
+          {
+            sessionId: toSessionId(sessionId),
+            content: request.content,
+          },
+          undefined,
+        );
 
-      return { ok: true };
-    },
+        return { ok: true };
+      },
+    ),
 
-    getEvents: async (ctx: restate.ObjectContext, request: GetEventsRequest) => {
-      const sessionId = resolveSessionId(ctx, request.sessionId);
-      const { getInternalApi } = getRequestHarness(ctx);
-      return getInternalApi().getEvents(
-        {
-          sessionId: toSessionId(sessionId),
-          content: "events",
-          offset: request.offset,
-        },
-        undefined,
-      );
-    },
+    getEvents: restate.handlers.object.shared(
+      async (ctx: restate.ObjectSharedContext, request: GetEventsRequest) => {
+        const sessionId = resolveSessionId(ctx, request.sessionId);
+        const { getInternalApi } = getRequestHarness(ctx, sessionId);
+        return getInternalApi().getEvents(
+          {
+            sessionId: toSessionId(sessionId),
+            content: "events",
+            offset: request.offset,
+          },
+          undefined,
+        );
+      },
+    ),
   },
 });
 

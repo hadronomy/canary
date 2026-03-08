@@ -11,35 +11,73 @@ import { createORPCAdapter } from "@canary/agent/adapters/orpc";
 import type { AppRouter } from "./server";
 import { createExampleAgentContracts } from "./shared";
 
+// --- Configuration ---
 const edgeToken = process.env.EXAMPLE_AGENT_API_TOKEN ?? "dev-token";
 const edgeUserId = process.env.EXAMPLE_AGENT_USER_ID ?? "demo-user";
-const sessionId = process.env.EXAMPLE_AGENT_SESSION_ID ?? `session-${Date.now()}`;
-const twoClientTest = (process.env.EXAMPLE_AGENT_TWO_CLIENT_TEST ?? "true") === "true";
-
 const contracts = createExampleAgentContracts(getModel("openai-codex", "gpt-5.3-codex"));
 type SupportSession = AgentSession<(typeof contracts)["supportAgent"]>;
 
-const ui = {
-  banner: (value: string) => ansis.bold.bgHex("#0f172a").hex("#f8fafc")(` ${value} `),
-  title: (value: string) => ansis.bold.hex("#38bdf8")(value),
-  subtitle: (value: string) => ansis.hex("#94a3b8")(value),
-  user: (value: string) => ansis.bold.hex("#f59e0b")(value),
-  assistant: (value: string) => ansis.bold.hex("#34d399")(value),
-  stream: (value: string) => ansis.hex("#22d3ee")(value),
-  ok: (value: string) => ansis.bold.hex("#10b981")(value),
-  fail: (value: string) => ansis.bold.hex("#ef4444")(value),
-  prompt: (value: string) => ansis.hex("#a78bfa")(value),
+// --- UI & Styling Engine ---
+const theme = {
+  primary: "#38bdf8", // Light Blue
+  secondary: "#c4b5fd", // Light Purple
+  success: "#10b981", // Emerald
+  warning: "#f59e0b", // Amber
+  error: "#ef4444", // Red
+  text: "#f8fafc", // Slate 50
+  muted: "#64748b", // Slate 500
+  agent: "#34d399", // Mint
+  border: "#334155", // Slate 700
 };
 
-function printRule(): void {
-  console.log(ansis.hex("#334155")("─".repeat(72)));
-}
+const ui = {
+  banner: (title: string) =>
+    console.log(`\n${ansis.bold.bgHex(theme.primary).hex("#0f172a")(`  ${title}  `)}\n`),
 
-function writeStreamingDelta(delta: string): void {
-  process.stdout.write(ui.stream(delta));
-}
+  step: (num: number, title: string, desc: string) => {
+    console.log(
+      ansis.bold.hex(theme.primary)(`\n[Step ${num}] `) + ansis.bold.hex(theme.text)(title),
+    );
+    console.log(ansis.italic.hex(theme.muted)(`│ ${desc}`));
+    console.log(
+      ansis.hex(theme.border)("├─────────────────────────────────────────────────────────"),
+    );
+  },
 
-function createConfiguredClient() {
+  prompt: (text: string) =>
+    console.log(`${ansis.hex(theme.secondary)("│ User:")}  ${ansis.hex(theme.text)(text)}`),
+  info: (text: string) =>
+    console.log(
+      `${ansis.hex(theme.muted)("│")} ${ansis.hex(theme.primary)("ℹ")} ${ansis.hex(theme.muted)(text)}`,
+    ),
+  success: (text: string) =>
+    console.log(
+      `${ansis.hex(theme.muted)("│")} ${ansis.hex(theme.success)("✔")} ${ansis.hex(theme.success)(text)}`,
+    ),
+  warning: (text: string) =>
+    console.log(
+      `${ansis.hex(theme.muted)("│")} ${ansis.hex(theme.warning)("⚠")} ${ansis.bold.hex(theme.warning)(text)}`,
+    ),
+
+  agentPrefix: () =>
+    process.stdout.write(`${ansis.hex(theme.muted)("│")} ${ansis.hex(theme.agent)("Agent:")} `),
+  stream: (text: string) => process.stdout.write(ansis.hex(theme.agent)(text)),
+
+  stats: (ttft: number, total: number, chars: number, status: string) => {
+    const statusFmt =
+      status === "done" ? ansis.hex(theme.success)(status) : ansis.hex(theme.warning)(status);
+    console.log(
+      ansis.hex(theme.border)(
+        `╰─▸ Status:[${statusFmt}] • TTFT: ${ttft}ms • Total: ${total}ms • Chars: ${chars}\n`,
+      ),
+    );
+  },
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- Client Initialization with Offset Tracking ---
+function createSessionClient() {
   const link = new RPCLink({
     url: "http://localhost:3000",
     headers: async () => ({
@@ -50,185 +88,233 @@ function createConfiguredClient() {
 
   const orpc: RouterClient<AppRouter> = createORPCClient(link);
 
+  let streamOffset = 0;
+
   return createHarnessClient({
     agents: contracts,
     adapter: createORPCAdapter(orpc),
+    resume: {
+      getOffset: () => streamOffset,
+      setOffset: (val) => {
+        streamOffset = val;
+      },
+    },
   });
 }
 
-async function listenForStreaming(
+// --- Robust Streaming Helper ---
+async function streamTurn(
   session: SupportSession,
-  label: string,
-  startedAtMs: number,
-): Promise<string> {
-  let sawAny = false;
-  const controller = new AbortController();
+  turnId: string,
+  controller: AbortController,
+  onDelta: (delta: string) => void,
+) {
   const views = session.events({ signal: controller.signal });
 
-  const deltaTask = (async () => {
-    for await (const delta of views.deltas()) {
-      if (!sawAny) {
-        sawAny = true;
-        console.log(`${ui.title(label)} TTFT: ${ui.ok(`${Date.now() - startedAtMs}ms`)}`);
-        process.stdout.write(`${ui.title(label)} ${ui.stream("streaming")}: `);
-      }
-
-      writeStreamingDelta(delta);
-    }
-
-    if (sawAny) {
-      process.stdout.write("\n");
-    }
-  })();
+  let text = "";
+  let terminalState = "done";
+  let finishedNaturally = false;
 
   try {
-    const result = await views.result();
-    controller.abort();
-    await deltaTask;
-    return result.text.trim();
+    for await (const event of views) {
+      if (event.turnId && event.turnId !== turnId) continue;
+
+      if (event.type === "assistant_text_delta") {
+        const delta = (event.payload as any).delta;
+        text += delta;
+        onDelta(delta);
+      } else if (event.type === "turn_done") {
+        terminalState = "done";
+        finishedNaturally = true;
+        break;
+      } else if (event.type === "turn_cancelled") {
+        terminalState = "cancelled";
+        finishedNaturally = true;
+        break;
+      } else if (event.type === "turn_error") {
+        terminalState = "error";
+        finishedNaturally = true;
+        break;
+      }
+    }
+  } catch (err: any) {
+    if (err.name === "AbortError" || controller.signal.aborted) {
+      terminalState = "cancelled";
+    } else {
+      throw err;
+    }
   } finally {
-    controller.abort();
+    // ALWAYS kill the HTTP connection when we exit the loop
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
   }
+
+  if (controller.signal.aborted && !finishedNaturally && terminalState !== "error") {
+    terminalState = "cancelled";
+  }
+
+  return { text, terminalState };
 }
 
-async function runTwoClientVerification(): Promise<void> {
-  const clientA = createConfiguredClient();
-  const sessionA = clientA.session(sessionId, "supportAgent");
-  const clientB = createConfiguredClient();
-  const sessionB = clientB.session(sessionId, "supportAgent");
-  const prompt = "Two-client sync check: reply with EXACTLY 'SYNC-OK'";
+// --- Scenarios ---
 
-  console.log(`\n${ui.banner("Two-Client SSE Verification")}`);
-  console.log(ui.subtitle("Same auth + same session, both clients should stream deltas."));
-  console.log(`${ui.title("Prompt")}: ${ui.prompt(prompt)}`);
-
-  const startedAtMs = Date.now();
-  const streamA = listenForStreaming(sessionA, "Client A", startedAtMs);
-  const streamB = listenForStreaming(sessionB, "Client B", startedAtMs);
-  const runResult = await sessionA.run({ question: prompt });
-  const [textA, textB] = await Promise.all([streamA, streamB]);
-
-  printRule();
-  console.log(`${ui.title("Client A final answer")}: ${ui.assistant(runResult.answer)}`);
-  console.log(`${ui.title("Client A streamed")}: ${textA ? ui.stream(textA) : ui.fail("<empty>")}`);
-  console.log(`${ui.title("Client B streamed")}: ${textB ? ui.stream(textB) : ui.fail("<empty>")}`);
-  const bothReceived = textA.length > 0 && textB.length > 0;
-  console.log(
-    `${ui.title("Both clients received stream")}: ${bothReceived ? ui.ok("YES") : ui.fail("NO")}`,
+/**
+ * SCENARIO 1: Background Submission & Durable Reconnection
+ */
+async function demoDurability(client: ReturnType<typeof createSessionClient>, sessionId: string) {
+  ui.step(
+    1,
+    "Durability & Reconnection",
+    "Submits a background task, simulates a dropped connection, and reconnects to fetch the result.",
   );
 
-  await runLongEssayBenchmark();
+  const session = client.session(sessionId, "supportAgent");
+  const prompt = "Explain the concept of 'Durable Execution' in exactly two short sentences.";
+  ui.prompt(prompt);
+
+  const startedAt = Date.now();
+  ui.info("Submitting task to Restate (Background run)...");
+
+  const { turnId } = await session.submit(
+    { question: prompt },
+    { idempotencyKey: crypto.randomUUID() },
+  );
+  ui.success(`Task accepted! Turn ID: ${turnId}`);
+
+  ui.info("Simulating client disconnect (sleeping 3 seconds)...");
+  await sleep(3000);
+
+  ui.info("Client reconnected. Fetching durable result from backend...");
+  const finalResult = await session.result(turnId);
+
+  ui.info("Syncing event stream offset to catch up with backend...");
+
+  // CRITICAL FIX: We must pass an AbortController so we can sever the SSE connection
+  // immediately after `waitForIdle` finishes catching up. Otherwise, the process hangs.
+  const idleController = new AbortController();
+  await session.waitForIdle({ signal: idleController.signal });
+  idleController.abort();
+
+  ui.agentPrefix();
+  ui.stream(finalResult.answer + "\n");
+
+  ui.stats(0, Date.now() - startedAt, finalResult.answer.length, "done");
 }
 
-async function runLongEssayBenchmark(): Promise<void> {
-  const client = createConfiguredClient();
-  const benchmarkSessionId = `${sessionId}-long-essay-${Date.now()}`;
-  const session = client.session(benchmarkSessionId, "supportAgent");
+/**
+ * SCENARIO 2: Real-time Streaming & Mid-Flight Interruption
+ */
+async function demoInterruption(client: ReturnType<typeof createSessionClient>) {
+  const sessionId = `interruption-session-${Date.now()}`;
+  ui.step(
+    2,
+    "Mid-Flight Interruption",
+    "Streams a long response and forcibly closes the network connection midway.",
+  );
+
+  const session = client.session(sessionId, "supportAgent");
   const prompt =
-    "Write a concise, coherent essay (about 300 words) on the evolution of distributed systems, including key trade-offs and modern best practices. Avoid repetition and keep a clean narrative flow.";
+    "Write a highly detailed, 500-word historical fiction about a space pirate discovering a new galaxy.";
+  ui.prompt(prompt);
 
-  console.log(`\n${ui.banner("Long Essay Benchmark")}`);
-  console.log(ui.subtitle("Fresh session to measure TTFT and total generation time."));
-  console.log(`${ui.title("Session")}: ${benchmarkSessionId}`);
-  console.log(`${ui.title("Prompt")}: ${ui.prompt(prompt)}`);
+  const startedAt = Date.now();
+  let ttft = 0;
+  let chars = 0;
+  let isCancelled = false;
 
-  const startedAtMs = Date.now();
-  let ttftMs: number | null = null;
-  let streamedChars = 0;
-  let sawAny = false;
+  const { turnId } = await session.submit(
+    { question: prompt },
+    { idempotencyKey: crypto.randomUUID() },
+  );
   const controller = new AbortController();
-  const views = session.events({ signal: controller.signal });
 
-  const deltaTask = (async () => {
-    for await (const delta of views.deltas()) {
-      if (ttftMs === null) {
-        ttftMs = Date.now() - startedAtMs;
-        console.log(`${ui.title("Long Essay")} TTFT: ${ui.ok(`${ttftMs}ms`)}`);
-        console.log(ui.subtitle("Streaming long answer..."));
-      }
+  ui.agentPrefix();
 
-      if (!sawAny) {
-        sawAny = true;
-        process.stdout.write(`\n${ui.title("Long Essay")} ${ui.stream("streaming")}: `);
-      }
+  const { terminalState } = await streamTurn(session, turnId, controller, (delta) => {
+    if (isCancelled) return;
 
-      streamedChars += delta.length;
-      writeStreamingDelta(delta);
+    if (ttft === 0) ttft = Date.now() - startedAt;
+    ui.stream(delta);
+    chars += delta.length;
+
+    if (chars > 150 && !isCancelled) {
+      isCancelled = true;
+      console.log(); // Break the line cleanly
+      ui.warning("User clicked STOP. Dropping SSE connection & sending cancel...");
+
+      session.cancel("User grew impatient and hit stop.").catch(() => {});
+      controller.abort();
     }
+  });
 
-    if (sawAny) {
-      process.stdout.write("\n");
-    }
-  })();
+  if (!isCancelled) console.log();
+  ui.stats(ttft, Date.now() - startedAt, chars, terminalState);
+}
 
-  const resultTask = views.result();
-  let turnId: string | undefined;
+/**
+ * SCENARIO 3: Stateful Continuity (Follow-Up)
+ */
+async function demoContinuity(
+  client: ReturnType<typeof createSessionClient>,
+  previousSessionId: string,
+) {
+  ui.step(
+    3,
+    "Stateful Continuity & Steering",
+    "Reconnects to the session from Step 1 and asks a follow-up question, proving the agent remembers context.",
+  );
+
+  const session = client.session(previousSessionId, "supportAgent");
+
+  // Tweak prompt to be more authoritative so the mock/cheap LLM properly answers instead of autocompleting
+  const prompt =
+    "You just explained Durable Execution. Now, please summarize that exact same explanation, but speak entirely in the persona of a 19th-century space pirate.";
+  ui.prompt(prompt);
+
+  const startedAt = Date.now();
+  let ttft = 0;
+  let chars = 0;
+
+  const { turnId } = await session.submit(
+    { question: prompt },
+    { idempotencyKey: crypto.randomUUID() },
+  );
+  const controller = new AbortController();
+
+  ui.agentPrefix();
+
+  const { terminalState } = await streamTurn(session, turnId, controller, (delta) => {
+    if (ttft === 0) ttft = Date.now() - startedAt;
+    ui.stream(delta);
+    chars += delta.length;
+  });
+
+  console.log();
+  ui.stats(ttft, Date.now() - startedAt, chars, terminalState);
+}
+
+// --- Main Execution ---
+async function main() {
+  console.clear();
+  ui.banner("@canary/agent — Interactive Masterclass Demo");
+
+  const statefulClient = createSessionClient();
+  const mainSessionId = `persistent-session-${Date.now()}`;
 
   try {
-    const submitResult = await session.submit(
-      { question: prompt },
-      {
-        idempotencyKey: crypto.randomUUID(),
-      },
-    );
-    turnId = submitResult.turnId;
+    await demoDurability(statefulClient, mainSessionId);
+    await demoInterruption(createSessionClient());
+    await demoContinuity(statefulClient, mainSessionId);
 
-    const streamResult = await resultTask;
-    streamedChars = streamResult.text.trim().length;
-  } finally {
-    controller.abort();
-    await Promise.allSettled([deltaTask]);
-    process.stderr.write("\r");
+    console.log(ansis.bold.hex(theme.success)("\n✨ Demo completed successfully!\n"));
+
+    // Explicitly exit to guarantee no hanging sockets from external libraries
+    process.exit(0);
+  } catch (err: any) {
+    console.log(ansis.bold.hex(theme.error)(`\n❌ Fatal Error: ${err.message}\n`));
+    process.exit(1);
   }
-
-  if (!turnId) {
-    throw new Error("Submit did not return a turnId");
-  }
-
-  const totalMs = Date.now() - startedAtMs;
-
-  if (ttftMs === null) {
-    ttftMs = totalMs;
-  }
-
-  printRule();
-  console.log(`${ui.title("Turn ID")}: ${turnId}`);
-  console.log(`${ui.title("Long Essay total time")}: ${ui.ok(`${totalMs}ms`)}`);
-  console.log(`${ui.title("Long Essay TTFT")}: ${ui.ok(`${ttftMs}ms`)}`);
-  if (streamedChars === 0) {
-    console.log(
-      ui.subtitle(
-        "No realtime delta tokens were observed for this run; response arrived at completion.",
-      ),
-    );
-  }
-  console.log(`${ui.title("Streamed chars")}: ${ui.stream(String(streamedChars))}`);
-  console.log(`${ui.title("Final answer chars")}: ${ui.assistant(String(streamedChars))}`);
-}
-
-async function runSingleClient(): Promise<void> {
-  const client = createConfiguredClient();
-  const session = client.session(sessionId, "supportAgent");
-  const prompt = "Your name is petter";
-  console.log(`\n${ui.banner("Single Client Run")}`);
-  console.log(`${ui.title("Prompt")}: ${ui.prompt(prompt)}`);
-
-  const startedAtMs = Date.now();
-  const stream = listenForStreaming(session, "Client", startedAtMs);
-  const result = await session.run({ question: prompt });
-  await stream;
-
-  printRule();
-  console.log(`${ui.title("Current answer")}: ${ui.assistant(result.answer)}`);
-}
-
-async function main(): Promise<void> {
-  if (twoClientTest) {
-    await runTwoClientVerification();
-    return;
-  }
-
-  await runSingleClient();
 }
 
 void main();
