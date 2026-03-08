@@ -96,6 +96,13 @@ const runResponseSchema = z.object({
   nextIndex: z.number(),
 });
 
+const runSubmitInputSchema = z.object({
+  sessionId: z.string(),
+  idempotencyKey: z.string(),
+  agent: z.string(),
+  input: z.string(),
+});
+
 const submitResponseSchema = z.object({
   turnId: z.string(),
 });
@@ -151,14 +158,7 @@ const pub = os.$context<RequestContext>().use(({ context, next }) => {
 
 export const appRouter = pub.router({
   run: pub
-    .input(
-      z.object({
-        sessionId: z.string(),
-        idempotencyKey: z.string(),
-        agent: z.string(),
-        input: z.unknown(),
-      }),
-    )
+    .input(runSubmitInputSchema)
     .output(runResponseSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
@@ -176,14 +176,7 @@ export const appRouter = pub.router({
     }),
 
   submit: pub
-    .input(
-      z.object({
-        sessionId: z.string(),
-        idempotencyKey: z.string(),
-        agent: z.string(),
-        input: z.unknown(),
-      }),
-    )
+    .input(runSubmitInputSchema)
     .output(submitResponseSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);

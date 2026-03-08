@@ -10,13 +10,16 @@ import type {
   WireEventEnvelope,
 } from "~/adapters/types";
 
-export interface ORPCHarnessRouter {
+export interface ORPCHarnessRouter<
+  TRunRequest extends HarnessRunRequest = HarnessRunRequest,
+  TSubmitRequest extends HarnessSubmitRequest = HarnessSubmitRequest,
+> {
   readonly run: (
-    input: HarnessRunRequest,
+    input: TRunRequest,
     options?: { readonly signal?: AbortSignal },
   ) => Promise<HarnessAdapterRunResponse>;
   readonly submit: (
-    input: HarnessSubmitRequest,
+    input: TSubmitRequest,
     options?: { readonly signal?: AbortSignal },
   ) => Promise<HarnessAdapterSubmitResponse>;
   readonly result: (
@@ -45,12 +48,17 @@ export interface ORPCHarnessRouter {
   ) => AsyncIterable<WireEventEnvelope> | Promise<AsyncIterable<WireEventEnvelope>>;
 }
 
-export function createORPCAdapter<TClient extends ORPCHarnessRouter>(
+type RunRequestFor<TClient extends ORPCHarnessRouter<any, any>> = Parameters<TClient["run"]>[0];
+type SubmitRequestFor<TClient extends ORPCHarnessRouter<any, any>> = Parameters<
+  TClient["submit"]
+>[0];
+
+export function createORPCAdapter<TClient extends ORPCHarnessRouter<any, any>>(
   client: TClient,
 ): HarnessClientAdapter {
   return {
-    run: (request, options) => client.run(request, options),
-    submit: (request, options) => client.submit(request, options),
+    run: (request, options) => client.run(request as RunRequestFor<TClient>, options),
+    submit: (request, options) => client.submit(request as SubmitRequestFor<TClient>, options),
     result: (request, options) => client.result(request, options),
     continue: (request, options) => client.continue(request, options),
     steer: async (request, options) => {
