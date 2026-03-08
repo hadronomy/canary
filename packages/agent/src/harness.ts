@@ -296,9 +296,8 @@ export function createInMemoryHarnessTurnRuntime(
         return existing;
       }
 
-      const pending = execute(input).catch((error) => {
+      const pending = execute(input).finally(() => {
         turnByIdempotency.delete(dedupeKey);
-        throw error;
       });
 
       turnByIdempotency.set(dedupeKey, pending);
@@ -1124,6 +1123,10 @@ type HarnessClientSharedOptions<TAgents extends HarnessClientAgents> = {
     readonly setOffset?: (offset: number) => void;
   };
   readonly eventRegistry?: EventRegistry<EventMap>;
+  readonly streamGuards?: {
+    readonly maxBufferedOutOfOrderEvents?: number;
+    readonly maxEventGap?: number;
+  };
 };
 
 type HarnessClientBaseUrlOptions = {
@@ -1546,6 +1549,10 @@ type CreateHarnessClientFromAdapterOptions<TAgents extends HarnessClientAgents> 
   readonly agents: TAgents;
   readonly adapter: HarnessClientAdapter;
   readonly eventRegistry: EventRegistry<EventMap>;
+  readonly streamGuards?: {
+    readonly maxBufferedOutOfOrderEvents?: number;
+    readonly maxEventGap?: number;
+  };
   readonly resume?: {
     readonly getOffset?: () => number;
     readonly setOffset?: (offset: number) => void;
@@ -1700,6 +1707,9 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
 
     return {
       async *[Symbol.asyncIterator]() {
+        const maxBufferedOutOfOrderEvents =
+          options.streamGuards?.maxBufferedOutOfOrderEvents ?? 1024;
+        const maxEventGap = options.streamGuards?.maxEventGap ?? 4096;
         const bufferedByIndex = new Map<number, AnyEventEnvelope<EventMap>>();
         let nextExpectedIndex = request.offset ?? 0;
 
@@ -1713,6 +1723,22 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
           }
 
           if (eventIndex > nextExpectedIndex) {
+            const gap = eventIndex - nextExpectedIndex;
+            if (gap > maxEventGap) {
+              throw new Error(
+                `Event stream gap too large: expected index ${String(nextExpectedIndex)}, got ${String(eventIndex)}`,
+              );
+            }
+
+            if (
+              !bufferedByIndex.has(eventIndex) &&
+              bufferedByIndex.size >= maxBufferedOutOfOrderEvents
+            ) {
+              throw new Error(
+                `Event stream buffered too many out-of-order events (${String(maxBufferedOutOfOrderEvents)})`,
+              );
+            }
+
             if (!bufferedByIndex.has(eventIndex)) {
               bufferedByIndex.set(eventIndex, envelope);
             }
@@ -1898,6 +1924,7 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
     agents: opts.agents,
     adapter,
     eventRegistry,
+    streamGuards: opts.streamGuards,
     resume: opts.resume,
   });
 }

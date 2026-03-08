@@ -125,43 +125,14 @@ const pubsubClient = createPubsubClient({
 });
 
 type HarnessForAgents = ReturnType<typeof createHarness<typeof agents>>;
-const harnessCache = new Map<string, HarnessForAgents>();
-const apiCache = new Map<string, RestateApi<EventMap, undefined>>();
-const latestCtxCache = new Map<string, restate.ObjectContext>();
-
-function getCachedInternalApi(sessionId: string): RestateApi<EventMap, undefined> | undefined {
-  return apiCache.get(sessionId);
-}
-
-function getLatestCtx(sessionId: string): restate.ObjectContext {
-  const ctx = latestCtxCache.get(sessionId);
-  if (!ctx) {
-    throw new restate.TerminalError("Session runtime is not initialized", { errorCode: 409 });
-  }
-
-  return ctx;
-}
 
 function getRequestHarness(
   ctx: restate.ObjectContext | restate.ObjectSharedContext,
-  sessionId: string,
+  _sessionId: string,
 ): {
   readonly harness: HarnessForAgents;
   readonly getInternalApi: () => RestateApi<EventMap, undefined>;
 } {
-  if ("set" in ctx) {
-    latestCtxCache.set(sessionId, ctx as restate.ObjectContext);
-  }
-
-  const cachedHarness = harnessCache.get(sessionId);
-  const cachedApi = apiCache.get(sessionId);
-  if (cachedHarness && cachedApi) {
-    return {
-      harness: cachedHarness,
-      getInternalApi: () => cachedApi,
-    };
-  }
-
   const pubsubBridge = createPubsubBridge({
     publisher: {
       publish: async (topic, envelope, idempotencyKey) => {
@@ -179,11 +150,15 @@ function getRequestHarness(
     agents,
     contextStore: {
       load: async () =>
-        (await getLatestCtx(sessionId).get<HarnessSessionSnapshot<typeof agents>>(
-          snapshotStateKey,
-        )) ?? undefined,
+        (await ctx.get<HarnessSessionSnapshot<typeof agents>>(snapshotStateKey)) ?? undefined,
       save: async (_sessionId, state) => {
-        getLatestCtx(sessionId).set(snapshotStateKey, state);
+        if (!("set" in ctx)) {
+          throw new restate.TerminalError("Snapshot save requires mutable object context", {
+            errorCode: 409,
+          });
+        }
+
+        ctx.set(snapshotStateKey, state);
       },
     },
     adapters: {
@@ -210,9 +185,6 @@ function getRequestHarness(
   }
 
   const initializedApi = internalApi;
-
-  harnessCache.set(sessionId, harness);
-  apiCache.set(sessionId, initializedApi);
 
   return {
     harness,
@@ -374,10 +346,7 @@ const orchestratorService = restate.object({
             .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
             .resolve({ type: "steer", content: request.content ?? "" });
         } else {
-          const internalApi = getCachedInternalApi(sessionId);
-          if (!internalApi) {
-            return { ok: false };
-          }
+          const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
 
           await internalApi.steer(
             {
@@ -406,10 +375,7 @@ const orchestratorService = restate.object({
             .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
             .resolve({ type: "follow_up", content: request.content ?? "" });
         } else {
-          const internalApi = getCachedInternalApi(sessionId);
-          if (!internalApi) {
-            return { ok: false };
-          }
+          const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
 
           await internalApi.followUp(
             {
@@ -439,16 +405,14 @@ const orchestratorService = restate.object({
             .resolve(request.content ?? "Cancelled by user");
         }
 
-        const internalApi = getCachedInternalApi(sessionId);
-        if (internalApi) {
-          await internalApi.cancel(
-            {
-              sessionId: toSessionId(sessionId),
-              content: request.content,
-            },
-            undefined,
-          );
-        }
+        const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
+        await internalApi.cancel(
+          {
+            sessionId: toSessionId(sessionId),
+            content: request.content,
+          },
+          undefined,
+        );
 
         return { ok: true };
       },
@@ -457,10 +421,7 @@ const orchestratorService = restate.object({
     getEvents: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext, request: GetEventsRequest) => {
         const sessionId = resolveSessionId(ctx, request.sessionId);
-        const internalApi = getCachedInternalApi(sessionId);
-        if (!internalApi) {
-          return [];
-        }
+        const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
 
         return internalApi.getEvents(
           {
