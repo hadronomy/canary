@@ -9,7 +9,9 @@
       "default": "./src/*.ts"
     }
   },
-  "scripts": {},
+  "scripts": {
+    "run:examples": "bun scripts/open-examples.tmux.ts"
+  },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.55.4",
     "@mariozechner/pi-ai": "^0.55.4",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
+    "@clack/prompts": "^1.1.0",
     "@orpc/client": "^1.13.6",
     "@orpc/server": "^1.13.6",
     "@types/bun": "^1.2.0",
