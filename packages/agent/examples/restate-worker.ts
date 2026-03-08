@@ -8,15 +8,20 @@ import { createPubsubClient } from "@restatedev/pubsub-client";
 import * as restate from "@restatedev/restate-sdk";
 
 import {
+  activeTurnStateKey,
   createHarness,
   createPubsubBridge,
   createRestateApi,
+  createRestateDurableRuntime,
   createRestateTurnRuntime,
   toSessionId,
+  turnCancelSignalKey,
+  turnControlSignalKey,
   type EventMap,
   type HarnessRunResponse,
   type HarnessSessionSnapshot,
   type RestateApi,
+  type TurnControlCommand,
 } from "@canary/agent";
 
 import { createExampleAgents } from "./shared";
@@ -123,6 +128,10 @@ type HarnessForAgents = ReturnType<typeof createHarness<typeof agents>>;
 const harnessCache = new Map<string, HarnessForAgents>();
 const apiCache = new Map<string, RestateApi<EventMap, undefined>>();
 const latestCtxCache = new Map<string, restate.ObjectContext>();
+
+function getCachedInternalApi(sessionId: string): RestateApi<EventMap, undefined> | undefined {
+  return apiCache.get(sessionId);
+}
 
 function getLatestCtx(sessionId: string): restate.ObjectContext {
   const ctx = latestCtxCache.get(sessionId);
@@ -354,14 +363,30 @@ const orchestratorService = restate.object({
     steer: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
         const sessionId = resolveSessionId(ctx, request.sessionId);
-        const { getInternalApi } = getRequestHarness(ctx, sessionId);
-        await getInternalApi().steer(
-          {
-            sessionId: toSessionId(sessionId),
-            content: request.content,
-          },
-          undefined,
-        );
+        const activeTurnId = await ctx.get<string>(activeTurnStateKey(sessionId));
+        if (activeTurnId) {
+          const runtime = createRestateDurableRuntime(ctx, {
+            state: {
+              get: async <T>(key: string) => (await ctx.get<T>(key)) ?? undefined,
+            },
+          });
+          await runtime.signals
+            .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
+            .resolve({ type: "steer", content: request.content ?? "" });
+        } else {
+          const internalApi = getCachedInternalApi(sessionId);
+          if (!internalApi) {
+            return { ok: false };
+          }
+
+          await internalApi.steer(
+            {
+              sessionId: toSessionId(sessionId),
+              content: request.content,
+            },
+            undefined,
+          );
+        }
 
         return { ok: true };
       },
@@ -370,14 +395,30 @@ const orchestratorService = restate.object({
     followUp: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
         const sessionId = resolveSessionId(ctx, request.sessionId);
-        const { getInternalApi } = getRequestHarness(ctx, sessionId);
-        await getInternalApi().followUp(
-          {
-            sessionId: toSessionId(sessionId),
-            content: request.content,
-          },
-          undefined,
-        );
+        const activeTurnId = await ctx.get<string>(activeTurnStateKey(sessionId));
+        if (activeTurnId) {
+          const runtime = createRestateDurableRuntime(ctx, {
+            state: {
+              get: async <T>(key: string) => (await ctx.get<T>(key)) ?? undefined,
+            },
+          });
+          await runtime.signals
+            .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
+            .resolve({ type: "follow_up", content: request.content ?? "" });
+        } else {
+          const internalApi = getCachedInternalApi(sessionId);
+          if (!internalApi) {
+            return { ok: false };
+          }
+
+          await internalApi.followUp(
+            {
+              sessionId: toSessionId(sessionId),
+              content: request.content,
+            },
+            undefined,
+          );
+        }
 
         return { ok: true };
       },
@@ -386,14 +427,28 @@ const orchestratorService = restate.object({
     cancel: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext, request: CommandRequest) => {
         const sessionId = resolveSessionId(ctx, request.sessionId);
-        const { getInternalApi } = getRequestHarness(ctx, sessionId);
-        await getInternalApi().cancel(
-          {
-            sessionId: toSessionId(sessionId),
-            content: request.content,
-          },
-          undefined,
-        );
+        const activeTurnId = await ctx.get<string>(activeTurnStateKey(sessionId));
+        if (activeTurnId) {
+          const runtime = createRestateDurableRuntime(ctx, {
+            state: {
+              get: async <T>(key: string) => (await ctx.get<T>(key)) ?? undefined,
+            },
+          });
+          await runtime.signals
+            .forKey<string>(turnCancelSignalKey(sessionId, activeTurnId))
+            .resolve(request.content ?? "Cancelled by user");
+        }
+
+        const internalApi = getCachedInternalApi(sessionId);
+        if (internalApi) {
+          await internalApi.cancel(
+            {
+              sessionId: toSessionId(sessionId),
+              content: request.content,
+            },
+            undefined,
+          );
+        }
 
         return { ok: true };
       },
@@ -402,8 +457,12 @@ const orchestratorService = restate.object({
     getEvents: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext, request: GetEventsRequest) => {
         const sessionId = resolveSessionId(ctx, request.sessionId);
-        const { getInternalApi } = getRequestHarness(ctx, sessionId);
-        return getInternalApi().getEvents(
+        const internalApi = getCachedInternalApi(sessionId);
+        if (!internalApi) {
+          return [];
+        }
+
+        return internalApi.getEvents(
           {
             sessionId: toSessionId(sessionId),
             content: "events",

@@ -4,6 +4,7 @@ import {
   TerminalError,
   type Context,
   type ObjectContext,
+  type ObjectSharedContext,
   type RunOptions,
 } from "@restatedev/restate-sdk";
 
@@ -109,7 +110,7 @@ export interface CreateRestateDurableRuntimeOptions<TMap extends object = EventM
 }
 
 export function createRestateDurableRuntime<TMap extends object = EventMap>(
-  ctx: ObjectContext,
+  ctx: ObjectContext | ObjectSharedContext,
   options?: CreateRestateDurableRuntimeOptions<TMap>,
 ): DurableRuntime<TMap> {
   const signalWaitersPrefix = "signal:waiters:";
@@ -134,6 +135,18 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
   async function getResolvedSignalValue<T>(key: string): Promise<T | undefined> {
     const value = await ctx.get<T>(signalResolvedKey(key), getSuperJsonSerde<T>());
     return value ?? undefined;
+  }
+
+  function canMutateState(value: ObjectContext | ObjectSharedContext): value is ObjectContext {
+    return "set" in value && "clear" in value;
+  }
+
+  function ensureMutableContext(operation: string): ObjectContext {
+    if (!canMutateState(ctx)) {
+      throw new Error(`${operation} requires ObjectContext state mutation access`);
+    }
+
+    return ctx;
   }
 
   return {
@@ -180,7 +193,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
           return;
         }
 
-        ctx.set<T>(key, value, getSuperJsonSerde<T>());
+        ensureMutableContext("state.set").set<T>(key, value, getSuperJsonSerde<T>());
       },
       delete: async (key: string) => {
         if (options?.state?.delete) {
@@ -188,7 +201,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
           return;
         }
 
-        ctx.clear(key);
+        ensureMutableContext("state.delete").clear(key);
       },
     },
     sideEffect: <T>(name: string, fn: () => Promise<T>) =>
@@ -208,32 +221,52 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
           wait: async (): Promise<T> => {
             const resolved = await getResolvedSignalValue<T>(key);
             if (resolved !== undefined) {
+              if (canMutateState(ctx)) {
+                ctx.clear(signalResolvedKey(key));
+              }
               return resolved;
             }
 
-            const awakeable = ctx.awakeable<T>(getSuperJsonSerde<T>());
+            const mutableCtx = ensureMutableContext("signals.wait");
+            const awakeable = mutableCtx.awakeable<T>(getSuperJsonSerde<T>());
             const waiters = await getSignalWaiters(key);
-            ctx.set(
+            mutableCtx.set(
               signalWaitersKey(key),
               [...waiters, awakeable.id],
               getSuperJsonSerde<Array<string>>(),
             );
-            return await awakeable.promise;
+            try {
+              return await awakeable.promise;
+            } finally {
+              const currentWaiters = await getSignalWaiters(key);
+              const remaining = currentWaiters.filter((waiterId) => waiterId !== awakeable.id);
+              mutableCtx.set(signalWaitersKey(key), remaining, getSuperJsonSerde<Array<string>>());
+            }
           },
           resolve: async (value: T): Promise<void> => {
-            ctx.set(signalResolvedKey(key), value, getSuperJsonSerde<T>());
             const waiters = await getSignalWaiters(key);
+
+            if (canMutateState(ctx)) {
+              ctx.set(signalResolvedKey(key), value, getSuperJsonSerde<T>());
+            }
+
             for (const waiterId of waiters) {
               ctx.resolveAwakeable(waiterId, value, getSuperJsonSerde<T>());
             }
-            ctx.clear(signalWaitersKey(key));
+
+            if (canMutateState(ctx)) {
+              ctx.clear(signalWaitersKey(key));
+            }
           },
           reject: async (reason: string): Promise<void> => {
             const waiters = await getSignalWaiters(key);
             for (const waiterId of waiters) {
               ctx.rejectAwakeable(waiterId, reason);
             }
-            ctx.clear(signalWaitersKey(key));
+
+            if (canMutateState(ctx)) {
+              ctx.clear(signalWaitersKey(key));
+            }
           },
           peek: async (): Promise<T | undefined> => {
             return await getResolvedSignalValue<T>(key);

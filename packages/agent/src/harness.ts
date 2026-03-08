@@ -29,8 +29,8 @@ import {
   toEventIndex,
   toIdempotencyKey,
   toMessageId,
-  toTurnId,
   toSessionId,
+  toTurnId,
   type AnyEventEnvelope,
   type EventMap,
   type EventRegistry,
@@ -191,6 +191,31 @@ interface HarnessSessionState {
   nextIndex: number;
   activeAgent?: Agent;
   abortController?: AbortController;
+}
+
+export function activeTurnStateKey(sessionId: string): string {
+  return `active-turn:${sessionId}`;
+}
+
+export function turnCancelSignalKey(sessionId: string, turnId: TurnId | string): string {
+  return `cancel-signal:${sessionId}:${String(turnId)}`;
+}
+
+export type TurnControlCommand =
+  | {
+      readonly type: "steer";
+      readonly content: string;
+    }
+  | {
+      readonly type: "follow_up";
+      readonly content: string;
+    }
+  | {
+      readonly type: "stop";
+    };
+
+export function turnControlSignalKey(sessionId: string, turnId: TurnId | string): string {
+  return `control-signal:${sessionId}:${String(turnId)}`;
 }
 
 export interface ContextStore<TState = unknown> {
@@ -577,8 +602,36 @@ export function createHarness<TAgents extends HarnessAgents>(
     });
 
     let generatedText = "";
+    const cancelSignal = durableRuntime.signals.forKey<string>(
+      turnCancelSignalKey(runOptions.sessionId, turnId),
+    );
+    const controlSignal = durableRuntime.signals.forKey<TurnControlCommand>(
+      turnControlSignalKey(runOptions.sessionId, turnId),
+    );
+
+    await durableRuntime.state.set(activeTurnStateKey(runOptions.sessionId), String(turnId));
+
     session.abortController = new AbortController();
     session.activeAgent = piAgent;
+
+    let controlsStopped = false;
+    const controlTask = (async () => {
+      while (!controlsStopped) {
+        const command = await controlSignal.wait();
+        if (controlsStopped || command.type === "stop") {
+          break;
+        }
+
+        if (command.type === "steer") {
+          piAgent.steer(toControlMessage(command.content));
+          continue;
+        }
+
+        if (command.type === "follow_up") {
+          piAgent.followUp(toControlMessage(command.content));
+        }
+      }
+    })();
     const onAbort = () => {
       piAgent.abort();
     };
@@ -601,10 +654,19 @@ export function createHarness<TAgents extends HarnessAgents>(
     });
 
     try {
+      const cancelRace = cancelSignal.wait().then((reason) => {
+        const cancellationReason = reason || "Cancelled by user";
+        if (!session.abortController?.signal.aborted) {
+          session.abortController?.abort(cancellationReason);
+        }
+        piAgent.abort();
+        throw new Error(cancellationReason);
+      });
+
       if (runOptions.intent === "continue") {
-        await piAgent.continue();
+        await Promise.race([piAgent.continue(), cancelRace]);
       } else {
-        await piAgent.prompt(promptText);
+        await Promise.race([piAgent.prompt(promptText), cancelRace]);
       }
 
       publish(
@@ -637,10 +699,15 @@ export function createHarness<TAgents extends HarnessAgents>(
       }
       throw error;
     } finally {
+      controlsStopped = true;
+      await controlSignal.resolve({ type: "stop" });
+      await Promise.allSettled([controlTask]);
+
       unsubscribe();
       session.abortController?.signal.removeEventListener("abort", onAbort);
       session.activeAgent = undefined;
       session.abortController = undefined;
+      await durableRuntime.state.delete(activeTurnStateKey(runOptions.sessionId));
     }
 
     const output = await agentDefinition.resolveOutput({
