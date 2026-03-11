@@ -1,8 +1,9 @@
-import { remark } from "remark";
+import { remark } from 'remark';
 
-import { isFragmentPathQuery, toCanonicalFragmentPathQuery } from "./path-query";
-import type { BoeMetadata, BoeFragment, FragmentPathQuery } from "./types";
-import { MarkdownString } from "./types";
+import type { BoeMetadata, BoeFragment, FragmentPathQuery } from './types';
+
+import { isFragmentPathQuery, toCanonicalFragmentPathQuery } from './path-query';
+import { MarkdownString } from './types';
 
 export { isFragmentPathQuery };
 
@@ -11,13 +12,13 @@ type RemarkRoot = Parameters<typeof markdownProcessor.stringify>[0];
 type RemarkRootContent = RemarkRoot extends { children: ReadonlyArray<infer Child> }
   ? Child
   : never;
-type RemarkText = Extract<RemarkRootContent, { type: "text" }>;
-type RemarkHeading = Extract<RemarkRootContent, { type: "heading" }>;
-type RemarkParagraph = Extract<RemarkRootContent, { type: "paragraph" }>;
-type RemarkListItem = Extract<RemarkRootContent, { type: "listItem" }>;
-type RemarkList = Extract<RemarkRootContent, { type: "list" }>;
-type RemarkThematicBreak = Extract<RemarkRootContent, { type: "thematicBreak" }>;
-type RemarkHtml = Extract<RemarkRootContent, { type: "html" }>;
+type RemarkText = Extract<RemarkRootContent, { type: 'text' }>;
+type RemarkHeading = Extract<RemarkRootContent, { type: 'heading' }>;
+type RemarkParagraph = Extract<RemarkRootContent, { type: 'paragraph' }>;
+type RemarkListItem = Extract<RemarkRootContent, { type: 'listItem' }>;
+type RemarkList = Extract<RemarkRootContent, { type: 'list' }>;
+type RemarkThematicBreak = Extract<RemarkRootContent, { type: 'thematicBreak' }>;
+type RemarkHtml = Extract<RemarkRootContent, { type: 'html' }>;
 
 export const normalizeFragmentPathQuery = toCanonicalFragmentPathQuery;
 
@@ -26,7 +27,7 @@ export const selectFragmentsByPathQuery = (
   query: FragmentPathQuery,
 ): ReadonlyArray<BoeFragment> => {
   const canonical = toCanonicalFragmentPathQuery(query);
-  if (canonical === "/") {
+  if (canonical === '/') {
     return fragments;
   }
 
@@ -44,7 +45,7 @@ export const formatFragmentsAsMarkdown = (
 
   const children: Array<RemarkRootContent> = [];
 
-  const title = metadata?.title ?? "Documento BOE";
+  const title = metadata?.title ?? 'Documento BOE';
   children.push(heading(1, title));
 
   if (metadata !== undefined) {
@@ -66,7 +67,7 @@ export const formatFragmentsAsMarkdown = (
   children.push(hr());
 
   if (selected.length === 0) {
-    children.push(paragraph("No fragments found for the selected path."));
+    children.push(paragraph('No fragments found for the selected path.'));
   }
 
   const openNodes: Array<{
@@ -87,7 +88,7 @@ export const formatFragmentsAsMarkdown = (
       }
     } else {
       const content =
-        fragment.nodeType === "subparagraph" &&
+        fragment.nodeType === 'subparagraph' &&
         fragment.nodeNumber !== undefined &&
         fragment.nodeNumber.length > 0
           ? `${fragment.nodeNumber}) ${fragment.content}`
@@ -108,7 +109,7 @@ export const formatFragmentsAsMarkdown = (
   }
 
   const ast = {
-    type: "root",
+    type: 'root',
     children,
   } satisfies RemarkRoot;
 
@@ -119,38 +120,38 @@ const toStructuredHeading = (
   fragment: BoeFragment,
 ): { readonly depth: 2 | 3 | 4; readonly title: string } | undefined => {
   switch (fragment.nodeType) {
-    case "title":
+    case 'title':
       return {
         depth: 2,
         title: fragment.nodeTitle ?? fragment.content,
       };
-    case "chapter":
-    case "disposicion_final":
-    case "disposicion_transitoria":
+    case 'chapter':
+    case 'disposicion_final':
+    case 'disposicion_transitoria':
       return {
         depth: 2,
         title: fragment.nodeTitle ?? fragment.content,
       };
-    case "article": {
-      const number = fragment.nodeNumber ? `Artículo ${fragment.nodeNumber}` : "Artículo";
+    case 'article': {
+      const number = fragment.nodeNumber ? `Artículo ${fragment.nodeNumber}` : 'Artículo';
       const suffix =
-        fragment.nodeTitle && fragment.nodeTitle.length > 0 ? ` — ${fragment.nodeTitle}` : "";
+        fragment.nodeTitle && fragment.nodeTitle.length > 0 ? ` — ${fragment.nodeTitle}` : '';
       return {
         depth: 3,
         title: `${number}${suffix}`,
       };
     }
-    case "annex":
+    case 'annex':
       return {
-        depth: fragment.nodePath.includes("/h/") ? 3 : 2,
+        depth: fragment.nodePath.includes('/h/') ? 3 : 2,
         title: fragment.nodeNumber ?? fragment.nodeTitle ?? fragment.content,
       };
-    case "section":
+    case 'section':
       return {
         depth: 4,
         title: fragment.nodeTitle ?? fragment.content,
       };
-    case "subsection":
+    case 'subsection':
       return {
         depth: 4,
         title: fragment.nodeTitle ?? fragment.content,
@@ -161,40 +162,40 @@ const toStructuredHeading = (
 };
 
 const text = (value: string): RemarkText => ({
-  type: "text",
+  type: 'text',
   value,
 });
 
 const heading = (depth: 1 | 2 | 3 | 4 | 5 | 6, value: string): RemarkHeading => ({
-  type: "heading",
+  type: 'heading',
   depth,
   children: [text(value)],
 });
 
 const paragraph = (value: string): RemarkParagraph => ({
-  type: "paragraph",
+  type: 'paragraph',
   children: [text(value)],
 });
 
 const listItem = (value: string): RemarkListItem => ({
-  type: "listItem",
+  type: 'listItem',
   spread: false,
   children: [paragraph(value)],
 });
 
 const summaryList = (values: ReadonlyArray<string>): RemarkList => ({
-  type: "list",
+  type: 'list',
   ordered: false,
   spread: false,
   children: values.map(listItem),
 });
 
 const hr = (): RemarkThematicBreak => ({
-  type: "thematicBreak",
+  type: 'thematicBreak',
 });
 
 const comment = (value: string): RemarkHtml => ({
-  type: "html",
+  type: 'html',
   value: `<!-- ${value} -->`,
 });
 

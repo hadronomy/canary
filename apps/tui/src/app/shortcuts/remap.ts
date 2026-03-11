@@ -1,5 +1,6 @@
-import { normalizeCombo } from "~/app/shortcuts/helpers";
-import type { KeyCombo, Shortcut, ShortcutScope } from "~/app/shortcuts/types";
+import type { KeyCombo, Shortcut, ShortcutScope } from '~/app/shortcuts/types';
+
+import { normalizeCombo } from '~/app/shortcuts/helpers';
 
 export type UserRemapping = {
   shortcutId: string;
@@ -7,7 +8,7 @@ export type UserRemapping = {
   scope?: ShortcutScope;
 };
 
-type RemappingErrorReason = "conflict" | "invalid_key" | "not_remappable" | "not_found";
+type RemappingErrorReason = 'conflict' | 'invalid_key' | 'not_remappable' | 'not_found';
 
 export type RemappingValidationResult = {
   valid: boolean;
@@ -25,13 +26,13 @@ export class RemappingRegistry {
       const target = shortcuts.find((shortcut) => shortcut.id === remapping.shortcutId);
       if (!target) {
         results.valid = false;
-        results.errors.push({ ...remapping, reason: "not_found" });
+        results.errors.push({ ...remapping, reason: 'not_found' });
         continue;
       }
 
       if (target.remappable === false) {
         results.valid = false;
-        results.errors.push({ ...remapping, reason: "not_remappable" });
+        results.errors.push({ ...remapping, reason: 'not_remappable' });
         continue;
       }
 
@@ -41,7 +42,7 @@ export class RemappingRegistry {
 
       if (!normalized.length) {
         results.valid = false;
-        results.errors.push({ ...remapping, reason: "invalid_key" });
+        results.errors.push({ ...remapping, reason: 'invalid_key' });
         continue;
       }
 

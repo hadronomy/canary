@@ -1,10 +1,11 @@
-import type { KeyEvent } from "@opentui/core";
+import type { KeyEvent } from '@opentui/core';
 
-import { isMatch, parseComboList } from "~/app/shortcuts/helpers";
-import { RemappingRegistry } from "~/app/shortcuts/remap";
-import type { KeyCombo, Shortcut, ShortcutContext, ShortcutScope } from "~/app/shortcuts/types";
+import type { KeyCombo, Shortcut, ShortcutContext, ShortcutScope } from '~/app/shortcuts/types';
 
-const SCOPES: ShortcutScope[] = ["component", "view", "global"];
+import { isMatch, parseComboList } from '~/app/shortcuts/helpers';
+import { RemappingRegistry } from '~/app/shortcuts/remap';
+
+const SCOPES: ShortcutScope[] = ['component', 'view', 'global'];
 
 type RegisteredShortcut = {
   shortcut: Shortcut;
@@ -104,14 +105,14 @@ export class ShortcutRegistry {
     if (context.onShortcutDebug) {
       const alt = (event as { option?: boolean }).option;
       const label = event.ctrl
-        ? "ctrl"
+        ? 'ctrl'
         : event.meta
-          ? "meta"
+          ? 'meta'
           : event.shift
-            ? "shift"
+            ? 'shift'
             : alt
-              ? "alt"
-              : "";
+              ? 'alt'
+              : '';
       const combo = label ? `${label}+${event.name}` : event.name;
       context.onShortcutDebug(combo, Boolean(found));
     }

@@ -1,18 +1,19 @@
-import type { NodeType } from "@canary/db/schema/legislation";
+import type { NodeType } from '@canary/db/schema/legislation';
 
-import { legalScopeSegments, specialSectionNodeType } from "../legal-scope";
-import { normalizeLegalPathSegment } from "../normalize";
-import { renderLegalPath } from "../path-query";
 import type {
   BoeMetadata,
   LegalPathSegment,
   LegalNodePathString as LegalNodePath,
   NodePath,
   ParsingStrategy,
-} from "../types";
-import { LegalNodePathString } from "../types";
-import { Path } from "./path-allocator";
-import type { AnnexState, BuildState, ClassifiedBlock, FragmentSeed, MainState } from "./types";
+} from '../types';
+import type { AnnexState, BuildState, ClassifiedBlock, FragmentSeed, MainState } from './types';
+
+import { legalScopeSegments, specialSectionNodeType } from '../legal-scope';
+import { normalizeLegalPathSegment } from '../normalize';
+import { renderLegalPath } from '../path-query';
+import { LegalNodePathString } from '../types';
+import { Path } from './path-allocator';
 
 interface Transition {
   readonly state: BuildState;
@@ -26,45 +27,45 @@ export const applyToken = (
   strategy: ParsingStrategy,
 ): Transition => {
   switch (token._tag) {
-    case "table":
+    case 'table':
       return handleTable(state, token, metadata);
-    case "titleHeading":
+    case 'titleHeading':
       return handleTitleHeading(state, token, metadata);
-    case "annexNumber":
+    case 'annexNumber':
       return handleAnnexNumber(state, token, metadata);
-    case "annexTitle":
+    case 'annexTitle':
       return handleAnnexTitle(state, token, metadata);
-    case "chapter":
+    case 'chapter':
       return handleChapter(state, token, metadata);
-    case "sectionHeading":
+    case 'sectionHeading':
       return handleSectionHeading(state, token, metadata);
-    case "article":
+    case 'article':
       return handleArticle(state, token, metadata);
-    case "subsection":
+    case 'subsection':
       return handleSubsection(state, token, metadata);
-    case "subparagraph":
+    case 'subparagraph':
       return handleSubparagraph(state, token, metadata);
-    case "signature":
+    case 'signature':
       return emitParagraph(state, metadata, token.content, strategy, {
-        nodeTypeOverride: "paragraph",
+        nodeTypeOverride: 'paragraph',
         nodeTitle: token.role,
       });
-    case "paragraph":
+    case 'paragraph':
       return emitParagraph(state, metadata, token.content, strategy);
-    case "raw":
+    case 'raw':
       return emitParagraph(state, metadata, token.content, strategy, {
-        nodeTypeOverride: "paragraph",
-        nodeTitle: token.className.length > 0 ? `raw:${token.className}` : "raw",
+        nodeTypeOverride: 'paragraph',
+        nodeTitle: token.className.length > 0 ? `raw:${token.className}` : 'raw',
       });
   }
 };
 
 const handleTitleHeading = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "titleHeading" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'titleHeading' }>,
   metadata: BoeMetadata,
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexState = ensureAnnexState(state);
     const annexKey = String(annexState.currentAnnex);
     const [sectionIndex, nextSections] = incrementCounter(annexState.annexSectionByIndex, annexKey);
@@ -78,7 +79,7 @@ const handleTitleHeading = (
           metadata,
           [Path.annex(annexState.currentAnnex), Path.section(sectionIndex)],
           token.title,
-          "subsection",
+          'subsection',
           { nodeTitle: token.title },
         ),
       ],
@@ -88,7 +89,7 @@ const handleTitleHeading = (
   const chapterIndex = state.chapterIndex + 1;
   const nextState: MainState = {
     ...state,
-    mode: "main",
+    mode: 'main',
     chapterIndex,
     currentChapter: chapterIndex,
     currentArticle: undefined,
@@ -99,7 +100,7 @@ const handleTitleHeading = (
   return {
     state: nextState,
     emits: [
-      makeSeed(metadata, [Path.chapter(chapterIndex)], token.title, "title", {
+      makeSeed(metadata, [Path.chapter(chapterIndex)], token.title, 'title', {
         nodeTitle: token.title,
       }),
     ],
@@ -108,10 +109,10 @@ const handleTitleHeading = (
 
 const handleTable = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "table" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'table' }>,
   metadata: BoeMetadata,
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const key = String(state.currentAnnex);
     const [tableIndex, nextMap] = incrementCounter(state.annexTableByIndex, key);
     return {
@@ -124,9 +125,9 @@ const handleTable = (
           metadata,
           [Path.annex(state.currentAnnex), Path.table(tableIndex)],
           token.content,
-          "paragraph",
+          'paragraph',
           {
-            nodeTitle: "table",
+            nodeTitle: 'table',
           },
         ),
       ],
@@ -150,8 +151,8 @@ const handleTable = (
             Path.table(tableIndex),
           ],
           token.content,
-          "paragraph",
-          { nodeTitle: "table" },
+          'paragraph',
+          { nodeTitle: 'table' },
         ),
       ],
     };
@@ -164,8 +165,8 @@ const handleTable = (
       rootTableIndex,
     },
     emits: [
-      makeSeed(metadata, [Path.table(rootTableIndex)], token.content, "paragraph", {
-        nodeTitle: "table",
+      makeSeed(metadata, [Path.table(rootTableIndex)], token.content, 'paragraph', {
+        nodeTitle: 'table',
       }),
     ],
   };
@@ -173,13 +174,13 @@ const handleTable = (
 
 const handleAnnexNumber = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "annexNumber" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'annexNumber' }>,
   metadata: BoeMetadata,
 ): Transition => {
   const annexIndex = state.annexIndex + 1;
   const nextState: AnnexState = {
     ...state,
-    mode: "annex",
+    mode: 'annex',
     annexIndex,
     currentAnnex: annexIndex,
     currentArticle: undefined,
@@ -190,7 +191,7 @@ const handleAnnexNumber = (
   return {
     state: nextState,
     emits: [
-      makeSeed(metadata, [Path.annex(annexIndex)], token.number, "annex", {
+      makeSeed(metadata, [Path.annex(annexIndex)], token.number, 'annex', {
         nodeNumber: token.number,
       }),
     ],
@@ -199,7 +200,7 @@ const handleAnnexNumber = (
 
 const handleAnnexTitle = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "annexTitle" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'annexTitle' }>,
   metadata: BoeMetadata,
 ): Transition => {
   const annexState = ensureAnnexState(state);
@@ -215,7 +216,7 @@ const handleAnnexTitle = (
         metadata,
         [Path.annex(annexState.currentAnnex), Path.header(headerIndex)],
         token.title,
-        "annex",
+        'annex',
         {
           nodeTitle: token.title,
         },
@@ -226,7 +227,7 @@ const handleAnnexTitle = (
 
 const handleChapter = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "chapter" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'chapter' }>,
   metadata: BoeMetadata,
 ): Transition => {
   if (/^ANEXO\s+/i.test(token.title)) {
@@ -234,7 +235,7 @@ const handleChapter = (
     return {
       state: {
         ...state,
-        mode: "annex",
+        mode: 'annex',
         annexIndex,
         currentAnnex: annexIndex,
         currentArticle: undefined,
@@ -242,14 +243,14 @@ const handleChapter = (
         legalArticleScopeBase: annexLegalScopeBase(annexIndex),
       },
       emits: [
-        makeSeed(metadata, [Path.annex(annexIndex)], token.title, "annex", {
+        makeSeed(metadata, [Path.annex(annexIndex)], token.title, 'annex', {
           nodeTitle: token.title,
         }),
       ],
     };
   }
 
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexKey = String(state.currentAnnex);
     const [sectionIndex, nextSections] = incrementCounter(state.annexSectionByIndex, annexKey);
     return {
@@ -262,7 +263,7 @@ const handleChapter = (
           metadata,
           [Path.annex(state.currentAnnex), Path.section(sectionIndex)],
           token.title,
-          "subsection",
+          'subsection',
           { nodeTitle: token.title },
         ),
       ],
@@ -273,7 +274,7 @@ const handleChapter = (
   const legalArticleScopeBase = legalScopeSegments(token.title, token.isSpecial);
   const nextState: MainState = {
     ...state,
-    mode: "main",
+    mode: 'main',
     chapterIndex,
     currentChapter: chapterIndex,
     currentArticle: undefined,
@@ -299,7 +300,7 @@ const handleChapter = (
 
 const handleArticle = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "article" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'article' }>,
   metadata: BoeMetadata,
 ): Transition => {
   const chapterState = ensureChapterState(state);
@@ -308,7 +309,7 @@ const handleArticle = (
   const legalArticlePath = toLegalArticlePath(token.number, chapterState.legalArticleScopeBase);
   const nextState: MainState & { readonly currentChapter: number } = {
     ...chapterState,
-    mode: "main",
+    mode: 'main',
     currentChapter: chapterState.currentChapter,
     currentArticle: articleIndex,
     currentArticleNumber: token.number,
@@ -324,7 +325,7 @@ const handleArticle = (
         metadata,
         [Path.chapter(nextState.currentChapter), Path.article(articleIndex)],
         token.content,
-        "article",
+        'article',
         {
           legalNodePath: legalArticlePath,
           nodeNumber: token.number,
@@ -337,10 +338,10 @@ const handleArticle = (
 
 const handleSectionHeading = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "sectionHeading" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'sectionHeading' }>,
   metadata: BoeMetadata,
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexState = ensureAnnexState(state);
     const annexKey = String(annexState.currentAnnex);
     const [sectionIndex, nextSections] = incrementCounter(annexState.annexSectionByIndex, annexKey);
@@ -354,7 +355,7 @@ const handleSectionHeading = (
           metadata,
           [Path.annex(annexState.currentAnnex), Path.section(sectionIndex)],
           token.title,
-          "subsection",
+          'subsection',
           { nodeTitle: token.title },
         ),
       ],
@@ -382,7 +383,7 @@ const handleSectionHeading = (
         metadata,
         [Path.chapter(nextState.currentChapter), Path.section(sectionIndex)],
         token.title,
-        "section",
+        'section',
         {
           nodeTitle: token.title,
         },
@@ -393,10 +394,10 @@ const handleSectionHeading = (
 
 const handleSubsection = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "subsection" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'subsection' }>,
   metadata: BoeMetadata,
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexState = ensureAnnexState(state);
     const annexKey = String(annexState.currentAnnex);
     const [sectionIndex, nextSections] = incrementCounter(annexState.annexSectionByIndex, annexKey);
@@ -410,7 +411,7 @@ const handleSubsection = (
           metadata,
           [Path.annex(annexState.currentAnnex), Path.section(sectionIndex)],
           token.title,
-          "subsection",
+          'subsection',
           { nodeTitle: token.title },
         ),
       ],
@@ -433,7 +434,7 @@ const handleSubsection = (
         metadata,
         [Path.chapter(chapterState.currentChapter), Path.section(sectionIndex)],
         token.title,
-        "subsection",
+        'subsection',
         {
           nodeTitle: token.title,
         },
@@ -444,10 +445,10 @@ const handleSubsection = (
 
 const handleSubparagraph = (
   state: BuildState,
-  token: Extract<ClassifiedBlock, { readonly _tag: "subparagraph" }>,
+  token: Extract<ClassifiedBlock, { readonly _tag: 'subparagraph' }>,
   metadata: BoeMetadata,
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexState = ensureAnnexState(state);
     const annexKey = String(annexState.currentAnnex);
     const [subparagraphIndex, nextSubparagraphs] = incrementCounter(
@@ -464,7 +465,7 @@ const handleSubparagraph = (
           metadata,
           [Path.annex(annexState.currentAnnex), Path.subparagraph(subparagraphIndex)],
           token.content,
-          "subparagraph",
+          'subparagraph',
           { nodeNumber: token.marker },
         ),
       ],
@@ -496,7 +497,7 @@ const handleSubparagraph = (
               Path.subparagraph(subparagraphIndex),
             ],
             token.content,
-            "subparagraph",
+            'subparagraph',
             {
               legalNodePath:
                 state.currentArticleLegalPath !== undefined
@@ -530,7 +531,7 @@ const handleSubparagraph = (
             Path.subparagraph(subparagraphIndex),
           ],
           token.content,
-          "subparagraph",
+          'subparagraph',
           {
             legalNodePath:
               state.currentArticleLegalPath !== undefined
@@ -551,7 +552,7 @@ const handleSubparagraph = (
       preambuloParagraphIndex,
     },
     emits: [
-      makeSeed(metadata, [Path.paragraph(preambuloParagraphIndex)], token.content, "preambulo", {
+      makeSeed(metadata, [Path.paragraph(preambuloParagraphIndex)], token.content, 'preambulo', {
         nodeNumber: token.marker,
       }),
     ],
@@ -568,7 +569,7 @@ const emitParagraph = (
     readonly nodeTitle?: string;
   },
 ): Transition => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     const annexState = ensureAnnexState(state);
     const annexKey = String(annexState.currentAnnex);
     const [paragraphIndex, nextParagraphs] = incrementCounter(
@@ -585,7 +586,7 @@ const emitParagraph = (
           metadata,
           [Path.annex(annexState.currentAnnex), Path.paragraph(paragraphIndex)],
           content,
-          options?.nodeTypeOverride ?? "paragraph",
+          options?.nodeTypeOverride ?? 'paragraph',
           {
             nodeTitle: options?.nodeTitle,
           },
@@ -616,7 +617,7 @@ const emitParagraph = (
             Path.paragraph(paragraphIndex),
           ],
           content,
-          options?.nodeTypeOverride ?? "paragraph",
+          options?.nodeTypeOverride ?? 'paragraph',
           {
             nodeNumber: state.currentArticleNumber,
             legalNodePath:
@@ -646,7 +647,7 @@ const emitParagraph = (
           metadata,
           [Path.chapter(state.currentChapter), Path.paragraph(paragraphIndex)],
           content,
-          options?.nodeTypeOverride ?? "paragraph",
+          options?.nodeTypeOverride ?? 'paragraph',
           {
             nodeTitle: options?.nodeTitle,
           },
@@ -666,7 +667,7 @@ const emitParagraph = (
         metadata,
         [Path.paragraph(preambuloParagraphIndex)],
         content,
-        options?.nodeTypeOverride ?? (strategy === "legislative" ? "preambulo" : "paragraph"),
+        options?.nodeTypeOverride ?? (strategy === 'legislative' ? 'preambulo' : 'paragraph'),
         {
           nodeTitle: options?.nodeTitle,
         },
@@ -679,7 +680,7 @@ const ensureChapterState = (state: BuildState): MainState & { readonly currentCh
   if (state.currentChapter !== undefined) {
     return {
       ...state,
-      mode: "main",
+      mode: 'main',
       currentChapter: state.currentChapter,
     };
   }
@@ -687,7 +688,7 @@ const ensureChapterState = (state: BuildState): MainState & { readonly currentCh
   const chapterIndex = state.chapterIndex + 1;
   return {
     ...state,
-    mode: "main",
+    mode: 'main',
     chapterIndex,
     currentChapter: chapterIndex,
     currentArticle: undefined,
@@ -695,14 +696,14 @@ const ensureChapterState = (state: BuildState): MainState & { readonly currentCh
 };
 
 const ensureAnnexState = (state: BuildState): AnnexState => {
-  if (state.mode === "annex") {
+  if (state.mode === 'annex') {
     return state;
   }
 
   const annexIndex = state.annexIndex + 1;
   return {
     ...state,
-    mode: "annex",
+    mode: 'annex',
     annexIndex,
     currentAnnex: annexIndex,
     currentArticle: undefined,
@@ -751,13 +752,13 @@ const toLegalArticlePath = (
   }
 
   return renderLegalPath({
-    segments: [...scopeBase, { _tag: "article", value: cleaned }],
+    segments: [...scopeBase, { _tag: 'article', value: cleaned }],
   });
 };
 
 function annexLegalScopeBase(annexIndex: number): ReadonlyArray<LegalPathSegment> {
   return [
-    { _tag: "custom", value: "annex" },
-    { _tag: "custom", value: String(annexIndex) },
+    { _tag: 'custom', value: 'annex' },
+    { _tag: 'custom', value: String(annexIndex) },
   ];
 }

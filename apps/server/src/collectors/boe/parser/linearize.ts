@@ -1,6 +1,7 @@
-import { MalformedTextSectionError } from "./errors";
-import { extractTableText, normalizeTextContent } from "./normalize";
-import type { LinearBlock } from "./types";
+import type { LinearBlock } from './types';
+
+import { MalformedTextSectionError } from './errors';
+import { extractTableText, normalizeTextContent } from './normalize';
 
 export function linearizeOrderedTextBlocks(ordered: unknown): ReadonlyArray<LinearBlock> {
   const textoEntries = getTextoEntries(ordered);
@@ -19,7 +20,7 @@ export function linearizeOrderedTextBlocks(ordered: unknown): ReadonlyArray<Line
       const className = getClassName(entry);
       const text = normalizeTextContent(collectText(entry.p));
       if (text.length > 0) {
-        blocks.push({ kind: "paragraph", className, text });
+        blocks.push({ kind: 'paragraph', className, text });
       }
       continue;
     }
@@ -27,7 +28,7 @@ export function linearizeOrderedTextBlocks(ordered: unknown): ReadonlyArray<Line
     if (entry.table !== undefined) {
       const text = extractTableText(entry.table);
       if (text.length > 0) {
-        blocks.push({ kind: "table", text });
+        blocks.push({ kind: 'table', text });
       }
     }
   }
@@ -60,56 +61,56 @@ export function assertTextoRoot(ordered: unknown): void {
   const hasRoot = getTextoEntries(ordered).length > 0;
   if (!hasRoot) {
     throw new MalformedTextSectionError({
-      message: "Missing <texto> section in BOE XML",
+      message: 'Missing <texto> section in BOE XML',
     });
   }
 }
 
 function getClassName(entry: Record<string, unknown>): string {
-  const attrs = entry[":@"];
+  const attrs = entry[':@'];
   if (!isRecord(attrs)) {
-    return "";
+    return '';
   }
 
-  const classValue = attrs["@_class"];
-  return typeof classValue === "string" ? classValue : "";
+  const classValue = attrs['@_class'];
+  return typeof classValue === 'string' ? classValue : '';
 }
 
 function collectText(input: unknown): string {
-  if (typeof input === "string") {
+  if (typeof input === 'string') {
     return input;
   }
 
-  if (typeof input === "number") {
+  if (typeof input === 'number') {
     return String(input);
   }
 
   if (Array.isArray(input)) {
-    return input.map(collectText).join(" ");
+    return input.map(collectText).join(' ');
   }
 
   if (!isRecord(input)) {
-    return "";
+    return '';
   }
 
   const parts: Array<string> = [];
 
-  if (typeof input["#text"] === "string" || typeof input["#text"] === "number") {
-    parts.push(String(input["#text"]));
+  if (typeof input['#text'] === 'string' || typeof input['#text'] === 'number') {
+    parts.push(String(input['#text']));
   }
 
   for (const [key, value] of Object.entries(input)) {
-    if (key === "#text" || key === ":@") {
+    if (key === '#text' || key === ':@') {
       continue;
     }
     parts.push(collectText(value));
   }
 
-  return parts.join(" ").trim();
+  return parts.join(' ').trim();
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const asArray = (value: unknown): ReadonlyArray<unknown> => {
   if (value === undefined) {

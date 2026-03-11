@@ -1,16 +1,16 @@
-import { ORPCError, os, withEventMeta } from "@orpc/server";
-import { RPCHandler } from "@orpc/server/fetch";
-import { createPubsubClient } from "@restatedev/pubsub-client";
-import { z } from "zod";
+import { ORPCError, os, withEventMeta } from '@orpc/server';
+import { RPCHandler } from '@orpc/server/fetch';
+import { createPubsubClient } from '@restatedev/pubsub-client';
+import { z } from 'zod';
 
 import {
   codec,
   defineEventRegistryFromMap,
   type AnyEventEnvelope,
   type EventMap,
-} from "@canary/agent";
+} from '@canary/agent';
 
-import { createOrchestratorClient } from "./shared";
+import { createOrchestratorClient } from './shared';
 
 interface AuthContext {
   readonly userId: string;
@@ -22,13 +22,13 @@ interface RequestContext {
   readonly url: URL;
 }
 
-const authToken = process.env.EXAMPLE_AGENT_API_TOKEN ?? "dev-token";
-const debugStreaming = (process.env.EXAMPLE_AGENT_DEBUG_STREAMING ?? "false") === "true";
-const restateIngressUrl = (process.env.RESTATE_INGRESS_URL ?? "http://127.0.0.1:8080").replace(
+const authToken = process.env.EXAMPLE_AGENT_API_TOKEN ?? 'dev-token';
+const debugStreaming = (process.env.EXAMPLE_AGENT_DEBUG_STREAMING ?? 'false') === 'true';
+const restateIngressUrl = (process.env.RESTATE_INGRESS_URL ?? 'http://127.0.0.1:8080').replace(
   /\/$/,
-  "",
+  '',
 );
-const pubsubName = process.env.RESTATE_PUBSUB_NAME ?? "pubsub";
+const pubsubName = process.env.RESTATE_PUBSUB_NAME ?? 'pubsub';
 const orchestrator = createOrchestratorClient({ baseUrl: restateIngressUrl });
 const pubsubClient = createPubsubClient({
   url: restateIngressUrl,
@@ -50,12 +50,12 @@ interface WireEnvelope {
 }
 
 function toWireEnvelope(message: unknown, fallbackSessionId: string): WireEnvelope | undefined {
-  if (!message || typeof message !== "object") {
+  if (!message || typeof message !== 'object') {
     return undefined;
   }
 
   const candidate = message as Partial<AnyEventEnvelope<EventMap>>;
-  if (typeof candidate.type !== "string") {
+  if (typeof candidate.type !== 'string') {
     return undefined;
   }
 
@@ -73,7 +73,7 @@ function toWireEnvelope(message: unknown, fallbackSessionId: string): WireEnvelo
   const payload = (() => {
     const payloadCandidate: unknown = candidate.payload;
 
-    if (typeof payloadCandidate === "string") {
+    if (typeof payloadCandidate === 'string') {
       return payloadCandidate;
     }
 
@@ -83,7 +83,7 @@ function toWireEnvelope(message: unknown, fallbackSessionId: string): WireEnvelo
   return {
     type: candidate.type,
     index: eventIndex,
-    turnId: String(candidate.turnId ?? ""),
+    turnId: String(candidate.turnId ?? ''),
     sessionId: String(candidate.sessionId ?? fallbackSessionId),
     ts: String(candidate.ts ?? new Date().toISOString()),
     payload,
@@ -124,29 +124,29 @@ function ensureSessionAccess(sessionId: string, userId: string): void {
 }
 
 const pub = os.$context<RequestContext>().use(({ context, next }) => {
-  const header = context.request.headers.get("authorization");
-  const bearerToken = header?.startsWith("Bearer ")
-    ? header.slice("Bearer ".length).trim()
+  const header = context.request.headers.get('authorization');
+  const bearerToken = header?.startsWith('Bearer ')
+    ? header.slice('Bearer '.length).trim()
     : undefined;
-  const queryToken = context.url.searchParams.get("token") ?? undefined;
+  const queryToken = context.url.searchParams.get('token') ?? undefined;
   const token = bearerToken ?? queryToken;
 
   if (!token) {
-    throw new ORPCError("UNAUTHORIZED", {
-      message: "Missing bearer token",
+    throw new ORPCError('UNAUTHORIZED', {
+      message: 'Missing bearer token',
     });
   }
 
   if (token.length === 0 || token !== authToken) {
-    throw new ORPCError("UNAUTHORIZED", {
-      message: "Invalid bearer token",
+    throw new ORPCError('UNAUTHORIZED', {
+      message: 'Invalid bearer token',
     });
   }
 
   const userId =
-    context.request.headers.get("x-user-id") ??
-    context.url.searchParams.get("userId") ??
-    "demo-user";
+    context.request.headers.get('x-user-id') ??
+    context.url.searchParams.get('userId') ??
+    'demo-user';
 
   return next({
     context: {
@@ -164,7 +164,7 @@ export const appRouter = pub.router({
       ensureSessionAccess(input.sessionId, context.userId);
       return orchestrator.call(
         input.sessionId,
-        "run",
+        'run',
         {
           ...input,
           context: {
@@ -182,7 +182,7 @@ export const appRouter = pub.router({
       ensureSessionAccess(input.sessionId, context.userId);
       return orchestrator.call(
         input.sessionId,
-        "submit",
+        'submit',
         {
           ...input,
           context: {
@@ -204,7 +204,7 @@ export const appRouter = pub.router({
     .output(runResponseSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
-      return orchestrator.call(input.sessionId, "result", input, { signal });
+      return orchestrator.call(input.sessionId, 'result', input, { signal });
     }),
 
   continue: pub
@@ -218,7 +218,7 @@ export const appRouter = pub.router({
     .output(runResponseSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
-      return orchestrator.call(input.sessionId, "continue", input, {
+      return orchestrator.call(input.sessionId, 'continue', input, {
         idempotencyKey: input.idempotencyKey,
         signal,
       });
@@ -234,7 +234,7 @@ export const appRouter = pub.router({
     .output(sessionCommandResultSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
-      await orchestrator.call(input.sessionId, "steer", input, { signal });
+      await orchestrator.call(input.sessionId, 'steer', input, { signal });
       return { ok: true };
     }),
 
@@ -248,7 +248,7 @@ export const appRouter = pub.router({
     .output(sessionCommandResultSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
-      await orchestrator.call(input.sessionId, "followUp", input, { signal });
+      await orchestrator.call(input.sessionId, 'followUp', input, { signal });
       return { ok: true };
     }),
 
@@ -262,7 +262,7 @@ export const appRouter = pub.router({
     .output(sessionCommandResultSchema)
     .handler(async ({ input, context, signal }) => {
       ensureSessionAccess(input.sessionId, context.userId);
-      await orchestrator.call(input.sessionId, "cancel", input, { signal });
+      await orchestrator.call(input.sessionId, 'cancel', input, { signal });
       return { ok: true };
     }),
 
@@ -276,7 +276,7 @@ export const appRouter = pub.router({
     .handler(async function* ({ input, context, signal, lastEventId }) {
       ensureSessionAccess(input.sessionId, context.userId);
       let nextOffset =
-        typeof lastEventId === "string" && lastEventId.length > 0
+        typeof lastEventId === 'string' && lastEventId.length > 0
           ? Number(lastEventId) + 1
           : (input.offset ?? 0);
       if (!Number.isFinite(nextOffset) || nextOffset < 0) {
@@ -304,7 +304,7 @@ export const appRouter = pub.router({
               ? Date.now() - Date.parse(envelope.ts)
               : undefined;
           console.log(
-            `[edge-stream][${nowIso}] session=${input.sessionId} idx=${eventIndex} type=${envelope.type} eventTs=${envelope.ts ?? "n/a"} lagMs=${lagMs ?? "n/a"}`,
+            `[edge-stream][${nowIso}] session=${input.sessionId} idx=${eventIndex} type=${envelope.type} eventTs=${envelope.ts ?? 'n/a'} lagMs=${lagMs ?? 'n/a'}`,
           );
         }
 
@@ -336,6 +336,6 @@ Bun.serve({
       return result.response;
     }
 
-    return new Response("Not found", { status: 404 });
+    return new Response('Not found', { status: 404 });
   },
 });

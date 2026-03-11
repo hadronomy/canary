@@ -1,7 +1,7 @@
-import { Brand, Schema } from "effect";
+import { Brand, Schema } from 'effect';
 
-import { isDispositionPathScope } from "./legal-scope";
-import { parseLegalPath, renderLegalPath } from "./path-query";
+import { isDispositionPathScope } from './legal-scope';
+import { parseLegalPath, renderLegalPath } from './path-query';
 import {
   LegalNodePathString,
   NodePathString,
@@ -10,12 +10,12 @@ import {
   type NodePath,
   type NodePathSegment,
   type NodePathSegmentTag,
-} from "./types";
+} from './types';
 
 const ltreePattern = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/;
 const nodePathPattern = /^\/(c|a|p|sp|x|t|s|h)\/\d+(?:\/(c|a|p|sp|x|t|s|h)\/\d+)*$/;
 
-export type LtreePathString = string & Brand.Brand<"LtreePathString">;
+export type LtreePathString = string & Brand.Brand<'LtreePathString'>;
 export const LtreePathString = Brand.nominal<LtreePathString>();
 export const LtreePathStringSchema = Schema.String.pipe(
   Schema.pattern(ltreePattern),
@@ -26,29 +26,29 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 const nodeTagToShort: Readonly<Record<NodePathSegmentTag, string>> = {
-  chapter: "c",
-  article: "a",
-  paragraph: "p",
-  subparagraph: "sp",
-  annex: "x",
-  table: "t",
-  section: "s",
-  header: "h",
+  chapter: 'c',
+  article: 'a',
+  paragraph: 'p',
+  subparagraph: 'sp',
+  annex: 'x',
+  table: 't',
+  section: 's',
+  header: 'h',
 };
 
 const shortToNodeTag: Readonly<Record<string, NodePathSegmentTag>> = {
-  c: "chapter",
-  a: "article",
-  p: "paragraph",
-  sp: "subparagraph",
-  x: "annex",
-  t: "table",
-  s: "section",
-  h: "header",
+  c: 'chapter',
+  a: 'article',
+  p: 'paragraph',
+  sp: 'subparagraph',
+  x: 'annex',
+  t: 'table',
+  s: 'section',
+  h: 'header',
 };
 
 function toHex(value: string): string {
-  return Array.from(encoder.encode(value), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return Array.from(encoder.encode(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function fromHex(hex: string): string {
@@ -85,7 +85,7 @@ export function ltreeToLegalNodePath(path: LtreePathString): LegalNodePathString
 
 export function nodePathSegmentsToLtree(path: NodePath): LtreePathString {
   if (path.length === 0) {
-    throw new Error("NodePath cannot be empty");
+    throw new Error('NodePath cannot be empty');
   }
 
   const labels = path.map(
@@ -96,7 +96,7 @@ export function nodePathSegmentsToLtree(path: NodePath): LtreePathString {
 
 export function legalPathAstToLtree(ast: LegalPathAst): LtreePathString {
   if (ast.segments.length === 0) {
-    throw new Error("LegalPathAst cannot be empty");
+    throw new Error('LegalPathAst cannot be empty');
   }
 
   const labels = ast.segments.map(encodeLegalSegmentLabel);
@@ -121,7 +121,7 @@ function parseNodePath(path: NodePathString): ReadonlyArray<NodePathSegment> {
     throw new Error(`Invalid structural node path '${raw}'`);
   }
 
-  const parts = raw.slice(1).split("/");
+  const parts = raw.slice(1).split('/');
   const segments: Array<NodePathSegment> = [];
   for (let index = 0; index < parts.length; index += 2) {
     const shortTag = parts[index];
@@ -148,12 +148,12 @@ function parseNodePath(path: NodePathString): ReadonlyArray<NodePathSegment> {
 
 function renderNodePath(path: ReadonlyArray<NodePathSegment>): NodePathString {
   if (path.length === 0) {
-    throw new Error("NodePath cannot be empty");
+    throw new Error('NodePath cannot be empty');
   }
 
   const rendered = `/${path
     .map((segment) => `${nodeTagToShort[segment._tag]}/${String(segment.index)}`)
-    .join("/")}`;
+    .join('/')}`;
 
   if (!nodePathPattern.test(rendered)) {
     throw new Error(`Decoded path is not a valid structural node path: '${rendered}'`);
@@ -164,45 +164,45 @@ function renderNodePath(path: ReadonlyArray<NodePathSegment>): NodePathString {
 
 function encodeLegalSegmentLabel(segment: LegalPathSegment): string {
   switch (segment._tag) {
-    case "scope":
-      return `ls_${segment.value.replaceAll("-", "_")}`;
-    case "article":
+    case 'scope':
+      return `ls_${segment.value.replaceAll('-', '_')}`;
+    case 'article':
       return `la_${toHex(segment.value)}`;
-    case "paragraph":
+    case 'paragraph':
       return `lp_${String(segment.value)}`;
-    case "custom":
+    case 'custom':
       return `lc_${toHex(segment.value)}`;
   }
 }
 
 function decodeLegalSegmentLabel(label: string): LegalPathSegment {
-  if (label.startsWith("ls_")) {
-    const raw = label.slice(3).replaceAll("_", "-");
+  if (label.startsWith('ls_')) {
+    const raw = label.slice(3).replaceAll('_', '-');
     if (!isDispositionPathScope(raw)) {
       throw new Error(`Unsupported legal scope '${raw}'`);
     }
-    return { _tag: "scope", value: raw };
+    return { _tag: 'scope', value: raw };
   }
 
-  if (label.startsWith("la_")) {
+  if (label.startsWith('la_')) {
     const value = fromHex(label.slice(3));
     if (value.length === 0) {
-      throw new Error("Article segment cannot be empty");
+      throw new Error('Article segment cannot be empty');
     }
-    return { _tag: "article", value };
+    return { _tag: 'article', value };
   }
 
-  if (label.startsWith("lp_")) {
+  if (label.startsWith('lp_')) {
     const raw = label.slice(3);
     const value = Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0) {
       throw new Error(`Invalid paragraph segment '${raw}'`);
     }
-    return { _tag: "paragraph", value };
+    return { _tag: 'paragraph', value };
   }
 
-  if (label.startsWith("lc_")) {
-    return { _tag: "custom", value: fromHex(label.slice(3)) };
+  if (label.startsWith('lc_')) {
+    return { _tag: 'custom', value: fromHex(label.slice(3)) };
   }
 
   throw new Error(`Unsupported legal ltree label '${label}'`);
@@ -237,7 +237,7 @@ function parseLtreeLabels(path: LtreePathString): ReadonlyArray<string> {
     throw new Error(`Invalid ltree path '${raw}'`);
   }
 
-  const labels = raw.split(".").filter((label) => label.length > 0);
+  const labels = raw.split('.').filter((label) => label.length > 0);
   if (labels.length === 0) {
     throw new Error(`Invalid ltree path '${raw}'`);
   }
@@ -246,7 +246,7 @@ function parseLtreeLabels(path: LtreePathString): ReadonlyArray<string> {
 }
 
 function toLtreePath(labels: ReadonlyArray<string>): LtreePathString {
-  const value = labels.join(".");
+  const value = labels.join('.');
   if (!ltreePattern.test(value)) {
     throw new Error(`Encoded ltree path is invalid: '${value}'`);
   }

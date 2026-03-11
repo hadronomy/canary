@@ -6,9 +6,11 @@ import {
   type AgentLoopConfig,
   type AgentMessage,
   type StreamFn,
-} from "@mariozechner/pi-agent-core";
+} from '@mariozechner/pi-agent-core';
 
-import { TURN_ERROR_CODE } from "~/errors";
+import type { Runtime } from '~/runtime';
+
+import { TURN_ERROR_CODE } from '~/errors';
 import {
   type AnyEventEnvelope,
   type EventEnvelope,
@@ -25,8 +27,7 @@ import {
   toSessionId,
   toToolExecutionId,
   toTurnId,
-} from "~/protocol";
-import type { Runtime } from "~/runtime";
+} from '~/protocol';
 
 export interface EventFlowIds {
   readonly turn: () => TurnId;
@@ -68,19 +69,19 @@ export interface CreateEventFlowOptions {
 }
 
 function normalizeSessionId(sessionId: SessionId | string): SessionId {
-  return typeof sessionId === "string" ? toSessionId(sessionId) : sessionId;
+  return typeof sessionId === 'string' ? toSessionId(sessionId) : sessionId;
 }
 
 function normalizeTurnId(turnId: TurnId | string): TurnId {
-  return typeof turnId === "string" ? toTurnId(turnId) : turnId;
+  return typeof turnId === 'string' ? toTurnId(turnId) : turnId;
 }
 
 function normalizeMessageId(messageId: MessageId | string): MessageId {
-  return typeof messageId === "string" ? toMessageId(messageId) : messageId;
+  return typeof messageId === 'string' ? toMessageId(messageId) : messageId;
 }
 
 function normalizeEventIndex(index: EventIndex | number): EventIndex {
-  return typeof index === "number" ? toEventIndex(index) : index;
+  return typeof index === 'number' ? toEventIndex(index) : index;
 }
 
 export function createEventFlow<TMap extends object = EventMap>(
@@ -105,7 +106,7 @@ export function createEventFlow<TMap extends object = EventMap>(
       options.messageIdFactory
         ? options.messageIdFactory(kind)
         : toMessageId(
-            `${kind ?? "msg"}-${String(sessionId)}-${indexCounter}-${generatedMessageCounter++}`,
+            `${kind ?? 'msg'}-${String(sessionId)}-${indexCounter}-${generatedMessageCounter++}`,
           ),
     toolExecution: (turnId, toolCallOrdinal, toolName) =>
       options.toolExecutionIdFactory
@@ -127,13 +128,13 @@ export function createEventFlow<TMap extends object = EventMap>(
   }
 
   function setAssistantMessageId(messageId?: MessageId | string): MessageId {
-    assistantMessageId = messageId ? normalizeMessageId(messageId) : ids.message("assistant");
+    assistantMessageId = messageId ? normalizeMessageId(messageId) : ids.message('assistant');
     return assistantMessageId;
   }
 
   function currentAssistantMessageId(): MessageId {
     if (!assistantMessageId) {
-      assistantMessageId = ids.message("assistant");
+      assistantMessageId = ids.message('assistant');
     }
 
     return assistantMessageId;
@@ -178,37 +179,37 @@ export function createEventFlow<TMap extends object = EventMap>(
 }
 
 export type PiAssistantMessageEvent =
-  | { readonly type: "text_delta"; readonly delta: string }
-  | { readonly type: "thinking_delta"; readonly delta: string }
-  | { readonly type: "toolcall_delta"; readonly toolCallOrdinal: number; readonly delta: unknown };
+  | { readonly type: 'text_delta'; readonly delta: string }
+  | { readonly type: 'thinking_delta'; readonly delta: string }
+  | { readonly type: 'toolcall_delta'; readonly toolCallOrdinal: number; readonly delta: unknown };
 
 export type PiAgentEvent =
-  | { readonly type: "agent_start"; readonly configuration: unknown }
-  | { readonly type: "agent_end"; readonly finalState: unknown }
+  | { readonly type: 'agent_start'; readonly configuration: unknown }
+  | { readonly type: 'agent_end'; readonly finalState: unknown }
   | {
-      readonly type: "message_start";
+      readonly type: 'message_start';
       readonly messageId: string;
-      readonly role: "user" | "assistant" | "system" | "toolResult";
+      readonly role: 'user' | 'assistant' | 'system' | 'toolResult';
     }
   | {
-      readonly type: "message_end";
+      readonly type: 'message_end';
       readonly messageId: string;
-      readonly role: "user" | "assistant" | "system" | "toolResult";
+      readonly role: 'user' | 'assistant' | 'system' | 'toolResult';
     }
-  | { readonly type: "turn_queue_cleared" }
-  | { readonly type: "message_update"; readonly assistantMessageEvent: PiAssistantMessageEvent }
+  | { readonly type: 'turn_queue_cleared' }
+  | { readonly type: 'message_update'; readonly assistantMessageEvent: PiAssistantMessageEvent }
   | {
-      readonly type: "tool_execution_start";
+      readonly type: 'tool_execution_start';
       readonly toolExecutionId: string;
       readonly toolName: string;
     }
   | {
-      readonly type: "tool_execution_update";
+      readonly type: 'tool_execution_update';
       readonly toolExecutionId: string;
       readonly partialResult: unknown;
     }
   | {
-      readonly type: "tool_execution_end";
+      readonly type: 'tool_execution_end';
       readonly toolExecutionId: string;
       readonly isError?: boolean;
       readonly result?: unknown;
@@ -222,12 +223,12 @@ export interface CreatePiEventMapperOptions {
   readonly toolExecutionIdFromString?: (value: string) => ToolExecutionId;
 }
 
-function toProtocolRole(role: string): "user" | "assistant" | "system" | "toolResult" {
-  if (role === "assistant" || role === "system" || role === "toolResult") {
+function toProtocolRole(role: string): 'user' | 'assistant' | 'system' | 'toolResult' {
+  if (role === 'assistant' || role === 'system' || role === 'toolResult') {
     return role;
   }
 
-  return "user";
+  return 'user';
 }
 
 let mappedEventMessageCounter = 0;
@@ -243,7 +244,7 @@ function hashString(value: string): string {
 }
 
 function toDeterministicMappedMessageId(event: AgentEvent): string {
-  if ("message" in event) {
+  if ('message' in event) {
     return `msg-${hashString(JSON.stringify(event.message))}`;
   }
 
@@ -255,70 +256,70 @@ function toDeterministicMappedMessageId(event: AgentEvent): string {
 export function mapAgentEventToPiEvent(event: AgentEvent): PiAgentEvent | null {
   const eventType = String(event.type);
 
-  if (eventType === "queue_cleared") {
-    return { type: "turn_queue_cleared" };
+  if (eventType === 'queue_cleared') {
+    return { type: 'turn_queue_cleared' };
   }
 
-  if (event.type === "agent_start") {
+  if (event.type === 'agent_start') {
     return {
-      type: "agent_start",
+      type: 'agent_start',
       configuration: null,
     };
   }
 
-  if (event.type === "agent_end") {
+  if (event.type === 'agent_end') {
     return {
-      type: "agent_end",
+      type: 'agent_end',
       finalState: {
         messages: event.messages,
       },
     };
   }
 
-  if (event.type === "message_start") {
+  if (event.type === 'message_start') {
     return {
-      type: "message_start",
+      type: 'message_start',
       messageId: toDeterministicMappedMessageId(event),
       role: toProtocolRole(event.message.role),
     };
   }
 
-  if (event.type === "message_end") {
+  if (event.type === 'message_end') {
     return {
-      type: "message_end",
+      type: 'message_end',
       messageId: toDeterministicMappedMessageId(event),
       role: toProtocolRole(event.message.role),
     };
   }
 
-  if (event.type === "message_update") {
+  if (event.type === 'message_update') {
     const assistantMessageEvent = event.assistantMessageEvent;
 
-    if (assistantMessageEvent.type === "text_delta") {
+    if (assistantMessageEvent.type === 'text_delta') {
       return {
-        type: "message_update",
+        type: 'message_update',
         assistantMessageEvent: {
-          type: "text_delta",
+          type: 'text_delta',
           delta: assistantMessageEvent.delta,
         },
       };
     }
 
-    if (assistantMessageEvent.type === "thinking_delta") {
+    if (assistantMessageEvent.type === 'thinking_delta') {
       return {
-        type: "message_update",
+        type: 'message_update',
         assistantMessageEvent: {
-          type: "thinking_delta",
+          type: 'thinking_delta',
           delta: assistantMessageEvent.delta,
         },
       };
     }
 
-    if (assistantMessageEvent.type === "toolcall_delta") {
+    if (assistantMessageEvent.type === 'toolcall_delta') {
       return {
-        type: "message_update",
+        type: 'message_update',
         assistantMessageEvent: {
-          type: "toolcall_delta",
+          type: 'toolcall_delta',
           toolCallOrdinal: assistantMessageEvent.contentIndex,
           delta: assistantMessageEvent.delta,
         },
@@ -328,25 +329,25 @@ export function mapAgentEventToPiEvent(event: AgentEvent): PiAgentEvent | null {
     return null;
   }
 
-  if (event.type === "tool_execution_start") {
+  if (event.type === 'tool_execution_start') {
     return {
-      type: "tool_execution_start",
+      type: 'tool_execution_start',
       toolExecutionId: event.toolCallId,
       toolName: event.toolName,
     };
   }
 
-  if (event.type === "tool_execution_update") {
+  if (event.type === 'tool_execution_update') {
     return {
-      type: "tool_execution_update",
+      type: 'tool_execution_update',
       toolExecutionId: event.toolCallId,
       partialResult: event.partialResult,
     };
   }
 
-  if (event.type === "tool_execution_end") {
+  if (event.type === 'tool_execution_end') {
     return {
-      type: "tool_execution_end",
+      type: 'tool_execution_end',
       toolExecutionId: event.toolCallId,
       isError: event.isError,
       result: event.result,
@@ -361,27 +362,27 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
   const mapToolExecutionId = options.toolExecutionIdFromString ?? toToolExecutionId;
 
   return function mapPiEvent(event: PiAgentEvent): ReadonlyArray<AnyEventEnvelope<EventMap>> {
-    if (event.type === "agent_start") {
+    if (event.type === 'agent_start') {
       return [
-        options.flow.emit("agent_start", {
+        options.flow.emit('agent_start', {
           sessionId: options.flow.sessionId,
           configuration: event.configuration,
         }),
       ];
     }
 
-    if (event.type === "agent_end") {
+    if (event.type === 'agent_end') {
       return [
-        options.flow.emit("agent_end", {
+        options.flow.emit('agent_end', {
           sessionId: options.flow.sessionId,
           finalState: event.finalState,
         }),
       ];
     }
 
-    if (event.type === "message_start") {
+    if (event.type === 'message_start') {
       return [
-        options.flow.emit("message_start", {
+        options.flow.emit('message_start', {
           turnId: options.turnId,
           messageId: toMessageId(event.messageId),
           role: event.role,
@@ -389,9 +390,9 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       ];
     }
 
-    if (event.type === "message_end") {
+    if (event.type === 'message_end') {
       return [
-        options.flow.emit("message_end", {
+        options.flow.emit('message_end', {
           turnId: options.turnId,
           messageId: toMessageId(event.messageId),
           role: event.role,
@@ -399,20 +400,20 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       ];
     }
 
-    if (event.type === "turn_queue_cleared") {
+    if (event.type === 'turn_queue_cleared') {
       return [
-        options.flow.emit("turn_queue_cleared", {
+        options.flow.emit('turn_queue_cleared', {
           turnId: options.turnId,
         }),
       ];
     }
 
-    if (event.type === "message_update") {
+    if (event.type === 'message_update') {
       const assistantEvent = event.assistantMessageEvent;
 
-      if (assistantEvent.type === "text_delta") {
+      if (assistantEvent.type === 'text_delta') {
         return [
-          options.flow.emit("assistant_text_delta", {
+          options.flow.emit('assistant_text_delta', {
             turnId: options.turnId,
             messageId: options.assistantMessageId,
             delta: assistantEvent.delta,
@@ -420,9 +421,9 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
         ];
       }
 
-      if (assistantEvent.type === "thinking_delta") {
+      if (assistantEvent.type === 'thinking_delta') {
         return [
-          options.flow.emit("assistant_thinking_delta", {
+          options.flow.emit('assistant_thinking_delta', {
             turnId: options.turnId,
             messageId: options.assistantMessageId,
             delta: assistantEvent.delta,
@@ -431,7 +432,7 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       }
 
       return [
-        options.flow.emit("assistant_toolcall_delta", {
+        options.flow.emit('assistant_toolcall_delta', {
           turnId: options.turnId,
           toolCallOrdinal: assistantEvent.toolCallOrdinal,
           delta: assistantEvent.delta,
@@ -439,9 +440,9 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       ];
     }
 
-    if (event.type === "tool_execution_start") {
+    if (event.type === 'tool_execution_start') {
       return [
-        options.flow.emit("tool_execution_start", {
+        options.flow.emit('tool_execution_start', {
           turnId: options.turnId,
           toolExecutionId: mapToolExecutionId(event.toolExecutionId),
           toolName: event.toolName,
@@ -449,9 +450,9 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       ];
     }
 
-    if (event.type === "tool_execution_update") {
+    if (event.type === 'tool_execution_update') {
       return [
-        options.flow.emit("tool_execution_update", {
+        options.flow.emit('tool_execution_update', {
           turnId: options.turnId,
           toolExecutionId: mapToolExecutionId(event.toolExecutionId),
           partial: event.partialResult,
@@ -459,7 +460,7 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
       ];
     }
 
-    const resultPayload: EventMap["tool_execution_result"] = event.isError
+    const resultPayload: EventMap['tool_execution_result'] = event.isError
       ? {
           turnId: options.turnId,
           toolExecutionId: mapToolExecutionId(event.toolExecutionId),
@@ -467,7 +468,7 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
           error: {
             code: TURN_ERROR_CODE.TOOL_ERROR,
             message:
-              event.error instanceof Error ? event.error.message : String(event.error ?? "Unknown"),
+              event.error instanceof Error ? event.error.message : String(event.error ?? 'Unknown'),
           },
         }
       : {
@@ -477,7 +478,7 @@ export function createPiEventMapper(options: CreatePiEventMapperOptions) {
           output: event.result,
         };
 
-    return [options.flow.emit("tool_execution_result", resultPayload)];
+    return [options.flow.emit('tool_execution_result', resultPayload)];
   };
 }
 
@@ -510,11 +511,11 @@ export interface CreateAgentLoopRunnerOptions {
 
 export function createAgentLoopRunner(options: CreateAgentLoopRunnerOptions) {
   async function publishTurnStarted(turnId: TurnId): Promise<void> {
-    await options.publish(options.flow.emit("turn_started", { turnId }, { turnId }));
+    await options.publish(options.flow.emit('turn_started', { turnId }, { turnId }));
   }
 
   async function publishTurnDone(turnId: TurnId): Promise<void> {
-    await options.publish(options.flow.emit("turn_done", { turnId }, { turnId }));
+    await options.publish(options.flow.emit('turn_done', { turnId }, { turnId }));
   }
 
   return {
@@ -556,7 +557,7 @@ export function createAgentLoopRunner(options: CreateAgentLoopRunnerOptions) {
     async continue(loopOptions: AgentLoopContinueOptions): Promise<ReadonlyArray<AgentMessage>> {
       const context = await options.contextStore?.load(loopOptions.sessionId);
       if (!context) {
-        throw new TypeError("No active session context available to continue");
+        throw new TypeError('No active session context available to continue');
       }
 
       const turnId = options.flow.beginTurn();

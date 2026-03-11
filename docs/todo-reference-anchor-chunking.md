@@ -9,7 +9,7 @@ The `populateReferenceAnchorsForAllSourceDocuments` function in `apps/server/src
 ```typescript
 // TODO: Make this work in chunks like with all the other elements
 const populateReferenceAnchorsForAllSourceDocuments = Effect.fn(
-  "BoeCollector.populateReferenceAnchorsForAllSourceDocuments",
+  'BoeCollector.populateReferenceAnchorsForAllSourceDocuments',
 )((runId: CollectionRunId) =>
   Effect.gen(function* () {
     // ... loads ALL latest versions at once

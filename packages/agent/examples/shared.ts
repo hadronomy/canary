@@ -1,6 +1,6 @@
-import type { Model } from "@mariozechner/pi-ai";
+import type { Model } from '@mariozechner/pi-ai';
 
-import { defineAgent, defineAgents, superJsonCodec, toPublicAgentContracts } from "@canary/agent";
+import { defineAgent, defineAgents, superJsonCodec, toPublicAgentContracts } from '@canary/agent';
 
 export interface SupportAgentInput {
   readonly question: string;
@@ -30,7 +30,7 @@ export function createExampleAgents(
     >({
       config: {
         systemPrompt:
-          "You are a concise and practical support assistant. Prefer short actionable steps.",
+          'You are a concise and practical support assistant. Prefer short actionable steps.',
         model,
         getApiKey: options?.getApiKey,
       },
@@ -48,7 +48,7 @@ export function createExampleAgentContracts(model: Model<any>) {
   return toPublicAgentContracts(createExampleAgents(model));
 }
 
-export const EXAMPLE_ORCHESTRATOR_SERVICE = "agent-orchestrator";
+export const EXAMPLE_ORCHESTRATOR_SERVICE = 'agent-orchestrator';
 
 export interface OrchestratorCallOptions {
   readonly idempotencyKey?: string;
@@ -61,7 +61,7 @@ export interface CreateOrchestratorClientOptions {
 }
 
 export function createOrchestratorClient(options: CreateOrchestratorClientOptions) {
-  const baseUrl = options.baseUrl.replace(/\/$/, "");
+  const baseUrl = options.baseUrl.replace(/\/$/, '');
   const service = options.service ?? EXAMPLE_ORCHESTRATOR_SERVICE;
 
   function toIngressUrl(sessionId: string, handler: string): string {
@@ -76,15 +76,15 @@ export function createOrchestratorClient(options: CreateOrchestratorClientOption
       callOptions?: OrchestratorCallOptions,
     ): Promise<T> {
       const headers: Record<string, string> = {
-        "content-type": "application/json",
+        'content-type': 'application/json',
       };
 
       if (callOptions?.idempotencyKey) {
-        headers["idempotency-key"] = callOptions.idempotencyKey;
+        headers['idempotency-key'] = callOptions.idempotencyKey;
       }
 
       const response = await fetch(toIngressUrl(sessionId, handler), {
-        method: "POST",
+        method: 'POST',
         headers,
         body: JSON.stringify(body),
         signal: callOptions?.signal,

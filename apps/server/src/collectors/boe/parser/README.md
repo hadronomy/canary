@@ -184,8 +184,8 @@ classDiagram
 // Ordered XML parsing preserves document sequence
 const orderedParser = new XMLParser({
   ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  textNodeName: "#text",
+  attributeNamePrefix: '@_',
+  textNodeName: '#text',
   preserveOrder: true, // Critical for legal documents
 });
 ```
@@ -245,7 +245,7 @@ stateDiagram-v2
 
 ```typescript
 interface MainState {
-  mode: "main";
+  mode: 'main';
   chapterIndex: number;
   currentChapter?: number;
   currentArticle?: number;
@@ -255,7 +255,7 @@ interface MainState {
 }
 
 interface AnnexState {
-  mode: "annex";
+  mode: 'annex';
   annexIndex: number;
   currentAnnex: number;
   annexParagraphByIndex: Record<string, number>;
@@ -336,10 +336,10 @@ Converts paths to PostgreSQL ltree format:
 
 ```typescript
 // Structural path to ltree
-nodePathToLtree("/c/1/a/2/p/3"); // → "n_c_1.n_a_2.n_p_3"
+nodePathToLtree('/c/1/a/2/p/3'); // → "n_c_1.n_a_2.n_p_3"
 
 // Legal path to ltree
-legalNodePathToLtree("/article/2/p/3"); // → "ls_disposicion_final.la_32.n_p_3"
+legalNodePathToLtree('/article/2/p/3'); // → "ls_disposicion_final.la_32.n_p_3"
 ```
 
 > **⚠️ Rough Edge:** The hex encoding for article numbers in legal paths (line 170: `toHex(segment.value)`) can produce very long labels for large article numbers, potentially hitting ltree label length limits.
@@ -351,9 +351,9 @@ High-level query interface for fragment retrieval:
 ```typescript
 // Query builders
 Query.all(); // All fragments
-Query.byLegalPath("/article/1"); // By legal path
-Query.article("1", { paragraph: 2 }); // Article + paragraph
-Query.dispositionArticle("disposicion-final", "primera"); // Disposition article
+Query.byLegalPath('/article/1'); // By legal path
+Query.article('1', { paragraph: 2 }); // Article + paragraph
+Query.dispositionArticle('disposicion-final', 'primera'); // Disposition article
 
 // Evaluation
 const result = evaluateQuery(fragments, query);
@@ -367,7 +367,7 @@ Markdown output generation:
 ```typescript
 const markdown = formatFragmentsAsMarkdown(
   fragments,
-  "/c/", // Fragment path query
+  '/c/', // Fragment path query
   metadata, // Optional metadata override
 );
 ```
@@ -411,7 +411,7 @@ Test files are located in `test/collectors/boe/parser/`:
 ### Basic Parsing
 
 ```typescript
-import { BoeXmlParser } from "./parser";
+import { BoeXmlParser } from './parser';
 
 const program = Effect.gen(function* () {
   const parser = yield* BoeXmlParser;
@@ -435,7 +435,7 @@ const chapter1 =
   yield *
   parser.selectByPath({
     document,
-    query: "/c/",
+    query: '/c/',
   });
 
 // Select by legal citation path
@@ -443,18 +443,18 @@ const article1 =
   yield *
   parser.selectByLegalPath({
     document,
-    legalPath: "/article/1",
+    legalPath: '/article/1',
   });
 ```
 
 ### Query Interface
 
 ```typescript
-import { Query, evaluateQuery } from "./parser/query";
+import { Query, evaluateQuery } from './parser/query';
 
-const result = evaluateQuery(fragments, Query.article("5", { paragraph: 2 }));
+const result = evaluateQuery(fragments, Query.article('5', { paragraph: 2 }));
 
-if (result._tag === "Match") {
+if (result._tag === 'Match') {
   result.fragments.forEach((f) => console.log(f.content));
 }
 ```
@@ -467,10 +467,10 @@ const builder = yield * parser.fragmentBuilder({ metadata, strategy });
 const fragments =
   yield *
   builder
-    .chapter("Título I")
-    .article({ number: "1", title: "Objeto" })
-    .paragraph("Este es el contenido...")
-    .subparagraph({ marker: "a", content: "Primera parte" })
+    .chapter('Título I')
+    .article({ number: '1', title: 'Objeto' })
+    .paragraph('Este es el contenido...')
+    .subparagraph({ marker: 'a', content: 'Primera parte' })
     .build();
 ```
 

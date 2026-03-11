@@ -1,6 +1,6 @@
-import { defineRelations } from "drizzle-orm";
+import { defineRelations } from 'drizzle-orm';
 
-import * as schema from "./legislation";
+import * as schema from './legislation';
 
 export const relations = defineRelations(schema, (r) => ({
   legislativeSources: {
@@ -33,12 +33,12 @@ export const relations = defineRelations(schema, (r) => ({
     outgoingAnchors: r.many.referenceAnchors({
       from: r.legalDocuments.docId,
       to: r.referenceAnchors.sourceDocId,
-      alias: "sourceRefs",
+      alias: 'sourceRefs',
     }),
     incomingAnchors: r.many.referenceAnchors({
       from: r.legalDocuments.docId,
       to: r.referenceAnchors.targetDocId,
-      alias: "targetRefs",
+      alias: 'targetRefs',
     }),
     fragmentIndexJobs: r.many.fragmentIndexJobs({
       from: r.legalDocuments.docId,
@@ -89,24 +89,24 @@ export const relations = defineRelations(schema, (r) => ({
     outgoingAnchors: r.many.referenceAnchors({
       from: r.senseFragments.fragmentId,
       to: r.referenceAnchors.sourceFragmentId,
-      alias: "fragmentSourceRefs",
+      alias: 'fragmentSourceRefs',
     }),
   },
   referenceAnchors: {
     sourceDoc: r.one.legalDocuments({
       from: r.referenceAnchors.sourceDocId,
       to: r.legalDocuments.docId,
-      alias: "sourceRefs",
+      alias: 'sourceRefs',
     }),
     targetDoc: r.one.legalDocuments({
       from: r.referenceAnchors.targetDocId,
       to: r.legalDocuments.docId,
-      alias: "targetRefs",
+      alias: 'targetRefs',
     }),
     sourceFragment: r.one.senseFragments({
       from: r.referenceAnchors.sourceFragmentId,
       to: r.senseFragments.fragmentId,
-      alias: "fragmentSourceRefs",
+      alias: 'fragmentSourceRefs',
     }),
   },
   syncRuns: {

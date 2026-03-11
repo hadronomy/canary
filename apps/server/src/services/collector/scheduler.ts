@@ -1,14 +1,15 @@
-import { Cron, Duration, Effect, Either, Fiber, HashMap, Metric, Option, Ref } from "effect";
+import { Cron, Duration, Effect, Either, Fiber, HashMap, Metric, Option, Ref } from 'effect';
 
-import { ScheduleError } from "./errors";
+import type { CollectorId } from './schema';
+
+import { ScheduleError } from './errors';
 import {
   collectorScheduledTotal,
   collectorScheduleErrorsTotal,
   collectorScheduleTriggersTotal,
-} from "./metrics";
-import { CollectorOrchestrator } from "./orchestrator";
-import { CollectorRepository } from "./repository";
-import type { CollectorId } from "./schema";
+} from './metrics';
+import { CollectorOrchestrator } from './orchestrator';
+import { CollectorRepository } from './repository';
 
 export interface ScheduledCollector {
   readonly collectorId: CollectorId;
@@ -16,7 +17,7 @@ export interface ScheduledCollector {
   readonly fiber: Fiber.RuntimeFiber<void, never>;
 }
 
-export type ScheduleStartMode = "next_cron" | "immediate_then_cron";
+export type ScheduleStartMode = 'next_cron' | 'immediate_then_cron';
 
 export interface ScheduleStartOptions {
   readonly startMode?: ScheduleStartMode;
@@ -41,7 +42,7 @@ const parseCron = (
     onRight: Effect.succeed,
   });
 
-export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("CollectorScheduler", {
+export class CollectorScheduler extends Effect.Service<CollectorScheduler>()('CollectorScheduler', {
   accessors: true,
   dependencies: [CollectorOrchestrator.Default, CollectorRepository.Default],
   scoped: Effect.gen(function* () {
@@ -54,7 +55,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
       Effect.flatMap((scheduled) => Metric.set(collectorScheduledTotal, HashMap.size(scheduled))),
     );
 
-    const stop = Effect.fn("CollectorScheduler.stop")((collectorId: CollectorId) =>
+    const stop = Effect.fn('CollectorScheduler.stop')((collectorId: CollectorId) =>
       Ref.get(scheduledRef).pipe(
         Effect.flatMap((scheduled) =>
           HashMap.get(scheduled, collectorId).pipe(
@@ -69,7 +70,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
       ),
     );
 
-    const start = Effect.fn("CollectorScheduler.start")(function* (
+    const start = Effect.fn('CollectorScheduler.start')(function* (
       collectorId: CollectorId,
       cronExpression: string,
       options?: ScheduleStartOptions,
@@ -94,7 +95,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
           Metric.increment(collectorScheduleErrorsTotal).pipe(
             Effect.tagMetrics({ collector_id: collectorId, error_tag: error._tag }),
             Effect.zipRight(
-              Effect.logError("Scheduled collector run failed", {
+              Effect.logError('Scheduled collector run failed', {
                 collectorId,
                 error: error.message,
               }),
@@ -109,9 +110,9 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
       }).pipe(Effect.flatMap((delayMs) => Effect.sleep(Duration.millis(delayMs))));
 
       const scheduledTask = Effect.gen(function* () {
-        const startMode = options?.startMode ?? "next_cron";
+        const startMode = options?.startMode ?? 'next_cron';
 
-        if (startMode === "immediate_then_cron") {
+        if (startMode === 'immediate_then_cron') {
           yield* runScheduledOnce;
         }
 
@@ -135,7 +136,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
     });
 
     const startAll = repository
-      .findMany({ _tag: "Enabled" })
+      .findMany({ _tag: 'Enabled' })
       .pipe(
         Effect.flatMap((collectors) =>
           Effect.forEach(
@@ -157,12 +158,12 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
       }
     });
 
-    const reschedule = Effect.fn("CollectorScheduler.reschedule")(
+    const reschedule = Effect.fn('CollectorScheduler.reschedule')(
       (collectorId: CollectorId, schedule: string, options?: ScheduleStartOptions) =>
         start(collectorId, schedule, options),
     );
 
-    const triggerNow = Effect.fn("CollectorScheduler.triggerNow")((collectorId: CollectorId) =>
+    const triggerNow = Effect.fn('CollectorScheduler.triggerNow')((collectorId: CollectorId) =>
       orchestrator.schedule(collectorId),
     );
 
@@ -180,7 +181,7 @@ export class CollectorScheduler extends Effect.Service<CollectorScheduler>()("Co
         Effect.zipRight(
           scheduled.pipe(
             Effect.flatMap((entries) =>
-              Effect.logInfo("Collector scheduler heartbeat", {
+              Effect.logInfo('Collector scheduler heartbeat', {
                 scheduledCollectors: entries.length,
                 schedules: entries,
               }),

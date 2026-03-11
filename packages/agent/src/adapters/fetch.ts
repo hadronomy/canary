@@ -7,18 +7,19 @@ import type {
   HarnessFetchResponse,
   HarnessRouteName,
   WireEventEnvelope,
-} from "~/adapters/types";
-import { CLIENT_ERROR_CODE } from "~/errors";
+} from '~/adapters/types';
+
+import { CLIENT_ERROR_CODE } from '~/errors';
 
 const harnessDefaultRoutes: Record<HarnessRouteName, string> = {
-  run: "/run",
-  submit: "/submit",
-  result: "/result",
-  continue: "/continue",
-  events: "/events",
-  steer: "/steer",
-  followUp: "/follow-up",
-  cancel: "/cancel",
+  run: '/run',
+  submit: '/submit',
+  result: '/result',
+  continue: '/continue',
+  events: '/events',
+  steer: '/steer',
+  followUp: '/follow-up',
+  cancel: '/cancel',
 };
 
 function resolveEventUrl(
@@ -37,24 +38,24 @@ function resolveEventUrl(
     return base instanceof URL ? base.toString() : base;
   }
 
-  const parsed = new URL(base instanceof URL ? base.toString() : base, "http://localhost");
+  const parsed = new URL(base instanceof URL ? base.toString() : base, 'http://localhost');
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {
       parsed.searchParams.set(key, value);
     }
   }
   if (offset !== undefined) {
-    parsed.searchParams.set("offset", String(offset));
+    parsed.searchParams.set('offset', String(offset));
   }
   if (sessionId !== undefined) {
-    parsed.searchParams.set("sessionId", sessionId);
+    parsed.searchParams.set('sessionId', sessionId);
   }
 
   if (base instanceof URL) {
     return parsed.toString();
   }
 
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith('http://') || base.startsWith('https://')) {
     return parsed.toString();
   }
 
@@ -70,18 +71,18 @@ function resolveCommandUrl(
     return override instanceof URL ? override.toString() : override;
   }
 
-  const normalizedSuffix = suffix.replace(/^\/+/, "");
+  const normalizedSuffix = suffix.replace(/^\/+/, '');
 
   const applySiblingPath = (url: URL): URL => {
     const currentPath = url.pathname;
     const parentPath =
-      currentPath.endsWith("/") || currentPath.length === 0
+      currentPath.endsWith('/') || currentPath.length === 0
         ? currentPath
-        : currentPath.slice(0, currentPath.lastIndexOf("/") + 1);
-    const joined = `${parentPath}${normalizedSuffix}`.replace(/\/{2,}/g, "/");
+        : currentPath.slice(0, currentPath.lastIndexOf('/') + 1);
+    const joined = `${parentPath}${normalizedSuffix}`.replace(/\/{2,}/g, '/');
 
     const next = new URL(url.toString());
-    next.pathname = joined.startsWith("/") ? joined : `/${joined}`;
+    next.pathname = joined.startsWith('/') ? joined : `/${joined}`;
     return next;
   };
 
@@ -89,20 +90,20 @@ function resolveCommandUrl(
     return applySiblingPath(base).toString();
   }
 
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith('http://') || base.startsWith('https://')) {
     return applySiblingPath(new URL(base)).toString();
   }
 
-  const parsed = new URL(base, "http://localhost");
+  const parsed = new URL(base, 'http://localhost');
   const resolved = applySiblingPath(parsed);
   return `${resolved.pathname}${resolved.search}${resolved.hash}`;
 }
 
 function resolvePathFromBase(base: string | URL, path: string): string {
-  const normalizedPath = path.replace(/^\/+/, "");
+  const normalizedPath = path.replace(/^\/+/, '');
   const joinPath = (basePath: string): string => {
-    const prefix = basePath.endsWith("/") ? basePath : `${basePath}/`;
-    return `${prefix}${normalizedPath}`.replace(/\/{2,}/g, "/");
+    const prefix = basePath.endsWith('/') ? basePath : `${basePath}/`;
+    return `${prefix}${normalizedPath}`.replace(/\/{2,}/g, '/');
   };
 
   if (base instanceof URL) {
@@ -111,13 +112,13 @@ function resolvePathFromBase(base: string | URL, path: string): string {
     return next.toString();
   }
 
-  if (base.startsWith("http://") || base.startsWith("https://")) {
+  if (base.startsWith('http://') || base.startsWith('https://')) {
     const next = new URL(base);
     next.pathname = joinPath(next.pathname);
     return next.toString();
   }
 
-  const parsed = new URL(base, "http://localhost");
+  const parsed = new URL(base, 'http://localhost');
   const next = new URL(parsed.toString());
   next.pathname = joinPath(next.pathname);
   return `${next.pathname}${next.search}${next.hash}`;
@@ -146,19 +147,19 @@ function resolveClientUrls(options: CreateFetchHarnessAdapterOptions): HarnessCl
 
   if (!options.runUrl || !options.eventsUrl) {
     throw new TypeError(
-      "createFetchHarnessAdapter requires either baseUrl, or both runUrl and eventsUrl for configuration.",
+      'createFetchHarnessAdapter requires either baseUrl, or both runUrl and eventsUrl for configuration.',
     );
   }
 
   const continueUrl =
     options.continueUrl !== undefined
-      ? resolveCommandUrl(options.runUrl, options.continueUrl, "/continue")
+      ? resolveCommandUrl(options.runUrl, options.continueUrl, '/continue')
       : options.runUrl instanceof URL
         ? options.runUrl.toString()
         : options.runUrl;
 
-  const submitUrl = resolveCommandUrl(options.runUrl, options.submitUrl, "/submit");
-  const resultUrl = resolveCommandUrl(options.runUrl, options.resultUrl, "/result");
+  const submitUrl = resolveCommandUrl(options.runUrl, options.submitUrl, '/submit');
+  const resultUrl = resolveCommandUrl(options.runUrl, options.resultUrl, '/result');
 
   return {
     run: options.runUrl instanceof URL ? options.runUrl.toString() : options.runUrl,
@@ -166,9 +167,9 @@ function resolveClientUrls(options: CreateFetchHarnessAdapterOptions): HarnessCl
     result: resultUrl,
     continue: continueUrl,
     events: options.eventsUrl instanceof URL ? options.eventsUrl.toString() : options.eventsUrl,
-    steer: resolveCommandUrl(options.runUrl, options.steerUrl, "/steer"),
-    followUp: resolveCommandUrl(options.runUrl, options.followUpUrl, "/follow-up"),
-    cancel: resolveCommandUrl(options.runUrl, options.cancelUrl, "/cancel"),
+    steer: resolveCommandUrl(options.runUrl, options.steerUrl, '/steer'),
+    followUp: resolveCommandUrl(options.runUrl, options.followUpUrl, '/follow-up'),
+    cancel: resolveCommandUrl(options.runUrl, options.cancelUrl, '/cancel'),
   };
 }
 
@@ -214,7 +215,7 @@ function createQueue<T>() {
   return { push, close, next };
 }
 
-function normalizeHeaders(headers?: RequestInit["headers"]): Record<string, string> {
+function normalizeHeaders(headers?: RequestInit['headers']): Record<string, string> {
   if (!headers) {
     return {};
   }
@@ -247,7 +248,7 @@ function defaultEventSourceFactory() {
 
   if (!ctor) {
     throw new TypeError(
-      "No EventSource implementation available. Pass createEventSource explicitly.",
+      'No EventSource implementation available. Pass createEventSource explicitly.',
     );
   }
 
@@ -260,8 +261,8 @@ function parseWireEvent(message: {
   readonly type: string;
 }): WireEventEnvelope {
   const rawData = JSON.parse(message.data) as unknown;
-  if (typeof rawData !== "object" || rawData === null) {
-    throw new TypeError("SSE data must be an object envelope");
+  if (typeof rawData !== 'object' || rawData === null) {
+    throw new TypeError('SSE data must be an object envelope');
   }
 
   const wireEnvelope = rawData as {
@@ -292,8 +293,8 @@ function ensureRunResponse(payload: unknown): {
   readonly turnId: string;
   readonly nextIndex: number;
 } {
-  if (typeof payload !== "object" || payload === null) {
-    throw new TypeError("Invalid run response: expected object");
+  if (typeof payload !== 'object' || payload === null) {
+    throw new TypeError('Invalid run response: expected object');
   }
 
   const candidate = payload as {
@@ -303,19 +304,19 @@ function ensureRunResponse(payload: unknown): {
     readonly nextOffset?: unknown;
   };
 
-  if (typeof candidate.turnId !== "string") {
-    throw new TypeError("Invalid run response: missing turnId");
+  if (typeof candidate.turnId !== 'string') {
+    throw new TypeError('Invalid run response: missing turnId');
   }
 
   const nextIndexValue =
-    typeof candidate.nextIndex === "number"
+    typeof candidate.nextIndex === 'number'
       ? candidate.nextIndex
-      : typeof candidate.nextOffset === "number"
+      : typeof candidate.nextOffset === 'number'
         ? candidate.nextOffset
         : undefined;
 
   if (nextIndexValue === undefined || !Number.isFinite(nextIndexValue)) {
-    throw new TypeError("Invalid run response: missing nextIndex");
+    throw new TypeError('Invalid run response: missing nextIndex');
   }
 
   return {
@@ -328,16 +329,16 @@ function ensureRunResponse(payload: unknown): {
 function ensureSubmitResponse(payload: unknown): {
   readonly turnId: string;
 } {
-  if (typeof payload !== "object" || payload === null) {
-    throw new TypeError("Invalid submit response: expected object");
+  if (typeof payload !== 'object' || payload === null) {
+    throw new TypeError('Invalid submit response: expected object');
   }
 
   const candidate = payload as {
     readonly turnId?: unknown;
   };
 
-  if (typeof candidate.turnId !== "string") {
-    throw new TypeError("Invalid submit response: missing turnId");
+  if (typeof candidate.turnId !== 'string') {
+    throw new TypeError('Invalid submit response: missing turnId');
   }
 
   return {
@@ -358,7 +359,7 @@ export function createFetchHarnessAdapter(
   };
 
   const defaultFetch: HarnessFetch = async (input, init) => {
-    const response = await fetch(typeof input === "string" ? input : input.toString(), {
+    const response = await fetch(typeof input === 'string' ? input : input.toString(), {
       method: init?.method,
       headers: init?.headers,
       body: init?.body,
@@ -398,9 +399,9 @@ export function createFetchHarnessAdapter(
     signal?: AbortSignal,
   ): Promise<void> {
     const response = await request(url, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify(body),
       signal,
@@ -416,13 +417,13 @@ export function createFetchHarnessAdapter(
   return {
     async run(requestOptions, signalOptions) {
       const response = await request(urls.run, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
+          'content-type': 'application/json',
         },
         body: JSON.stringify({
           ...requestOptions,
-          intent: "run",
+          intent: 'run',
         }),
         signal: signalOptions?.signal,
       });
@@ -438,9 +439,9 @@ export function createFetchHarnessAdapter(
 
     async submit(requestOptions, signalOptions) {
       const response = await request(urls.submit, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
+          'content-type': 'application/json',
         },
         body: JSON.stringify(requestOptions),
         signal: signalOptions?.signal,
@@ -457,9 +458,9 @@ export function createFetchHarnessAdapter(
 
     async result(requestOptions, signalOptions) {
       const response = await request(urls.result, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
+          'content-type': 'application/json',
         },
         body: JSON.stringify(requestOptions),
         signal: signalOptions?.signal,
@@ -476,13 +477,13 @@ export function createFetchHarnessAdapter(
 
     async continue(requestOptions, signalOptions) {
       const response = await request(urls.continue, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
+          'content-type': 'application/json',
         },
         body: JSON.stringify({
           ...requestOptions,
-          intent: "continue",
+          intent: 'continue',
         }),
         signal: signalOptions?.signal,
       });
@@ -524,7 +525,7 @@ export function createFetchHarnessAdapter(
       };
 
       source.onerror = close;
-      signalOptions?.signal?.addEventListener("abort", close, { once: true });
+      signalOptions?.signal?.addEventListener('abort', close, { once: true });
 
       return {
         [Symbol.asyncIterator]() {

@@ -1,21 +1,21 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 export class MissingRootDocumentoError extends Schema.TaggedError<MissingRootDocumentoError>()(
-  "MissingRootDocumentoError",
+  'MissingRootDocumentoError',
   {
     message: Schema.String,
   },
 ) {}
 
 export class InvalidMetadataError extends Schema.TaggedError<InvalidMetadataError>()(
-  "InvalidMetadataError",
+  'InvalidMetadataError',
   {
     message: Schema.String,
   },
 ) {}
 
 export class UnsupportedStrategyError extends Schema.TaggedError<UnsupportedStrategyError>()(
-  "UnsupportedStrategyError",
+  'UnsupportedStrategyError',
   {
     strategyHint: Schema.String,
     message: Schema.String,
@@ -23,14 +23,14 @@ export class UnsupportedStrategyError extends Schema.TaggedError<UnsupportedStra
 ) {}
 
 export class MalformedTextSectionError extends Schema.TaggedError<MalformedTextSectionError>()(
-  "MalformedTextSectionError",
+  'MalformedTextSectionError',
   {
     message: Schema.String,
   },
 ) {}
 
 export class NodePathCollisionError extends Schema.TaggedError<NodePathCollisionError>()(
-  "NodePathCollisionError",
+  'NodePathCollisionError',
   {
     nodePath: Schema.String,
     message: Schema.String,
@@ -38,14 +38,14 @@ export class NodePathCollisionError extends Schema.TaggedError<NodePathCollision
 ) {}
 
 export class EmptyFragmentContentError extends Schema.TaggedError<EmptyFragmentContentError>()(
-  "EmptyFragmentContentError",
+  'EmptyFragmentContentError',
   {
     nodePath: Schema.String,
     message: Schema.String,
   },
 ) {}
 
-export class XmlParseError extends Schema.TaggedError<XmlParseError>()("XmlParseError", {
+export class XmlParseError extends Schema.TaggedError<XmlParseError>()('XmlParseError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect),
 }) {}

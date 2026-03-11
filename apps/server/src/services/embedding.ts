@@ -1,5 +1,5 @@
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
-import { AutoTokenizer, type PreTrainedTokenizer } from "@huggingface/transformers";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { AutoTokenizer, type PreTrainedTokenizer } from '@huggingface/transformers';
 import {
   Cache,
   Config,
@@ -11,7 +11,7 @@ import {
   Redacted,
   Schedule,
   Schema,
-} from "effect";
+} from 'effect';
 
 /**
  * Unified error type for embedding and reranking operations.
@@ -25,7 +25,7 @@ import {
  * );
  * ```
  */
-export class EmbeddingServiceError extends Data.TaggedError("EmbeddingServiceError")<{
+export class EmbeddingServiceError extends Data.TaggedError('EmbeddingServiceError')<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
@@ -41,7 +41,7 @@ export interface EmbeddedResult {
   readonly full: number[];
 }
 
-export type EmbeddingTask = "retrieval" | "classification" | "clustering" | "text-matching";
+export type EmbeddingTask = 'retrieval' | 'classification' | 'clustering' | 'text-matching';
 
 export interface EmbedOptions {
   readonly task?: EmbeddingTask;
@@ -113,48 +113,48 @@ export type EmbeddingInput =
  * @param input Raw embedding input.
  * @returns Normalized input object accepted by the embedding API.
  */
-export const normalizeInput = Effect.fn("EmbeddingService.normalizeInput")(function* (
+export const normalizeInput = Effect.fn('EmbeddingService.normalizeInput')(function* (
   input: EmbeddingInput,
 ) {
-  if (typeof input === "string") {
+  if (typeof input === 'string') {
     const isUrl = /^(http|https):\/\/[^ "]+$/.test(input);
     return isUrl ? { url: input } : { text: input };
   }
 
   if (input instanceof Uint8Array) {
-    const base64 = Buffer.from(input).toString("base64");
+    const base64 = Buffer.from(input).toString('base64');
     return { image: base64 };
   }
 
   if (input instanceof Blob) {
     const arrayBuffer = yield* Effect.tryPromise({
       try: () => input.arrayBuffer(),
-      catch: (cause) => new EmbeddingServiceError({ message: "Failed to read blob", cause }),
+      catch: (cause) => new EmbeddingServiceError({ message: 'Failed to read blob', cause }),
     });
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
     return { image: base64 };
   }
 
-  if (typeof input === "object" && input !== null) {
-    if ("image" in input && input.image) {
+  if (typeof input === 'object' && input !== null) {
+    if ('image' in input && input.image) {
       const image = input.image;
       if (image instanceof Uint8Array) {
-        const base64 = Buffer.from(image).toString("base64");
+        const base64 = Buffer.from(image).toString('base64');
         return { ...input, image: base64 };
       }
       if (image instanceof Blob) {
         const arrayBuffer = yield* Effect.tryPromise({
           try: () => image.arrayBuffer(),
-          catch: (cause) => new EmbeddingServiceError({ message: "Failed to read blob", cause }),
+          catch: (cause) => new EmbeddingServiceError({ message: 'Failed to read blob', cause }),
         });
-        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
         return { ...input, image: base64 };
       }
     }
     return input;
   }
 
-  return yield* new EmbeddingServiceError({ message: "Invalid input format" });
+  return yield* new EmbeddingServiceError({ message: 'Invalid input format' });
 });
 
 interface EmbeddingServiceShape {
@@ -201,12 +201,12 @@ interface EmbeddingServiceShape {
  * - `POST /v1/embeddings`
  * - `POST /v1/rerank`
  */
-export class EmbeddingService extends Context.Tag("EmbeddingService")<
+export class EmbeddingService extends Context.Tag('EmbeddingService')<
   EmbeddingService,
   EmbeddingServiceShape
 >() {
-  static readonly DefaultModelName = "jina-embeddings-v4" as const;
-  static readonly DefaultTokenizerModelName = "jinaai/jina-embeddings-v4" as const;
+  static readonly DefaultModelName = 'jina-embeddings-v4' as const;
+  static readonly DefaultTokenizerModelName = 'jinaai/jina-embeddings-v4' as const;
 }
 
 /**
@@ -216,11 +216,11 @@ export const EmbeddingServiceLive = Layer.effect(
   EmbeddingService,
   Effect.gen(function* () {
     const embeddingConfig = yield* Config.all({
-      lateChunking: Config.boolean("EMBEDDING_LATE_CHUNKING").pipe(Config.withDefault(true)),
-      dimensions: Config.number("EMBEDDING_DIMENSIONS").pipe(Config.withDefault(1024)),
-      scoutDimensions: Config.number("EMBEDDING_SCOUT_DIMENSIONS").pipe(Config.withDefault(256)),
+      lateChunking: Config.boolean('EMBEDDING_LATE_CHUNKING').pipe(Config.withDefault(true)),
+      dimensions: Config.number('EMBEDDING_DIMENSIONS').pipe(Config.withDefault(1024)),
+      scoutDimensions: Config.number('EMBEDDING_SCOUT_DIMENSIONS').pipe(Config.withDefault(256)),
     });
-    const apiKey = yield* Config.redacted("JINA_API_KEY");
+    const apiKey = yield* Config.redacted('JINA_API_KEY');
     const client = yield* HttpClient.HttpClient;
     const tokenizerCache = yield* Cache.make<string, PreTrainedTokenizer, EmbeddingServiceError>({
       capacity: 4,
@@ -244,9 +244,9 @@ export const EmbeddingServiceLive = Layer.effect(
         Effect.flatMap((results) =>
           results[0]
             ? Effect.succeed(results[0])
-            : new EmbeddingServiceError({ message: "No embedding returned" }),
+            : new EmbeddingServiceError({ message: 'No embedding returned' }),
         ),
-        Effect.withSpan("EmbeddingService.embedOne"),
+        Effect.withSpan('EmbeddingService.embedOne'),
       );
 
     const embedMany = (
@@ -256,9 +256,9 @@ export const EmbeddingServiceLive = Layer.effect(
       Effect.gen(function* () {
         const normalizedInputs = yield* Effect.all(inputs.map(normalizeInput));
 
-        const baseRequest = HttpClientRequest.post("https://api.jina.ai/v1/embeddings").pipe(
-          HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
-          HttpClientRequest.setHeader("Content-Type", "application/json"),
+        const baseRequest = HttpClientRequest.post('https://api.jina.ai/v1/embeddings').pipe(
+          HttpClientRequest.setHeader('Authorization', `Bearer ${Redacted.value(apiKey)}`),
+          HttpClientRequest.setHeader('Content-Type', 'application/json'),
         );
 
         const vectorResponse = yield* Effect.gen(function* () {
@@ -273,7 +273,7 @@ export const EmbeddingServiceLive = Layer.effect(
             Effect.mapError(
               (cause) =>
                 new EmbeddingServiceError({
-                  message: "Failed to serialize vector request body",
+                  message: 'Failed to serialize vector request body',
                   cause,
                 }),
             ),
@@ -283,7 +283,7 @@ export const EmbeddingServiceLive = Layer.effect(
             Effect.mapError(
               (cause) =>
                 new EmbeddingServiceError({
-                  message: "Vector embedding HTTP request failed",
+                  message: 'Vector embedding HTTP request failed',
                   cause,
                 }),
             ),
@@ -291,7 +291,7 @@ export const EmbeddingServiceLive = Layer.effect(
 
           if (vectorHttp.status < 200 || vectorHttp.status >= 300) {
             const errorBody = yield* vectorHttp.text.pipe(
-              Effect.orElseSucceed(() => "<unable to read error body>"),
+              Effect.orElseSucceed(() => '<unable to read error body>'),
             );
             return yield* new EmbeddingServiceError({
               message: `Vector embedding request failed with status ${vectorHttp.status}: ${errorBody.slice(0, 500)}`,
@@ -302,7 +302,7 @@ export const EmbeddingServiceLive = Layer.effect(
             Effect.mapError(
               (cause) =>
                 new EmbeddingServiceError({
-                  message: "Vector embedding response schema validation failed",
+                  message: 'Vector embedding response schema validation failed',
                   cause,
                 }),
             ),
@@ -317,7 +317,7 @@ export const EmbeddingServiceLive = Layer.effect(
         );
 
         if (!vectorResponse.data || vectorResponse.data.length === 0) {
-          return yield* new EmbeddingServiceError({ message: "No embedding returned" });
+          return yield* new EmbeddingServiceError({ message: 'No embedding returned' });
         }
 
         return yield* Effect.forEach(vectorResponse.data, (item) =>
@@ -342,31 +342,31 @@ export const EmbeddingServiceLive = Layer.effect(
             } satisfies EmbeddedResult;
           }),
         );
-      }).pipe(Effect.withSpan("EmbeddingService.embedMany"));
+      }).pipe(Effect.withSpan('EmbeddingService.embedMany'));
 
     const embed = ((input: EmbeddingInput | EmbeddingInput[], options: EmbedOptions = {}) =>
       Array.isArray(input)
         ? embedMany(input, options)
-        : embedOne(input, options)) as EmbeddingServiceShape["embed"];
+        : embedOne(input, options)) as EmbeddingServiceShape['embed'];
 
-    const rerank = Effect.fn("EmbeddingService.rerank")(function* (query: string, docs: string[]) {
-      const request = yield* HttpClientRequest.post("https://api.jina.ai/v1/rerank").pipe(
-        HttpClientRequest.setHeader("Authorization", `Bearer ${Redacted.value(apiKey)}`),
-        HttpClientRequest.setHeader("Content-Type", "application/json"),
+    const rerank = Effect.fn('EmbeddingService.rerank')(function* (query: string, docs: string[]) {
+      const request = yield* HttpClientRequest.post('https://api.jina.ai/v1/rerank').pipe(
+        HttpClientRequest.setHeader('Authorization', `Bearer ${Redacted.value(apiKey)}`),
+        HttpClientRequest.setHeader('Content-Type', 'application/json'),
         HttpClientRequest.bodyJson({
-          model: "jina-reranker-v2-base-multilingual",
+          model: 'jina-reranker-v2-base-multilingual',
           query,
           documents: docs,
         }),
         Effect.mapError(
           (cause) =>
-            new EmbeddingServiceError({ message: "Failed to serialize request body", cause }),
+            new EmbeddingServiceError({ message: 'Failed to serialize request body', cause }),
         ),
       );
 
       const response = yield* client.execute(request).pipe(
         Effect.flatMap(HttpClientResponse.schemaBodyJson(RerankResponseSchema)),
-        Effect.mapError((cause) => new EmbeddingServiceError({ message: "Rerank Error", cause })),
+        Effect.mapError((cause) => new EmbeddingServiceError({ message: 'Rerank Error', cause })),
       );
 
       return response.results.map((result) => ({
@@ -376,7 +376,7 @@ export const EmbeddingServiceLive = Layer.effect(
       }));
     });
 
-    const countTokens = Effect.fn("EmbeddingService.countTokens")(function* (
+    const countTokens = Effect.fn('EmbeddingService.countTokens')(function* (
       texts: ReadonlyArray<string>,
     ) {
       const tokenizer = yield* tokenizerCache.get(EmbeddingService.DefaultTokenizerModelName);
@@ -407,7 +407,7 @@ export const EmbeddingServiceTest = Layer.succeed(
       };
 
       return Effect.succeed(isArray ? input.map(() => mockResult) : mockResult);
-    }) as EmbeddingServiceShape["embed"],
+    }) as EmbeddingServiceShape['embed'],
     rerank: (_query, docs) =>
       Effect.succeed(
         docs.map((doc, index) => ({

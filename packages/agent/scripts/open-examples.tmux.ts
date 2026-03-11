@@ -1,16 +1,15 @@
 #!/usr/bin/env bun
 
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { intro, log, outro, spinner } from '@clack/prompts';
+import { $ } from 'bun';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { intro, log, outro, spinner } from "@clack/prompts";
-import { $ } from "bun";
-
-const session = process.env.TMUX_SESSION ?? "canary-agent-examples";
-const worker = "worker";
-const server = "server";
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const wport = Number(process.env.RESTATE_WORKER_PORT ?? "9080");
+const session = process.env.TMUX_SESSION ?? 'canary-agent-examples';
+const worker = 'worker';
+const server = 'server';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const wport = Number(process.env.RESTATE_WORKER_PORT ?? '9080');
 const sport = 3000;
 
 async function free(port: number, name: string) {
@@ -20,7 +19,7 @@ async function free(port: number, name: string) {
   }
 
   const pids = raw
-    .split("\n")
+    .split('\n')
     .map((pid) => pid.trim())
     .filter((pid) => pid.length > 0);
   if (pids.length === 0) {
@@ -28,13 +27,13 @@ async function free(port: number, name: string) {
   }
 
   await Promise.all(pids.map((pid) => $`kill ${pid}`.nothrow().quiet()));
-  return `${name}:${String(port)}:${pids.join(",")}`;
+  return `${name}:${String(port)}:${pids.join(',')}`;
 }
 
 async function main() {
-  intro("Run @canary/agent examples");
+  intro('Run @canary/agent examples');
   const s = spinner();
-  s.start("Preparing tmux session");
+  s.start('Preparing tmux session');
 
   const killed = await $`tmux kill-session -t ${session}`.nothrow().quiet();
   const restarted = killed.exitCode === 0;
@@ -49,12 +48,12 @@ async function main() {
   await $`tmux send-keys -t ${session}:${server} "bun examples/server.ts" Enter`.quiet();
   await $`tmux select-window -t ${session}:${worker}`.quiet();
 
-  s.stop("Examples are running in tmux");
+  s.stop('Examples are running in tmux');
   if (restarted) {
     log.info(`Restarted existing session '${session}'`);
   }
   if (stopped.length > 0) {
-    log.info(`Stopped old listeners: ${stopped.join(" | ")}`);
+    log.info(`Stopped old listeners: ${stopped.join(' | ')}`);
   }
 
   log.success(`Started session '${session}' with windows '${worker}' and '${server}'`);

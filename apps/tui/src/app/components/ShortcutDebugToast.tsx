@@ -1,6 +1,6 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from '@opentui/core';
 
-import type { Theme } from "~/app/theme";
+import type { Theme } from '~/app/theme';
 
 type ShortcutDebugToastProps = {
   theme: Theme;
@@ -14,11 +14,11 @@ export function ShortcutDebugToast({ theme, open, message }: ShortcutDebugToastP
   return (
     <box
       style={{
-        position: "absolute",
+        position: 'absolute',
         right: 2,
         bottom: 2,
         border: true,
-        borderStyle: "heavy",
+        borderStyle: 'heavy',
         borderColor: theme.palette.mauve,
         backgroundColor: theme.palette.base,
         paddingLeft: 1,

@@ -1,9 +1,9 @@
-import { drizzle } from "drizzle-orm/bun-sql";
-export { and, eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from 'drizzle-orm/bun-sql';
+export { and, eq, inArray, sql } from 'drizzle-orm';
 
-import { loadDatabaseClientConfig } from "./config";
-import * as schema from "./schema/index";
-import { relations } from "./schema/relations";
+import { loadDatabaseClientConfig } from './config';
+import * as schema from './schema/index';
+import { relations } from './schema/relations';
 
 const config = loadDatabaseClientConfig();
 

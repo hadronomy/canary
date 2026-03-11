@@ -11,10 +11,10 @@ import {
   Schedule,
   Schema,
   Stream,
-} from "effect";
+} from 'effect';
 
-import { and, eq, inArray, sql } from "@canary/db/drizzle";
-import { DatabaseService } from "@canary/db/effect";
+import { and, eq, inArray, sql } from '@canary/db/drizzle';
+import { DatabaseService } from '@canary/db/effect';
 import {
   documentVersions,
   legalDocuments,
@@ -22,13 +22,13 @@ import {
   referenceAnchors,
   syncRuns,
   type RelationType,
-} from "@canary/db/schema/legislation";
+} from '@canary/db/schema/legislation';
 import {
   CollectionError,
   SourceConnectionError,
   ValidationError,
-} from "~/services/collector/errors";
-import { defineFactory, type CollectorRuntime } from "~/services/collector/factory";
+} from '~/services/collector/errors';
+import { defineFactory, type CollectorRuntime } from '~/services/collector/factory';
 import {
   CollectedDocument,
   CollectionBatch,
@@ -37,24 +37,24 @@ import {
   type Capabilities,
   type CollectionMode as CollectionModeType,
   type CollectionRunId,
-} from "~/services/collector/schema";
+} from '~/services/collector/schema';
 
-import { BoeCollectorConfig } from "./config";
-import { BoeIndexingQueue, IndexingTriggerPayload } from "./indexing";
-import { mapBoeLawToDocument, parseBoeDate, parseBoeDateTime } from "./mapping";
-import { BoeXmlParser } from "./parser";
-import { BoeResponseSchema, normalizeBoeItems, type BoeLawItem } from "./schemas";
+import { BoeCollectorConfig } from './config';
+import { BoeIndexingQueue, IndexingTriggerPayload } from './indexing';
+import { mapBoeLawToDocument, parseBoeDate, parseBoeDateTime } from './mapping';
+import { BoeXmlParser } from './parser';
+import { BoeResponseSchema, normalizeBoeItems, type BoeLawItem } from './schemas';
 
 const decodeBoeResponse = Schema.decodeUnknown(BoeResponseSchema);
 const decodeDateTimeUtc = Schema.decodeSync(Schema.DateTimeUtc);
 const decodeIndexingTriggerPayload = Schema.decodeUnknown(IndexingTriggerPayload);
 
 const capabilities: Capabilities = new Set([
-  "FullSync",
-  "Incremental",
-  "Backfill",
-  "Resume",
-  "ChangeDetection",
+  'FullSync',
+  'Incremental',
+  'Backfill',
+  'Resume',
+  'ChangeDetection',
 ]);
 
 // =============================================================================
@@ -79,7 +79,7 @@ interface PreparedLaw {
   readonly law: BoeLawItem;
   readonly mapped: ReturnType<typeof mapBoeLawToDocument>;
   readonly existing: ExistingLegalDocument | null;
-  readonly kind: "New" | "Update" | "Unchanged";
+  readonly kind: 'New' | 'Update' | 'Unchanged';
   readonly contentText: string;
   readonly contentHash: string | null;
 }
@@ -89,11 +89,11 @@ interface PreparedLaw {
 // =============================================================================
 
 const toMetadataRecord = (value: unknown): Record<string, unknown> => {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 };
 
 const createContentHash = (content: string): string =>
-  new Bun.CryptoHasher("sha256").update(content).digest("hex");
+  new Bun.CryptoHasher('sha256').update(content).digest('hex');
 
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
 const CANONICAL_ID_MAX_LENGTH = 150;
@@ -109,7 +109,7 @@ function truncateLogText(value: string): string {
 }
 
 function sanitizeCanonicalId(candidate: string): string | null {
-  const normalized = candidate.normalize("NFKC").replace(CONTROL_CHARACTERS, "").trim();
+  const normalized = candidate.normalize('NFKC').replace(CONTROL_CHARACTERS, '').trim();
   if (normalized.length === 0) {
     return null;
   }
@@ -138,15 +138,15 @@ function describeQueryCause(cause: unknown): Record<string, unknown> {
 
 function mapReferenceRelationType(type: string): RelationType {
   const t = type.toUpperCase();
-  if (t.includes("DEROGA")) return "deroga_total";
-  if (t.includes("MODIFICA")) return "modifica";
-  if (t.includes("DESARROLLA") || t.includes("COMPLEMENTA") || t.includes("RELACION")) {
-    return "complementa";
+  if (t.includes('DEROGA')) return 'deroga_total';
+  if (t.includes('MODIFICA')) return 'modifica';
+  if (t.includes('DESARROLLA') || t.includes('COMPLEMENTA') || t.includes('RELACION')) {
+    return 'complementa';
   }
-  if (t.includes("DECLARA") || t.includes("INTERPRETA") || t.includes("NULIDAD")) {
-    return "interpreta";
+  if (t.includes('DECLARA') || t.includes('INTERPRETA') || t.includes('NULIDAD')) {
+    return 'interpreta';
   }
-  return "cita_explicita";
+  return 'cita_explicita';
 }
 
 function normalizeTargetCanonicalId(reference: string): string | null {
@@ -155,7 +155,7 @@ function normalizeTargetCanonicalId(reference: string): string | null {
     return null;
   }
 
-  const withoutPrefix = trimmed.replace(/^boe:/i, "").toUpperCase();
+  const withoutPrefix = trimmed.replace(/^boe:/i, '').toUpperCase();
   if (/^BOE-[A-Z]-\d{1,}-\d+$/.test(withoutPrefix)) {
     return `boe:${withoutPrefix}`;
   }
@@ -178,7 +178,7 @@ const fullSyncMode = CollectionMode.FullSync({
 });
 
 const parseResumeOffset = (mode: CollectionModeType): number => {
-  if (mode._tag !== "Resume") {
+  if (mode._tag !== 'Resume') {
     return 0;
   }
 
@@ -190,13 +190,13 @@ const getCollectionWindow = (
   mode: CollectionModeType,
 ): Option.Option<{ readonly from?: Date; readonly to?: Date }> => {
   switch (mode._tag) {
-    case "FullSync":
+    case 'FullSync':
       return Option.some({ from: mode.startDate });
-    case "Incremental":
+    case 'Incremental':
       return Option.some({ from: mode.since });
-    case "Backfill":
+    case 'Backfill':
       return Option.some({ from: mode.from, to: mode.to });
-    case "Resume":
+    case 'Resume':
       return getCollectionWindow(mode.originalMode);
     default:
       return Option.none();
@@ -220,20 +220,20 @@ const isWithinModeWindow = (itemUpdatedAt: Date, mode: CollectionModeType): bool
 };
 
 const isFullSyncLike = (mode: CollectionModeType): boolean => {
-  if (mode._tag === "FullSync") {
+  if (mode._tag === 'FullSync') {
     return true;
   }
-  if (mode._tag === "Resume") {
+  if (mode._tag === 'Resume') {
     return isFullSyncLike(mode.originalMode);
   }
   return false;
 };
 
 const shouldFailFastOnSourceError = (mode: CollectionModeType): boolean => {
-  if (mode._tag === "Incremental") {
+  if (mode._tag === 'Incremental') {
     return true;
   }
-  if (mode._tag === "Resume") {
+  if (mode._tag === 'Resume') {
     return shouldFailFastOnSourceError(mode.originalMode);
   }
   return false;
@@ -243,7 +243,7 @@ const canonicalIdFromIdentifier = (identifier: string): string => `boe:${identif
 
 const buildDocument = (
   law: BoeLawItem,
-  kind: CollectedDocument["kind"],
+  kind: CollectedDocument['kind'],
   mappedMetadata: unknown,
   contentText: string,
   contentHash: string | null,
@@ -266,7 +266,7 @@ const toBatchDocument = (document: CollectedDocument): CollectedDocument =>
   new CollectedDocument({
     externalId: document.externalId,
     title: document.title,
-    content: "",
+    content: '',
     metadata: {},
     publishedAt: document.publishedAt,
     updatedAt: document.updatedAt,
@@ -276,9 +276,9 @@ const toBatchDocument = (document: CollectedDocument): CollectedDocument =>
   });
 
 export const BoeLawsCollectorFactory = defineFactory({
-  id: "boe-laws",
-  name: "BOE Laws Collector",
-  description: "Collects BOE consolidated legislation and upserts legal document metadata",
+  id: 'boe-laws',
+  name: 'BOE Laws Collector',
+  description: 'Collects BOE consolidated legislation and upserts legal document metadata',
   configSchema: BoeCollectorConfig,
   capabilities,
   make: ({ collectorId, config }) =>
@@ -299,7 +299,7 @@ export const BoeLawsCollectorFactory = defineFactory({
           Schedule.exponential(baseDelay).pipe(Schedule.jittered),
         );
 
-      const ensureSourceExists = Effect.fn("BoeCollector.ensureSourceExists")(() =>
+      const ensureSourceExists = Effect.fn('BoeCollector.ensureSourceExists')(() =>
         Effect.gen(function* () {
           const rows = yield* db
             .select({ sourceId: legislativeSources.sourceId })
@@ -312,7 +312,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   new CollectionError({
                     collectorId,
                     runId: undefined,
-                    reason: "Unable to verify legislative source",
+                    reason: 'Unable to verify legislative source',
                     cause,
                     message: `Collection error [${collectorId}]: Unable to verify legislative source`,
                   }),
@@ -324,38 +324,38 @@ export const BoeLawsCollectorFactory = defineFactory({
             : Effect.fail(
                 new ValidationError({
                   collectorId,
-                  field: "sourceId",
+                  field: 'sourceId',
                   value: sourceId,
-                  reason: "Legislative source not found",
+                  reason: 'Legislative source not found',
                   message: `Legislative source '${sourceId}' does not exist`,
                 }),
               );
         }).pipe(
-          Effect.withSpan("BoeCollector.ensureSourceExists", {
+          Effect.withSpan('BoeCollector.ensureSourceExists', {
             attributes: { sourceId },
           }),
         ),
       );
 
-      const fetchPage = Effect.fn("BoeCollector.fetchPage")(
+      const fetchPage = Effect.fn('BoeCollector.fetchPage')(
         (offset: number, mode: CollectionModeType) =>
           Effect.gen(function* () {
             const url = new URL(config.baseUrl);
-            url.searchParams.set("offset", String(offset));
-            url.searchParams.set("limit", String(config.batchSize));
+            url.searchParams.set('offset', String(offset));
+            url.searchParams.set('limit', String(config.batchSize));
 
             if (config.staticQuery.trim().length > 0) {
-              url.searchParams.set("query", config.staticQuery);
+              url.searchParams.set('query', config.staticQuery);
             }
 
             Option.match(getCollectionWindow(mode), {
               onNone: () => undefined,
               onSome: ({ from, to }) => {
                 if (from !== undefined) {
-                  url.searchParams.set("from", from.toISOString().slice(0, 10).replaceAll("-", ""));
+                  url.searchParams.set('from', from.toISOString().slice(0, 10).replaceAll('-', ''));
                 }
                 if (to !== undefined) {
-                  url.searchParams.set("to", to.toISOString().slice(0, 10).replaceAll("-", ""));
+                  url.searchParams.set('to', to.toISOString().slice(0, 10).replaceAll('-', ''));
                 }
               },
             });
@@ -363,7 +363,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             const payload = yield* Effect.tryPromise({
               try: async () => {
                 const response = await fetch(url, {
-                  headers: { Accept: "application/json" },
+                  headers: { Accept: 'application/json' },
                 });
 
                 if (!response.ok) {
@@ -388,7 +388,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                     }),
             }).pipe(
               Effect.timeout(requestTimeout),
-              Effect.catchTag("TimeoutException", (timeoutError) =>
+              Effect.catchTag('TimeoutException', (timeoutError) =>
                 Effect.fail(
                   new SourceConnectionError({
                     collectorId,
@@ -401,7 +401,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               Effect.retry({
                 schedule: retryPolicy(config.textFetchMaxAttempts, textRetryBaseDelay),
                 while: (error): error is SourceConnectionError =>
-                  error._tag === "SourceConnectionError",
+                  error._tag === 'SourceConnectionError',
               }),
             );
 
@@ -410,7 +410,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 (cause) =>
                   new ValidationError({
                     collectorId,
-                    field: "sourcePayload",
+                    field: 'sourcePayload',
                     value: payload,
                     reason: String(cause),
                     message: `Invalid BOE payload for collector '${collectorId}'`,
@@ -420,13 +420,13 @@ export const BoeLawsCollectorFactory = defineFactory({
 
             return normalizeBoeItems(decoded);
           }).pipe(
-            Effect.withSpan("BoeCollector.fetchPage", {
+            Effect.withSpan('BoeCollector.fetchPage', {
               attributes: { offset, mode: mode._tag },
             }),
           ),
       );
 
-      const fetchConsolidatedText = Effect.fn("BoeCollector.fetchConsolidatedText")(
+      const fetchConsolidatedText = Effect.fn('BoeCollector.fetchConsolidatedText')(
         (identifier: string, runId: CollectionRunId) =>
           config.ingestTextVersions
             ? Effect.gen(function* () {
@@ -435,7 +435,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 const fetchOnce = Effect.tryPromise({
                   try: async () => {
                     const response = await fetch(sourceUrl, {
-                      headers: { Accept: "application/xml" },
+                      headers: { Accept: 'application/xml' },
                     });
 
                     if (!response.ok) {
@@ -460,9 +460,9 @@ export const BoeLawsCollectorFactory = defineFactory({
                           message: `Collection error [${collectorId}]: Unable to fetch consolidated text for '${identifier}'`,
                         }),
                 }).pipe(
-                  Effect.withSpan("BoeCollector.fetchConsolidatedText.fetch"),
+                  Effect.withSpan('BoeCollector.fetchConsolidatedText.fetch'),
                   Effect.timeout(textRequestTimeout),
-                  Effect.catchTag("TimeoutException", (timeoutError) =>
+                  Effect.catchTag('TimeoutException', (timeoutError) =>
                     Effect.fail(
                       new SourceConnectionError({
                         collectorId,
@@ -490,22 +490,22 @@ export const BoeLawsCollectorFactory = defineFactory({
                   Effect.retry({
                     schedule: retryPolicy(config.textFetchMaxAttempts, textRetryBaseDelay),
                     while: (error): error is SourceConnectionError =>
-                      error._tag === "SourceConnectionError",
+                      error._tag === 'SourceConnectionError',
                   }),
                 );
               }).pipe(
-                Effect.withSpan("BoeCollector.fetchConsolidatedText", {
+                Effect.withSpan('BoeCollector.fetchConsolidatedText', {
                   attributes: { identifier, runId },
                 }),
               )
-            : Effect.succeed(""),
+            : Effect.succeed(''),
       );
 
-      const prepareLaw = Effect.fn("BoeCollector.prepareLaw")(
+      const prepareLaw = Effect.fn('BoeCollector.prepareLaw')(
         (law: BoeLawItem, runId: CollectionRunId, existing: ExistingLegalDocument | null) =>
           Effect.gen(function* () {
-            yield* Effect.annotateCurrentSpan("law.identifier", law.identificador);
-            yield* Effect.annotateCurrentSpan("law.hasExisting", existing !== null);
+            yield* Effect.annotateCurrentSpan('law.identifier', law.identificador);
+            yield* Effect.annotateCurrentSpan('law.hasExisting', existing !== null);
 
             const mapped = yield* Effect.try({
               try: () =>
@@ -517,7 +517,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               catch: (cause) =>
                 new ValidationError({
                   collectorId,
-                  field: "mapping",
+                  field: 'mapping',
                   value: law,
                   reason: String(cause),
                   message: `Failed to map BOE law '${law.identificador}'`,
@@ -532,29 +532,29 @@ export const BoeLawsCollectorFactory = defineFactory({
                 law,
                 mapped,
                 existing,
-                kind: "Unchanged" as const,
-                contentText: "",
+                kind: 'Unchanged' as const,
+                contentText: '',
                 contentHash: existing.contentHash,
               };
             }
 
             const contentText = config.ingestTextVersions
               ? yield* fetchConsolidatedText(law.identificador, runId)
-              : "";
+              : '';
             const contentHash = config.ingestTextVersions ? createContentHash(contentText) : null;
 
             return {
               law,
               mapped,
               existing,
-              kind: existing === null ? ("New" as const) : ("Update" as const),
+              kind: existing === null ? ('New' as const) : ('Update' as const),
               contentText,
               contentHash,
             };
           }),
       );
 
-      const startSyncRun = Effect.fn("BoeCollector.startSyncRun")(
+      const startSyncRun = Effect.fn('BoeCollector.startSyncRun')(
         (runId: CollectionRunId, mode: CollectionModeType) =>
           config.trackSyncRuns
             ? Effect.gen(function* () {
@@ -564,21 +564,21 @@ export const BoeLawsCollectorFactory = defineFactory({
                   .values({
                     runId,
                     sourceId,
-                    status: "running",
+                    status: 'running',
                     startedAt: now,
                     docsInserted: 0,
                     docsUpdated: 0,
                     docsFailed: 0,
                     metadata: {
                       collectorId,
-                      factoryId: "boe-laws",
+                      factoryId: 'boe-laws',
                       mode: mode._tag,
                     },
                   })
                   .onConflictDoUpdate({
                     target: syncRuns.runId,
                     set: {
-                      status: "running",
+                      status: 'running',
                       completedAt: null,
                       docsInserted: 0,
                       docsUpdated: 0,
@@ -587,7 +587,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                       errorLog: [],
                       metadata: {
                         collectorId,
-                        factoryId: "boe-laws",
+                        factoryId: 'boe-laws',
                         mode: mode._tag,
                       },
                     },
@@ -598,24 +598,24 @@ export const BoeLawsCollectorFactory = defineFactory({
                         new CollectionError({
                           collectorId,
                           runId,
-                          reason: "Unable to start sync run",
+                          reason: 'Unable to start sync run',
                           cause,
                           message: `Collection error [${collectorId}]: Unable to start sync run`,
                         }),
                     ),
                   );
               }).pipe(
-                Effect.withSpan("BoeCollector.startSyncRun", {
+                Effect.withSpan('BoeCollector.startSyncRun', {
                   attributes: { runId, mode: mode._tag },
                 }),
               )
             : Effect.void,
       );
 
-      const finishSyncRun = Effect.fn("BoeCollector.finishSyncRun")(
+      const finishSyncRun = Effect.fn('BoeCollector.finishSyncRun')(
         (input: {
           readonly runId: CollectionRunId;
-          readonly status: "completed" | "failed";
+          readonly status: 'completed' | 'failed';
           readonly stats: SyncStats;
           readonly startedAt: Date;
           readonly errorLog: ReadonlyArray<Record<string, string>>;
@@ -642,14 +642,14 @@ export const BoeLawsCollectorFactory = defineFactory({
                         new CollectionError({
                           collectorId,
                           runId: input.runId,
-                          reason: "Unable to finalize sync run",
+                          reason: 'Unable to finalize sync run',
                           cause,
                           message: `Collection error [${collectorId}]: Unable to finalize sync run`,
                         }),
                     ),
                   );
               }).pipe(
-                Effect.withSpan("BoeCollector.finishSyncRun", {
+                Effect.withSpan('BoeCollector.finishSyncRun', {
                   attributes: {
                     runId: input.runId,
                     status: input.status,
@@ -662,7 +662,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             : Effect.void,
       );
 
-      const loadExistingDocuments = Effect.fn("BoeCollector.loadExistingDocuments")(
+      const loadExistingDocuments = Effect.fn('BoeCollector.loadExistingDocuments')(
         (page: ReadonlyArray<BoeLawItem>, runId: CollectionRunId) =>
           Effect.gen(function* () {
             const [rejectedCanonicalIdsChunk, acceptedCanonicalIdsChunk] = Chunk.partitionMap(
@@ -679,7 +679,7 @@ export const BoeLawsCollectorFactory = defineFactory({
 
             if (rejectedCanonicalIdsChunk.length > 0) {
               yield* Effect.logWarning(
-                "Filtered invalid canonical identifiers before existing-documents query",
+                'Filtered invalid canonical identifiers before existing-documents query',
                 {
                   collectorId,
                   runId,
@@ -693,7 +693,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               return new Map<string, ExistingLegalDocument>();
             }
 
-            const queryChunk = Effect.fn("BoeCollector.queryExistingDocumentsChunk")(
+            const queryChunk = Effect.fn('BoeCollector.queryExistingDocumentsChunk')(
               (canonicalIds: ReadonlyArray<string>) =>
                 db
                   .select({
@@ -716,10 +716,10 @@ export const BoeLawsCollectorFactory = defineFactory({
                         Schedule.compose(Schedule.recurs(2)),
                       ),
                       while: (error) =>
-                        typeof error === "object" &&
+                        typeof error === 'object' &&
                         error !== null &&
-                        "_tag" in error &&
-                        error._tag === "EffectDrizzleQueryError",
+                        '_tag' in error &&
+                        error._tag === 'EffectDrizzleQueryError',
                     }),
                   ),
             );
@@ -731,7 +731,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 const chunkIds = Chunk.toReadonlyArray(chunk);
                 const rows = yield* queryChunk(chunkIds).pipe(
                   Effect.tapError((cause) =>
-                    Effect.logError("Existing-documents query chunk failed", {
+                    Effect.logError('Existing-documents query chunk failed', {
                       collectorId,
                       runId,
                       chunkIndex,
@@ -768,14 +768,14 @@ export const BoeLawsCollectorFactory = defineFactory({
                       return yield* new CollectionError({
                         collectorId,
                         runId,
-                        reason: "Unable to load existing page documents",
+                        reason: 'Unable to load existing page documents',
                         cause: chunkCause,
                         message: `Collection error [${collectorId}]: Unable to load existing page documents`,
                       });
                     }
 
                     yield* Effect.logWarning(
-                      "Recovered existing-documents chunk via single-id fallback",
+                      'Recovered existing-documents chunk via single-id fallback',
                       {
                         collectorId,
                         runId,
@@ -800,13 +800,13 @@ export const BoeLawsCollectorFactory = defineFactory({
               safeRows.map((row) => [row.canonicalId, row]),
             );
           }).pipe(
-            Effect.withSpan("BoeCollector.loadExistingDocuments", {
+            Effect.withSpan('BoeCollector.loadExistingDocuments', {
               attributes: { runId, pageSize: page.length },
             }),
           ),
       );
 
-      const upsertLegalDocuments = Effect.fn("BoeCollector.upsertLegalDocuments")(
+      const upsertLegalDocuments = Effect.fn('BoeCollector.upsertLegalDocuments')(
         (persistable: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
           Effect.gen(function* () {
             const upsertRows = persistable.map((item) => {
@@ -864,17 +864,17 @@ export const BoeLawsCollectorFactory = defineFactory({
                     new CollectionError({
                       collectorId,
                       runId,
-                      reason: "Unable to bulk upsert legal documents",
+                      reason: 'Unable to bulk upsert legal documents',
                       cause,
                       message: `Collection error [${collectorId}]: Unable to bulk upsert legal documents`,
                     }),
                 ),
               );
-          }).pipe(Effect.withSpan("BoeCollector.upsertLegalDocuments")),
+          }).pipe(Effect.withSpan('BoeCollector.upsertLegalDocuments')),
       );
 
       const resolveReferenceAnchorsForCollectorRun = Effect.fn(
-        "BoeCollector.resolveReferenceAnchorsForCollectorRun",
+        'BoeCollector.resolveReferenceAnchorsForCollectorRun',
       )((runId: CollectionRunId) =>
         db
           .execute(sql`
@@ -898,7 +898,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 new CollectionError({
                   collectorId,
                   runId,
-                  reason: "Unable to resolve unresolved reference anchors",
+                  reason: 'Unable to resolve unresolved reference anchors',
                   cause,
                   message: `Collection error [${collectorId}]: Unable to resolve unresolved reference anchors`,
                 }),
@@ -908,7 +908,7 @@ export const BoeLawsCollectorFactory = defineFactory({
 
       // TODO: Make this work in chunks like with all the other elements
       const populateReferenceAnchorsForAllSourceDocuments = Effect.fn(
-        "BoeCollector.populateReferenceAnchorsForAllSourceDocuments",
+        'BoeCollector.populateReferenceAnchorsForAllSourceDocuments',
       )((runId: CollectionRunId) =>
         Effect.gen(function* () {
           const latestVersions = yield* db
@@ -930,7 +930,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   new CollectionError({
                     collectorId,
                     runId,
-                    reason: "Unable to load latest versions for reference anchor population",
+                    reason: 'Unable to load latest versions for reference anchor population',
                     cause,
                     message: `Collection error [${collectorId}]: Unable to load latest versions for reference anchor population`,
                   }),
@@ -953,7 +953,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   .parseForIndexingWithReferences({ xml: row.content_text })
                   .pipe(
                     Effect.catchAll((cause) =>
-                      Effect.logWarning("BoeCollector reference parse failed for document", {
+                      Effect.logWarning('BoeCollector reference parse failed for document', {
                         collectorId,
                         runId,
                         docId: row.doc_id,
@@ -1016,16 +1016,16 @@ export const BoeLawsCollectorFactory = defineFactory({
                         new CollectionError({
                           collectorId,
                           runId,
-                          reason: "Unable to insert populated reference anchors",
+                          reason: 'Unable to insert populated reference anchors',
                           cause,
                           message: `Collection error [${collectorId}]: Unable to insert populated reference anchors`,
                         }),
                     ),
                   );
               }).pipe(
-                Effect.catchTag("CollectionError", (error) =>
+                Effect.catchTag('CollectionError', (error) =>
                   Effect.logWarning(
-                    "BoeCollector reference anchor population failed for document",
+                    'BoeCollector reference anchor population failed for document',
                     {
                       collectorId,
                       runId,
@@ -1041,7 +1041,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             },
           );
         }).pipe(
-          Effect.withSpan("BoeCollector.populateReferenceAnchorsForAllSourceDocuments", {
+          Effect.withSpan('BoeCollector.populateReferenceAnchorsForAllSourceDocuments', {
             attributes: { runId },
           }),
           Effect.mapError(
@@ -1049,7 +1049,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               new CollectionError({
                 collectorId,
                 runId,
-                reason: "Unable to populate reference anchors for all source documents",
+                reason: 'Unable to populate reference anchors for all source documents',
                 cause,
                 message: `Collection error [${collectorId}]: Unable to populate reference anchors for all source documents`,
               }),
@@ -1057,7 +1057,7 @@ export const BoeLawsCollectorFactory = defineFactory({
         ),
       );
 
-      const ingestDocumentVersions = Effect.fn("BoeCollector.ingestDocumentVersions")(
+      const ingestDocumentVersions = Effect.fn('BoeCollector.ingestDocumentVersions')(
         (
           persistable: ReadonlyArray<PreparedLaw>,
           docIdByCanonicalId: Map<string, string>,
@@ -1069,7 +1069,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             const sourceByDocAndContent = new Map<
               string,
               {
-                readonly kind: "New" | "Update";
+                readonly kind: 'New' | 'Update';
                 readonly canonicalId: string;
                 readonly contentHash: string | null;
               }
@@ -1078,7 +1078,7 @@ export const BoeLawsCollectorFactory = defineFactory({
             const newVersionRows: Array<{
               readonly docId: string;
               readonly versionNumber: number;
-              readonly versionType: "consolidated_initial";
+              readonly versionType: 'consolidated_initial';
               readonly contentText: string;
               readonly validFrom: Date;
               readonly validUntil: null;
@@ -1109,24 +1109,24 @@ export const BoeLawsCollectorFactory = defineFactory({
               const validFrom =
                 item.mapped.document.entryIntoForceAt ?? item.mapped.document.publishedAt ?? now;
 
-              if (item.kind === "New") {
+              if (item.kind === 'New') {
                 newVersionRows.push({
                   docId,
                   versionNumber: 1,
-                  versionType: "consolidated_initial",
+                  versionType: 'consolidated_initial',
                   contentText: item.contentText,
                   validFrom,
                   validUntil: null,
                 });
                 sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
-                  kind: "New",
+                  kind: 'New',
                   canonicalId,
                   contentHash: item.contentHash,
                 });
               } else {
                 updateCandidates.push({ docId, validFrom, contentText: item.contentText });
                 sourceByDocAndContent.set(`${docId}:${item.contentText}`, {
-                  kind: "Update",
+                  kind: 'Update',
                   canonicalId,
                   contentHash: item.contentHash,
                 });
@@ -1150,7 +1150,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                       new CollectionError({
                         collectorId,
                         runId,
-                        reason: "Unable to bulk insert initial versions",
+                        reason: 'Unable to bulk insert initial versions',
                         cause,
                         message: `Collection error [${collectorId}]: Unable to bulk insert initial versions`,
                       }),
@@ -1180,7 +1180,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                         new CollectionError({
                           collectorId,
                           runId,
-                          reason: "Unable to decode indexing trigger payload for initial version",
+                          reason: 'Unable to decode indexing trigger payload for initial version',
                           cause,
                           message: `Collection error [${collectorId}]: Unable to decode indexing trigger payload for initial version`,
                         }),
@@ -1209,7 +1209,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                     new CollectionError({
                       collectorId,
                       runId,
-                      reason: "Unable to load versions for batch updates",
+                      reason: 'Unable to load versions for batch updates',
                       cause,
                       message: `Collection error [${collectorId}]: Unable to load versions for batch updates`,
                     }),
@@ -1244,7 +1244,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                       new CollectionError({
                         collectorId,
                         runId,
-                        reason: "Unable to close existing versions in bulk",
+                        reason: 'Unable to close existing versions in bulk',
                         cause,
                         message: `Collection error [${collectorId}]: Unable to close existing versions in bulk`,
                       }),
@@ -1257,7 +1257,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               return {
                 docId: candidate.docId,
                 versionNumber: (latest?.versionNumber ?? 0) + 1,
-                versionType: "consolidated_update" as const,
+                versionType: 'consolidated_update' as const,
                 contentText: candidate.contentText,
                 validFrom: candidate.validFrom,
                 validUntil: null,
@@ -1279,7 +1279,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                       new CollectionError({
                         collectorId,
                         runId,
-                        reason: "Unable to bulk insert update versions",
+                        reason: 'Unable to bulk insert update versions',
                         cause,
                         message: `Collection error [${collectorId}]: Unable to bulk insert update versions`,
                       }),
@@ -1309,7 +1309,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                         new CollectionError({
                           collectorId,
                           runId,
-                          reason: "Unable to decode indexing trigger payload for updated version",
+                          reason: 'Unable to decode indexing trigger payload for updated version',
                           cause,
                           message: `Collection error [${collectorId}]: Unable to decode indexing trigger payload for updated version`,
                         }),
@@ -1320,13 +1320,13 @@ export const BoeLawsCollectorFactory = defineFactory({
             }
 
             return indexingPayloads as ReadonlyArray<typeof IndexingTriggerPayload.Type>;
-          }).pipe(Effect.withSpan("BoeCollector.ingestDocumentVersions")),
+          }).pipe(Effect.withSpan('BoeCollector.ingestDocumentVersions')),
       );
 
-      const persistPreparedLaws = Effect.fn("BoeCollector.persistPreparedLaws")(
+      const persistPreparedLaws = Effect.fn('BoeCollector.persistPreparedLaws')(
         (preparedLaws: ReadonlyArray<PreparedLaw>, runId: CollectionRunId) =>
           Effect.gen(function* () {
-            const persistable = preparedLaws.filter((law) => law.kind !== "Unchanged");
+            const persistable = preparedLaws.filter((law) => law.kind !== 'Unchanged');
             if (persistable.length === 0) {
               return;
             }
@@ -1343,7 +1343,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               if (payloads.length > 0) {
                 yield* indexingQueue.enqueueMany(payloads).pipe(
                   Effect.tapError((cause) =>
-                    Effect.logWarning("Boe indexing enqueue failed; continuing collector run", {
+                    Effect.logWarning('Boe indexing enqueue failed; continuing collector run', {
                       collectorId,
                       runId,
                       payloadCount: payloads.length,
@@ -1355,7 +1355,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                       new CollectionError({
                         collectorId,
                         runId,
-                        reason: "Unable to enqueue BOE indexing jobs",
+                        reason: 'Unable to enqueue BOE indexing jobs',
                         cause,
                         message: `Collection error [${collectorId}]: Unable to enqueue BOE indexing jobs`,
                       }),
@@ -1364,7 +1364,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               }
             }
           }).pipe(
-            Effect.withSpan("BoeCollector.persistPreparedLaws", {
+            Effect.withSpan('BoeCollector.persistPreparedLaws', {
               attributes: { runId, totalLaws: preparedLaws.length },
             }),
           ),
@@ -1373,8 +1373,8 @@ export const BoeLawsCollectorFactory = defineFactory({
       const collectStream = (mode: CollectionModeType, runId: CollectionRunId) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            yield* Effect.annotateCurrentSpan("collect.runId", runId);
-            yield* Effect.annotateCurrentSpan("collect.mode", mode._tag);
+            yield* Effect.annotateCurrentSpan('collect.runId', runId);
+            yield* Effect.annotateCurrentSpan('collect.mode', mode._tag);
 
             yield* ensureSourceExists();
 
@@ -1394,13 +1394,13 @@ export const BoeLawsCollectorFactory = defineFactory({
               readonly updated: number;
             }
 
-            const checkWindow = Effect.fn("BoeCollector.checkWindow")((law: BoeLawItem) =>
+            const checkWindow = Effect.fn('BoeCollector.checkWindow')((law: BoeLawItem) =>
               Effect.try({
                 try: () => isWithinModeWindow(parseBoeDateTime(law.fecha_actualizacion), mode),
                 catch: (cause) =>
                   new ValidationError({
                     collectorId,
-                    field: "fecha_actualizacion",
+                    field: 'fecha_actualizacion',
                     value: law.fecha_actualizacion,
                     reason: String(cause),
                     message: `Invalid BOE update timestamp for '${law.identificador}'`,
@@ -1408,7 +1408,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               }),
             );
 
-            const processItem = Effect.fn("BoeCollector.processItem")(
+            const processItem = Effect.fn('BoeCollector.processItem')(
               (
                 law: BoeLawItem,
                 existingByCanonicalId: Map<string, ExistingLegalDocument>,
@@ -1435,7 +1435,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                     catch: (cause) =>
                       new ValidationError({
                         collectorId,
-                        field: "documentEncoding",
+                        field: 'documentEncoding',
                         value: law.identificador,
                         reason: String(cause),
                         message: `Failed to build collected document for '${law.identificador}'`,
@@ -1445,13 +1445,13 @@ export const BoeLawsCollectorFactory = defineFactory({
                   return {
                     prepared,
                     document,
-                    inserted: prepared.kind === "New" ? 1 : 0,
-                    updated: prepared.kind === "Update" ? 1 : 0,
+                    inserted: prepared.kind === 'New' ? 1 : 0,
+                    updated: prepared.kind === 'Update' ? 1 : 0,
                   };
                 }),
             );
 
-            const fetchAndProcessPage = Effect.fn("BoeCollector.fetchAndProcessPage")(
+            const fetchAndProcessPage = Effect.fn('BoeCollector.fetchAndProcessPage')(
               (
                 offset: number,
               ): Effect.Effect<
@@ -1460,7 +1460,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                 never
               > =>
                 Effect.gen(function* () {
-                  yield* Effect.annotateCurrentSpan("page.offset", offset);
+                  yield* Effect.annotateCurrentSpan('page.offset', offset);
 
                   const page = yield* fetchPage(offset, mode);
                   if (page.length === 0) {
@@ -1472,8 +1472,8 @@ export const BoeLawsCollectorFactory = defineFactory({
                   const windowChecks = yield* Effect.forEach(page, (law) =>
                     checkWindow(law).pipe(
                       Effect.map((inWindow) => ({ law, inWindow })),
-                      Effect.catchTag("ValidationError", (error) =>
-                        config.unknownRangeStrategy === "fail"
+                      Effect.catchTag('ValidationError', (error) =>
+                        config.unknownRangeStrategy === 'fail'
                           ? Effect.fail(error)
                           : Effect.succeed({ law, inWindow: false, error }),
                       ),
@@ -1492,10 +1492,10 @@ export const BoeLawsCollectorFactory = defineFactory({
                     error: ValidationError | SourceConnectionError | CollectionError,
                   ): boolean => {
                     switch (error._tag) {
-                      case "ValidationError":
-                        return config.unknownRangeStrategy === "fail";
-                      case "SourceConnectionError":
-                      case "CollectionError":
+                      case 'ValidationError':
+                        return config.unknownRangeStrategy === 'fail';
+                      case 'SourceConnectionError':
+                      case 'CollectionError':
                         return shouldFailFastOnSourceError(mode);
                     }
                   };
@@ -1506,12 +1506,12 @@ export const BoeLawsCollectorFactory = defineFactory({
                   yield* Effect.forEach(failures, (error) =>
                     appendErrorLog({
                       identifier:
-                        "_tag" in error && "identifier" in error
+                        '_tag' in error && 'identifier' in error
                           ? String(error.identifier)
-                          : "unknown",
-                      tag: "_tag" in error ? String(error._tag) : "Unknown",
+                          : 'unknown',
+                      tag: '_tag' in error ? String(error._tag) : 'Unknown',
                       message:
-                        "message" in error && typeof error.message === "string"
+                        'message' in error && typeof error.message === 'string'
                           ? error.message
                           : String(error),
                     }),
@@ -1533,15 +1533,15 @@ export const BoeLawsCollectorFactory = defineFactory({
                   }));
 
                   const currentStats = yield* Ref.get(statsRef);
-                  yield* Effect.annotateCurrentSpan("stats.totalInserted", currentStats.inserted);
-                  yield* Effect.annotateCurrentSpan("stats.totalUpdated", currentStats.updated);
-                  yield* Effect.annotateCurrentSpan("stats.totalFailed", currentStats.failed);
+                  yield* Effect.annotateCurrentSpan('stats.totalInserted', currentStats.inserted);
+                  yield* Effect.annotateCurrentSpan('stats.totalUpdated', currentStats.updated);
+                  yield* Effect.annotateCurrentSpan('stats.totalFailed', currentStats.failed);
 
                   const hasMore = page.length === config.batchSize;
                   const nextOffset = offset + config.batchSize;
 
-                  yield* Effect.annotateCurrentSpan("page.hasMore", hasMore);
-                  yield* Effect.annotateCurrentSpan("page.nextOffset", nextOffset);
+                  yield* Effect.annotateCurrentSpan('page.hasMore', hasMore);
+                  yield* Effect.annotateCurrentSpan('page.nextOffset', nextOffset);
 
                   const requestDelayMs = Duration.toMillis(requestDelay);
                   const effectiveDelayMs = isFullSyncLike(mode)
@@ -1588,15 +1588,15 @@ export const BoeLawsCollectorFactory = defineFactory({
                         ...errorLog,
                         {
                           collectorId,
-                          tag: "CollectionExit",
+                          tag: 'CollectionExit',
                           message: Cause.pretty(exit.cause),
                         },
                       ];
 
                   // TODO: This should be done in chunks as well to avoid potential timeouts and memory issues with large numbers of documents
                   yield* populateReferenceAnchorsForAllSourceDocuments(runId).pipe(
-                    Effect.catchTag("CollectionError", (error) =>
-                      Effect.logWarning("BoeCollector full reference anchor population failed", {
+                    Effect.catchTag('CollectionError', (error) =>
+                      Effect.logWarning('BoeCollector full reference anchor population failed', {
                         collectorId,
                         runId,
                         reason: error.reason,
@@ -1606,8 +1606,8 @@ export const BoeLawsCollectorFactory = defineFactory({
                   );
 
                   yield* resolveReferenceAnchorsForCollectorRun(runId).pipe(
-                    Effect.catchTag("CollectionError", (error) =>
-                      Effect.logWarning("BoeCollector reference anchor reconciliation failed", {
+                    Effect.catchTag('CollectionError', (error) =>
+                      Effect.logWarning('BoeCollector reference anchor reconciliation failed', {
                         collectorId,
                         runId,
                         reason: error.reason,
@@ -1618,16 +1618,16 @@ export const BoeLawsCollectorFactory = defineFactory({
 
                   yield* finishSyncRun({
                     runId,
-                    status: isSuccess ? "completed" : "failed",
+                    status: isSuccess ? 'completed' : 'failed',
                     stats,
                     startedAt,
                     errorLog: finalErrorLog,
-                  }).pipe(Effect.catchTag("CollectionError", () => Effect.void));
+                  }).pipe(Effect.catchTag('CollectionError', () => Effect.void));
                 }),
               ),
             );
           }).pipe(
-            Effect.withSpan("BoeCollector.collectStream", {
+            Effect.withSpan('BoeCollector.collectStream', {
               attributes: { runId, mode: mode._tag },
             }),
           ),
@@ -1638,7 +1638,7 @@ export const BoeLawsCollectorFactory = defineFactory({
         validate: ensureSourceExists().pipe(
           Effect.zipRight(fetchPage(0, fullSyncMode)),
           Effect.asVoid,
-          Effect.withSpan("BoeCollector.validate"),
+          Effect.withSpan('BoeCollector.validate'),
         ),
         detectChanges: (since) =>
           fetchPage(
@@ -1648,7 +1648,7 @@ export const BoeLawsCollectorFactory = defineFactory({
               lookBackWindow: undefined,
             }),
           ).pipe(Effect.map((items) => items.length > 0)),
-        estimateState: Effect.fn("BoeCollector.estimateState")(function* () {
+        estimateState: Effect.fn('BoeCollector.estimateState')(function* () {
           const latestDoc = yield* db
             .select({ maxDate: sql<Date | null>`max(${legalDocuments.lastUpdatedAt})` })
             .from(legalDocuments)
@@ -1660,7 +1660,7 @@ export const BoeLawsCollectorFactory = defineFactory({
                   new CollectionError({
                     collectorId,
                     runId: undefined,
-                    reason: "Unable to query latest document date",
+                    reason: 'Unable to query latest document date',
                     cause,
                     message: `Collection error [${collectorId}]: Unable to query latest document date`,
                   }),
@@ -1668,12 +1668,12 @@ export const BoeLawsCollectorFactory = defineFactory({
             );
 
           if (latestDoc) {
-            yield* Effect.logInfo("Latest document date found in DB", {
+            yield* Effect.logInfo('Latest document date found in DB', {
               collectorId,
               latestDate: latestDoc.toISOString(),
             });
           } else {
-            yield* Effect.logInfo("No existing documents found in DB", { collectorId });
+            yield* Effect.logInfo('No existing documents found in DB', { collectorId });
           }
 
           return {
@@ -1686,22 +1686,22 @@ export const BoeLawsCollectorFactory = defineFactory({
         healthCheck: Effect.gen(function* () {
           const now = yield* Effect.map(Clock.currentTimeMillis, (ms) => new Date(ms));
           return yield* fetchPage(0, fullSyncMode).pipe(
-            Effect.as({ status: "healthy" as const, checkedAt: now }),
+            Effect.as({ status: 'healthy' as const, checkedAt: now }),
             Effect.catchTags({
               SourceConnectionError: (error) =>
                 Effect.succeed({
-                  status: "unhealthy" as const,
+                  status: 'unhealthy' as const,
                   checkedAt: now,
                   message: error.message,
                 }),
               ValidationError: (error) =>
                 Effect.succeed({
-                  status: "unhealthy" as const,
+                  status: 'unhealthy' as const,
                   checkedAt: now,
                   message: error.message,
                 }),
             }),
-            Effect.withSpan("BoeCollector.healthCheck"),
+            Effect.withSpan('BoeCollector.healthCheck'),
           );
         }),
       };

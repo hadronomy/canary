@@ -1,6 +1,6 @@
-import superjson from "superjson";
+import superjson from 'superjson';
 
-import type { StandardJSONSchemaV1, StandardSchemaV1 } from "~/standard-schema";
+import type { StandardJSONSchemaV1, StandardSchemaV1 } from '~/standard-schema';
 
 export interface CodecSerde<T> {
   readonly contentType?: string;
@@ -17,7 +17,7 @@ export interface Codec<T, TWire = unknown> extends CodecSerde<T> {
 }
 
 class BinaryCodec implements Codec<Uint8Array, Uint8Array> {
-  readonly contentType = "application/octet-stream";
+  readonly contentType = 'application/octet-stream';
 
   encode(value: Uint8Array): Uint8Array {
     return value;
@@ -25,7 +25,7 @@ class BinaryCodec implements Codec<Uint8Array, Uint8Array> {
 
   decode(value: Uint8Array): Uint8Array {
     if (!(value instanceof Uint8Array)) {
-      throw new TypeError("Expected Uint8Array value");
+      throw new TypeError('Expected Uint8Array value');
     }
 
     return value;
@@ -47,7 +47,7 @@ class BinaryCodec implements Codec<Uint8Array, Uint8Array> {
 class VoidCodec implements Codec<void, undefined> {
   encode(value: void): undefined {
     if (value !== undefined) {
-      throw new TypeError("Expected undefined value");
+      throw new TypeError('Expected undefined value');
     }
 
     return undefined;
@@ -55,13 +55,13 @@ class VoidCodec implements Codec<void, undefined> {
 
   decode(value: undefined): void {
     if (value !== undefined) {
-      throw new TypeError("Expected undefined value");
+      throw new TypeError('Expected undefined value');
     }
   }
 
   serialize(value: void): Uint8Array {
     if (value !== undefined) {
-      throw new TypeError("Expected undefined value");
+      throw new TypeError('Expected undefined value');
     }
 
     return new Uint8Array(0);
@@ -69,7 +69,7 @@ class VoidCodec implements Codec<void, undefined> {
 
   deserialize(data: Uint8Array): void {
     if (data.length !== 0) {
-      throw new TypeError("Expected empty data");
+      throw new TypeError('Expected empty data');
     }
   }
 
@@ -79,20 +79,20 @@ class VoidCodec implements Codec<void, undefined> {
 }
 
 export class JsonCodec<T> implements Codec<T | undefined, string> {
-  readonly contentType = "application/json";
+  readonly contentType = 'application/json';
 
   constructor(readonly jsonSchema?: object) {}
 
   encode(value: T | undefined): string {
     if (value === undefined) {
-      return "";
+      return '';
     }
 
     return JSON.stringify(value);
   }
 
   decode(value: string): T | undefined {
-    if (value === "") {
+    if (value === '') {
       return undefined;
     }
 
@@ -125,15 +125,15 @@ export class JsonCodec<T> implements Codec<T | undefined, string> {
 }
 
 export class SuperJsonCodec<T> implements Codec<T, string> {
-  readonly contentType = "application/json";
+  readonly contentType = 'application/json';
 
   encode(value: T): string {
     return superjson.stringify(value);
   }
 
   decode(value: unknown): T {
-    if (typeof value !== "string") {
-      throw new TypeError("SuperJsonCodec.decode expects a string payload");
+    if (typeof value !== 'string') {
+      throw new TypeError('SuperJsonCodec.decode expects a string payload');
     }
 
     return superjson.parse<T>(value);
@@ -153,9 +153,9 @@ export class SuperJsonCodec<T> implements Codec<T, string> {
 }
 
 class StandardSchemaCodec<
-  T extends { readonly "~standard": StandardSchemaV1.Props },
+  T extends { readonly '~standard': StandardSchemaV1.Props },
 > implements Codec<StandardSchemaV1.InferOutput<T>, string> {
-  contentType: string | undefined = "application/json";
+  contentType: string | undefined = 'application/json';
   jsonSchema?: object;
 
   constructor(
@@ -163,12 +163,12 @@ class StandardSchemaCodec<
     private readonly validateOptions?: Record<string, unknown>,
     jsonSchemaOptions?: Record<string, unknown>,
   ) {
-    const standard = schema["~standard"];
+    const standard = schema['~standard'];
 
     if (isStandardJSONSchemaV1(standard)) {
       try {
         this.jsonSchema = standard.jsonSchema.output({
-          target: "draft-2020-12",
+          target: 'draft-2020-12',
           libraryOptions: jsonSchemaOptions,
         });
       } catch {
@@ -184,14 +184,14 @@ class StandardSchemaCodec<
 
   encode(value: StandardSchemaV1.InferOutput<T>): string {
     if (value === undefined) {
-      return "";
+      return '';
     }
 
     return JSON.stringify(value);
   }
 
   decode(value: string): StandardSchemaV1.InferOutput<T> {
-    const parsed = value === "" ? undefined : (JSON.parse(value) as unknown);
+    const parsed = value === '' ? undefined : (JSON.parse(value) as unknown);
     return this.validate(parsed);
   }
 
@@ -213,19 +213,19 @@ class StandardSchemaCodec<
   }
 
   private validate(value: unknown): StandardSchemaV1.InferOutput<T> {
-    const result = this.schema["~standard"].validate(
+    const result = this.schema['~standard'].validate(
       value,
       this.validateOptions === undefined ? undefined : { libraryOptions: this.validateOptions },
     );
 
     if (isPromiseLike(result)) {
       throw new TypeError(
-        "Async validation is not supported in Codec. Restate Serde supports only synchronous validation.",
+        'Async validation is not supported in Codec. Restate Serde supports only synchronous validation.',
       );
     }
 
     if (result.issues) {
-      const errorMessages = result.issues.map(formatStandardSchemaIssue).join("\n");
+      const errorMessages = result.issues.map(formatStandardSchemaIssue).join('\n');
       throw new TypeError(`Standard schema validation failed:\n${errorMessages}`);
     }
 
@@ -271,7 +271,7 @@ export function defineCodec<T, TWire>(codec: {
   };
 }
 
-export function standardSchemaCodec<T extends { readonly "~standard": StandardSchemaV1.Props }>(
+export function standardSchemaCodec<T extends { readonly '~standard': StandardSchemaV1.Props }>(
   schema: T,
   validateOptions?: Record<string, unknown>,
   jsonSchemaOptions?: Record<string, unknown>,
@@ -301,16 +301,16 @@ export function fromSerde<T>(serde: CodecSerde<T>): Codec<T, T> {
 function formatStandardSchemaIssue(issue: StandardSchemaV1.Issue): string {
   if (issue.path && issue.path.length > 0) {
     const jsonPointer =
-      "/" +
+      '/' +
       issue.path
         .map((segment) => {
-          if (typeof segment === "object" && segment !== null && "key" in segment) {
+          if (typeof segment === 'object' && segment !== null && 'key' in segment) {
             return String(segment.key);
           }
 
           return String(segment);
         })
-        .join("/");
+        .join('/');
 
     return `* (at ${jsonPointer}) ${issue.message}`;
   }
@@ -323,16 +323,16 @@ function isStandardJSONSchemaV1(
 ): standard is StandardSchemaV1.Props & { readonly jsonSchema: StandardJSONSchemaV1.Converter } {
   return (
     standard !== undefined &&
-    "jsonSchema" in standard &&
-    typeof standard.jsonSchema === "object" &&
+    'jsonSchema' in standard &&
+    typeof standard.jsonSchema === 'object' &&
     standard.jsonSchema !== null &&
-    "output" in standard.jsonSchema &&
-    typeof standard.jsonSchema.output === "function"
+    'output' in standard.jsonSchema &&
+    typeof standard.jsonSchema.output === 'function'
   );
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return typeof value === "object" && value !== null && "then" in value;
+  return typeof value === 'object' && value !== null && 'then' in value;
 }
 
 export const codec = {
@@ -341,7 +341,7 @@ export const codec = {
   superJson: new SuperJsonCodec<unknown>(),
   binary: new BinaryCodec(),
   empty: new VoidCodec(),
-  schema: <T extends { readonly "~standard": StandardSchemaV1.Props }>(
+  schema: <T extends { readonly '~standard': StandardSchemaV1.Props }>(
     schema: T,
     validateOptions?: Record<string, unknown>,
     jsonSchemaOptions?: Record<string, unknown>,

@@ -1,13 +1,12 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from 'bun:test';
+import { Schema } from 'effect';
 
-import { Schema } from "effect";
+import { defineQueue, defineQueues } from '~/queues/registry';
 
-import { defineQueue, defineQueues } from "~/queues/registry";
-
-describe("queue registry", () => {
-  it("defines queues with names", () => {
+describe('queue registry', () => {
+  it('defines queues with names', () => {
     const refinery = defineQueue(
-      "refinery",
+      'refinery',
       Schema.Struct({
         id: Schema.String,
       }),
@@ -15,7 +14,7 @@ describe("queue registry", () => {
 
     const queues = defineQueues({ refinery });
 
-    expect(refinery.name).toBe("refinery");
-    expect(queues.refinery.name).toBe("refinery");
+    expect(refinery.name).toBe('refinery');
+    expect(queues.refinery.name).toBe('refinery');
   });
 });

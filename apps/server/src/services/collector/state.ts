@@ -1,6 +1,5 @@
-import { DateTime, Effect, HashMap, Option, Ref } from "effect";
+import { DateTime, Effect, HashMap, Option, Ref } from 'effect';
 
-import { CollectionError } from "./errors";
 import type {
   CollectionMode,
   CollectionProgress,
@@ -9,14 +8,16 @@ import type {
   CollectionState,
   CollectionStats,
   CollectorId,
-} from "./schema";
+} from './schema';
+
+import { CollectionError } from './errors';
 import {
   CollectionCursor,
   CollectionRun as CollectionRunModel,
   CollectionRunStatus,
   CollectionState as CollectionStateModel,
   CollectorId as CollectorIdBrand,
-} from "./schema";
+} from './schema';
 
 export interface RunSnapshot {
   readonly run: CollectionRun;
@@ -31,14 +32,14 @@ export interface StateUpdate {
 }
 
 export class CollectorStateManager extends Effect.Service<CollectorStateManager>()(
-  "CollectorStateManager",
+  'CollectorStateManager',
   {
     accessors: true,
     effect: Effect.gen(function* () {
       const activeRunsRef = yield* Ref.make(HashMap.empty<CollectionRunId, RunSnapshot>());
       const collectorStatesRef = yield* Ref.make(HashMap.empty<CollectorId, CollectionState>());
 
-      const lookupRun = Effect.fn("CollectorStateManager.lookupRun")(function* (
+      const lookupRun = Effect.fn('CollectorStateManager.lookupRun')(function* (
         runId: CollectionRunId,
       ) {
         const runs = yield* Ref.get(activeRunsRef);
@@ -46,7 +47,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
           Option.match({
             onNone: () =>
               new CollectionError({
-                collectorId: CollectorIdBrand("00000000-0000-0000-0000-000000000000"),
+                collectorId: CollectorIdBrand('00000000-0000-0000-0000-000000000000'),
                 runId,
                 reason: `Run '${runId}' not found`,
                 message: `Run '${runId}' not found`,
@@ -56,13 +57,13 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         );
       });
 
-      const getState = Effect.fn("CollectorStateManager.getState")((collectorId: CollectorId) =>
+      const getState = Effect.fn('CollectorStateManager.getState')((collectorId: CollectorId) =>
         Ref.get(collectorStatesRef).pipe(
           Effect.map((stateMap) => HashMap.get(stateMap, collectorId)),
         ),
       );
 
-      const updateState = Effect.fn("CollectorStateManager.updateState")(function* (
+      const updateState = Effect.fn('CollectorStateManager.updateState')(function* (
         collectorId: CollectorId,
         update: StateUpdate,
       ) {
@@ -94,9 +95,9 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
 
         const next = new CollectionStateModel({
           ...previous,
-          lastFullSync: update.mode._tag === "FullSync" ? Option.some(now) : previous.lastFullSync,
+          lastFullSync: update.mode._tag === 'FullSync' ? Option.some(now) : previous.lastFullSync,
           lastIncremental:
-            update.mode._tag === "Incremental" ? Option.some(now) : previous.lastIncremental,
+            update.mode._tag === 'Incremental' ? Option.some(now) : previous.lastIncremental,
           lastCursor: nextCursor,
           totalDocumentsCollected: previous.totalDocumentsCollected + update.documentsCollected,
           lastDocumentDate: update.lastDocumentDate,
@@ -106,7 +107,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         yield* Ref.update(collectorStatesRef, HashMap.set(collectorId, next));
       });
 
-      const createRun = Effect.fn("CollectorStateManager.createRun")(function* (
+      const createRun = Effect.fn('CollectorStateManager.createRun')(function* (
         collectorId: CollectorId,
         mode: CollectionMode,
       ) {
@@ -125,7 +126,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         return runId;
       });
 
-      const updateProgress = Effect.fn("CollectorStateManager.updateProgress")(function* (
+      const updateProgress = Effect.fn('CollectorStateManager.updateProgress')(function* (
         runId: CollectionRunId,
         progress: CollectionProgress,
       ) {
@@ -141,7 +142,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         );
       });
 
-      const completeRun = Effect.fn("CollectorStateManager.completeRun")(function* (
+      const completeRun = Effect.fn('CollectorStateManager.completeRun')(function* (
         runId: CollectionRunId,
         _stats: CollectionStats,
       ) {
@@ -149,7 +150,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         yield* Ref.update(activeRunsRef, HashMap.remove(runId));
       });
 
-      const failRun = Effect.fn("CollectorStateManager.failRun")(function* (
+      const failRun = Effect.fn('CollectorStateManager.failRun')(function* (
         runId: CollectionRunId,
         _error: string,
         _progress: Option.Option<CollectionProgress>,
@@ -159,7 +160,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         yield* Ref.update(activeRunsRef, HashMap.remove(runId));
       });
 
-      const cancelRun = Effect.fn("CollectorStateManager.cancelRun")(function* (
+      const cancelRun = Effect.fn('CollectorStateManager.cancelRun')(function* (
         runId: CollectionRunId,
         _reason: Option.Option<string>,
         _progress: Option.Option<CollectionProgress>,
@@ -168,7 +169,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
         yield* Ref.update(activeRunsRef, HashMap.remove(runId));
       });
 
-      const getResumableRun = Effect.fn("CollectorStateManager.getResumableRun")(
+      const getResumableRun = Effect.fn('CollectorStateManager.getResumableRun')(
         (collectorId: CollectorId) =>
           Ref.get(activeRunsRef).pipe(
             Effect.map((runs) =>
@@ -180,7 +181,7 @@ export class CollectorStateManager extends Effect.Service<CollectorStateManager>
           ),
       );
 
-      const getRunSnapshot = Effect.fn("CollectorStateManager.getRunSnapshot")(
+      const getRunSnapshot = Effect.fn('CollectorStateManager.getRunSnapshot')(
         (runId: CollectionRunId) =>
           Ref.get(activeRunsRef).pipe(Effect.map((runs) => HashMap.get(runs, runId))),
       );

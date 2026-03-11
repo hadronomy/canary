@@ -1,15 +1,15 @@
-import { Duration, Effect, Schema } from "effect";
+import { Duration, Effect, Schema } from 'effect';
 
-import { count, eq } from "@canary/db/drizzle";
-import { DatabaseService } from "@canary/db/effect";
-import { legalDocuments, legislativeSources } from "@canary/db/schema/legislation";
-import { collector } from "~/services/collector/api";
-import { CollectionMode } from "~/services/collector/schema";
+import { count, eq } from '@canary/db/drizzle';
+import { DatabaseService } from '@canary/db/effect';
+import { legalDocuments, legislativeSources } from '@canary/db/schema/legislation';
+import { collector } from '~/services/collector/api';
+import { CollectionMode } from '~/services/collector/schema';
 
-import { BoeLawsCollectorFactory } from "./factory";
+import { BoeLawsCollectorFactory } from './factory';
 
 export class BoeBootstrapError extends Schema.TaggedError<BoeBootstrapError>()(
-  "BoeBootstrapError",
+  'BoeBootstrapError',
   {
     operation: Schema.String,
     message: Schema.String,
@@ -27,15 +27,15 @@ export interface EnsureBoeCollectorInput {
 }
 
 const defaults: Required<EnsureBoeCollectorInput> = {
-  sourceCode: "BOE_CONSOLIDADA",
-  sourceName: "Boletin Oficial del Estado - Legislacion Consolidada",
-  collectorName: "BOE Consolidated Laws",
-  collectorDescription: "Collects and syncs BOE consolidated legislation",
-  schedule: "0 */4 * * *",
-  query: "",
+  sourceCode: 'BOE_CONSOLIDADA',
+  sourceName: 'Boletin Oficial del Estado - Legislacion Consolidada',
+  collectorName: 'BOE Consolidated Laws',
+  collectorDescription: 'Collects and syncs BOE consolidated legislation',
+  schedule: '0 */4 * * *',
+  query: '',
 };
 
-export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
+export const ensureBoeSource = Effect.fn('BoeCollector.ensureBoeSource')(
   (input?: EnsureBoeCollectorInput) =>
     Effect.gen(function* () {
       const resolved = { ...defaults, ...input };
@@ -49,7 +49,7 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
           Effect.mapError(
             (cause) =>
               new BoeBootstrapError({
-                operation: "ensureBoeSource.findLegislativeSource",
+                operation: 'ensureBoeSource.findLegislativeSource',
                 message: `Failed to query legislative source: ${String(cause)}`,
                 cause,
               }),
@@ -66,18 +66,18 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
         .values({
           sourceCode: resolved.sourceCode,
           sourceName: resolved.sourceName,
-          shortName: "BOE",
-          description: "Official BOE consolidated laws source",
-          jurisdiction: "estatal",
+          shortName: 'BOE',
+          description: 'Official BOE consolidated laws source',
+          jurisdiction: 'estatal',
           autonomousCommunity: null,
           isParliamentary: false,
           isOfficialGazette: true,
-          providesStage: ["bulletin", "enacted", "repealed", "expired"],
-          baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
+          providesStage: ['bulletin', 'enacted', 'repealed', 'expired'],
+          baseUrl: 'https://boe.es/datosabiertos/api/legislacion-consolidada',
           apiConfig: {
             supportsIncremental: true,
             supportsBackfill: true,
-            format: "json",
+            format: 'json',
           },
         })
         .returning({ sourceId: legislativeSources.sourceId })
@@ -85,7 +85,7 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
           Effect.mapError(
             (cause) =>
               new BoeBootstrapError({
-                operation: "ensureBoeSource.insertLegislativeSource",
+                operation: 'ensureBoeSource.insertLegislativeSource',
                 message: `Failed to insert legislative source: ${String(cause)}`,
                 cause,
               }),
@@ -97,7 +97,7 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
       Effect.mapError(
         (cause) =>
           new BoeBootstrapError({
-            operation: "ensureBoeSource",
+            operation: 'ensureBoeSource',
             message: `Failed to ensure BOE legislative source: ${String(cause)}`,
             cause,
           }),
@@ -105,7 +105,7 @@ export const ensureBoeSource = Effect.fn("BoeCollector.ensureBoeSource")(
     ),
 );
 
-export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
+export const ensureBoeCollector = Effect.fn('BoeCollector.ensureBoeCollector')(
   (input?: EnsureBoeCollectorInput) =>
     Effect.gen(function* () {
       const resolved = { ...defaults, ...input };
@@ -131,7 +131,7 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
         }),
         config: {
           sourceId,
-          baseUrl: "https://boe.es/datosabiertos/api/legislacion-consolidada",
+          baseUrl: 'https://boe.es/datosabiertos/api/legislacion-consolidada',
           batchSize: 250,
           timeout: Duration.seconds(30),
           requestDelay: Duration.millis(50),
@@ -141,8 +141,8 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
           textRetryBase: Duration.millis(250),
           textRequestTimeout: Duration.seconds(45),
           trackSyncRuns: true,
-          unknownRangeStrategy: "regulation",
-          upsertActor: "collector:boe-laws",
+          unknownRangeStrategy: 'regulation',
+          upsertActor: 'collector:boe-laws',
           staticQuery: resolved.query,
         },
       });
@@ -150,7 +150,7 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
       Effect.mapError(
         (cause) =>
           new BoeBootstrapError({
-            operation: "ensureBoeCollector",
+            operation: 'ensureBoeCollector',
             message: `Failed to ensure BOE collector: ${String(cause)}`,
             cause,
           }),
@@ -158,7 +158,7 @@ export const ensureBoeCollector = Effect.fn("BoeCollector.ensureBoeCollector")(
     ),
 );
 
-export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsForSource")(
+export const countDocumentsForSource = Effect.fn('BoeCollector.countDocumentsForSource')(
   (sourceId: string) =>
     Effect.gen(function* () {
       const db = yield* DatabaseService.client();
@@ -170,7 +170,7 @@ export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsFor
           Effect.mapError(
             (cause) =>
               new BoeBootstrapError({
-                operation: "countDocumentsForSource.query",
+                operation: 'countDocumentsForSource.query',
                 message: `Failed to count source docs: ${String(cause)}`,
                 cause,
               }),
@@ -181,7 +181,7 @@ export const countDocumentsForSource = Effect.fn("BoeCollector.countDocumentsFor
       Effect.mapError(
         (cause) =>
           new BoeBootstrapError({
-            operation: "countDocumentsForSource",
+            operation: 'countDocumentsForSource',
             message: `Failed to count source docs: ${String(cause)}`,
             cause,
           }),

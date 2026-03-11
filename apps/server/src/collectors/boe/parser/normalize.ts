@@ -2,7 +2,7 @@ import type {
   NormalizedArticleHeader,
   NormalizedChapterHeader,
   NormalizedSubparagraph,
-} from "./types";
+} from './types';
 
 const articlePatterns = [
   /Disposición\s+(adicional|final|transitoria|derogatoria)\s+([\p{L}\d]+)\.?\s*(.*)?/iu,
@@ -16,22 +16,22 @@ const articleWordLeadPattern = /^([\p{L}\d]+(?:\s+[\p{L}\d]+){0,2})(?:\s+(.*))?$
 const NODE_NUMBER_MAX_LENGTH = 50;
 
 export const normalizeTextContent = (text: string): string => {
-  return text.replace(/\s+/g, " ").trim();
+  return text.replace(/\s+/g, ' ').trim();
 };
 
 export function normalizeLegalPathSegment(value: string): string {
   return normalizeTextContent(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export function normalizeChapterHeader(text: string): NormalizedChapterHeader {
-  const isSpecial = text.includes("[encabezado]");
+  const isSpecial = text.includes('[encabezado]');
   return {
-    title: normalizeTextContent(text.replace(/^\[encabezado\]/i, "")),
+    title: normalizeTextContent(text.replace(/^\[encabezado\]/i, '')),
     isSpecial,
   };
 }
@@ -44,10 +44,10 @@ export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
     if (match !== null) {
       const number =
         match.length >= 3 && /^disposición\s+/i.test(cleaned)
-          ? `Disposición ${match[1] ?? ""} ${match[2] ?? ""}`.trim()
+          ? `Disposición ${match[1] ?? ''} ${match[2] ?? ''}`.trim()
           : (match[1] ?? cleaned);
       const title =
-        match.length >= 3 && /^disposición\s+/i.test(cleaned) ? (match[3] ?? "") : (match[2] ?? "");
+        match.length >= 3 && /^disposición\s+/i.test(cleaned) ? (match[3] ?? '') : (match[2] ?? '');
 
       return {
         number: normalizeNodeNumber(number),
@@ -57,13 +57,13 @@ export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
   }
 
   if (articlePrefixPattern.test(cleaned)) {
-    const descriptor = normalizeTextContent(cleaned.replace(articlePrefixPattern, ""));
+    const descriptor = normalizeTextContent(cleaned.replace(articlePrefixPattern, ''));
 
     const withSeparator = /^(.+?)[.:]\s*(.+)$/.exec(descriptor);
     if (withSeparator !== null) {
       return {
         number: normalizeNodeNumber(withSeparator[1] ?? descriptor),
-        title: normalizeTextContent(withSeparator[2] ?? ""),
+        title: normalizeTextContent(withSeparator[2] ?? ''),
       };
     }
 
@@ -71,7 +71,7 @@ export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
     if (numericLead !== null) {
       return {
         number: normalizeNodeNumber(numericLead[1] ?? descriptor),
-        title: normalizeTextContent(numericLead[2] ?? ""),
+        title: normalizeTextContent(numericLead[2] ?? ''),
       };
     }
 
@@ -79,14 +79,14 @@ export function normalizeArticleHeader(text: string): NormalizedArticleHeader {
     if (wordLead !== null) {
       return {
         number: normalizeNodeNumber(wordLead[1] ?? descriptor),
-        title: normalizeTextContent(wordLead[2] ?? ""),
+        title: normalizeTextContent(wordLead[2] ?? ''),
       };
     }
   }
 
   return {
     number: normalizeNodeNumber(cleaned),
-    title: "",
+    title: '',
   };
 }
 
@@ -96,7 +96,7 @@ function normalizeNodeNumber(value: string): string {
     return normalized;
   }
 
-  const firstToken = normalized.split(" ")[0]?.trim();
+  const firstToken = normalized.split(' ')[0]?.trim();
   if (
     firstToken !== undefined &&
     firstToken.length > 0 &&
@@ -113,29 +113,29 @@ export function normalizeSubparagraph(text: string): NormalizedSubparagraph {
   const ordinalMatch = cleaned.match(/^(\d+)\.?\s*([ªº])\s*(.*)$/i);
   if (ordinalMatch !== null) {
     return {
-      marker: normalizeTextContent(`${ordinalMatch[1] ?? ""}${ordinalMatch[2] ?? ""}`),
-      content: normalizeTextContent(ordinalMatch[3] ?? ""),
+      marker: normalizeTextContent(`${ordinalMatch[1] ?? ''}${ordinalMatch[2] ?? ''}`),
+      content: normalizeTextContent(ordinalMatch[3] ?? ''),
     };
   }
 
   const match = cleaned.match(/^([a-z]|\d+)[.)]\s*(.*)$/i);
   if (match === null) {
     return {
-      marker: "",
+      marker: '',
       content: cleaned,
     };
   }
 
   return {
-    marker: normalizeTextContent(match[1] ?? ""),
-    content: normalizeTextContent(match[2] ?? ""),
+    marker: normalizeTextContent(match[1] ?? ''),
+    content: normalizeTextContent(match[2] ?? ''),
   };
 }
 
 export function extractTableText(input: unknown): string {
   const rows = collectRows(input);
   if (rows.length > 0) {
-    return rows.join("\n");
+    return rows.join('\n');
   }
 
   return normalizeTextContent(collectText(input));
@@ -170,7 +170,7 @@ function collectRows(input: unknown): Array<string> {
         ].filter((cell) => cell.length > 0);
 
         if (cells.length > 0) {
-          rows.push(cells.join(" | "));
+          rows.push(cells.join(' | '));
         }
       }
     }
@@ -186,40 +186,40 @@ function collectRows(input: unknown): Array<string> {
 }
 
 function collectText(input: unknown): string {
-  if (typeof input === "string") {
+  if (typeof input === 'string') {
     return input;
   }
 
-  if (typeof input === "number") {
+  if (typeof input === 'number') {
     return String(input);
   }
 
   if (Array.isArray(input)) {
-    return input.map(collectText).join(" ");
+    return input.map(collectText).join(' ');
   }
 
   if (!isRecord(input)) {
-    return "";
+    return '';
   }
 
   const textParts: Array<string> = [];
 
-  if (typeof input["#text"] === "string" || typeof input["#text"] === "number") {
-    textParts.push(String(input["#text"]));
+  if (typeof input['#text'] === 'string' || typeof input['#text'] === 'number') {
+    textParts.push(String(input['#text']));
   }
 
   for (const [key, value] of Object.entries(input)) {
-    if (key === "#text" || key === ":@") {
+    if (key === '#text' || key === ':@') {
       continue;
     }
     textParts.push(collectText(value));
   }
 
-  return textParts.join(" ").trim();
+  return textParts.join(' ').trim();
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;
 
 const asArray = (value: unknown): ReadonlyArray<unknown> => {
   if (value === undefined) {

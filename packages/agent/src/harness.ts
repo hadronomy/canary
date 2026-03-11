@@ -1,3 +1,5 @@
+import type { Model, ThinkingBudgets, Transport } from '@mariozechner/pi-ai';
+
 import {
   Agent,
   type AgentMessage,
@@ -5,10 +7,8 @@ import {
   type AgentState,
   type AgentTool,
   type ThinkingLevel,
-} from "@mariozechner/pi-agent-core";
-import type { Model, ThinkingBudgets, Transport } from "@mariozechner/pi-ai";
+} from '@mariozechner/pi-agent-core';
 
-import { createFetchHarnessAdapter } from "~/adapters/fetch";
 import type {
   CreateFetchHarnessAdapterOptions,
   HarnessClientAdapter,
@@ -17,13 +17,16 @@ import type {
   HarnessFetch,
   HarnessFetchOptions,
   WireEventEnvelope,
-} from "~/adapters/types";
-import { createSessionApi, type SessionApi } from "~/api";
-import type { Codec } from "~/codec";
-import { codec } from "~/codec";
-import { createMemoryDurableRuntime, type DurableRuntime } from "~/durable";
-import { TURN_ERROR_CODE, TURN_ERROR_STAGE } from "~/errors";
-import { createSessionOrchestrator, type SessionOrchestrator } from "~/orchestrator";
+} from '~/adapters/types';
+import type { Codec } from '~/codec';
+import type { Runtime } from '~/runtime';
+
+import { createFetchHarnessAdapter } from '~/adapters/fetch';
+import { createSessionApi, type SessionApi } from '~/api';
+import { codec } from '~/codec';
+import { createMemoryDurableRuntime, type DurableRuntime } from '~/durable';
+import { TURN_ERROR_CODE, TURN_ERROR_STAGE } from '~/errors';
+import { createSessionOrchestrator, type SessionOrchestrator } from '~/orchestrator';
 import {
   defineEventRegistryFromMap,
   toEventIndex,
@@ -40,12 +43,11 @@ import {
   type SubmitTurnInput,
   type SubmitTurnResult,
   type TurnId,
-} from "~/protocol";
-import type { Runtime } from "~/runtime";
-import { createSseServer } from "~/stream";
-import { createEventFlow, createPiEventMapper, mapAgentEventToPiEvent } from "~/workflow";
+} from '~/protocol';
+import { createSseServer } from '~/stream';
+import { createEventFlow, createPiEventMapper, mapAgentEventToPiEvent } from '~/workflow';
 
-import type { MakeExclusive } from "./types";
+import type { MakeExclusive } from './types';
 
 export interface HarnessAgentConfig {
   readonly systemPrompt: string;
@@ -53,13 +55,13 @@ export interface HarnessAgentConfig {
   readonly thinkingLevel?: ThinkingLevel;
   readonly tools?: ReadonlyArray<AgentTool<any>>;
   readonly messages?: ReadonlyArray<AgentMessage>;
-  readonly convertToLlm?: AgentOptions["convertToLlm"];
-  readonly transformContext?: AgentOptions["transformContext"];
-  readonly steeringMode?: AgentOptions["steeringMode"];
-  readonly followUpMode?: AgentOptions["followUpMode"];
-  readonly streamFn?: AgentOptions["streamFn"];
+  readonly convertToLlm?: AgentOptions['convertToLlm'];
+  readonly transformContext?: AgentOptions['transformContext'];
+  readonly steeringMode?: AgentOptions['steeringMode'];
+  readonly followUpMode?: AgentOptions['followUpMode'];
+  readonly streamFn?: AgentOptions['streamFn'];
   readonly sessionId?: string;
-  readonly getApiKey?: AgentOptions["getApiKey"];
+  readonly getApiKey?: AgentOptions['getApiKey'];
   readonly thinkingBudgets?: ThinkingBudgets;
   readonly transport?: Transport;
   readonly maxRetryDelayMs?: number;
@@ -203,15 +205,15 @@ export function turnCancelSignalKey(sessionId: string, turnId: TurnId | string):
 
 export type TurnControlCommand =
   | {
-      readonly type: "steer";
+      readonly type: 'steer';
       readonly content: string;
     }
   | {
-      readonly type: "follow_up";
+      readonly type: 'follow_up';
       readonly content: string;
     }
   | {
-      readonly type: "stop";
+      readonly type: 'stop';
     };
 
 export function turnControlSignalKey(sessionId: string, turnId: TurnId | string): string {
@@ -331,7 +333,7 @@ export function createHarness<TAgents extends HarnessAgents>(
 
   type SubmitMetadata = {
     readonly agent: keyof TAgents & string;
-    readonly intent?: "run" | "continue";
+    readonly intent?: 'run' | 'continue';
     readonly input?: unknown;
     readonly context?: unknown;
     readonly turnId?: string;
@@ -486,7 +488,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     runOptions: {
       readonly sessionId: string;
       readonly idempotencyKey: string;
-      readonly intent: "run" | "continue";
+      readonly intent: 'run' | 'continue';
       readonly input?: HarnessAgentInput<TAgents[TKey]>;
       readonly context?: HarnessAgentContext<TAgents[TKey]>;
       readonly turnId?: TurnId;
@@ -502,7 +504,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     let context: HarnessAgentContext<TAgents[TKey]>;
     let rehydratedState: AgentState | undefined;
 
-    if (runOptions.intent === "continue") {
+    if (runOptions.intent === 'continue') {
       if (!persistedSnapshot) {
         throw new TypeError(`No persisted state found for continue on agent '${key}'`);
       }
@@ -514,7 +516,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       rehydratedState = persistedSnapshot.agentState;
     } else {
       if (runOptions.input === undefined || runOptions.context === undefined) {
-        throw new TypeError("run intent requires both input and context");
+        throw new TypeError('run intent requires both input and context');
       }
 
       input = runOptions.input;
@@ -530,18 +532,18 @@ export function createHarness<TAgents extends HarnessAgents>(
       sessionId: runOptions.sessionId,
       startIndex: session.nextIndex,
       turnIdFactory: () => toTurnId(`turn-${durableRuntime.rand.uuid()}`),
-      messageIdFactory: (kind) => toMessageId(`${kind ?? "msg"}-${durableRuntime.rand.uuid()}`),
+      messageIdFactory: (kind) => toMessageId(`${kind ?? 'msg'}-${durableRuntime.rand.uuid()}`),
     });
 
     const turnId = flow.beginTurn(runOptions.turnId);
-    const userMessageId = flow.ids.message("user");
+    const userMessageId = flow.ids.message('user');
     const assistantMessageId = flow.setAssistantMessageId();
 
-    publish(runOptions.sessionId, flow.emit("turn_queued", { turnId }));
-    publish(runOptions.sessionId, flow.emit("turn_started", { turnId }));
+    publish(runOptions.sessionId, flow.emit('turn_queued', { turnId }));
+    publish(runOptions.sessionId, flow.emit('turn_started', { turnId }));
 
     const promptMessage =
-      runOptions.intent === "run"
+      runOptions.intent === 'run'
         ? agentDefinition.prompt
           ? agentDefinition.prompt(input, context)
           : JSON.stringify(agentDefinition.input.encode(input))
@@ -549,17 +551,17 @@ export function createHarness<TAgents extends HarnessAgents>(
 
     const promptText =
       promptMessage === undefined
-        ? ""
-        : typeof promptMessage === "string"
+        ? ''
+        : typeof promptMessage === 'string'
           ? promptMessage
           : Array.isArray(promptMessage)
-            ? promptMessage.map((message) => JSON.stringify(message)).join("\n")
+            ? promptMessage.map((message) => JSON.stringify(message)).join('\n')
             : JSON.stringify(promptMessage);
 
-    if (runOptions.intent === "run") {
+    if (runOptions.intent === 'run') {
       publish(
         runOptions.sessionId,
-        flow.emit("user_message", {
+        flow.emit('user_message', {
           turnId,
           messageId: userMessageId,
           content: promptText,
@@ -568,7 +570,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     }
     publish(
       runOptions.sessionId,
-      flow.emit("assistant_message_start", {
+      flow.emit('assistant_message_start', {
         turnId,
         messageId: assistantMessageId,
       }),
@@ -600,7 +602,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       assistantMessageId,
     });
 
-    let generatedText = "";
+    let generatedText = '';
     const cancelSignal = durableRuntime.signals.forKey<string>(
       turnCancelSignalKey(runOptions.sessionId, turnId),
     );
@@ -617,16 +619,16 @@ export function createHarness<TAgents extends HarnessAgents>(
     const controlTask = (async () => {
       while (!controlsStopped) {
         const command = await controlSignal.wait();
-        if (controlsStopped || command.type === "stop") {
+        if (controlsStopped || command.type === 'stop') {
           break;
         }
 
-        if (command.type === "steer") {
+        if (command.type === 'steer') {
           piAgent.steer(toControlMessage(command.content));
           continue;
         }
 
-        if (command.type === "follow_up") {
+        if (command.type === 'follow_up') {
           piAgent.followUp(toControlMessage(command.content));
         }
       }
@@ -634,7 +636,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     const onAbort = () => {
       piAgent.abort();
     };
-    session.abortController.signal.addEventListener("abort", onAbort, { once: true });
+    session.abortController.signal.addEventListener('abort', onAbort, { once: true });
 
     const unsubscribe = piAgent.subscribe((event) => {
       const piEvent = mapAgentEventToPiEvent(event);
@@ -646,7 +648,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       for (const envelope of mapped) {
         publish(runOptions.sessionId, envelope);
 
-        if (envelope.type === "assistant_text_delta") {
+        if (envelope.type === 'assistant_text_delta') {
           generatedText += envelope.payload.delta;
         }
       }
@@ -654,7 +656,7 @@ export function createHarness<TAgents extends HarnessAgents>(
 
     try {
       const cancelRace = cancelSignal.wait().then((reason) => {
-        const cancellationReason = reason || "Cancelled by user";
+        const cancellationReason = reason || 'Cancelled by user';
         if (!session.abortController?.signal.aborted) {
           session.abortController?.abort(cancellationReason);
         }
@@ -662,7 +664,7 @@ export function createHarness<TAgents extends HarnessAgents>(
         throw new Error(cancellationReason);
       });
 
-      if (runOptions.intent === "continue") {
+      if (runOptions.intent === 'continue') {
         await Promise.race([piAgent.continue(), cancelRace]);
       } else {
         await Promise.race([piAgent.prompt(promptText), cancelRace]);
@@ -670,24 +672,24 @@ export function createHarness<TAgents extends HarnessAgents>(
 
       publish(
         runOptions.sessionId,
-        flow.emit("assistant_message_done", {
+        flow.emit('assistant_message_done', {
           turnId,
           messageId: assistantMessageId,
-          stopReason: "stop",
+          stopReason: 'stop',
         }),
       );
-      publish(runOptions.sessionId, flow.emit("turn_done", { turnId }));
+      publish(runOptions.sessionId, flow.emit('turn_done', { turnId }));
     } catch (error) {
       if (session.abortController?.signal.aborted) {
         const reason =
-          typeof session.abortController.signal.reason === "string"
+          typeof session.abortController.signal.reason === 'string'
             ? session.abortController.signal.reason
-            : "Cancelled by user";
-        publish(runOptions.sessionId, flow.emit("turn_cancelled", { turnId, reason }));
+            : 'Cancelled by user';
+        publish(runOptions.sessionId, flow.emit('turn_cancelled', { turnId, reason }));
       } else {
         publish(
           runOptions.sessionId,
-          flow.emit("turn_error", {
+          flow.emit('turn_error', {
             turnId,
             stage: TURN_ERROR_STAGE.LLM,
             retrying: false,
@@ -699,11 +701,11 @@ export function createHarness<TAgents extends HarnessAgents>(
       throw error;
     } finally {
       controlsStopped = true;
-      await controlSignal.resolve({ type: "stop" });
+      await controlSignal.resolve({ type: 'stop' });
       await Promise.allSettled([controlTask]);
 
       unsubscribe();
-      session.abortController?.signal.removeEventListener("abort", onAbort);
+      session.abortController?.signal.removeEventListener('abort', onAbort);
       session.activeAgent = undefined;
       session.abortController = undefined;
       await durableRuntime.state.delete(activeTurnStateKey(runOptions.sessionId));
@@ -760,16 +762,16 @@ export function createHarness<TAgents extends HarnessAgents>(
   ): Promise<SubmitTurnResult> {
     const agentDefinition = getAgentDefinition(key);
     const result =
-      metadata.intent === "continue"
+      metadata.intent === 'continue'
         ? await runInternal(key, {
             sessionId: String(input.sessionId),
             idempotencyKey: String(input.idempotencyKey),
-            intent: "continue",
+            intent: 'continue',
           })
         : await runInternal(key, {
             sessionId: String(input.sessionId),
             idempotencyKey: String(input.idempotencyKey),
-            intent: "run",
+            intent: 'run',
             input: agentDefinition.input.decode(
               metadata.input as HarnessAgentInputWire<TAgents[TKey]>,
             ) as HarnessAgentInput<TAgents[TKey]>,
@@ -791,7 +793,7 @@ export function createHarness<TAgents extends HarnessAgents>(
   async function runViaSubmit(input: SubmitTurnInput): Promise<SubmitTurnResult> {
     const metadata = input.metadata as SubmitMetadata | undefined;
     if (!metadata) {
-      throw new TypeError("submitTurn metadata is required");
+      throw new TypeError('submitTurn metadata is required');
     }
 
     return runViaSubmitForAgent(metadata.agent, metadata, input);
@@ -799,8 +801,8 @@ export function createHarness<TAgents extends HarnessAgents>(
 
   function toControlMessage(content: string): AgentMessage {
     return {
-      role: "user",
-      content: [{ type: "text", text: content }],
+      role: 'user',
+      content: [{ type: 'text', text: content }],
       timestamp: Date.now(),
     };
   }
@@ -824,7 +826,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     model: codec.superJson,
     tools: [],
     convertToLlm: (value: unknown) => value,
-    transport: "sse",
+    transport: 'sse',
   };
 
   const orchestrationHandlers: SessionOrchestrator<EventMap, undefined> = {
@@ -856,7 +858,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     },
     cancel: async (input: SessionCommandInput): Promise<SessionMutationResult> => {
       const session = getSession(String(input.sessionId));
-      session.abortController?.abort(input.content ?? "Cancelled by user");
+      session.abortController?.abort(input.content ?? 'Cancelled by user');
       session.activeAgent?.abort();
       return { ok: true };
     },
@@ -868,7 +870,7 @@ export function createHarness<TAgents extends HarnessAgents>(
       const lastEvent = session.events[session.events.length - 1];
       return {
         sessionId: toSessionId(String(input.sessionId)),
-        status: "open",
+        status: 'open',
         activeTurnId: lastEvent?.turnId ?? null,
         lastIndex: lastEvent?.index ?? toEventIndex(0),
         events: session.events,
@@ -916,10 +918,10 @@ export function createHarness<TAgents extends HarnessAgents>(
     const submit = await turnRuntime.submitTurn({
       sessionId: toSessionId(runOptions.sessionId),
       idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
-      content: "harness.run",
+      content: 'harness.run',
       metadata: {
         agent: key,
-        intent: "run",
+        intent: 'run',
         input: agentDefinition.input.encode(runOptions.input),
         context: runOptions.context,
         turnId: runOptions.turnId,
@@ -950,10 +952,10 @@ export function createHarness<TAgents extends HarnessAgents>(
     const submit = await turnRuntime.submitTurn({
       sessionId: toSessionId(runOptions.sessionId),
       idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
-      content: "harness.continue",
+      content: 'harness.continue',
       metadata: {
         agent: key,
-        intent: "continue",
+        intent: 'continue',
       },
     });
 
@@ -981,10 +983,10 @@ export function createHarness<TAgents extends HarnessAgents>(
     const submitResult = await turnRuntime.submitTurn({
       sessionId: toSessionId(runOptions.sessionId),
       idempotencyKey: toIdempotencyKey(runOptions.idempotencyKey),
-      content: "harness.submit",
+      content: 'harness.submit',
       metadata: {
         agent: key,
-        intent: "run",
+        intent: 'run',
         input: agentDefinition.input.encode(runOptions.input),
         context: runOptions.context,
       },
@@ -1025,7 +1027,7 @@ export function createHarness<TAgents extends HarnessAgents>(
     return new ReadableStream<Uint8Array>({
       start(controller) {
         const sessionStream = sse.session(streamOptions.sessionId);
-        controller.enqueue(encoder.encode(sessionStream.comment("connected")));
+        controller.enqueue(encoder.encode(sessionStream.comment('connected')));
 
         let nextReplayIndex = offset;
 
@@ -1081,7 +1083,7 @@ export function createHarness<TAgents extends HarnessAgents>(
           controller.close();
         };
 
-        streamOptions.signal?.addEventListener("abort", cleanup);
+        streamOptions.signal?.addEventListener('abort', cleanup);
       },
     });
   }
@@ -1152,7 +1154,7 @@ type HarnessClientAdapterOptions = {
 type HarnessNetworkingOptions = MakeExclusive<{
   "'adapter'": HarnessClientAdapterOptions;
   "'baseUrl'": HarnessClientBaseUrlOptions;
-  "legacy URLs": HarnessClientLegacyUrlOptions;
+  'legacy URLs': HarnessClientLegacyUrlOptions;
 }>;
 
 export type CreateHarnessClientOptions<TAgents extends HarnessClientAgents> =
@@ -1175,12 +1177,12 @@ type HarnessClientOutput<TAgent> = TAgent extends { readonly output: Codec<infer
   : never;
 
 export type HarnessProgressUpdate =
-  | { readonly type: "text"; readonly content: string }
-  | { readonly type: "thinking"; readonly content: string }
+  | { readonly type: 'text'; readonly content: string }
+  | { readonly type: 'thinking'; readonly content: string }
   | {
-      readonly type: "tool";
+      readonly type: 'tool';
       readonly content: {
-        readonly status: "running" | "done";
+        readonly status: 'running' | 'done';
         readonly toolExecutionId: string;
         readonly name?: string;
         readonly result?: unknown;
@@ -1191,7 +1193,7 @@ export type HarnessProgressUpdate =
 export interface HarnessToolUpdate {
   readonly toolExecutionId: string;
   readonly name?: string;
-  readonly status: "running" | "done";
+  readonly status: 'running' | 'done';
   readonly result?: unknown;
   readonly error?: unknown;
 }
@@ -1199,7 +1201,7 @@ export interface HarnessToolUpdate {
 export interface HarnessEventResult {
   readonly text: string;
   readonly events: ReadonlyArray<AnyEventEnvelope<EventMap>>;
-  readonly terminal: "done" | "error" | "cancelled" | "stream_end";
+  readonly terminal: 'done' | 'error' | 'cancelled' | 'stream_end';
   readonly turnId?: string;
 }
 
@@ -1223,16 +1225,16 @@ export function createHarnessEventViews(
 
   function isAbortError(error: unknown): boolean {
     return (
-      typeof error === "object" &&
+      typeof error === 'object' &&
       error !== null &&
-      "name" in error &&
-      (error as { readonly name?: unknown }).name === "AbortError"
+      'name' in error &&
+      (error as { readonly name?: unknown }).name === 'AbortError'
     );
   }
 
   const subscribers = new Set<StreamSubscriber>();
   const eventsList: Array<AnyEventEnvelope<EventMap>> = [];
-  let text = "";
+  let text = '';
   let started = false;
   let finished = false;
 
@@ -1263,7 +1265,7 @@ export function createHarnessEventViews(
     subscribers.clear();
   }
 
-  function finish(terminal: HarnessEventResult["terminal"], turnId?: string): void {
+  function finish(terminal: HarnessEventResult['terminal'], turnId?: string): void {
     if (finished) {
       return;
     }
@@ -1298,32 +1300,32 @@ export function createHarnessEventViews(
       try {
         for await (const event of streamFactory()) {
           eventsList.push(event);
-          if (event.type === "assistant_text_delta") {
+          if (event.type === 'assistant_text_delta') {
             text += event.payload.delta;
           }
 
           emitToSubscribers(event);
 
-          if (event.type === "turn_done") {
-            finish("done", event.turnId ? String(event.turnId) : undefined);
+          if (event.type === 'turn_done') {
+            finish('done', event.turnId ? String(event.turnId) : undefined);
             return;
           }
 
-          if (event.type === "turn_error") {
-            finish("error", event.turnId ? String(event.turnId) : undefined);
+          if (event.type === 'turn_error') {
+            finish('error', event.turnId ? String(event.turnId) : undefined);
             return;
           }
 
-          if (event.type === "turn_cancelled") {
-            finish("cancelled", event.turnId ? String(event.turnId) : undefined);
+          if (event.type === 'turn_cancelled') {
+            finish('cancelled', event.turnId ? String(event.turnId) : undefined);
             return;
           }
         }
 
-        finish("stream_end", undefined);
+        finish('stream_end', undefined);
       } catch (error) {
         if (isAbortError(error)) {
-          finish("stream_end", undefined);
+          finish('stream_end', undefined);
           return;
         }
 
@@ -1418,7 +1420,7 @@ export function createHarnessEventViews(
     return {
       async *[Symbol.asyncIterator]() {
         for await (const event of events()) {
-          if (event.type === "assistant_text_delta") {
+          if (event.type === 'assistant_text_delta') {
             yield event.payload.delta;
           }
         }
@@ -1432,24 +1434,24 @@ export function createHarnessEventViews(
     return {
       async *[Symbol.asyncIterator]() {
         for await (const event of events()) {
-          if (event.type === "assistant_text_delta") {
-            yield { type: "text", content: event.payload.delta };
+          if (event.type === 'assistant_text_delta') {
+            yield { type: 'text', content: event.payload.delta };
             continue;
           }
 
-          if (event.type === "assistant_thinking_delta") {
-            yield { type: "thinking", content: event.payload.delta };
+          if (event.type === 'assistant_thinking_delta') {
+            yield { type: 'thinking', content: event.payload.delta };
             continue;
           }
 
-          if (event.type === "tool_execution_start") {
+          if (event.type === 'tool_execution_start') {
             const toolExecutionId = String(event.payload.toolExecutionId);
             const name = event.payload.toolName;
             toolNames.set(toolExecutionId, name);
             yield {
-              type: "tool",
+              type: 'tool',
               content: {
-                status: "running",
+                status: 'running',
                 toolExecutionId,
                 name,
               },
@@ -1457,12 +1459,12 @@ export function createHarnessEventViews(
             continue;
           }
 
-          if (event.type === "tool_execution_result") {
+          if (event.type === 'tool_execution_result') {
             const toolExecutionId = String(event.payload.toolExecutionId);
             yield {
-              type: "tool",
+              type: 'tool',
               content: {
-                status: "done",
+                status: 'done',
                 toolExecutionId,
                 name: toolNames.get(toolExecutionId),
                 result: event.payload.ok ? event.payload.output : undefined,
@@ -1481,24 +1483,24 @@ export function createHarnessEventViews(
     return {
       async *[Symbol.asyncIterator]() {
         for await (const event of events()) {
-          if (event.type === "tool_execution_start") {
+          if (event.type === 'tool_execution_start') {
             const toolExecutionId = String(event.payload.toolExecutionId);
             const name = event.payload.toolName;
             toolNames.set(toolExecutionId, name);
             yield {
               toolExecutionId,
               name,
-              status: "running",
+              status: 'running',
             };
             continue;
           }
 
-          if (event.type === "tool_execution_result") {
+          if (event.type === 'tool_execution_result') {
             const toolExecutionId = String(event.payload.toolExecutionId);
             yield {
               toolExecutionId,
               name: toolNames.get(toolExecutionId),
-              status: "done",
+              status: 'done',
               result: event.payload.ok ? event.payload.output : undefined,
               error: event.payload.ok ? undefined : event.payload.error,
             };
@@ -1571,7 +1573,7 @@ function decodeEventEnvelope(
 
   const resolvedSessionId = wireEvent.sessionId ?? fallbackSessionId;
   if (!resolvedSessionId) {
-    throw new TypeError("SSE envelope is missing a valid sessionId");
+    throw new TypeError('SSE envelope is missing a valid sessionId');
   }
 
   return {
@@ -1789,15 +1791,15 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
   }
 
   async function sendSessionCommand(
-    type: "steer" | "followUp" | "cancel",
+    type: 'steer' | 'followUp' | 'cancel',
     body: { readonly sessionId: string; readonly content?: string },
   ): Promise<void> {
-    if (type === "steer") {
+    if (type === 'steer') {
       await options.adapter.steer(body);
       return;
     }
 
-    if (type === "followUp") {
+    if (type === 'followUp') {
       await options.adapter.followUp(body);
       return;
     }
@@ -1863,20 +1865,20 @@ function createHarnessClientFromAdapter<TAgents extends HarnessClientAgents>(
           return result.output;
         },
         async steer(content) {
-          await sendSessionCommand("steer", { sessionId, content });
+          await sendSessionCommand('steer', { sessionId, content });
         },
         async followUp(content) {
-          await sendSessionCommand("followUp", { sessionId, content });
+          await sendSessionCommand('followUp', { sessionId, content });
         },
         async cancel(reason) {
-          await sendSessionCommand("cancel", { sessionId, content: reason });
+          await sendSessionCommand('cancel', { sessionId, content: reason });
         },
         async waitForIdle(waitOptions) {
           for await (const event of this.events(waitOptions)) {
             if (
-              event.type === "turn_done" ||
-              event.type === "turn_error" ||
-              event.type === "turn_cancelled"
+              event.type === 'turn_done' ||
+              event.type === 'turn_error' ||
+              event.type === 'turn_cancelled'
             ) {
               return;
             }
@@ -1900,19 +1902,19 @@ export function createHarnessClient<TAgents extends HarnessClientAgents>(
     });
 
   const adapter =
-    "adapter" in opts && opts.adapter
+    'adapter' in opts && opts.adapter
       ? opts.adapter
       : createFetchHarnessAdapter({
-          baseUrl: "baseUrl" in opts ? opts.baseUrl : undefined,
-          routes: "routes" in opts ? opts.routes : undefined,
-          eventsUrl: "eventsUrl" in opts ? opts.eventsUrl : undefined,
-          runUrl: "runUrl" in opts ? opts.runUrl : undefined,
-          submitUrl: "submitUrl" in opts ? opts.submitUrl : undefined,
-          resultUrl: "resultUrl" in opts ? opts.resultUrl : undefined,
-          continueUrl: "continueUrl" in opts ? opts.continueUrl : undefined,
-          steerUrl: "steerUrl" in opts ? opts.steerUrl : undefined,
-          followUpUrl: "followUpUrl" in opts ? opts.followUpUrl : undefined,
-          cancelUrl: "cancelUrl" in opts ? opts.cancelUrl : undefined,
+          baseUrl: 'baseUrl' in opts ? opts.baseUrl : undefined,
+          routes: 'routes' in opts ? opts.routes : undefined,
+          eventsUrl: 'eventsUrl' in opts ? opts.eventsUrl : undefined,
+          runUrl: 'runUrl' in opts ? opts.runUrl : undefined,
+          submitUrl: 'submitUrl' in opts ? opts.submitUrl : undefined,
+          resultUrl: 'resultUrl' in opts ? opts.resultUrl : undefined,
+          continueUrl: 'continueUrl' in opts ? opts.continueUrl : undefined,
+          steerUrl: 'steerUrl' in opts ? opts.steerUrl : undefined,
+          followUpUrl: 'followUpUrl' in opts ? opts.followUpUrl : undefined,
+          cancelUrl: 'cancelUrl' in opts ? opts.cancelUrl : undefined,
           queryParams: opts.queryParams,
           fetch: opts.fetch,
           fetchOptions: opts.fetchOptions,

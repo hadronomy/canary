@@ -1,13 +1,14 @@
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from 'effect';
 
-import { ValidationError } from "./errors";
-import { CollectorFactoryRegistry, type CollectorFactory, type ConfigType } from "./factory";
-import { CollectorOrchestrator } from "./orchestrator";
-import { CollectorFilter, CollectorRepository } from "./repository";
-import { CollectorScheduler, type ScheduleStartOptions } from "./scheduler";
-import type { CollectionMode, CollectionRunId, CollectorId } from "./schema";
-import { CollectorId as CollectorIdBrand, FactoryId } from "./schema";
-import { CollectorStateManager } from "./state";
+import type { CollectionMode, CollectionRunId, CollectorId } from './schema';
+
+import { ValidationError } from './errors';
+import { CollectorFactoryRegistry, type CollectorFactory, type ConfigType } from './factory';
+import { CollectorOrchestrator } from './orchestrator';
+import { CollectorFilter, CollectorRepository } from './repository';
+import { CollectorScheduler, type ScheduleStartOptions } from './scheduler';
+import { CollectorId as CollectorIdBrand, FactoryId } from './schema';
+import { CollectorStateManager } from './state';
 
 type AnySchema = Schema.Schema.AnyNoContext;
 type AnyFactory = CollectorFactory<AnySchema, unknown>;
@@ -81,11 +82,11 @@ export const collector = {
         Effect.mapError(
           (parseError) =>
             new ValidationError({
-              collectorId: CollectorIdBrand("00000000-0000-0000-0000-000000000000"),
-              field: "config",
+              collectorId: CollectorIdBrand('00000000-0000-0000-0000-000000000000'),
+              field: 'config',
               value: input.config,
               reason: String(parseError),
-              message: "Collector config did not match factory schema",
+              message: 'Collector config did not match factory schema',
             }),
         ),
       );
@@ -114,14 +115,14 @@ export const collector = {
           ? undefined
           : yield* registry.validateConfig(FactoryId(entry.factoryId), input.id, input.config).pipe(
               Effect.catchTag(
-                "ConfigValidationError",
+                'ConfigValidationError',
                 (parseError) =>
                   new ValidationError({
                     collectorId: input.id,
-                    field: "config",
+                    field: 'config',
                     value: input.config,
-                    reason: parseError.issues.join("; "),
-                    message: "Collector config did not match factory schema",
+                    reason: parseError.issues.join('; '),
+                    message: 'Collector config did not match factory schema',
                   }),
               ),
             );
@@ -165,12 +166,12 @@ export const collector = {
 
   runOnce: (sourceId: CollectorId) =>
     CollectorOrchestrator.schedule(sourceId).pipe(
-      Effect.withSpan("CollectorApi.runOnce", { attributes: { sourceId } }),
+      Effect.withSpan('CollectorApi.runOnce', { attributes: { sourceId } }),
     ),
 
   runWithMode: (sourceId: CollectorId, mode: CollectionMode) =>
     CollectorOrchestrator.scheduleExplicit(sourceId, mode).pipe(
-      Effect.withSpan("CollectorApi.runWithMode", {
+      Effect.withSpan('CollectorApi.runWithMode', {
         attributes: { sourceId, mode: mode._tag },
       }),
     ),
@@ -181,30 +182,30 @@ export const collector = {
       const entry = yield* repository.findOne(sourceId);
       return yield* CollectorOrchestrator.collectNow(sourceId, mode ?? entry.defaultMode);
     }).pipe(
-      Effect.withSpan("CollectorApi.runNow", {
-        attributes: { sourceId, mode: mode?._tag ?? "default" },
+      Effect.withSpan('CollectorApi.runNow', {
+        attributes: { sourceId, mode: mode?._tag ?? 'default' },
       }),
     ),
 
-  runAll: () => CollectorOrchestrator.collectAll.pipe(Effect.withSpan("CollectorApi.runAll")),
+  runAll: () => CollectorOrchestrator.collectAll.pipe(Effect.withSpan('CollectorApi.runAll')),
 
   resumeRun: (sourceId: CollectorId, runId: CollectionRunId) =>
     CollectorOrchestrator.resume(sourceId, runId).pipe(
-      Effect.withSpan("CollectorApi.resumeRun", { attributes: { sourceId, runId } }),
+      Effect.withSpan('CollectorApi.resumeRun', { attributes: { sourceId, runId } }),
     ),
 
   cancelRun: (runId: CollectionRunId, reason?: string) =>
     CollectorOrchestrator.cancel(runId, reason).pipe(
-      Effect.withSpan("CollectorApi.cancelRun", { attributes: { runId, reason } }),
+      Effect.withSpan('CollectorApi.cancelRun', { attributes: { runId, reason } }),
     ),
 
-  status: () => CollectorOrchestrator.status.pipe(Effect.withSpan("CollectorApi.status")),
+  status: () => CollectorOrchestrator.status.pipe(Effect.withSpan('CollectorApi.status')),
 
-  running: () => CollectorOrchestrator.running.pipe(Effect.withSpan("CollectorApi.running")),
+  running: () => CollectorOrchestrator.running.pipe(Effect.withSpan('CollectorApi.running')),
 
   runSnapshot: (runId: CollectionRunId) =>
     CollectorStateManager.getRunSnapshot(runId).pipe(
-      Effect.withSpan("CollectorApi.runSnapshot", { attributes: { runId } }),
+      Effect.withSpan('CollectorApi.runSnapshot', { attributes: { runId } }),
     ),
 
   estimateState: (sourceId: CollectorId) =>
@@ -214,7 +215,7 @@ export const collector = {
       const entry = yield* repository.findOne(sourceId);
       const collector = yield* registry.instantiate(entry);
       return yield* collector.estimateState();
-    }).pipe(Effect.withSpan("CollectorApi.estimateState", { attributes: { sourceId } })),
+    }).pipe(Effect.withSpan('CollectorApi.estimateState', { attributes: { sourceId } })),
 
   schedule: (sourceId: CollectorId, cron?: string, options?: ScheduleStartOptions) =>
     Effect.gen(function* () {
@@ -225,27 +226,27 @@ export const collector = {
       const repository = yield* CollectorRepository;
       const entry = yield* repository.findOne(sourceId);
       return yield* CollectorScheduler.start(sourceId, entry.schedule, options);
-    }).pipe(Effect.withSpan("CollectorApi.schedule", { attributes: { sourceId, cron } })),
+    }).pipe(Effect.withSpan('CollectorApi.schedule', { attributes: { sourceId, cron } })),
 
   stopSchedule: (sourceId: CollectorId) =>
     CollectorScheduler.stop(sourceId).pipe(
-      Effect.withSpan("CollectorApi.stopSchedule", { attributes: { sourceId } }),
+      Effect.withSpan('CollectorApi.stopSchedule', { attributes: { sourceId } }),
     ),
 
   reschedule: (sourceId: CollectorId, cron: string, options?: ScheduleStartOptions) =>
     CollectorScheduler.reschedule(sourceId, cron, options).pipe(
-      Effect.withSpan("CollectorApi.reschedule", { attributes: { sourceId, cron } }),
+      Effect.withSpan('CollectorApi.reschedule', { attributes: { sourceId, cron } }),
     ),
 
   startAllSchedules: () =>
-    CollectorScheduler.startAll.pipe(Effect.withSpan("CollectorApi.startAllSchedules")),
+    CollectorScheduler.startAll.pipe(Effect.withSpan('CollectorApi.startAllSchedules')),
 
   stopAllSchedules: () =>
-    CollectorScheduler.stopAll.pipe(Effect.withSpan("CollectorApi.stopAllSchedules")),
+    CollectorScheduler.stopAll.pipe(Effect.withSpan('CollectorApi.stopAllSchedules')),
 
   triggerNow: (sourceId: CollectorId) =>
     CollectorScheduler.triggerNow(sourceId).pipe(
-      Effect.withSpan("CollectorApi.triggerNow", { attributes: { sourceId } }),
+      Effect.withSpan('CollectorApi.triggerNow', { attributes: { sourceId } }),
     ),
 
   schedules: () => CollectorScheduler.scheduled,

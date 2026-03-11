@@ -1,7 +1,7 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
-import type { BoeParseError } from "./errors";
-import type { BoeFragment, BuildInput, LinearBlock, ParagraphBlock } from "./types";
+import type { BoeParseError } from './errors';
+import type { BoeFragment, BuildInput, LinearBlock, ParagraphBlock } from './types';
 
 export interface FragmentBuilder {
   readonly chapter: (title: string) => FragmentBuilder;
@@ -19,26 +19,26 @@ type BuildFragments = (
 
 export function createFragmentBuilder(
   buildFragments: BuildFragments,
-  input: Omit<BuildInput, "blocks">,
+  input: Omit<BuildInput, 'blocks'>,
 ): FragmentBuilder {
   const make = (blocks: ReadonlyArray<LinearBlock>): FragmentBuilder => ({
-    chapter: (title) => make([...blocks, paragraphBlock("capitulo", title)]),
+    chapter: (title) => make([...blocks, paragraphBlock('capitulo', title)]),
     article: ({ number, title }) =>
       make([
         ...blocks,
-        paragraphBlock("articulo", title ? `Art. ${number}: ${title}` : `Art. ${number}`),
+        paragraphBlock('articulo', title ? `Art. ${number}: ${title}` : `Art. ${number}`),
       ]),
-    paragraph: (content) => make([...blocks, paragraphBlock("parrafo", content)]),
+    paragraph: (content) => make([...blocks, paragraphBlock('parrafo', content)]),
     subparagraph: ({ marker, content }) =>
-      make([...blocks, paragraphBlock("parrafo_2", `${marker}) ${content}`)]),
+      make([...blocks, paragraphBlock('parrafo_2', `${marker}) ${content}`)]),
     annex: ({ number, title }) => {
-      const nextBlocks: Array<LinearBlock> = [...blocks, paragraphBlock("anexo_num", number)];
+      const nextBlocks: Array<LinearBlock> = [...blocks, paragraphBlock('anexo_num', number)];
       if (title !== undefined && title.length > 0) {
-        nextBlocks.push(paragraphBlock("anexo_tit", title));
+        nextBlocks.push(paragraphBlock('anexo_tit', title));
       }
       return make(nextBlocks);
     },
-    table: (content) => make([...blocks, { kind: "table", text: content }]),
+    table: (content) => make([...blocks, { kind: 'table', text: content }]),
     build: () =>
       buildFragments({
         ...input,
@@ -50,7 +50,7 @@ export function createFragmentBuilder(
 }
 
 const paragraphBlock = (className: string, text: string): ParagraphBlock => ({
-  kind: "paragraph",
+  kind: 'paragraph',
   className,
   text,
 });

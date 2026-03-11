@@ -10,13 +10,13 @@
  *   bun run verify-otlp.ts --timeout 30000
  */
 
-import { spawn } from "child_process";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
-import { parseArgs } from "util";
+import { spawn } from 'child_process';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { parseArgs } from 'util';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const INDEX_TS_PATH = resolve(SCRIPT_DIR, "./src/index.ts");
+const INDEX_TS_PATH = resolve(SCRIPT_DIR, './src/index.ts');
 
 interface CapturedRequest {
   path: string;
@@ -26,13 +26,13 @@ interface CapturedRequest {
 
 const OPTIONS = {
   timeout: {
-    type: "string",
-    short: "t",
-    default: "30000",
+    type: 'string',
+    short: 't',
+    default: '30000',
   },
   verbose: {
-    type: "boolean",
-    short: "v",
+    type: 'boolean',
+    short: 'v',
     default: false,
   },
 } as const;
@@ -43,7 +43,7 @@ const { values: args } = parseArgs({
   allowPositionals: false,
 });
 
-const TIMEOUT = Number.parseInt(args.timeout ?? "30000", 10);
+const TIMEOUT = Number.parseInt(args.timeout ?? '30000', 10);
 const VERBOSE = args.verbose ?? false;
 
 class Verifier {
@@ -52,7 +52,7 @@ class Verifier {
   private port = 0;
 
   async start(): Promise<void> {
-    console.log("🔍 OTLP Verification Tool\n");
+    console.log('🔍 OTLP Verification Tool\n');
 
     this.server = Bun.serve({
       port: 0,
@@ -71,7 +71,7 @@ class Verifier {
 
         return new Response(JSON.stringify({ partialSuccess: {} }), {
           status: 200,
-          headers: { "Content-Type": "application/json" },
+          headers: { 'Content-Type': 'application/json' },
         });
       },
     });
@@ -88,34 +88,34 @@ class Verifier {
     return {
       ...process.env,
       AXIOM_URL: `http://localhost:${this.port}`,
-      AXIOM_API_TOKEN: "test-token-verification",
-      AXIOM_DATASET: "verification-dataset",
-      AXIOM_TRACES_DATASET: "verification-traces",
-      AXIOM_LOGS_DATASET: "verification-logs",
-      AXIOM_SERVICE_NAME: "canary-verification",
-      AXIOM_ENVIRONMENT: "verification",
-      AXIOM_SHUTDOWN_TIMEOUT_MS: "1000",
-      AXIOM_BATCH_TIMEOUT_MS: "100",
+      AXIOM_API_TOKEN: 'test-token-verification',
+      AXIOM_DATASET: 'verification-dataset',
+      AXIOM_TRACES_DATASET: 'verification-traces',
+      AXIOM_LOGS_DATASET: 'verification-logs',
+      AXIOM_SERVICE_NAME: 'canary-verification',
+      AXIOM_ENVIRONMENT: 'verification',
+      AXIOM_SHUTDOWN_TIMEOUT_MS: '1000',
+      AXIOM_BATCH_TIMEOUT_MS: '100',
     };
   }
 
   async runApp(): Promise<number> {
-    console.log("🚀 Starting application...\n");
+    console.log('🚀 Starting application...\n');
 
     const startTime = Date.now();
-    const proc = spawn("bun", ["run", INDEX_TS_PATH], {
+    const proc = spawn('bun', ['run', INDEX_TS_PATH], {
       cwd: SCRIPT_DIR,
       env: this.getEnv(),
-      stdio: VERBOSE ? "inherit" : ["ignore", "ignore", "inherit"],
+      stdio: VERBOSE ? 'inherit' : ['ignore', 'ignore', 'inherit'],
     });
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        console.log("⏱️  Timeout reached, stopping application...");
+        console.log('⏱️  Timeout reached, stopping application...');
         proc.kill();
       }, TIMEOUT);
 
-      proc.on("exit", (_code) => {
+      proc.on('exit', (_code) => {
         clearTimeout(timeout);
         resolve(Date.now() - startTime);
       });
@@ -125,46 +125,46 @@ class Verifier {
   printResults(duration: number): void {
     console.log(`\n⏱️  Duration: ${duration}ms\n`);
 
-    const traces = this.requests.filter((r) => r.path === "/v1/traces");
-    const logs = this.requests.filter((r) => r.path === "/v1/logs");
+    const traces = this.requests.filter((r) => r.path === '/v1/traces');
+    const logs = this.requests.filter((r) => r.path === '/v1/logs');
 
-    console.log("═".repeat(60));
-    console.log("VERIFICATION RESULTS");
-    console.log("═".repeat(60));
+    console.log('═'.repeat(60));
+    console.log('VERIFICATION RESULTS');
+    console.log('═'.repeat(60));
     console.log();
 
     if (this.requests.length === 0) {
-      console.log("❌ No OTLP requests captured\n");
+      console.log('❌ No OTLP requests captured\n');
       return;
     }
 
     console.log(`Total requests: ${this.requests.length}\n`);
 
     for (const req of this.requests) {
-      const icon = req.path === "/v1/traces" ? "📊" : req.path === "/v1/logs" ? "📝" : "📦";
+      const icon = req.path === '/v1/traces' ? '📊' : req.path === '/v1/logs' ? '📝' : '📦';
       console.log(`  ${icon} ${req.path}: ${req.body.length} bytes`);
     }
 
     console.log();
-    console.log("─".repeat(60));
-    console.log(`Traces: ${traces.length > 0 ? "✅ YES" : "❌ NO"} (${traces.length})`);
-    console.log(`Logs:   ${logs.length > 0 ? "✅ YES" : "❌ NO"} (${logs.length})`);
-    console.log("─".repeat(60));
+    console.log('─'.repeat(60));
+    console.log(`Traces: ${traces.length > 0 ? '✅ YES' : '❌ NO'} (${traces.length})`);
+    console.log(`Logs:   ${logs.length > 0 ? '✅ YES' : '❌ NO'} (${logs.length})`);
+    console.log('─'.repeat(60));
     console.log();
 
     if (traces.length > 0 && logs.length > 0) {
-      console.log("✅ SUCCESS: OTLP export working correctly!\n");
+      console.log('✅ SUCCESS: OTLP export working correctly!\n');
     } else {
-      console.log("❌ FAIL: Missing OTLP exports\n");
-      if (traces.length === 0) console.log("   → No traces received");
-      if (logs.length === 0) console.log("   → No logs received");
+      console.log('❌ FAIL: Missing OTLP exports\n');
+      if (traces.length === 0) console.log('   → No traces received');
+      if (logs.length === 0) console.log('   → No logs received');
       console.log();
     }
   }
 
   get exitCode(): number {
-    const traces = this.requests.filter((r) => r.path === "/v1/traces").length;
-    const logs = this.requests.filter((r) => r.path === "/v1/logs").length;
+    const traces = this.requests.filter((r) => r.path === '/v1/traces').length;
+    const logs = this.requests.filter((r) => r.path === '/v1/logs').length;
     return traces > 0 && logs > 0 ? 0 : 1;
   }
 }
@@ -178,7 +178,7 @@ async function main(): Promise<void> {
     verifier.printResults(duration);
     process.exit(verifier.exitCode);
   } catch (error) {
-    console.error("Fatal error:", error);
+    console.error('Fatal error:', error);
     process.exit(1);
   } finally {
     verifier.stop();

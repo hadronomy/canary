@@ -1,20 +1,20 @@
-import type { Codec } from "~/codec";
+import type { Codec } from '~/codec';
 
 export declare const brandSymbol: unique symbol;
 
 export type Brand<T, Name extends string> = T & { readonly [brandSymbol]: Name };
 
-export type SessionId = Brand<string, "SessionId">;
-export type TurnId = Brand<string, "TurnId">;
-export type EventIndex = Brand<number, "EventIndex">;
-export type IdempotencyKey = Brand<string, "IdempotencyKey">;
-export type MessageId = Brand<string, "MessageId">;
-export type ToolExecutionId = Brand<string, "ToolExecutionId">;
+export type SessionId = Brand<string, 'SessionId'>;
+export type TurnId = Brand<string, 'TurnId'>;
+export type EventIndex = Brand<number, 'EventIndex'>;
+export type IdempotencyKey = Brand<string, 'IdempotencyKey'>;
+export type MessageId = Brand<string, 'MessageId'>;
+export type ToolExecutionId = Brand<string, 'ToolExecutionId'>;
 
-export type TurnState = "queued" | "running" | "done" | "error" | "cancelled";
-export type SessionStatus = "open" | "closing" | "closed";
-export type TurnErrorStage = "llm" | "tool" | "publish";
-export type AssistantStopReason = "stop" | "length" | "toolUse";
+export type TurnState = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
+export type SessionStatus = 'open' | 'closing' | 'closed';
+export type TurnErrorStage = 'llm' | 'tool' | 'publish';
+export type AssistantStopReason = 'stop' | 'length' | 'toolUse';
 
 export interface ToolExecutionError {
   readonly code: string;
@@ -45,7 +45,7 @@ export interface BaseEventMap {
   readonly message_start: {
     readonly turnId: TurnId;
     readonly messageId: MessageId;
-    readonly role: "user" | "assistant" | "system" | "toolResult";
+    readonly role: 'user' | 'assistant' | 'system' | 'toolResult';
   };
   readonly user_message: {
     readonly turnId: TurnId;
@@ -55,7 +55,7 @@ export interface BaseEventMap {
   readonly message_end: {
     readonly turnId: TurnId;
     readonly messageId: MessageId;
-    readonly role: "user" | "assistant" | "system" | "toolResult";
+    readonly role: 'user' | 'assistant' | 'system' | 'toolResult';
   };
   readonly assistant_message_start: {
     readonly turnId: TurnId;
@@ -229,27 +229,27 @@ export interface EventRegistryBuilder<TMap extends object = EventMap> {
 }
 
 export const baseEventTypes = [
-  "session_opened",
-  "agent_start",
-  "agent_end",
-  "turn_queued",
-  "turn_started",
-  "turn_queue_cleared",
-  "message_start",
-  "user_message",
-  "message_end",
-  "assistant_message_start",
-  "assistant_text_delta",
-  "assistant_thinking_delta",
-  "assistant_toolcall_delta",
-  "tool_execution_start",
-  "tool_execution_update",
-  "tool_execution_result",
-  "assistant_message_done",
-  "turn_done",
-  "turn_error",
-  "turn_cancelled",
-  "session_closed",
+  'session_opened',
+  'agent_start',
+  'agent_end',
+  'turn_queued',
+  'turn_started',
+  'turn_queue_cleared',
+  'message_start',
+  'user_message',
+  'message_end',
+  'assistant_message_start',
+  'assistant_text_delta',
+  'assistant_thinking_delta',
+  'assistant_toolcall_delta',
+  'tool_execution_start',
+  'tool_execution_update',
+  'tool_execution_result',
+  'assistant_message_done',
+  'turn_done',
+  'turn_error',
+  'turn_cancelled',
+  'session_closed',
 ] as const satisfies ReadonlyArray<EventType<EventMap>>;
 
 export function defineEvent<TType extends string, TPayload>(

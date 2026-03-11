@@ -1,23 +1,9 @@
-import { Effect, Schema } from "effect";
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { Effect, Schema } from 'effect';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
-import { EmbeddingService } from "~/services/embedding";
+import { EmbeddingService } from '~/services/embedding';
 
-import {
-  InvalidMetadataError,
-  MissingRootDocumentoError,
-  XmlParseError,
-  type BoeParseError,
-} from "./errors";
-import { createFragmentBuilder } from "./fluent";
-import { formatFragmentsAsMarkdown, selectFragmentsByPathQuery } from "./format";
-import { blocksToTextNodes, buildAst } from "./fragments";
-import { assertFragmentInvariants } from "./invariants";
-import { assertTextoRoot, linearizeOrderedTextBlocks } from "./linearize";
-import { toCanonicalFragmentPathQuery } from "./path-query";
-import type { LegalQuery } from "./query";
-import { evaluateQuery, selectByLegalPath } from "./query";
-import { determineParsingStrategy } from "./strategy";
+import type { LegalQuery } from './query';
 import type {
   BoeAnalysis,
   BoeParsedDocument,
@@ -29,8 +15,23 @@ import type {
   LegalNodePathString,
   LegalReference,
   ParseInput,
-} from "./types";
-import { BoeMetadataSchema } from "./types";
+} from './types';
+
+import {
+  InvalidMetadataError,
+  MissingRootDocumentoError,
+  XmlParseError,
+  type BoeParseError,
+} from './errors';
+import { createFragmentBuilder } from './fluent';
+import { formatFragmentsAsMarkdown, selectFragmentsByPathQuery } from './format';
+import { blocksToTextNodes, buildAst } from './fragments';
+import { assertFragmentInvariants } from './invariants';
+import { assertTextoRoot, linearizeOrderedTextBlocks } from './linearize';
+import { toCanonicalFragmentPathQuery } from './path-query';
+import { evaluateQuery, selectByLegalPath } from './query';
+import { determineParsingStrategy } from './strategy';
+import { BoeMetadataSchema } from './types';
 
 const decodeDate = Schema.decodeUnknownSync(Schema.String.pipe(Schema.pattern(/^\d{8}$/)));
 const decodeBoeMetadata = Schema.decodeUnknownSync(BoeMetadataSchema);
@@ -38,8 +39,8 @@ const decodeBoeMetadata = Schema.decodeUnknownSync(BoeMetadataSchema);
 function createOrderedParser() {
   return new XMLParser({
     ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    textNodeName: "#text",
+    attributeNamePrefix: '@_',
+    textNodeName: '#text',
     parseAttributeValue: false,
     parseTagValue: false,
     trimValues: true,
@@ -52,12 +53,12 @@ interface ParsedRawDocument {
   readonly ordered: unknown;
 }
 
-export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser", {
+export class BoeXmlParser extends Effect.Service<BoeXmlParser>()('BoeXmlParser', {
   accessors: true,
   effect: Effect.sync(() => {
     const orderedParser = createOrderedParser();
 
-    const parseRaw = Effect.fn("BoeXmlParser.parseRaw")((xml: string) =>
+    const parseRaw = Effect.fn('BoeXmlParser.parseRaw')((xml: string) =>
       Effect.try({
         try: (): ParsedRawDocument => {
           const validation = XMLValidator.validate(xml);
@@ -72,7 +73,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
           const documentoEntries = getDocumentoEntries(ordered);
           if (documentoEntries.length === 0) {
             throw new MissingRootDocumentoError({
-              message: "Missing root <documento> element",
+              message: 'Missing root <documento> element',
             });
           }
 
@@ -85,7 +86,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       }),
     );
 
-    const parse = Effect.fn("BoeXmlParser.parse")((input: ParseInput) =>
+    const parse = Effect.fn('BoeXmlParser.parse')((input: ParseInput) =>
       Effect.gen(function* () {
         const raw = yield* parseRaw(input.xml);
         const metadata = yield* decodeMetadata(raw.documentoEntries);
@@ -106,7 +107,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       }),
     );
 
-    const parseDocument = Effect.fn("BoeXmlParser.parseDocument")((input: ParseInput) =>
+    const parseDocument = Effect.fn('BoeXmlParser.parseDocument')((input: ParseInput) =>
       parse(input).pipe(
         Effect.map(
           (document) =>
@@ -119,7 +120,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       ),
     );
 
-    const parseForIndexing = Effect.fn("BoeXmlParser.parseForIndexing")((input: ParseInput) =>
+    const parseForIndexing = Effect.fn('BoeXmlParser.parseForIndexing')((input: ParseInput) =>
       Effect.gen(function* () {
         const raw = yield* parseRaw(input.xml);
         const metadata = yield* decodeMetadata(raw.documentoEntries);
@@ -129,7 +130,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       }),
     );
 
-    const parseForIndexingWithReferences = Effect.fn("BoeXmlParser.parseForIndexingWithReferences")(
+    const parseForIndexingWithReferences = Effect.fn('BoeXmlParser.parseForIndexingWithReferences')(
       (input: ParseInput) =>
         Effect.gen(function* () {
           const raw = yield* parseRaw(input.xml);
@@ -148,7 +149,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
         }),
     );
 
-    const buildAstFromInput = Effect.fn("BoeXmlParser.buildAst")((input: BuildInput) =>
+    const buildAstFromInput = Effect.fn('BoeXmlParser.buildAst')((input: BuildInput) =>
       Effect.gen(function* () {
         const built = buildAst(input);
         yield* assertFragmentInvariants(built.fragments);
@@ -156,44 +157,44 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
       }),
     );
 
-    const buildFragmentsFromInput = Effect.fn("BoeXmlParser.buildFragments")((input: BuildInput) =>
+    const buildFragmentsFromInput = Effect.fn('BoeXmlParser.buildFragments')((input: BuildInput) =>
       buildAstFromInput(input).pipe(Effect.map((built) => built.fragments)),
     );
 
-    const parseToFragments = Effect.fn("BoeXmlParser.parseToFragments")((input: ParseInput) =>
+    const parseToFragments = Effect.fn('BoeXmlParser.parseToFragments')((input: ParseInput) =>
       parseForIndexing(input),
     );
 
-    const fragmentBuilder = Effect.fn("BoeXmlParser.fragmentBuilder")(
-      (input: Omit<BuildInput, "blocks">) =>
+    const fragmentBuilder = Effect.fn('BoeXmlParser.fragmentBuilder')(
+      (input: Omit<BuildInput, 'blocks'>) =>
         Effect.succeed(createFragmentBuilder(buildFragmentsFromInput, input)),
     );
 
-    const selectByPath = Effect.fn("BoeXmlParser.selectByPath")(
+    const selectByPath = Effect.fn('BoeXmlParser.selectByPath')(
       (input: { readonly document: BoeParsedDocument; readonly query: FragmentPathQuery }) =>
         Effect.succeed(selectFragmentsByIndexedPath(input.document, input.query)),
     );
 
-    const selectByLegalPathEffect = Effect.fn("BoeXmlParser.selectByLegalPath")(
+    const selectByLegalPathEffect = Effect.fn('BoeXmlParser.selectByLegalPath')(
       (input: {
         readonly document: BoeParsedDocument;
         readonly legalPath: LegalNodePathString | string;
       }) => Effect.succeed(selectByLegalPath(input.document.fragments, input.legalPath)),
     );
 
-    const queryLegal = Effect.fn("BoeXmlParser.queryLegal")(
+    const queryLegal = Effect.fn('BoeXmlParser.queryLegal')(
       (input: { readonly document: BoeParsedDocument; readonly query: LegalQuery }) =>
         Effect.succeed(evaluateQuery(input.document.fragments, input.query)),
     );
 
-    const formatMarkdownByPath = Effect.fn("BoeXmlParser.formatMarkdownByPath")(
+    const formatMarkdownByPath = Effect.fn('BoeXmlParser.formatMarkdownByPath')(
       (input: { readonly document: BoeParsedDocument; readonly query: FragmentPathQuery }) =>
         Effect.succeed(
           formatFragmentsAsMarkdown(input.document.fragments, input.query, input.document.metadata),
         ),
     );
 
-    const countTokensByPath = Effect.fn("BoeXmlParser.countTokensByPath")(
+    const countTokensByPath = Effect.fn('BoeXmlParser.countTokensByPath')(
       (input: { readonly document: BoeParsedDocument; readonly query: FragmentPathQuery }) =>
         Effect.gen(function* () {
           const selected = selectFragmentsByPathQuery(input.document.fragments, input.query);
@@ -206,7 +207,7 @@ export class BoeXmlParser extends Effect.Service<BoeXmlParser>()("BoeXmlParser",
               Effect.mapError(
                 (cause) =>
                   new XmlParseError({
-                    message: "Failed to count tokens using embedding service",
+                    message: 'Failed to count tokens using embedding service',
                     cause,
                   }),
               ),
@@ -292,7 +293,7 @@ const linearizeBlocks = (ordered: unknown) =>
   });
 
 function extractMetadata(documentoEntries: ReadonlyArray<unknown>): BoeMetadata {
-  const metadatosEntries = getChildEntries(documentoEntries, "metadatos");
+  const metadatosEntries = getChildEntries(documentoEntries, 'metadatos');
   const metadatos = asRecord(orderedEntriesToRecord(metadatosEntries));
   const identifier = asText(metadatos.identificador);
   const title = asText(metadatos.titulo);
@@ -305,14 +306,14 @@ function extractMetadata(documentoEntries: ReadonlyArray<unknown>): BoeMetadata 
   const subseccion = asText(metadatos.subseccion);
 
   const rangoRecord = asRecord(metadatos.rango);
-  const rangoCodigo = asText(rangoRecord["@_codigo"]);
+  const rangoCodigo = asText(rangoRecord['@_codigo']);
 
   const pdfUrl =
     pdfUrlRaw.length > 0
-      ? pdfUrlRaw.startsWith("http")
+      ? pdfUrlRaw.startsWith('http')
         ? pdfUrlRaw
         : `https://www.boe.es${pdfUrlRaw}`
-      : "";
+      : '';
 
   return decodeBoeMetadata({
     identifier,
@@ -329,13 +330,13 @@ function extractMetadata(documentoEntries: ReadonlyArray<unknown>): BoeMetadata 
 }
 
 function extractAnalysis(documentoEntries: ReadonlyArray<unknown>): BoeAnalysis {
-  const analysisEntries = getChildEntries(documentoEntries, "analisis");
+  const analysisEntries = getChildEntries(documentoEntries, 'analisis');
   const analysis = asRecord(orderedEntriesToRecord(analysisEntries));
-  const priorReferenceEntries = extractReferenceRecords(analysisEntries, "anteriores", "anterior");
+  const priorReferenceEntries = extractReferenceRecords(analysisEntries, 'anteriores', 'anterior');
   const posteriorReferenceEntries = extractReferenceRecords(
     analysisEntries,
-    "posteriores",
-    "posterior",
+    'posteriores',
+    'posterior',
   );
 
   return {
@@ -354,11 +355,11 @@ function extractAnalysis(documentoEntries: ReadonlyArray<unknown>): BoeAnalysis 
 
 function extractReferenceRecords(
   analysisEntries: ReadonlyArray<unknown>,
-  sectionTag: "anteriores" | "posteriores",
-  itemTag: "anterior" | "posterior",
+  sectionTag: 'anteriores' | 'posteriores',
+  itemTag: 'anterior' | 'posterior',
 ): ReadonlyArray<Record<string, unknown>> {
   const sectionEntries = getChildEntries(
-    getChildEntries(analysisEntries, "referencias"),
+    getChildEntries(analysisEntries, 'referencias'),
     sectionTag,
   );
   const records: Array<Record<string, unknown>> = [];
@@ -374,7 +375,7 @@ function extractReferenceRecords(
     }
 
     const bodyRecord = orderedEntriesToRecord(asArray(itemValue));
-    const attributeRecord = asRecord(sectionEntry[":@"]);
+    const attributeRecord = asRecord(sectionEntry[':@']);
     records.push({
       ...bodyRecord,
       ...attributeRecord,
@@ -389,9 +390,9 @@ function extractReferences(input: unknown): ReadonlyArray<LegalReference> {
   return entries
     .map((entry): LegalReference | null => {
       const record = asRecord(entry);
-      const referenceRaw = asText(record.referencia ?? record["@_referencia"]);
-      const type = asText(record.tipo ?? record.palabra ?? record["@_tipo"]);
-      const text = asText(record.text ?? record.texto ?? record["#text"]);
+      const referenceRaw = asText(record.referencia ?? record['@_referencia']);
+      const type = asText(record.tipo ?? record.palabra ?? record['@_tipo']);
+      const text = asText(record.text ?? record.texto ?? record['#text']);
 
       const reference =
         normalizeReferenceIdentifier(referenceRaw) ?? extractReferenceIdentifierFromText(text);
@@ -415,7 +416,7 @@ function normalizeReferenceIdentifier(reference: string): string | null {
     return null;
   }
 
-  const normalized = trimmed.replace(/^boe:/i, "").toUpperCase();
+  const normalized = trimmed.replace(/^boe:/i, '').toUpperCase();
   return /^[A-Z]+-[A-Z]-\d{1,}-\d+$/.test(normalized) ? normalized : null;
 }
 
@@ -426,7 +427,7 @@ function extractReferenceIdentifierFromText(text: string): string | null {
 
 function extractTextArray(input: unknown): ReadonlyArray<string> {
   return asArray(input)
-    .map((entry) => asText(isRecord(entry) ? entry["#text"] : entry))
+    .map((entry) => asText(isRecord(entry) ? entry['#text'] : entry))
     .filter((entry) => entry.length > 0);
 }
 
@@ -448,43 +449,43 @@ function toParseError(cause: unknown): BoeParseError {
 }
 
 function isParseError(cause: unknown): cause is BoeParseError {
-  if (!isRecord(cause) || typeof cause._tag !== "string") {
+  if (!isRecord(cause) || typeof cause._tag !== 'string') {
     return false;
   }
 
   return (
-    cause._tag === "MissingRootDocumentoError" ||
-    cause._tag === "InvalidMetadataError" ||
-    cause._tag === "UnsupportedStrategyError" ||
-    cause._tag === "MalformedTextSectionError" ||
-    cause._tag === "NodePathCollisionError" ||
-    cause._tag === "EmptyFragmentContentError" ||
-    cause._tag === "XmlParseError"
+    cause._tag === 'MissingRootDocumentoError' ||
+    cause._tag === 'InvalidMetadataError' ||
+    cause._tag === 'UnsupportedStrategyError' ||
+    cause._tag === 'MalformedTextSectionError' ||
+    cause._tag === 'NodePathCollisionError' ||
+    cause._tag === 'EmptyFragmentContentError' ||
+    cause._tag === 'XmlParseError'
   );
 }
 
 function isSchemaParseError(
   cause: unknown,
-): cause is { readonly _tag: "ParseError"; readonly message: string } {
-  return isRecord(cause) && cause._tag === "ParseError" && typeof cause.message === "string";
+): cause is { readonly _tag: 'ParseError'; readonly message: string } {
+  return isRecord(cause) && cause._tag === 'ParseError' && typeof cause.message === 'string';
 }
 
 function asText(value: unknown): string {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return value.trim();
   }
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return String(value);
   }
   if (isRecord(value)) {
-    if (typeof value["#text"] === "string") {
-      return value["#text"].trim();
+    if (typeof value['#text'] === 'string') {
+      return value['#text'].trim();
     }
-    if (typeof value["#text"] === "number") {
-      return String(value["#text"]);
+    if (typeof value['#text'] === 'number') {
+      return String(value['#text']);
     }
   }
-  return "";
+  return '';
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -522,23 +523,23 @@ function getChildEntries(entries: ReadonlyArray<unknown>, tag: string): Readonly
 function orderedEntriesToRecord(entries: ReadonlyArray<unknown>): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const entry of entries) {
-    if (typeof entry === "string") {
-      record["#text"] = entry;
+    if (typeof entry === 'string') {
+      record['#text'] = entry;
       continue;
     }
-    if (typeof entry === "number") {
-      record["#text"] = String(entry);
+    if (typeof entry === 'number') {
+      record['#text'] = String(entry);
       continue;
     }
     if (!isRecord(entry)) {
       continue;
     }
 
-    const entryAttributes = asRecord(entry[":@"]);
+    const entryAttributes = asRecord(entry[':@']);
     const hasExplicitAttributes = Object.keys(entryAttributes).length > 0;
 
     for (const [key, value] of Object.entries(entry)) {
-      if (key === ":@") {
+      if (key === ':@') {
         continue;
       }
 
@@ -549,12 +550,12 @@ function orderedEntriesToRecord(entries: ReadonlyArray<unknown>): Record<string,
         Object.assign(nestedRecord, entryAttributes);
       }
 
-      const textValue = asText(nestedRecord["#text"] ?? nestedRecord.text ?? nestedRecord.value);
+      const textValue = asText(nestedRecord['#text'] ?? nestedRecord.text ?? nestedRecord.value);
       const hasOnlyText = Object.keys(nestedRecord).every(
-        (nestedKey) => nestedKey === "#text" || nestedKey.startsWith("@_"),
+        (nestedKey) => nestedKey === '#text' || nestedKey.startsWith('@_'),
       );
       const shouldSimplifyToText =
-        hasOnlyText && nestedRecord["#text"] !== undefined && !hasExplicitAttributes;
+        hasOnlyText && nestedRecord['#text'] !== undefined && !hasExplicitAttributes;
       record[key] = shouldSimplifyToText ? textValue : nestedRecord;
     }
   }
@@ -562,4 +563,4 @@ function orderedEntriesToRecord(entries: ReadonlyArray<unknown>): Record<string,
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === 'object' && value !== null;

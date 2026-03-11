@@ -1,8 +1,9 @@
-import { Cause, Chunk, Config, DateTime, Effect, Schedule, Schema, Stream } from "effect";
+import { Cause, Chunk, Config, DateTime, Effect, Schedule, Schema, Stream } from 'effect';
 
-import { and, eq, inArray, sql } from "@canary/db/drizzle";
-import { DatabaseService } from "@canary/db/effect";
-import type { RelationType } from "@canary/db/schema/legislation";
+import type { RelationType } from '@canary/db/schema/legislation';
+
+import { and, eq, inArray, sql } from '@canary/db/drizzle';
+import { DatabaseService } from '@canary/db/effect';
 import {
   documentVersions,
   fragmentIndexJobs,
@@ -10,24 +11,25 @@ import {
   nodeTypeEnum,
   referenceAnchors,
   senseFragments,
-} from "@canary/db/schema/legislation";
+} from '@canary/db/schema/legislation';
 import {
   BoeXmlParser,
   legalNodePathToLtree,
   nodePathToLtree,
   type BoeFragment,
   type LegalReference,
-} from "~/collectors/boe/parser";
-import { EmbeddingService, EmbeddingServiceLive } from "~/services/embedding";
+} from '~/collectors/boe/parser';
+import { EmbeddingService, EmbeddingServiceLive } from '~/services/embedding';
 
-import { IndexingWorkflowError } from "./errors";
-import type { IndexingTriggerPayload } from "./schema";
+import type { IndexingTriggerPayload } from './schema';
+
+import { IndexingWorkflowError } from './errors';
 
 const IndexingConfig = Config.all({
-  upsertBatchSize: Config.number("INDEXING_UPSERT_BATCH_SIZE").pipe(Config.withDefault(250)),
-  embedBatchSize: Config.number("INDEXING_EMBED_BATCH_SIZE").pipe(Config.withDefault(64)),
-  embedConcurrency: Config.number("INDEXING_EMBED_CONCURRENCY").pipe(Config.withDefault(2)),
-  profileMemory: Config.boolean("INDEXING_PROFILE_MEMORY").pipe(Config.withDefault(false)),
+  upsertBatchSize: Config.number('INDEXING_UPSERT_BATCH_SIZE').pipe(Config.withDefault(250)),
+  embedBatchSize: Config.number('INDEXING_EMBED_BATCH_SIZE').pipe(Config.withDefault(64)),
+  embedConcurrency: Config.number('INDEXING_EMBED_CONCURRENCY').pipe(Config.withDefault(2)),
+  profileMemory: Config.boolean('INDEXING_PROFILE_MEMORY').pipe(Config.withDefault(false)),
 });
 
 export const FragmentRowSchema = Schema.Struct({
@@ -75,7 +77,7 @@ interface FragmentRow {
 }
 
 export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>()(
-  "BoeIndexingActivities",
+  'BoeIndexingActivities',
   {
     accessors: true,
     dependencies: [DatabaseService.Default, BoeXmlParser.Default, EmbeddingServiceLive],
@@ -97,7 +99,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
       });
 
       const ensureIndexingTargetsExist = Effect.fn(
-        "BoeIndexingActivities.ensureIndexingTargetsExist",
+        'BoeIndexingActivities.ensureIndexingTargetsExist',
       )((payload: IndexingTriggerPayload, executionId: string) =>
         Effect.gen(function* () {
           const versionRows = yield* db
@@ -109,9 +111,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 toWorkflowError(
                   payload,
                   executionId,
-                  "mark-in-progress-target-check",
+                  'mark-in-progress-target-check',
                   cause,
-                  "Unable to verify document version before marking indexing in progress",
+                  'Unable to verify document version before marking indexing in progress',
                 ),
               ),
             );
@@ -121,9 +123,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             return yield* toWorkflowError(
               payload,
               executionId,
-              "mark-in-progress-target-check",
+              'mark-in-progress-target-check',
               undefined,
-              "Indexing payload references missing document version",
+              'Indexing payload references missing document version',
             );
           }
 
@@ -131,7 +133,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             return yield* toWorkflowError(
               payload,
               executionId,
-              "mark-in-progress-target-check",
+              'mark-in-progress-target-check',
               undefined,
               `Indexing payload doc/version mismatch. versionId belongs to docId ${versionDocId}, payload has ${payload.docId}`,
             );
@@ -146,9 +148,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 toWorkflowError(
                   payload,
                   executionId,
-                  "mark-in-progress-target-check",
+                  'mark-in-progress-target-check',
                   cause,
-                  "Unable to verify legal document before marking indexing in progress",
+                  'Unable to verify legal document before marking indexing in progress',
                 ),
               ),
             );
@@ -157,21 +159,21 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             return yield* toWorkflowError(
               payload,
               executionId,
-              "mark-in-progress-target-check",
+              'mark-in-progress-target-check',
               undefined,
-              "Indexing payload references missing legal document",
+              'Indexing payload references missing legal document',
             );
           }
         }),
       );
 
-      const markInProgress = Effect.fn("BoeIndexingActivities.markInProgress")(
+      const markInProgress = Effect.fn('BoeIndexingActivities.markInProgress')(
         (payload: IndexingTriggerPayload, executionId: string) =>
           Effect.gen(function* () {
             yield* ensureIndexingTargetsExist(payload, executionId).pipe(
               Effect.retry({
                 schedule: Schedule.intersect(
-                  Schedule.exponential("100 millis"),
+                  Schedule.exponential('100 millis'),
                   Schedule.recurs(5),
                 ).pipe(Schedule.jittered),
                 while: isRetryableTargetCheckError,
@@ -183,7 +185,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               .values({
                 docId: payload.docId,
                 versionId: payload.versionId,
-                status: "in_progress",
+                status: 'in_progress',
                 attempts: 1,
                 startedAt: new Date(),
                 metadata: buildJobMetadata(payload, executionId),
@@ -191,7 +193,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               .onConflictDoUpdate({
                 target: [fragmentIndexJobs.docId, fragmentIndexJobs.versionId],
                 set: {
-                  status: "in_progress",
+                  status: 'in_progress',
                   attempts: sql`${fragmentIndexJobs.attempts} + 1`,
                   updatedAt: sql`now()`,
                   lastError: null,
@@ -201,7 +203,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               .pipe(
                 Effect.retry({
                   schedule: Schedule.intersect(
-                    Schedule.exponential("100 millis"),
+                    Schedule.exponential('100 millis'),
                     Schedule.recurs(5),
                   ).pipe(Schedule.jittered),
                   while: isForeignKeyViolationCause,
@@ -210,15 +212,15 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "mark-in-progress",
+                    'mark-in-progress',
                     cause,
-                    "Unable to mark indexing job in progress",
+                    'Unable to mark indexing job in progress',
                   ),
                 ),
               );
           }).pipe(
             Effect.tapError((cause) =>
-              Effect.logWarning("BoeIndexingActivities.markInProgress failed", {
+              Effect.logWarning('BoeIndexingActivities.markInProgress failed', {
                 docId: payload.docId,
                 versionId: payload.versionId,
                 executionId,
@@ -229,7 +231,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           ),
       );
 
-      const loadVersionContent = Effect.fn("BoeIndexingActivities.loadVersionContent")(
+      const loadVersionContent = Effect.fn('BoeIndexingActivities.loadVersionContent')(
         (payload: IndexingTriggerPayload, executionId: string) =>
           db
             .select({
@@ -244,9 +246,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 toWorkflowError(
                   payload,
                   executionId,
-                  "load-version",
+                  'load-version',
                   cause,
-                  "Unable to load document version content",
+                  'Unable to load document version content',
                 ),
               ),
               Effect.flatMap((rows) => {
@@ -256,9 +258,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                     toWorkflowError(
                       payload,
                       executionId,
-                      "load-version",
+                      'load-version',
                       undefined,
-                      "Missing or empty version content",
+                      'Missing or empty version content',
                     ),
                   );
                 }
@@ -271,7 +273,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             ),
       );
 
-      const ensureLatestVersion = Effect.fn("BoeIndexingActivities.ensureLatestVersion")(
+      const ensureLatestVersion = Effect.fn('BoeIndexingActivities.ensureLatestVersion')(
         (payload: IndexingTriggerPayload, executionId: string) =>
           Effect.gen(function* () {
             const current = yield* db
@@ -283,9 +285,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "version-check",
+                    'version-check',
                     cause,
-                    "Unable to read current version number",
+                    'Unable to read current version number',
                   ),
                 ),
               );
@@ -295,9 +297,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               return yield* toWorkflowError(
                 payload,
                 executionId,
-                "version-check",
+                'version-check',
                 undefined,
-                "Current document version was not found",
+                'Current document version was not found',
               );
             }
 
@@ -310,9 +312,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "version-check",
+                    'version-check',
                     cause,
-                    "Unable to read latest document version",
+                    'Unable to read latest document version',
                   ),
                 ),
               );
@@ -322,7 +324,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               return yield* toWorkflowError(
                 payload,
                 executionId,
-                "version-check",
+                'version-check',
                 undefined,
                 `Stale indexing workflow payload. Current version ${currentVersionNumber} is older than latest ${latestVersionNumber}`,
               );
@@ -361,7 +363,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
         };
       };
 
-      const upsertFragmentBatch = Effect.fn("BoeIndexingActivities.upsertFragmentBatch")(
+      const upsertFragmentBatch = Effect.fn('BoeIndexingActivities.upsertFragmentBatch')(
         (
           payload: IndexingTriggerPayload,
           executionId: string,
@@ -421,16 +423,16 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "upsert-fragments",
+                    'upsert-fragments',
                     cause,
-                    "Unable to upsert sense fragments",
+                    'Unable to upsert sense fragments',
                   ),
                 ),
               );
           }),
       );
 
-      const persistEmbeddingBatch = Effect.fn("BoeIndexingActivities.persistEmbeddingBatch")(
+      const persistEmbeddingBatch = Effect.fn('BoeIndexingActivities.persistEmbeddingBatch')(
         (
           payload: IndexingTriggerPayload,
           executionId: string,
@@ -445,7 +447,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               return;
             }
 
-            const toVectorLiteral = (vector: ReadonlyArray<number>) => `[${vector.join(",")}]`;
+            const toVectorLiteral = (vector: ReadonlyArray<number>) => `[${vector.join(',')}]`;
             const updatedAt = new Date();
             const fragmentIdColumn = sql.raw(`"${senseFragments.fragmentId.name}"`);
             const embedding1024Column = sql.raw(`"${senseFragments.embedding1024.name}"`);
@@ -485,7 +487,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               .pipe(
                 Effect.retry({
                   schedule: Schedule.intersect(
-                    Schedule.exponential("100 millis"),
+                    Schedule.exponential('100 millis'),
                     Schedule.recurs(2),
                   ).pipe(Schedule.jittered),
                 }),
@@ -493,9 +495,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "embed-fragments",
+                    'embed-fragments',
                     cause,
-                    "Unable to persist generated fragment embeddings batch",
+                    'Unable to persist generated fragment embeddings batch',
                   ),
                 ),
                 Effect.asVoid,
@@ -503,7 +505,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           }),
       );
 
-      const embedFragmentRows = Effect.fn("BoeIndexingActivities.embedFragmentRows")(
+      const embedFragmentRows = Effect.fn('BoeIndexingActivities.embedFragmentRows')(
         (payload: IndexingTriggerPayload, executionId: string, rows: ReadonlyArray<FragmentRow>) =>
           Stream.fromIterable(rows).pipe(
             Stream.grouped(config.embedBatchSize),
@@ -514,16 +516,16 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   const vectors = yield* embedding
                     .embed(
                       batchRows.map((row) => row.content),
-                      { task: "retrieval" },
+                      { task: 'retrieval' },
                     )
                     .pipe(
                       Effect.mapError((cause) =>
                         toWorkflowError(
                           payload,
                           executionId,
-                          "embed-fragments",
+                          'embed-fragments',
                           cause,
-                          "Unable to generate embeddings for fragments",
+                          'Unable to generate embeddings for fragments',
                         ),
                       ),
                     );
@@ -532,9 +534,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                     return yield* toWorkflowError(
                       payload,
                       executionId,
-                      "embed-fragments",
+                      'embed-fragments',
                       undefined,
-                      "Embedding service returned unexpected vector cardinality",
+                      'Embedding service returned unexpected vector cardinality',
                     );
                   }
 
@@ -545,7 +547,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                         toWorkflowError(
                           payload,
                           executionId,
-                          "embed-fragments",
+                          'embed-fragments',
                           undefined,
                           `Missing embedding vector for fragment ${row.fragmentId} at index ${index}`,
                         ),
@@ -565,7 +567,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
 
                   if (config.profileMemory) {
                     const usage = process.memoryUsage();
-                    yield* Effect.logInfo("indexing.embed.batch.completed", {
+                    yield* Effect.logInfo('indexing.embed.batch.completed', {
                       docId: payload.docId,
                       versionId: payload.versionId,
                       batchSize: batchRows.length,
@@ -581,7 +583,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           ),
       );
 
-      const upsertDocumentReferences = Effect.fn("BoeIndexingActivities.upsertDocumentReferences")(
+      const upsertDocumentReferences = Effect.fn('BoeIndexingActivities.upsertDocumentReferences')(
         (
           payload: IndexingTriggerPayload,
           executionId: string,
@@ -589,7 +591,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
         ) =>
           Effect.gen(function* () {
             if (references.length === 0) {
-              yield* Effect.logInfo("indexing.references.empty", {
+              yield* Effect.logInfo('indexing.references.empty', {
                 docId: payload.docId,
                 versionId: payload.versionId,
                 executionId,
@@ -599,13 +601,13 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
 
             const mapRelationType = (type: string): RelationType => {
               const t = type.toUpperCase();
-              if (t.includes("DEROGA")) return "deroga_total";
-              if (t.includes("MODIFICA")) return "modifica";
-              if (t.includes("DESARROLLA") || t.includes("COMPLEMENTA") || t.includes("RELACION"))
-                return "complementa";
-              if (t.includes("DECLARA") || t.includes("INTERPRETA") || t.includes("NULIDAD"))
-                return "interpreta";
-              return "cita_explicita";
+              if (t.includes('DEROGA')) return 'deroga_total';
+              if (t.includes('MODIFICA')) return 'modifica';
+              if (t.includes('DESARROLLA') || t.includes('COMPLEMENTA') || t.includes('RELACION'))
+                return 'complementa';
+              if (t.includes('DECLARA') || t.includes('INTERPRETA') || t.includes('NULIDAD'))
+                return 'interpreta';
+              return 'cita_explicita';
             };
 
             const invalidReferenceInputs: Array<string> = [];
@@ -637,7 +639,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
             }
 
             if (invalidReferenceInputs.length > 0) {
-              yield* Effect.logWarning("indexing.references.invalid", {
+              yield* Effect.logWarning('indexing.references.invalid', {
                 docId: payload.docId,
                 versionId: payload.versionId,
                 executionId,
@@ -648,7 +650,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
 
             const rows = [...dedupedRows.values()];
             if (rows.length === 0) {
-              yield* Effect.logWarning("indexing.references.no-valid-targets", {
+              yield* Effect.logWarning('indexing.references.no-valid-targets', {
                 docId: payload.docId,
                 versionId: payload.versionId,
                 executionId,
@@ -692,15 +694,15 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               toWorkflowError(
                 payload,
                 executionId,
-                "upsert-references",
+                'upsert-references',
                 cause,
-                "Unable to upsert document references",
+                'Unable to upsert document references',
               ),
             ),
           ),
       );
 
-      const processFragments = Effect.fn("BoeIndexingActivities.processFragments")(
+      const processFragments = Effect.fn('BoeIndexingActivities.processFragments')(
         (
           payload: IndexingTriggerPayload,
           executionId: string,
@@ -723,9 +725,9 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                   toWorkflowError(
                     payload,
                     executionId,
-                    "parse-document",
+                    'parse-document',
                     cause,
-                    "Unable to parse BOE XML document",
+                    'Unable to parse BOE XML document',
                   ),
                 ),
               );
@@ -750,7 +752,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
 
                     if (config.profileMemory) {
                       const usage = process.memoryUsage();
-                      yield* Effect.logInfo("indexing.fragment.batch.completed", {
+                      yield* Effect.logInfo('indexing.fragment.batch.completed', {
                         docId: payload.docId,
                         versionId: payload.versionId,
                         parsedBatchSize: parsedBatch.length,
@@ -768,12 +770,12 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
           }),
       );
 
-      const finalizeReady = Effect.fn("BoeIndexingActivities.finalizeReady")(
+      const finalizeReady = Effect.fn('BoeIndexingActivities.finalizeReady')(
         (payload: IndexingTriggerPayload, executionId: string) =>
           db
             .update(fragmentIndexJobs)
             .set({
-              status: "ready",
+              status: 'ready',
               completedAt: new Date(),
               updatedAt: new Date(),
               lastError: null,
@@ -789,21 +791,21 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
                 toWorkflowError(
                   payload,
                   executionId,
-                  "finalize-ready",
+                  'finalize-ready',
                   cause,
-                  "Unable to mark indexing job as ready",
+                  'Unable to mark indexing job as ready',
                 ),
               ),
               Effect.asVoid,
             ),
       );
 
-      const finalizeFailed = Effect.fn("BoeIndexingActivities.finalizeFailed")(
+      const finalizeFailed = Effect.fn('BoeIndexingActivities.finalizeFailed')(
         (payload: IndexingTriggerPayload, reason: string) =>
           db
             .update(fragmentIndexJobs)
             .set({
-              status: "failed",
+              status: 'failed',
               completedAt: new Date(),
               updatedAt: new Date(),
               lastError: reason,
@@ -818,7 +820,7 @@ export class BoeIndexingActivities extends Effect.Service<BoeIndexingActivities>
               Effect.asVoid,
               Effect.tapError((cause) =>
                 Effect.logError(
-                  "BoeIndexingActivities.finalizeFailed could not persist failed status",
+                  'BoeIndexingActivities.finalizeFailed could not persist failed status',
                   {
                     docId: payload.docId,
                     versionId: payload.versionId,
@@ -849,9 +851,9 @@ function createContentFingerprint(
   nodePath: string,
   normalizedContent: string,
 ): string {
-  return new Bun.CryptoHasher("sha256")
+  return new Bun.CryptoHasher('sha256')
     .update(`${docId}:${versionId}:${nodePath}:${normalizedContent}`)
-    .digest("hex");
+    .digest('hex');
 }
 
 function toWorkflowError(
@@ -884,14 +886,14 @@ function formatUnknownCause(cause: unknown): string {
 
 function isForeignKeyViolationCause(cause: unknown): boolean {
   const rendered = formatUnknownCause(cause).toLowerCase();
-  return rendered.includes("foreign key") || rendered.includes("violates foreign key constraint");
+  return rendered.includes('foreign key') || rendered.includes('violates foreign key constraint');
 }
 
 function isRetryableTargetCheckError(cause: unknown): boolean {
   return (
     cause instanceof IndexingWorkflowError &&
-    cause.stage === "mark-in-progress-target-check" &&
-    cause.message.startsWith("Indexing payload references missing")
+    cause.stage === 'mark-in-progress-target-check' &&
+    cause.message.startsWith('Indexing payload references missing')
   );
 }
 

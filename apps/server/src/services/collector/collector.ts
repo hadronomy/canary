@@ -1,7 +1,8 @@
-import { Effect, Stream } from "effect";
-import type { Option } from "effect/Option";
+import type { Option } from 'effect/Option';
 
-import type { CollectorError } from "./errors";
+import { Effect, Stream } from 'effect';
+
+import type { CollectorError } from './errors';
 import type {
   CollectorId,
   FactoryId,
@@ -9,12 +10,12 @@ import type {
   CollectionBatch,
   CollectionMode,
   Capabilities,
-} from "./schema";
+} from './schema';
 
 export type HealthStatus =
-  | { readonly status: "healthy"; readonly checkedAt: Date }
-  | { readonly status: "degraded"; readonly message: string; readonly checkedAt: Date }
-  | { readonly status: "unhealthy"; readonly message: string; readonly checkedAt: Date };
+  | { readonly status: 'healthy'; readonly checkedAt: Date }
+  | { readonly status: 'degraded'; readonly message: string; readonly checkedAt: Date }
+  | { readonly status: 'unhealthy'; readonly message: string; readonly checkedAt: Date };
 
 export interface CollectorState {
   readonly lastDocumentDate: Option<Date>;
@@ -43,4 +44,4 @@ export interface Collector {
   readonly healthCheck: Effect.Effect<HealthStatus, never>;
 }
 
-export type ModeIntent = "auto" | "forceFullSync" | "forceIncremental";
+export type ModeIntent = 'auto' | 'forceFullSync' | 'forceIncremental';

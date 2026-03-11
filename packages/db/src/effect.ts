@@ -1,18 +1,18 @@
-import * as Reactivity from "@effect/experimental/Reactivity";
-import * as PgClient from "@effect/sql-pg/PgClient";
-import * as SqlClient from "@effect/sql/SqlClient";
-import * as PgDrizzle from "drizzle-orm/effect-postgres";
-import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect";
-import * as Redacted from "effect/Redacted";
+import * as Reactivity from '@effect/experimental/Reactivity';
+import * as PgClient from '@effect/sql-pg/PgClient';
+import * as SqlClient from '@effect/sql/SqlClient';
+import * as PgDrizzle from 'drizzle-orm/effect-postgres';
+import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from 'effect';
+import * as Redacted from 'effect/Redacted';
 
-import { databaseClientConfig, databaseServiceConfig } from "./config";
-import * as schema from "./schema";
-import { relations } from "./schema/relations";
+import { databaseClientConfig, databaseServiceConfig } from './config';
+import * as schema from './schema';
+import { relations } from './schema/relations';
 
 export type DatabaseClient = PgDrizzle.EffectPgDatabase<typeof schema, typeof relations>;
 
 export class DatabaseUnavailableError extends Schema.TaggedError<DatabaseUnavailableError>()(
-  "DatabaseUnavailableError",
+  'DatabaseUnavailableError',
   {
     operation: Schema.String,
     message: Schema.String,
@@ -39,7 +39,7 @@ const withCurrentSpanCorrelation = <A extends Record<string, unknown>>(fields: A
     };
   });
 
-const makeDatabaseService = Effect.fn("DatabaseService.make")(function* (
+const makeDatabaseService = Effect.fn('DatabaseService.make')(function* (
   db: DatabaseClient,
   startupRetries: number,
   startupBaseDelay: Duration.Duration,
@@ -48,13 +48,13 @@ const makeDatabaseService = Effect.fn("DatabaseService.make")(function* (
     Duration.max(Duration.millis(1), startupBaseDelay),
   ).pipe(Schedule.compose(Schedule.recurs(startupRetries)));
 
-  const healthCheck = Effect.fn("DatabaseService.healthCheck")(() =>
-    db.execute("select 1").pipe(
+  const healthCheck = Effect.fn('DatabaseService.healthCheck')(() =>
+    db.execute('select 1').pipe(
       Effect.asVoid,
       Effect.mapError(
         (cause) =>
           new DatabaseUnavailableError({
-            operation: "healthCheck",
+            operation: 'healthCheck',
             message: `Database health check failed: ${String(cause)}`,
             cause,
           }),
@@ -62,7 +62,7 @@ const makeDatabaseService = Effect.fn("DatabaseService.make")(function* (
     ),
   );
 
-  const ready = Effect.fn("DatabaseService.ready")(() =>
+  const ready = Effect.fn('DatabaseService.ready')(() =>
     healthCheck().pipe(
       Effect.tapError((error) =>
         Effect.gen(function* () {
@@ -71,14 +71,14 @@ const makeDatabaseService = Effect.fn("DatabaseService.make")(function* (
             baseDelayMs: Duration.toMillis(startupBaseDelay),
             error: error.message,
           });
-          yield* Effect.logWarning("Database unavailable during startup precheck", fields);
+          yield* Effect.logWarning('Database unavailable during startup precheck', fields);
         }),
       ),
       Effect.retry(startupRetrySchedule),
     ),
   );
 
-  const client = Effect.fn("DatabaseService.client")(() => Effect.succeed(db));
+  const client = Effect.fn('DatabaseService.client')(() => Effect.succeed(db));
 
   const service: DatabaseServiceApi = {
     ready,
@@ -100,7 +100,7 @@ const make = Effect.gen(function* () {
   );
 
   return service;
-}).pipe(Effect.withSpan("DatabaseService.make"));
+}).pipe(Effect.withSpan('DatabaseService.make'));
 
 const pgClientLayer = Layer.scopedContext(
   Effect.gen(function* () {
@@ -114,17 +114,17 @@ const pgClientLayer = Layer.scopedContext(
       connectTimeout: clientConfig.poolConnectionTimeout,
       ssl: false,
     }).pipe(
-      Effect.tapError(() => Effect.logWarning("Database connection failed, retrying...")),
+      Effect.tapError(() => Effect.logWarning('Database connection failed, retrying...')),
       Effect.retry({
         schedule: Schedule.exponential(
           Duration.max(Duration.millis(10), serviceConfig.startupBaseDelay),
         ).pipe(Schedule.compose(Schedule.recurs(serviceConfig.startupRetries))),
-        while: (error) => error._tag === "SqlError",
+        while: (error) => error._tag === 'SqlError',
       }),
       Effect.mapError(
         (cause) =>
           new DatabaseUnavailableError({
-            operation: "createDrizzleClient",
+            operation: 'createDrizzleClient',
             message: `Failed to create Drizzle client after ${serviceConfig.startupRetries} retries: ${String(cause)}`,
             cause,
           }),
@@ -137,11 +137,11 @@ const pgClientLayer = Layer.scopedContext(
 
 const drizzleDependencies = Layer.merge(PgDrizzle.DefaultServices, pgClientLayer);
 
-export class DatabaseService extends Effect.Service<DatabaseService>()("DatabaseService", {
+export class DatabaseService extends Effect.Service<DatabaseService>()('DatabaseService', {
   accessors: true,
   effect: make,
   dependencies: [drizzleDependencies],
 }) {}
 
-export type { SqlClient } from "@effect/sql/SqlClient";
-export type { SqlError } from "@effect/sql/SqlError";
+export type { SqlClient } from '@effect/sql/SqlClient';
+export type { SqlError } from '@effect/sql/SqlError';

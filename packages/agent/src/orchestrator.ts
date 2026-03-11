@@ -6,8 +6,8 @@ import type {
   SessionSnapshot,
   SubmitTurnInput,
   SubmitTurnResult,
-} from "~/protocol";
-import type { Runtime } from "~/runtime";
+} from '~/protocol';
+import type { Runtime } from '~/runtime';
 
 export interface SessionOrchestrator<TMap extends object = EventMap, TAuthContext = unknown> {
   readonly createSession: (context: TAuthContext) => Promise<SessionMutationResult>;

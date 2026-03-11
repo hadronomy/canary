@@ -1,9 +1,9 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { CollectionRunId, DocumentId, DocumentVersionId } from "./schema";
+import { CollectionRunId, DocumentId, DocumentVersionId } from './schema';
 
 export class IndexingWorkflowUnavailableError extends Schema.TaggedError<IndexingWorkflowUnavailableError>()(
-  "IndexingWorkflowUnavailableError",
+  'IndexingWorkflowUnavailableError',
   {
     versionId: DocumentVersionId,
     message: Schema.String,
@@ -11,7 +11,7 @@ export class IndexingWorkflowUnavailableError extends Schema.TaggedError<Indexin
 ) {}
 
 export class IndexingEnqueueError extends Schema.TaggedError<IndexingEnqueueError>()(
-  "IndexingEnqueueError",
+  'IndexingEnqueueError',
   {
     versionId: DocumentVersionId,
     message: Schema.String,
@@ -20,7 +20,7 @@ export class IndexingEnqueueError extends Schema.TaggedError<IndexingEnqueueErro
 ) {}
 
 export class IndexingWorkflowError extends Schema.TaggedError<IndexingWorkflowError>()(
-  "IndexingWorkflowError",
+  'IndexingWorkflowError',
   {
     runId: CollectionRunId,
     docId: DocumentId,

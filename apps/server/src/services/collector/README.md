@@ -42,15 +42,15 @@ This guarantees the decoded runtime config and compile-time config type always m
 ## Quick Start
 
 ```ts
-import { Effect, Layer } from "effect";
+import { Effect, Layer } from 'effect';
 import {
   CollectorFactoryRegistry,
   CollectorRepository,
   CollectorStateManager,
   CollectorOrchestrator,
   CollectorScheduler,
-} from "~/services/collector";
-import { RssCollectorFactory } from "~/collectors/rss/factory";
+} from '~/services/collector';
+import { RssCollectorFactory } from '~/collectors/rss/factory';
 
 const CollectorLive = Layer.mergeAll(
   CollectorFactoryRegistry.Default,
@@ -72,22 +72,22 @@ const program = Effect.gen(function* () {
 Facade-first quick start:
 
 ```ts
-import { Effect } from "effect";
-import { collector, CollectorLive, CollectionMode } from "~/services/collector";
-import { RssCollectorFactory } from "~/collectors/rss/factory";
+import { Effect } from 'effect';
+import { collector, CollectorLive, CollectionMode } from '~/services/collector';
+import { RssCollectorFactory } from '~/collectors/rss/factory';
 
 const app = Effect.gen(function* () {
   yield* collector.registerFactory(RssCollectorFactory);
 
   const sourceId = yield* collector.create({
     factory: RssCollectorFactory,
-    name: "BOC RSS",
-    schedule: "*/15 * * * *",
+    name: 'BOC RSS',
+    schedule: '*/15 * * * *',
     mode: CollectionMode.Incremental({
       since: new Date(Date.now() - 3600_000),
       lookBackWindow: undefined,
     }),
-    config: { feedUrl: "https://example.com/feed.xml" },
+    config: { feedUrl: 'https://example.com/feed.xml' },
   });
 
   const runId = yield* collector.runOnce(sourceId);
@@ -115,7 +115,7 @@ Important exports:
 Example:
 
 ```ts
-import { CollectionMode } from "~/services/collector";
+import { CollectionMode } from '~/services/collector';
 
 const mode = CollectionMode.Incremental({
   since: new Date(Date.now() - 3600_000),
@@ -147,14 +147,14 @@ Main errors:
 Example:
 
 ```ts
-import { Effect, ScheduleError } from "~/services/collector";
+import { Effect, ScheduleError } from '~/services/collector';
 
 const invalidCron = (collectorId: string, expression: string) =>
   Effect.fail(
     new ScheduleError({
       collectorId,
       schedule: expression,
-      reason: "Invalid cron expression",
+      reason: 'Invalid cron expression',
       message: `Invalid cron expression '${expression}' for collector '${collectorId}'`,
     }),
   );
@@ -177,13 +177,13 @@ API:
 Example shape:
 
 ```ts
-import type { Collector } from "~/services/collector";
+import type { Collector } from '~/services/collector';
 
 const collector: Collector = {
   id,
   factoryId,
-  name: "Example",
-  capabilities: new Set(["FullSync", "Incremental"]),
+  name: 'Example',
+  capabilities: new Set(['FullSync', 'Incremental']),
   collect: (mode, runId) => stream,
   validate: validateEffect,
   detectChanges: (since) => detectEffect,
@@ -219,8 +219,8 @@ type ConfigType<S extends Schema.Schema.AnyNoContext> = Schema.Schema.Type<S>;
 Registry note: `CollectorFactoryRegistry` is configured with `accessors: false` because `register` is generic. Use service instance methods.
 
 ```ts
-import { Effect, CollectorFactoryRegistry } from "~/services/collector";
-import { RssCollectorFactory } from "~/collectors/rss/factory";
+import { Effect, CollectorFactoryRegistry } from '~/services/collector';
+import { RssCollectorFactory } from '~/collectors/rss/factory';
 
 const program = Effect.gen(function* () {
   const registry = yield* CollectorFactoryRegistry;
@@ -251,7 +251,7 @@ Filters:
 - `CollectorFilter.all()`
 
 ```ts
-import { Effect, CollectorFilter, CollectorRepository } from "~/services/collector";
+import { Effect, CollectorFilter, CollectorRepository } from '~/services/collector';
 
 const enabled = Effect.gen(function* () {
   return yield* CollectorRepository.findMany(CollectorFilter.enabled());
@@ -273,7 +273,7 @@ API:
 - `getState`, `updateState`
 
 ```ts
-import { Effect, CollectionMode, CollectorStateManager } from "~/services/collector";
+import { Effect, CollectionMode, CollectorStateManager } from '~/services/collector';
 
 const createRun = Effect.gen(function* () {
   return yield* CollectorStateManager.createRun(
@@ -315,7 +315,7 @@ Public API:
 - `running`
 
 ```ts
-import { Effect, CollectionMode, CollectorOrchestrator } from "~/services/collector";
+import { Effect, CollectionMode, CollectorOrchestrator } from '~/services/collector';
 
 const runNow = Effect.gen(function* () {
   const queuedRunId = yield* CollectorOrchestrator.schedule(collectorId);
@@ -323,8 +323,8 @@ const runNow = Effect.gen(function* () {
   return yield* CollectorOrchestrator.collectNow(
     collectorId,
     CollectionMode.Backfill({
-      from: new Date("2025-01-01"),
-      to: new Date("2025-01-31"),
+      from: new Date('2025-01-01'),
+      to: new Date('2025-01-31'),
       batchSize: undefined,
     }),
   );
@@ -356,10 +356,10 @@ Public API:
 - `scheduled`
 
 ```ts
-import { Effect, CollectorScheduler } from "~/services/collector";
+import { Effect, CollectorScheduler } from '~/services/collector';
 
 const scheduling = Effect.gen(function* () {
-  yield* CollectorScheduler.start(collectorId, "*/15 * * * *");
+  yield* CollectorScheduler.start(collectorId, '*/15 * * * *');
   return yield* CollectorScheduler.scheduled;
 });
 ```
@@ -395,8 +395,8 @@ It supports:
 Registration example:
 
 ```ts
-import { Effect, CollectorFactoryRegistry } from "~/services/collector";
-import { RssCollectorFactory } from "~/collectors/rss/factory";
+import { Effect, CollectorFactoryRegistry } from '~/services/collector';
+import { RssCollectorFactory } from '~/collectors/rss/factory';
 
 const register = Effect.gen(function* () {
   const registry = yield* CollectorFactoryRegistry;
@@ -420,7 +420,7 @@ This is the typical end-to-end flow in production:
 ### Integration Example
 
 ```ts
-import { Effect, Layer } from "effect";
+import { Effect, Layer } from 'effect';
 import {
   CollectorFactoryRegistry,
   CollectorRepository,
@@ -428,8 +428,8 @@ import {
   CollectorOrchestrator,
   CollectorScheduler,
   CollectionMode,
-} from "~/services/collector";
-import { RssCollectorFactory } from "~/collectors/rss/factory";
+} from '~/services/collector';
+import { RssCollectorFactory } from '~/collectors/rss/factory';
 
 const CollectorLive = Layer.mergeAll(
   CollectorFactoryRegistry.Default,
@@ -447,16 +447,16 @@ const program = Effect.gen(function* () {
   // 2) Create a collector entry
   const entry = yield* CollectorRepository.create({
     factoryId: RssCollectorFactory.id,
-    name: "BOC RSS",
-    description: "Official BOC feed",
+    name: 'BOC RSS',
+    description: 'Official BOC feed',
     enabled: true,
-    schedule: "*/15 * * * *",
+    schedule: '*/15 * * * *',
     defaultMode: CollectionMode.Incremental({
       since: new Date(Date.now() - 60 * 60 * 1000),
       lookBackWindow: undefined,
     }),
     config: {
-      feedUrl: "https://example.com/feed.xml",
+      feedUrl: 'https://example.com/feed.xml',
       // all other fields are schema-defaulted by RssCollectorConfig
     },
   });
@@ -501,7 +501,7 @@ import {
   CollectorStateManager,
   CollectorOrchestrator,
   CollectorScheduler,
-} from "~/services/collector";
+} from '~/services/collector';
 ```
 
 ---

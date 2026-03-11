@@ -1,9 +1,11 @@
-import type { KeyEvent } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
-import { useEffect, useMemo, useRef } from "react";
+import type { KeyEvent } from '@opentui/core';
 
-import { ShortcutRegistry } from "~/app/shortcuts/registry";
-import type { Shortcut, ShortcutContext } from "~/app/shortcuts/types";
+import { useKeyboard } from '@opentui/react';
+import { useEffect, useMemo, useRef } from 'react';
+
+import type { Shortcut, ShortcutContext } from '~/app/shortcuts/types';
+
+import { ShortcutRegistry } from '~/app/shortcuts/registry';
 
 const registry = new ShortcutRegistry();
 

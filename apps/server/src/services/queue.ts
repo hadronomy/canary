@@ -1,17 +1,17 @@
-import { Queue, Worker, type Job } from "bullmq";
-import { Config, Context, Effect, Layer, Runtime, Schema } from "effect";
+import { Queue, Worker, type Job } from 'bullmq';
+import { Config, Context, Effect, Layer, Runtime, Schema } from 'effect';
 
-import type { QueueDescriptor } from "~/queues/registry";
+import type { QueueDescriptor } from '~/queues/registry';
 
 type QueuePayload<Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>> =
-  Schema.Schema.Type<Q["schema"]>;
+  Schema.Schema.Type<Q['schema']>;
 
-export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
+export class QueueError extends Schema.TaggedError<QueueError>()('QueueError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect),
 }) {}
 
-export class QueueService extends Context.Tag("@canary/QueueService")<
+export class QueueService extends Context.Tag('@canary/QueueService')<
   QueueService,
   {
     readonly add: <Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>>(
@@ -25,8 +25,8 @@ export const QueueServiceLive = Layer.scoped(
   QueueService,
   Effect.gen(function* () {
     const connection = {
-      host: yield* Config.string("REDIS_HOST").pipe(Config.withDefault("localhost")),
-      port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
+      host: yield* Config.string('REDIS_HOST').pipe(Config.withDefault('localhost')),
+      port: yield* Config.integer('REDIS_PORT').pipe(Config.withDefault(6379)),
     };
 
     const queues = new Map<string, Queue>();
@@ -38,12 +38,12 @@ export const QueueServiceLive = Layer.scoped(
       return queues.get(name)!;
     };
 
-    const add = Effect.fn("QueueService.add")(function* <
+    const add = Effect.fn('QueueService.add')(function* <
       Q extends QueueDescriptor<string, Schema.Schema.AnyNoContext>,
     >(queueDescriptor: Q, payload: QueuePayload<Q>) {
       const decoded = yield* Schema.decodeUnknown(queueDescriptor.schema)(payload).pipe(
         Effect.mapError(
-          (error) => new QueueError({ message: "Invalid queue payload", cause: error }),
+          (error) => new QueueError({ message: 'Invalid queue payload', cause: error }),
         ),
       );
 
@@ -52,7 +52,7 @@ export const QueueServiceLive = Layer.scoped(
           const queue = getQueue(queueDescriptor.name);
           return await queue.add(queueDescriptor.name, decoded);
         },
-        catch: (error) => new QueueError({ message: "Failed to add job to queue", cause: error }),
+        catch: (error) => new QueueError({ message: 'Failed to add job to queue', cause: error }),
       });
     });
 
@@ -75,7 +75,7 @@ export const QueueServiceTest = Layer.succeed(
       payload: QueuePayload<Q>,
     ) =>
       Effect.succeed({
-        id: "test-job-id",
+        id: 'test-job-id',
         name: queueDescriptor.name,
         data: payload,
       } as Job<QueuePayload<Q>>),
@@ -87,8 +87,8 @@ export const makeWorker = Effect.fn(function* <
   R,
 >(queueDescriptor: Q, processor: (job: Job<QueuePayload<Q>>) => Effect.Effect<void, Error, R>) {
   const connection = {
-    host: yield* Config.string("REDIS_HOST").pipe(Config.withDefault("localhost")),
-    port: yield* Config.integer("REDIS_PORT").pipe(Config.withDefault(6379)),
+    host: yield* Config.string('REDIS_HOST').pipe(Config.withDefault('localhost')),
+    port: yield* Config.integer('REDIS_PORT').pipe(Config.withDefault(6379)),
   };
   const runtime = yield* Effect.runtime<R>();
 

@@ -1,25 +1,26 @@
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option } from 'effect';
 
-import { CollectorNotFoundError } from "./errors";
 import type {
   CollectorId,
   FactoryId,
   CollectorEntry,
   CollectionState,
   CollectionMode,
-} from "./schema";
+} from './schema';
+
+import { CollectorNotFoundError } from './errors';
 
 export type CollectorFilter =
-  | { readonly _tag: "ById"; readonly id: CollectorId }
-  | { readonly _tag: "ByFactory"; readonly factoryId: FactoryId }
-  | { readonly _tag: "Enabled" }
-  | { readonly _tag: "All" };
+  | { readonly _tag: 'ById'; readonly id: CollectorId }
+  | { readonly _tag: 'ByFactory'; readonly factoryId: FactoryId }
+  | { readonly _tag: 'Enabled' }
+  | { readonly _tag: 'All' };
 
 export const CollectorFilter = {
-  byId: (id: CollectorId): CollectorFilter => ({ _tag: "ById", id }),
-  byFactory: (factoryId: FactoryId): CollectorFilter => ({ _tag: "ByFactory", factoryId }),
-  enabled: (): CollectorFilter => ({ _tag: "Enabled" }),
-  all: (): CollectorFilter => ({ _tag: "All" }),
+  byId: (id: CollectorId): CollectorFilter => ({ _tag: 'ById', id }),
+  byFactory: (factoryId: FactoryId): CollectorFilter => ({ _tag: 'ByFactory', factoryId }),
+  enabled: (): CollectorFilter => ({ _tag: 'Enabled' }),
+  all: (): CollectorFilter => ({ _tag: 'All' }),
 };
 
 export interface CollectorCreate {
@@ -54,7 +55,7 @@ export interface CollectorRepositoryShape {
 }
 
 export class CollectorRepository extends Effect.Service<CollectorRepository>()(
-  "CollectorRepository",
+  'CollectorRepository',
   {
     accessors: true,
     effect: Effect.gen(function* () {
@@ -77,13 +78,13 @@ export class CollectorRepository extends Effect.Service<CollectorRepository>()(
           Effect.succeed(
             Array.from(collectors.values()).filter((entry) => {
               switch (filter._tag) {
-                case "ById":
+                case 'ById':
                   return entry.collectorId === filter.id;
-                case "ByFactory":
+                case 'ByFactory':
                   return entry.factoryId === filter.factoryId;
-                case "Enabled":
+                case 'Enabled':
                   return entry.enabled;
-                case "All":
+                case 'All':
                 default:
                   return true;
               }

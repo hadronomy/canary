@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from 'bun:test';
 
 import {
   astNodePaths,
@@ -6,13 +6,13 @@ import {
   pathBuilder,
   selectAstByCanonicalScope,
   selectAstByScope,
-} from "~/collectors/boe/parser";
+} from '~/collectors/boe/parser';
 
-import { parseBoe, readBoeFixture } from "../common";
+import { parseBoe, readBoeFixture } from '../common';
 
-describe("parser AST contracts", () => {
-  test("parse returns AST aligned with fragment projections", async () => {
-    const xml = await readBoeFixture("constitution-1978.xml");
+describe('parser AST contracts', () => {
+  test('parse returns AST aligned with fragment projections', async () => {
+    const xml = await readBoeFixture('constitution-1978.xml');
     const document = await parseBoe(xml);
 
     expect(document.ast.nodes.length).toBe(document.fragments.length);
@@ -29,8 +29,8 @@ describe("parser AST contracts", () => {
     }
   });
 
-  test("AST node IDs are stable across repeated parses", async () => {
-    const xml = await readBoeFixture("real-boe-full.xml");
+  test('AST node IDs are stable across repeated parses', async () => {
+    const xml = await readBoeFixture('real-boe-full.xml');
     const first = await parseBoe(xml);
     const second = await parseBoe(xml);
 
@@ -42,18 +42,18 @@ describe("parser AST contracts", () => {
     }
   });
 
-  test("scope indexes match direct scope selectors", async () => {
-    const xml = await readBoeFixture("real-boe-full.xml");
+  test('scope indexes match direct scope selectors', async () => {
+    const xml = await readBoeFixture('real-boe-full.xml');
     const document = await parseBoe(xml);
 
     const byScope = selectAstByScope(document.ast, pathBuilder.fragment`/c`);
-    const byCanonical = selectAstByCanonicalScope(document.ast, "/c/");
+    const byCanonical = selectAstByCanonicalScope(document.ast, '/c/');
 
     expect(byScope.map((node) => node.id)).toEqual(byCanonical.map((node) => node.id));
   });
 
-  test("ltree derivation is available directly from AST nodes", async () => {
-    const xml = await readBoeFixture("constitution-1978.xml");
+  test('ltree derivation is available directly from AST nodes', async () => {
+    const xml = await readBoeFixture('constitution-1978.xml');
     const document = await parseBoe(xml);
     const node = document.ast.nodes.find((candidate) => candidate.legalNodePath !== undefined);
 
@@ -63,15 +63,15 @@ describe("parser AST contracts", () => {
     }
 
     const paths = astNodePaths(node);
-    expect(String(paths.nodePathLtree)).toContain("n_");
+    expect(String(paths.nodePathLtree)).toContain('n_');
     expect(paths.legalNodePathLtree).toBeDefined();
   });
 
-  test("explicit path builders and generic path facade remain equivalent", () => {
+  test('explicit path builders and generic path facade remain equivalent', () => {
     const fragmentFromBuilder = pathBuilder.fragment`/p`;
-    const fragmentFromFacade = path<"fragment">`/p`;
+    const fragmentFromFacade = path<'fragment'>`/p`;
     const legalFromBuilder = pathBuilder.legal`/article/${38}`;
-    const legalFromFacade = path<"legal">`/article/${38}`;
+    const legalFromFacade = path<'legal'>`/article/${38}`;
 
     expect(fragmentFromBuilder).toBe(fragmentFromFacade);
     expect(legalFromBuilder).toBe(legalFromFacade);

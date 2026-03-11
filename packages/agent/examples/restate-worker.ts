@@ -1,11 +1,10 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { stdin as input, stdout as output } from "node:process";
-import { createInterface } from "node:readline/promises";
-
-import { getModel, loginOpenAICodex, type OAuthCredentials } from "@mariozechner/pi-ai";
-import { createPubsubObject } from "@restatedev/pubsub";
-import { createPubsubClient } from "@restatedev/pubsub-client";
-import * as restate from "@restatedev/restate-sdk";
+import { getModel, loginOpenAICodex, type OAuthCredentials } from '@mariozechner/pi-ai';
+import { createPubsubObject } from '@restatedev/pubsub';
+import { createPubsubClient } from '@restatedev/pubsub-client';
+import * as restate from '@restatedev/restate-sdk';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { stdin as input, stdout as output } from 'node:process';
+import { createInterface } from 'node:readline/promises';
 
 import {
   activeTurnStateKey,
@@ -22,14 +21,14 @@ import {
   type HarnessSessionSnapshot,
   type RestateApi,
   type TurnControlCommand,
-} from "@canary/agent";
+} from '@canary/agent';
 
-import { createExampleAgents } from "./shared";
+import { createExampleAgents } from './shared';
 
-const AUTH_FILE_URL = new URL("./auth.json", import.meta.url);
+const AUTH_FILE_URL = new URL('./auth.json', import.meta.url);
 
 interface StoredAuth {
-  readonly "openai-codex"?: { readonly type: "oauth" } & OAuthCredentials;
+  readonly 'openai-codex'?: { readonly type: 'oauth' } & OAuthCredentials;
 }
 
 interface RunRequest {
@@ -79,16 +78,16 @@ function loadAuth(): StoredAuth {
     return {};
   }
 
-  const raw = readFileSync(AUTH_FILE_URL, "utf-8");
+  const raw = readFileSync(AUTH_FILE_URL, 'utf-8');
   return JSON.parse(raw) as StoredAuth;
 }
 
 function saveAuth(auth: StoredAuth): void {
-  writeFileSync(AUTH_FILE_URL, JSON.stringify(auth, null, 2), "utf-8");
+  writeFileSync(AUTH_FILE_URL, JSON.stringify(auth, null, 2), 'utf-8');
 }
 
 async function ensureOpenAICodexAccessToken(): Promise<string> {
-  const current = loadAuth()["openai-codex"];
+  const current = loadAuth()['openai-codex'];
   if (current && current.expires > Date.now()) {
     return current.access;
   }
@@ -102,7 +101,7 @@ async function ensureOpenAICodexAccessToken(): Promise<string> {
     onProgress: (message) => console.log(message),
   });
 
-  const auth = { "openai-codex": { type: "oauth", ...credentials } } as const;
+  const auth = { 'openai-codex': { type: 'oauth', ...credentials } } as const;
   saveAuth(auth);
   return credentials.access;
 }
@@ -110,15 +109,15 @@ async function ensureOpenAICodexAccessToken(): Promise<string> {
 const openAIAccessToken = await ensureOpenAICodexAccessToken();
 process.env.OPENAI_API_KEY = openAIAccessToken;
 
-const agents = createExampleAgents(getModel("openai-codex", "gpt-5.2"), {
+const agents = createExampleAgents(getModel('openai-codex', 'gpt-5.2'), {
   getApiKey: () => openAIAccessToken,
 });
-const snapshotStateKey = "snapshot";
-const restateIngressUrl = (process.env.RESTATE_INGRESS_URL ?? "http://127.0.0.1:8080").replace(
+const snapshotStateKey = 'snapshot';
+const restateIngressUrl = (process.env.RESTATE_INGRESS_URL ?? 'http://127.0.0.1:8080').replace(
   /\/$/,
-  "",
+  '',
 );
-const pubsubName = process.env.RESTATE_PUBSUB_NAME ?? "pubsub";
+const pubsubName = process.env.RESTATE_PUBSUB_NAME ?? 'pubsub';
 const pubsubClient = createPubsubClient({
   url: restateIngressUrl,
   name: pubsubName,
@@ -152,8 +151,8 @@ function getRequestHarness(
       load: async () =>
         (await ctx.get<HarnessSessionSnapshot<typeof agents>>(snapshotStateKey)) ?? undefined,
       save: async (_sessionId, state) => {
-        if (!("set" in ctx)) {
-          throw new restate.TerminalError("Snapshot save requires mutable object context", {
+        if (!('set' in ctx)) {
+          throw new restate.TerminalError('Snapshot save requires mutable object context', {
             errorCode: 409,
           });
         }
@@ -164,7 +163,7 @@ function getRequestHarness(
     adapters: {
       onPublish: (_sessionId, envelope) => {
         void pubsubBridge.publish(envelope).catch((error) => {
-          console.error("Failed to publish envelope to pubsub", error);
+          console.error('Failed to publish envelope to pubsub', error);
         });
       },
       createApi: ({ orchestrator }) => {
@@ -181,7 +180,7 @@ function getRequestHarness(
   });
 
   if (!internalApi) {
-    throw new Error("Harness API not initialized");
+    throw new Error('Harness API not initialized');
   }
 
   const initializedApi = internalApi;
@@ -227,13 +226,13 @@ function dispatchRunInBackground(
   try {
     const sender = ctx.objectSendClient<{
       readonly run: (_ctx: unknown, input: RunRequest) => void;
-    }>({ name: "agent-orchestrator" }, sessionId);
+    }>({ name: 'agent-orchestrator' }, sessionId);
 
     sender.run(
       request,
       restate.rpc.sendOpts({
         idempotencyKey: `${request.idempotencyKey}:run-dispatch`,
-        name: "dispatch-background-run",
+        name: 'dispatch-background-run',
       }),
     );
   } catch (error) {
@@ -245,20 +244,20 @@ function dispatchRunInBackground(
 }
 
 const orchestratorService = restate.object({
-  name: "agent-orchestrator",
+  name: 'agent-orchestrator',
   handlers: {
     run: async (ctx: restate.ObjectContext, request: RunRequest) => {
       const key = getAgentKey(request.agent);
       const agentDefinition = agents[key];
-      if (typeof request.input !== "string") {
-        throw new restate.TerminalError("Invalid run input payload", { errorCode: 400 });
+      if (typeof request.input !== 'string') {
+        throw new restate.TerminalError('Invalid run input payload', { errorCode: 400 });
       }
 
       const decodedInput = (() => {
         try {
           return agentDefinition.input.decode(request.input);
         } catch {
-          throw new restate.TerminalError("Failed to decode run input payload", { errorCode: 400 });
+          throw new restate.TerminalError('Failed to decode run input payload', { errorCode: 400 });
         }
       })();
 
@@ -269,7 +268,7 @@ const orchestratorService = restate.object({
         idempotencyKey: request.idempotencyKey,
         input: decodedInput,
         context: {
-          userId: request.context?.userId ?? "demo-user",
+          userId: request.context?.userId ?? 'demo-user',
         },
         turnId: request.turnId,
       });
@@ -280,15 +279,15 @@ const orchestratorService = restate.object({
     submit: async (ctx: restate.ObjectContext, request: RunRequest) => {
       const key = getAgentKey(request.agent);
       const agentDefinition = agents[key];
-      if (typeof request.input !== "string") {
-        throw new restate.TerminalError("Invalid submit input payload", { errorCode: 400 });
+      if (typeof request.input !== 'string') {
+        throw new restate.TerminalError('Invalid submit input payload', { errorCode: 400 });
       }
 
       (() => {
         try {
           agentDefinition.input.decode(request.input);
         } catch {
-          throw new restate.TerminalError("Failed to decode submit input payload", {
+          throw new restate.TerminalError('Failed to decode submit input payload', {
             errorCode: 400,
           });
         }
@@ -344,7 +343,7 @@ const orchestratorService = restate.object({
           });
           await runtime.signals
             .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
-            .resolve({ type: "steer", content: request.content ?? "" });
+            .resolve({ type: 'steer', content: request.content ?? '' });
         } else {
           const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
 
@@ -373,7 +372,7 @@ const orchestratorService = restate.object({
           });
           await runtime.signals
             .forKey<TurnControlCommand>(turnControlSignalKey(sessionId, activeTurnId))
-            .resolve({ type: "follow_up", content: request.content ?? "" });
+            .resolve({ type: 'follow_up', content: request.content ?? '' });
         } else {
           const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
 
@@ -402,7 +401,7 @@ const orchestratorService = restate.object({
           });
           await runtime.signals
             .forKey<string>(turnCancelSignalKey(sessionId, activeTurnId))
-            .resolve(request.content ?? "Cancelled by user");
+            .resolve(request.content ?? 'Cancelled by user');
         }
 
         const internalApi = getRequestHarness(ctx, sessionId).getInternalApi();
@@ -426,7 +425,7 @@ const orchestratorService = restate.object({
         return internalApi.getEvents(
           {
             sessionId: toSessionId(sessionId),
-            content: "events",
+            content: 'events',
             offset: request.offset,
           },
           undefined,
@@ -436,7 +435,7 @@ const orchestratorService = restate.object({
   },
 });
 
-const port = Number(process.env.RESTATE_WORKER_PORT ?? "9080");
+const port = Number(process.env.RESTATE_WORKER_PORT ?? '9080');
 const pubsubObject = createPubsubObject(pubsubName, {});
 await restate.serve({
   services: [orchestratorService, pubsubObject],

@@ -1,4 +1,4 @@
-import type { AnyEventEnvelope, EventMap } from "~/protocol";
+import type { AnyEventEnvelope, EventMap } from '~/protocol';
 
 export interface DurableRuntimeState {
   readonly get: <T>(key: string) => Promise<T | undefined>;
@@ -119,13 +119,13 @@ export function createMemoryDurableRuntime<TMap extends object = EventMap>(
 
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => {
-          signal?.removeEventListener("abort", onAbort);
+          signal?.removeEventListener('abort', onAbort);
           resolve();
         }, ms);
 
         const onAbort = () => {
           clearTimeout(timer);
-          reject(signal?.reason ?? new Error("Sleep aborted"));
+          reject(signal?.reason ?? new Error('Sleep aborted'));
         };
 
         if (signal?.aborted) {
@@ -133,7 +133,7 @@ export function createMemoryDurableRuntime<TMap extends object = EventMap>(
           return;
         }
 
-        signal?.addEventListener("abort", onAbort, { once: true });
+        signal?.addEventListener('abort', onAbort, { once: true });
       });
     },
     state: {

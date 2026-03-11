@@ -1,9 +1,9 @@
-import type { Effect } from "effect";
+import type { Effect } from 'effect';
 
-import type { EmbeddingService } from "~/services/embedding";
+import type { EmbeddingService } from '~/services/embedding';
 
-import type { BoeParseError } from "./errors";
-import type { LegalQuery, LegalQueryResult } from "./query";
+import type { BoeParseError } from './errors';
+import type { LegalQuery, LegalQueryResult } from './query';
 import type {
   BoeAstDocument,
   BoeFragment,
@@ -16,7 +16,7 @@ import type {
   LegalReference,
   MarkdownString,
   ParseInput,
-} from "./types";
+} from './types';
 
 export interface BoeFragmentBuilderApi {
   readonly buildAst: (

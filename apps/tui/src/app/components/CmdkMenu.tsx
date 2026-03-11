@@ -1,8 +1,9 @@
-import { TextAttributes } from "@opentui/core";
-import type { TextareaRenderable } from "@opentui/core";
-import { useEffect, useRef } from "react";
+import type { TextareaRenderable } from '@opentui/core';
 
-import type { Theme } from "~/app/theme";
+import { TextAttributes } from '@opentui/core';
+import { useEffect, useRef } from 'react';
+
+import type { Theme } from '~/app/theme';
 
 type CommandOption = {
   name: string;
@@ -38,32 +39,32 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
   return (
     <box
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
-        justifyContent: "center",
-        alignItems: "center",
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
         zIndex: 20,
       }}
     >
       <box
         style={{
-          width: "60%",
-          height: "60%",
+          width: '60%',
+          height: '60%',
           border: true,
-          borderStyle: "rounded",
+          borderStyle: 'rounded',
           borderColor: palette.mauve,
           backgroundColor: palette.base,
           padding: 1,
-          flexDirection: "column",
+          flexDirection: 'column',
         }}
       >
         <box
           style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
+            flexDirection: 'row',
+            justifyContent: 'space-between',
             paddingLeft: 1,
             paddingRight: 1,
             marginBottom: 1,
@@ -82,8 +83,8 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
             paddingLeft: 1,
             paddingRight: 1,
             marginBottom: 1,
-            flexDirection: "row",
-            alignItems: "center",
+            flexDirection: 'row',
+            alignItems: 'center',
           }}
         >
           <textarea
@@ -116,7 +117,7 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
           options={options}
           style={{
             flexGrow: 1,
-            backgroundColor: "transparent",
+            backgroundColor: 'transparent',
             textColor: palette.text,
             descriptionColor: palette.subtext0,
             focusedBackgroundColor: palette.surface1,
@@ -132,7 +133,7 @@ export function CmdkMenu({ theme, open, query, options, onQueryChange }: CmdkMen
             marginTop: 1,
             paddingLeft: 1,
             paddingRight: 1,
-            flexDirection: "row",
+            flexDirection: 'row',
             gap: 2,
           }}
         >

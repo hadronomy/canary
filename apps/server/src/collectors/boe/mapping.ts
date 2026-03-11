@@ -3,10 +3,10 @@ import type {
   HierarchyLevel,
   LegislativeStage,
   NewLegalDocument,
-} from "@canary/db/schema/legislation";
+} from '@canary/db/schema/legislation';
 
-import type { BoeCollectorConfig } from "./config";
-import type { BoeLawItem } from "./schemas";
+import type { BoeCollectorConfig } from './config';
+import type { BoeLawItem } from './schemas';
 
 export interface MappedBoeDocument {
   readonly canonicalId: string;
@@ -21,39 +21,39 @@ interface MappingTables {
 
 const mappingTables: MappingTables = {
   contentTypeByRangoCode: {
-    "1070": "law",
-    "1290": "law",
-    "1300": "law",
-    "1310": "regulation",
-    "1320": "regulation",
-    "1325": "regulation",
-    "1340": "regulation",
-    "1350": "regulation",
-    "1370": "regulation",
-    "1390": "regulation",
-    "1450": "law",
-    "1470": "regulation",
-    "1480": "regulation",
-    "1500": "regulation",
-    "1510": "regulation",
+    '1070': 'law',
+    '1290': 'law',
+    '1300': 'law',
+    '1310': 'regulation',
+    '1320': 'regulation',
+    '1325': 'regulation',
+    '1340': 'regulation',
+    '1350': 'regulation',
+    '1370': 'regulation',
+    '1390': 'regulation',
+    '1450': 'law',
+    '1470': 'regulation',
+    '1480': 'regulation',
+    '1500': 'regulation',
+    '1510': 'regulation',
   },
   hierarchyByRangoCode: {
-    "1070": "constitucion",
-    "1180": "tratado_internacional",
-    "1290": "ley_organica",
-    "1300": "ley_estatal",
-    "1310": "real_decreto_legislativo",
-    "1320": "decreto_ley",
-    "1325": "decreto_ley",
-    "1340": "real_decreto",
-    "1350": "orden_ministerial",
-    "1370": "resolucion",
-    "1390": "circular",
-    "1450": "ley_estatal",
-    "1470": "decreto",
-    "1480": "decreto",
-    "1500": "decreto_ley",
-    "1510": "decreto",
+    '1070': 'constitucion',
+    '1180': 'tratado_internacional',
+    '1290': 'ley_organica',
+    '1300': 'ley_estatal',
+    '1310': 'real_decreto_legislativo',
+    '1320': 'decreto_ley',
+    '1325': 'decreto_ley',
+    '1340': 'real_decreto',
+    '1350': 'orden_ministerial',
+    '1370': 'resolucion',
+    '1390': 'circular',
+    '1450': 'ley_estatal',
+    '1470': 'decreto',
+    '1480': 'decreto',
+    '1500': 'decreto_ley',
+    '1510': 'decreto',
   },
 };
 
@@ -90,26 +90,26 @@ export const parseBoeDateTime = (value: string): Date => {
 };
 
 const toLegislativeStage = (item: BoeLawItem): LegislativeStage => {
-  if (item.estatus_derogacion === "S") {
-    return "repealed";
+  if (item.estatus_derogacion === 'S') {
+    return 'repealed';
   }
-  if (item.vigencia_agotada === "S") {
-    return "expired";
+  if (item.vigencia_agotada === 'S') {
+    return 'expired';
   }
-  return "enacted";
+  return 'enacted';
 };
 
 const toContentType = (
   item: BoeLawItem,
-  strategy: BoeCollectorConfig["unknownRangeStrategy"],
+  strategy: BoeCollectorConfig['unknownRangeStrategy'],
 ): ContentType => {
   const contentType = mappingTables.contentTypeByRangoCode[item.rango.codigo];
   if (contentType !== undefined) {
     return contentType;
   }
 
-  if (strategy === "regulation") {
-    return "regulation";
+  if (strategy === 'regulation') {
+    return 'regulation';
   }
 
   throw new Error(`Unsupported BOE rango code '${item.rango.codigo}' for '${item.identificador}'`);
@@ -141,12 +141,12 @@ const buildBoeOriginalTextUrl = (identifier: string): string =>
   `https://www.boe.es/diario_boe/txt.php?id=${identifier}`;
 
 const stableStringify = (value: unknown): string => {
-  if (value === null || typeof value !== "object") {
+  if (value === null || typeof value !== 'object') {
     return JSON.stringify(value);
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
+    return `[${value.map(stableStringify).join(',')}]`;
   }
 
   const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
@@ -155,12 +155,12 @@ const stableStringify = (value: unknown): string => {
   const serialized = entries.map(
     ([key, nested]) => `${JSON.stringify(key)}:${stableStringify(nested)}`,
   );
-  return `{${serialized.join(",")}}`;
+  return `{${serialized.join(',')}}`;
 };
 
 export const createMetadataHash = (payload: unknown): string => {
   const body = stableStringify(payload);
-  return new Bun.CryptoHasher("sha256").update(body).digest("hex");
+  return new Bun.CryptoHasher('sha256').update(body).digest('hex');
 };
 
 export const mapBoeLawToDocument = (
@@ -168,7 +168,7 @@ export const mapBoeLawToDocument = (
   options: {
     readonly sourceId: string;
     readonly actor: string;
-    readonly unknownRangeStrategy: BoeCollectorConfig["unknownRangeStrategy"];
+    readonly unknownRangeStrategy: BoeCollectorConfig['unknownRangeStrategy'];
   },
 ): MappedBoeDocument => {
   const publishedAt = parseBoeDate(law.fecha_publicacion);
@@ -194,8 +194,8 @@ export const mapBoeLawToDocument = (
     mappedBy: options.actor,
     mappedAt: updatedAt.toISOString(),
     source: {
-      provider: "boe",
-      endpoint: "legislacion-consolidada",
+      provider: 'boe',
+      endpoint: 'legislacion-consolidada',
     },
   };
 
@@ -223,7 +223,7 @@ export const mapBoeLawToDocument = (
       approvedAt: null,
       publishedAt,
       entryIntoForceAt,
-      repealedAt: law.estatus_derogacion === "S" ? updatedAt : null,
+      repealedAt: law.estatus_derogacion === 'S' ? updatedAt : null,
       repealedByDocId: null,
       isConsolidatedText: true,
       consolidationDate: updatedAt,

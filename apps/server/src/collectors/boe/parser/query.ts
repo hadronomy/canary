@@ -1,63 +1,63 @@
-import { normalizeLegalPathSegment } from "./normalize";
-import { parseLegalPath, renderLegalPath } from "./path-query";
-import { type BoeFragment, type LegalNodePathString as LegalNodePath } from "./types";
+import { normalizeLegalPathSegment } from './normalize';
+import { parseLegalPath, renderLegalPath } from './path-query';
+import { type BoeFragment, type LegalNodePathString as LegalNodePath } from './types';
 
 export type DispositionScope =
-  | "general"
-  | "disposicion-adicional"
-  | "disposicion-final"
-  | "disposicion-transitoria"
-  | "disposicion-derogatoria";
+  | 'general'
+  | 'disposicion-adicional'
+  | 'disposicion-final'
+  | 'disposicion-transitoria'
+  | 'disposicion-derogatoria';
 
 export type LegalQuery =
-  | { readonly _tag: "All" }
-  | { readonly _tag: "ByLegalPath"; readonly path: LegalNodePath | string }
+  | { readonly _tag: 'All' }
+  | { readonly _tag: 'ByLegalPath'; readonly path: LegalNodePath | string }
   | {
-      readonly _tag: "Article";
+      readonly _tag: 'Article';
       readonly article: string;
       readonly paragraph?: number;
       readonly scope?: DispositionScope;
     }
   | {
-      readonly _tag: "DispositionArticle";
-      readonly disposition: Exclude<DispositionScope, "general">;
+      readonly _tag: 'DispositionArticle';
+      readonly disposition: Exclude<DispositionScope, 'general'>;
       readonly article: string;
       readonly paragraph?: number;
     };
 
 export type LegalQueryResult =
   | {
-      readonly _tag: "Match";
+      readonly _tag: 'Match';
       readonly fragments: ReadonlyArray<BoeFragment>;
       readonly paths: ReadonlyArray<LegalNodePath>;
     }
   | {
-      readonly _tag: "Ambiguous";
+      readonly _tag: 'Ambiguous';
       readonly candidates: ReadonlyArray<{
         readonly basePath: LegalNodePath;
         readonly fragments: ReadonlyArray<BoeFragment>;
       }>;
     }
-  | { readonly _tag: "NotFound" };
+  | { readonly _tag: 'NotFound' };
 
 export const Query = {
-  all: (): LegalQuery => ({ _tag: "All" }),
-  byLegalPath: (path: LegalNodePath | string): LegalQuery => ({ _tag: "ByLegalPath", path }),
+  all: (): LegalQuery => ({ _tag: 'All' }),
+  byLegalPath: (path: LegalNodePath | string): LegalQuery => ({ _tag: 'ByLegalPath', path }),
   article: (
     article: string,
     options?: { readonly paragraph?: number; readonly scope?: DispositionScope },
   ): LegalQuery => ({
-    _tag: "Article",
+    _tag: 'Article',
     article,
     paragraph: options?.paragraph,
     scope: options?.scope,
   }),
   dispositionArticle: (
-    disposition: Exclude<DispositionScope, "general">,
+    disposition: Exclude<DispositionScope, 'general'>,
     article: string,
     options?: { readonly paragraph?: number },
   ): LegalQuery => ({
-    _tag: "DispositionArticle",
+    _tag: 'DispositionArticle',
     disposition,
     article,
     paragraph: options?.paragraph,
@@ -84,36 +84,36 @@ export const evaluateQuery = (
   query: LegalQuery,
 ): LegalQueryResult => {
   switch (query._tag) {
-    case "All": {
+    case 'All': {
       const paths = uniqueLegalPaths(fragments);
       return {
-        _tag: "Match",
+        _tag: 'Match',
         fragments,
         paths,
       };
     }
-    case "ByLegalPath": {
+    case 'ByLegalPath': {
       const selected = selectByLegalPath(fragments, query.path);
       if (selected.length === 0) {
-        return { _tag: "NotFound" };
+        return { _tag: 'NotFound' };
       }
 
       return {
-        _tag: "Match",
+        _tag: 'Match',
         fragments: selected,
         paths: uniqueLegalPaths(selected),
       };
     }
-    case "DispositionArticle": {
+    case 'DispositionArticle': {
       const queryForScope: LegalQuery = {
-        _tag: "Article",
+        _tag: 'Article',
         article: query.article,
         paragraph: query.paragraph,
         scope: query.disposition,
       };
       return evaluateQuery(fragments, queryForScope);
     }
-    case "Article": {
+    case 'Article': {
       const articleKey = normalizeLegalToken(query.article);
       const explicitBasePath = toScopedArticlePath(articleKey, query.scope);
       const candidates =
@@ -122,12 +122,12 @@ export const evaluateQuery = (
           : findArticleCandidates(fragments, articleKey);
 
       if (candidates.length === 0) {
-        return { _tag: "NotFound" };
+        return { _tag: 'NotFound' };
       }
 
       if (candidates.length > 1) {
         return {
-          _tag: "Ambiguous",
+          _tag: 'Ambiguous',
           candidates: candidates.map((basePath) => ({
             basePath,
             fragments: withParagraphFilter(selectByLegalPath(fragments, basePath), query.paragraph),
@@ -137,15 +137,15 @@ export const evaluateQuery = (
 
       const basePath = candidates[0];
       if (basePath === undefined) {
-        return { _tag: "NotFound" };
+        return { _tag: 'NotFound' };
       }
       const selected = withParagraphFilter(selectByLegalPath(fragments, basePath), query.paragraph);
       if (selected.length === 0) {
-        return { _tag: "NotFound" };
+        return { _tag: 'NotFound' };
       }
 
       return {
-        _tag: "Match",
+        _tag: 'Match',
         fragments: selected,
         paths: [basePath],
       };
@@ -198,17 +198,17 @@ const toScopedArticlePath = (
   }
 
   const segments =
-    scope === "general"
-      ? [{ _tag: "article", value: articleKey } as const]
-      : [{ _tag: "scope", value: scope } as const, { _tag: "article", value: articleKey } as const];
+    scope === 'general'
+      ? [{ _tag: 'article', value: articleKey } as const]
+      : [{ _tag: 'scope', value: scope } as const, { _tag: 'article', value: articleKey } as const];
 
   return renderLegalPath({ segments });
 };
 
 const articleBasePath = (path: LegalNodePath): LegalNodePath | undefined => {
   const parsed = parseLegalPath(path);
-  const scopeSegment = parsed.segments.find((segment) => segment._tag === "scope");
-  const articleSegment = parsed.segments.find((segment) => segment._tag === "article");
+  const scopeSegment = parsed.segments.find((segment) => segment._tag === 'scope');
+  const articleSegment = parsed.segments.find((segment) => segment._tag === 'article');
 
   if (articleSegment === undefined) {
     return undefined;

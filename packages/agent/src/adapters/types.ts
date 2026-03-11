@@ -1,4 +1,4 @@
-import type { EventMap } from "~/protocol";
+import type { EventMap } from '~/protocol';
 
 export interface WireEventEnvelope {
   readonly type: string;
@@ -86,13 +86,13 @@ export interface HarnessClientAdapter {
 }
 
 export type HarnessFetchInit = {
-  readonly method?: RequestInit["method"];
-  readonly headers?: RequestInit["headers"];
-  readonly body?: RequestInit["body"];
+  readonly method?: RequestInit['method'];
+  readonly headers?: RequestInit['headers'];
+  readonly body?: RequestInit['body'];
   readonly signal?: AbortSignal;
-} & Omit<RequestInit, "method" | "headers" | "body" | "signal">;
+} & Omit<RequestInit, 'method' | 'headers' | 'body' | 'signal'>;
 
-export type HarnessFetchOptions = Omit<HarnessFetchInit, "method" | "body" | "signal">;
+export type HarnessFetchOptions = Omit<HarnessFetchInit, 'method' | 'body' | 'signal'>;
 
 export type HarnessFetchResponse = {
   readonly ok: boolean;
@@ -134,14 +134,14 @@ export type HarnessClientRoutes = {
 };
 
 export type HarnessRouteName =
-  | "run"
-  | "submit"
-  | "result"
-  | "continue"
-  | "events"
-  | "steer"
-  | "followUp"
-  | "cancel";
+  | 'run'
+  | 'submit'
+  | 'result'
+  | 'continue'
+  | 'events'
+  | 'steer'
+  | 'followUp'
+  | 'cancel';
 
 export type HarnessClientResolvedUrls = Record<HarnessRouteName, string>;
 

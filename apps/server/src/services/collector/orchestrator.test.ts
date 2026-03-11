@@ -1,8 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from 'bun:test';
+import { Duration, Effect, Either, Layer, Metric, Option, Schema, Stream } from 'effect';
 
-import { Duration, Effect, Either, Layer, Metric, Option, Schema, Stream } from "effect";
-
-import { defineFactory, type CollectorRuntime } from "./factory";
+import { defineFactory, type CollectorRuntime } from './factory';
 import {
   CollectionBatch,
   CollectionMode,
@@ -16,18 +15,18 @@ import {
   CollectorRepository,
   CollectorStateManager,
   type CollectorId,
-} from "./index";
+} from './index';
 
 const decodeDateTimeUtc = Schema.decodeSync(Schema.DateTimeUtc);
 
 const TestFactory = defineFactory({
-  id: "test-orchestrator",
-  name: "Test Orchestrator Factory",
-  description: "Factory used by orchestrator tests",
+  id: 'test-orchestrator',
+  name: 'Test Orchestrator Factory',
+  description: 'Factory used by orchestrator tests',
   configSchema: Schema.Struct({
     delayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), { default: () => 0 }),
   }),
-  capabilities: new Set(["FullSync", "Incremental", "Backfill", "Resume"]),
+  capabilities: new Set(['FullSync', 'Incremental', 'Backfill', 'Resume']),
   make: ({ config }) => {
     const collector: CollectorRuntime = {
       collect: (_mode, _runId) =>
@@ -38,15 +37,15 @@ const TestFactory = defineFactory({
                 new CollectionBatch({
                   documents: [
                     new CollectedDocument({
-                      externalId: "doc-1",
-                      title: "Test",
-                      content: "payload",
+                      externalId: 'doc-1',
+                      title: 'Test',
+                      content: 'payload',
                       metadata: {},
                       publishedAt: decodeDateTimeUtc(new Date().toISOString()),
                       updatedAt: Option.none(),
                       sourceUrl: Option.none(),
                       contentHash: Option.none(),
-                      kind: "New",
+                      kind: 'New',
                     }),
                   ],
                   cursor: Option.none(),
@@ -61,7 +60,7 @@ const TestFactory = defineFactory({
       estimateTotal: () => Effect.succeed(Option.none()),
       estimateState: () =>
         Effect.succeed({ lastDocumentDate: Option.none(), documentsCollected: 0 }),
-      healthCheck: Effect.succeed({ status: "healthy", checkedAt: new Date() } as const),
+      healthCheck: Effect.succeed({ status: 'healthy', checkedAt: new Date() } as const),
     };
 
     return Effect.succeed(collector);
@@ -82,9 +81,9 @@ const createCollector = (name: string, delayMs = 0) =>
     const entry = yield* CollectorRepository.create({
       factoryId: TestFactory.id,
       name,
-      description: "test",
+      description: 'test',
       enabled: true,
-      schedule: "*/1 * * * *",
+      schedule: '*/1 * * * *',
       defaultMode: CollectionMode.FullSync({ startDate: undefined, batchSize: undefined }),
       config: { delayMs },
     });
@@ -116,10 +115,10 @@ const waitForRunStart = (runId: CollectionRunId) =>
     throw new Error(`Run '${runId}' did not start in time`);
   });
 
-describe("CollectorOrchestrator", () => {
-  test("schedule returns runId and completes queued run", async () => {
+describe('CollectorOrchestrator', () => {
+  test('schedule returns runId and completes queued run', async () => {
     const program = Effect.gen(function* () {
-      const collectorId = yield* createCollector("schedule-test");
+      const collectorId = yield* createCollector('schedule-test');
       const runId = yield* CollectorOrchestrator.schedule(collectorId);
       yield* waitForRunCompletion(runId);
       const status = yield* CollectorOrchestrator.status;
@@ -131,14 +130,14 @@ describe("CollectorOrchestrator", () => {
     expect(result.status.running).toBe(0);
   });
 
-  test("scheduleExplicit executes provided mode", async () => {
+  test('scheduleExplicit executes provided mode', async () => {
     const program = Effect.gen(function* () {
-      const collectorId = yield* createCollector("schedule-explicit-test");
+      const collectorId = yield* createCollector('schedule-explicit-test');
       const runId = yield* CollectorOrchestrator.scheduleExplicit(
         collectorId,
         CollectionMode.Backfill({
-          from: new Date("2025-01-01"),
-          to: new Date("2025-01-31"),
+          from: new Date('2025-01-01'),
+          to: new Date('2025-01-31'),
           batchSize: undefined,
         }),
       );
@@ -150,16 +149,16 @@ describe("CollectorOrchestrator", () => {
     expect(runId).toBeDefined();
   });
 
-  test("collectNow returns immediate stats", async () => {
+  test('collectNow returns immediate stats', async () => {
     const program = Effect.gen(function* () {
-      const collectorId = yield* createCollector("collect-now-test");
+      const collectorId = yield* createCollector('collect-now-test');
       const completedMetric = collectorRunsCompletedTotal.pipe(
-        Metric.tagged("collector_id", collectorId),
-        Metric.tagged("mode", "FullSync"),
+        Metric.tagged('collector_id', collectorId),
+        Metric.tagged('mode', 'FullSync'),
       );
       const processedMetric = collectorDocumentsProcessedTotal.pipe(
-        Metric.tagged("collector_id", collectorId),
-        Metric.tagged("mode", "FullSync"),
+        Metric.tagged('collector_id', collectorId),
+        Metric.tagged('mode', 'FullSync'),
       );
 
       const beforeCompleted = yield* Metric.value(completedMetric);
@@ -180,27 +179,27 @@ describe("CollectorOrchestrator", () => {
     expect(result.afterProcessed.count - result.beforeProcessed.count).toBe(1);
   });
 
-  test("resume fails with ResumeError when run snapshot is missing", async () => {
+  test('resume fails with ResumeError when run snapshot is missing', async () => {
     const program = Effect.gen(function* () {
-      const collectorId = yield* createCollector("resume-missing-test");
+      const collectorId = yield* createCollector('resume-missing-test');
       return yield* Effect.either(
-        CollectorOrchestrator.resume(collectorId, CollectionRunId("missing-run")),
+        CollectorOrchestrator.resume(collectorId, CollectionRunId('missing-run')),
       );
     });
 
     const either = await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("ResumeError");
+      expect(either.left._tag).toBe('ResumeError');
     }
   });
 
-  test("cancel interrupts an active scheduled run", async () => {
+  test('cancel interrupts an active scheduled run', async () => {
     const program = Effect.gen(function* () {
-      const collectorId: CollectorId = yield* createCollector("cancel-test", 200);
+      const collectorId: CollectorId = yield* createCollector('cancel-test', 200);
       const runId = yield* CollectorOrchestrator.schedule(collectorId);
       yield* waitForRunStart(runId);
-      yield* CollectorOrchestrator.cancel(runId, "cancelled by test");
+      yield* CollectorOrchestrator.cancel(runId, 'cancelled by test');
       yield* Effect.sleep(Duration.millis(25));
       const snapshot = yield* CollectorStateManager.getRunSnapshot(runId);
       return snapshot;
@@ -210,10 +209,10 @@ describe("CollectorOrchestrator", () => {
     expect(Option.isNone(snapshot)).toBe(true);
   });
 
-  test("collectAll enqueues all enabled collectors", async () => {
+  test('collectAll enqueues all enabled collectors', async () => {
     const program = Effect.gen(function* () {
-      yield* createCollector("collect-all-a");
-      yield* createCollector("collect-all-b");
+      yield* createCollector('collect-all-a');
+      yield* createCollector('collect-all-b');
       const runIds = yield* CollectorOrchestrator.collectAll;
       yield* Effect.forEach(runIds, waitForRunCompletion, { discard: true });
       const status = yield* CollectorOrchestrator.status;

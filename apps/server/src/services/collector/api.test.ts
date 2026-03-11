@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
-
-import { Duration, Effect, Option, Schema, Stream } from "effect";
+import { describe, expect, test } from 'bun:test';
+import { Duration, Effect, Option, Schema, Stream } from 'effect';
 
 import {
   collector,
@@ -10,19 +9,19 @@ import {
   CollectedDocument,
   CollectionMode,
   defineFactory,
-} from "./index";
+} from './index';
 
 const decodeDateTimeUtc = Schema.decodeSync(Schema.DateTimeUtc);
 
 const FacadeFactory = defineFactory({
-  id: "facade-test-rss",
-  name: "Facade Test RSS",
-  description: "Factory for collector facade tests",
+  id: 'facade-test-rss',
+  name: 'Facade Test RSS',
+  description: 'Factory for collector facade tests',
   configSchema: Schema.Struct({
     feedUrl: Schema.String,
     delayMs: Schema.optionalWith(Schema.Number.pipe(Schema.nonNegative()), { default: () => 0 }),
   }),
-  capabilities: new Set(["FullSync", "Incremental", "Resume"]),
+  capabilities: new Set(['FullSync', 'Incremental', 'Resume']),
   make: ({ config }) =>
     Effect.succeed({
       collect: (_mode, _runId) =>
@@ -32,15 +31,15 @@ const FacadeFactory = defineFactory({
               new CollectionBatch({
                 documents: [
                   new CollectedDocument({
-                    externalId: "facade-doc-1",
-                    title: "Facade Document",
-                    content: "payload",
+                    externalId: 'facade-doc-1',
+                    title: 'Facade Document',
+                    content: 'payload',
                     metadata: {},
                     publishedAt: decodeDateTimeUtc(new Date().toISOString()),
                     updatedAt: Option.none(),
                     sourceUrl: Option.some(config.feedUrl),
                     contentHash: Option.none(),
-                    kind: "New",
+                    kind: 'New',
                   }),
                 ],
                 cursor: Option.none(),
@@ -54,20 +53,20 @@ const FacadeFactory = defineFactory({
       estimateTotal: () => Effect.succeed(Option.none()),
       estimateState: () =>
         Effect.succeed({ lastDocumentDate: Option.none(), documentsCollected: 0 }),
-      healthCheck: Effect.succeed({ status: "healthy", checkedAt: new Date() } as const),
+      healthCheck: Effect.succeed({ status: 'healthy', checkedAt: new Date() } as const),
     }),
 });
 
-describe("collector facade", () => {
-  test("register/create/run/status flow works end-to-end", async () => {
+describe('collector facade', () => {
+  test('register/create/run/status flow works end-to-end', async () => {
     const program = Effect.gen(function* () {
       const sourceId = yield* collector.create({
         factory: FacadeFactory,
-        name: "Facade Source",
-        schedule: "*/5 * * * *",
+        name: 'Facade Source',
+        schedule: '*/5 * * * *',
         mode: CollectionMode.Incremental({ since: new Date(), lookBackWindow: undefined }),
         config: {
-          feedUrl: "https://example.com/feed.xml",
+          feedUrl: 'https://example.com/feed.xml',
           delayMs: 10,
         },
       });
@@ -86,10 +85,10 @@ describe("collector facade", () => {
     );
     expect(result.runId).toBeDefined();
     expect(result.status.running).toBe(0);
-    expect(result.source.name).toBe("Facade Source");
+    expect(result.source.name).toBe('Facade Source');
   });
 
-  test("registerFactory remains available for dynamic registration", async () => {
+  test('registerFactory remains available for dynamic registration', async () => {
     const program = Effect.gen(function* () {
       yield* collector.registerFactory(FacadeFactory);
       const factories = yield* collector.factories();

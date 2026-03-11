@@ -1,18 +1,20 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { Serde } from "@restatedev/restate-sdk";
+import type { AssistantMessage } from '@mariozechner/pi-ai';
+import type { Serde } from '@restatedev/restate-sdk';
+
 import {
   TerminalError,
   type Context,
   type ObjectContext,
   type ObjectSharedContext,
   type RunOptions,
-} from "@restatedev/restate-sdk";
+} from '@restatedev/restate-sdk';
 
-import type { SessionApi } from "~/api";
-import { defineCodec, SuperJsonCodec, type Codec } from "~/codec";
-import type { DurableRuntime } from "~/durable";
-import type { HarnessTurnRuntime } from "~/harness";
-import type { AnyEventEnvelope, EventMap } from "~/protocol";
+import type { SessionApi } from '~/api';
+import type { DurableRuntime } from '~/durable';
+import type { HarnessTurnRuntime } from '~/harness';
+import type { AnyEventEnvelope, EventMap } from '~/protocol';
+
+import { defineCodec, SuperJsonCodec, type Codec } from '~/codec';
 
 export class SuperJsonSerde<T> extends SuperJsonCodec<T> {}
 
@@ -38,7 +40,7 @@ function getSuperJsonSerde<T>(): Serde<T> {
 }
 
 function hasNameAndCode(value: unknown): value is { readonly name: string; readonly code: number } {
-  if (typeof value !== "object" || value === null) {
+  if (typeof value !== 'object' || value === null) {
     return false;
   }
 
@@ -46,7 +48,7 @@ function hasNameAndCode(value: unknown): value is { readonly name: string; reado
   const maybeName = candidate.name;
   const maybeCode = candidate.code;
 
-  return typeof maybeName === "string" && typeof maybeCode === "number";
+  return typeof maybeName === 'string' && typeof maybeCode === 'number';
 }
 
 export function isTerminalError(err: unknown): boolean {
@@ -57,9 +59,9 @@ export function isTerminalError(err: unknown): boolean {
   }
 
   return (
-    (err.name === "TerminalError" && err.code !== undefined) ||
-    (err.name === "TimeoutError" && err.code === 408) ||
-    (err.name === "CancelledError" && err.code === 409)
+    (err.name === 'TerminalError' && err.code !== undefined) ||
+    (err.name === 'TimeoutError' && err.code === 408) ||
+    (err.name === 'CancelledError' && err.code === 409)
   );
 }
 
@@ -113,8 +115,8 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
   ctx: ObjectContext | ObjectSharedContext,
   options?: CreateRestateDurableRuntimeOptions<TMap>,
 ): DurableRuntime<TMap> {
-  const signalWaitersPrefix = "signal:waiters:";
-  const signalResolvedPrefix = "signal:resolved:";
+  const signalWaitersPrefix = 'signal:waiters:';
+  const signalResolvedPrefix = 'signal:resolved:';
 
   function signalWaitersKey(key: string): string {
     return `${signalWaitersPrefix}${key}`;
@@ -138,7 +140,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
   }
 
   function canMutateState(value: ObjectContext | ObjectSharedContext): value is ObjectContext {
-    return "set" in value && "clear" in value;
+    return 'set' in value && 'clear' in value;
   }
 
   function ensureMutableContext(operation: string): ObjectContext {
@@ -162,16 +164,16 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
       }
 
       if (signal.aborted) {
-        throw signal.reason ?? new Error("Sleep aborted");
+        throw signal.reason ?? new Error('Sleep aborted');
       }
 
       await Promise.race([
         ctx.sleep(ms),
         new Promise<never>((_, reject) => {
           signal.addEventListener(
-            "abort",
+            'abort',
             () => {
-              reject(signal.reason ?? new Error("Sleep aborted"));
+              reject(signal.reason ?? new Error('Sleep aborted'));
             },
             { once: true },
           );
@@ -193,7 +195,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
           return;
         }
 
-        ensureMutableContext("state.set").set<T>(key, value, getSuperJsonSerde<T>());
+        ensureMutableContext('state.set').set<T>(key, value, getSuperJsonSerde<T>());
       },
       delete: async (key: string) => {
         if (options?.state?.delete) {
@@ -201,7 +203,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
           return;
         }
 
-        ensureMutableContext("state.delete").clear(key);
+        ensureMutableContext('state.delete').clear(key);
       },
     },
     sideEffect: <T>(name: string, fn: () => Promise<T>) =>
@@ -227,7 +229,7 @@ export function createRestateDurableRuntime<TMap extends object = EventMap>(
               return resolved;
             }
 
-            const mutableCtx = ensureMutableContext("signals.wait");
+            const mutableCtx = ensureMutableContext('signals.wait');
             const awakeable = mutableCtx.awakeable<T>(getSuperJsonSerde<T>());
             const waiters = await getSignalWaiters(key);
             mutableCtx.set(

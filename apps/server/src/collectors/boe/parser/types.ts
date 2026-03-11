@@ -1,6 +1,6 @@
-import { Brand, Schema } from "effect";
+import { Brand, Schema } from 'effect';
 
-import type { NodeType } from "@canary/db/schema/legislation";
+import type { NodeType } from '@canary/db/schema/legislation';
 
 export interface LegalReference {
   readonly reference: string;
@@ -42,16 +42,16 @@ export interface BoeAnalysis {
 }
 
 export type BoeTextNode =
-  | { readonly _tag: "preambulo"; readonly content: string }
-  | { readonly _tag: "chapter"; readonly title: string }
-  | { readonly _tag: "section"; readonly title: string }
-  | { readonly _tag: "subsection"; readonly title: string }
-  | { readonly _tag: "article"; readonly number: string; readonly title: string }
-  | { readonly _tag: "paragraph"; readonly content: string }
-  | { readonly _tag: "subparagraph"; readonly marker: string; readonly content: string }
-  | { readonly _tag: "annex"; readonly number: string; readonly title: string }
-  | { readonly _tag: "signature"; readonly role: string; readonly content: string }
-  | { readonly _tag: "raw"; readonly content: string };
+  | { readonly _tag: 'preambulo'; readonly content: string }
+  | { readonly _tag: 'chapter'; readonly title: string }
+  | { readonly _tag: 'section'; readonly title: string }
+  | { readonly _tag: 'subsection'; readonly title: string }
+  | { readonly _tag: 'article'; readonly number: string; readonly title: string }
+  | { readonly _tag: 'paragraph'; readonly content: string }
+  | { readonly _tag: 'subparagraph'; readonly marker: string; readonly content: string }
+  | { readonly _tag: 'annex'; readonly number: string; readonly title: string }
+  | { readonly _tag: 'signature'; readonly role: string; readonly content: string }
+  | { readonly _tag: 'raw'; readonly content: string };
 
 export interface BoeXmlDocument {
   readonly metadata: BoeMetadata;
@@ -66,7 +66,7 @@ export interface BoeParsedDocument extends BoeXmlDocument {
   readonly fragments: ReadonlyArray<BoeFragment>;
 }
 
-export type AstNodeId = string & Brand.Brand<"AstNodeId">;
+export type AstNodeId = string & Brand.Brand<'AstNodeId'>;
 export const AstNodeId = Brand.nominal<AstNodeId>();
 
 export interface BoeAstNode {
@@ -124,30 +124,30 @@ export interface FragmentTokenCountResult {
 }
 
 export type NodeKind =
-  | "preambulo"
-  | "title"
-  | "chapter"
-  | "section"
-  | "subsection"
-  | "article"
-  | "paragraph"
-  | "subparagraph"
-  | "annex"
-  | "disposicion_transitoria"
-  | "disposicion_final"
-  | "signature"
-  | "table"
-  | "raw";
+  | 'preambulo'
+  | 'title'
+  | 'chapter'
+  | 'section'
+  | 'subsection'
+  | 'article'
+  | 'paragraph'
+  | 'subparagraph'
+  | 'annex'
+  | 'disposicion_transitoria'
+  | 'disposicion_final'
+  | 'signature'
+  | 'table'
+  | 'raw';
 
 export type NodePathSegmentTag =
-  | "chapter"
-  | "article"
-  | "paragraph"
-  | "subparagraph"
-  | "annex"
-  | "table"
-  | "section"
-  | "header";
+  | 'chapter'
+  | 'article'
+  | 'paragraph'
+  | 'subparagraph'
+  | 'annex'
+  | 'table'
+  | 'section'
+  | 'header';
 
 export interface NodePathSegment {
   readonly _tag: NodePathSegmentTag;
@@ -156,86 +156,86 @@ export interface NodePathSegment {
 
 export type NodePath = ReadonlyArray<NodePathSegment>;
 
-export type NodePathString = string & Brand.Brand<"NodePathString">;
+export type NodePathString = string & Brand.Brand<'NodePathString'>;
 export const NodePathString = Brand.nominal<NodePathString>();
 export const NodePathStringSchema = Schema.String.pipe(Schema.fromBrand(NodePathString));
 
-export type LegalNodePathString = string & Brand.Brand<"LegalNodePathString">;
+export type LegalNodePathString = string & Brand.Brand<'LegalNodePathString'>;
 export const LegalNodePathString = Brand.nominal<LegalNodePathString>();
 export const LegalNodePathStringSchema = Schema.String.pipe(Schema.fromBrand(LegalNodePathString));
 
 export type DispositionPathScope =
-  | "disposicion-adicional"
-  | "disposicion-final"
-  | "disposicion-transitoria"
-  | "disposicion-derogatoria";
+  | 'disposicion-adicional'
+  | 'disposicion-final'
+  | 'disposicion-transitoria'
+  | 'disposicion-derogatoria';
 
 export type LegalPathSegment =
-  | { readonly _tag: "scope"; readonly value: DispositionPathScope }
-  | { readonly _tag: "article"; readonly value: string }
-  | { readonly _tag: "paragraph"; readonly value: number }
-  | { readonly _tag: "custom"; readonly value: string };
+  | { readonly _tag: 'scope'; readonly value: DispositionPathScope }
+  | { readonly _tag: 'article'; readonly value: string }
+  | { readonly _tag: 'paragraph'; readonly value: number }
+  | { readonly _tag: 'custom'; readonly value: string };
 
 export interface LegalPathAst {
   readonly segments: ReadonlyArray<LegalPathSegment>;
 }
 
-export type MarkdownString = string & Brand.Brand<"MarkdownString">;
+export type MarkdownString = string & Brand.Brand<'MarkdownString'>;
 export const MarkdownString = Brand.nominal<MarkdownString>();
 export const MarkdownStringSchema = Schema.String.pipe(Schema.fromBrand(MarkdownString));
 
 export const FRAGMENT_PATH_SCOPE_MAP = {
   preambulo: {
-    segment: "p",
-    nodeTypes: ["preambulo", "paragraph", "signature", "raw"] as const,
+    segment: 'p',
+    nodeTypes: ['preambulo', 'paragraph', 'signature', 'raw'] as const,
   },
   chapter: {
-    segment: "c",
+    segment: 'c',
     nodeTypes: [
-      "title",
-      "chapter",
-      "section",
-      "subsection",
-      "article",
-      "paragraph",
-      "subparagraph",
-      "disposicion_transitoria",
-      "disposicion_final",
+      'title',
+      'chapter',
+      'section',
+      'subsection',
+      'article',
+      'paragraph',
+      'subparagraph',
+      'disposicion_transitoria',
+      'disposicion_final',
     ] as const,
   },
   annex: {
-    segment: "x",
-    nodeTypes: ["annex", "subsection", "section", "paragraph", "subparagraph"] as const,
+    segment: 'x',
+    nodeTypes: ['annex', 'subsection', 'section', 'paragraph', 'subparagraph'] as const,
   },
   table: {
-    segment: "t",
-    nodeTypes: ["table"] as const,
+    segment: 't',
+    nodeTypes: ['table'] as const,
   },
 } as const satisfies Readonly<
   Record<string, { readonly segment: string; readonly nodeTypes: ReadonlyArray<NodeKind> }>
 >;
 
 export type FragmentPathScope =
-  (typeof FRAGMENT_PATH_SCOPE_MAP)[keyof typeof FRAGMENT_PATH_SCOPE_MAP]["segment"];
-export type FragmentPathQuery = "/" | `/${FragmentPathScope}` | `/${FragmentPathScope}/`;
-export type CanonicalFragmentPathQuery = "/" | `/${FragmentPathScope}/`;
+  (typeof FRAGMENT_PATH_SCOPE_MAP)[keyof typeof FRAGMENT_PATH_SCOPE_MAP]['segment'];
+export type FragmentPathQuery = '/' | `/${FragmentPathScope}` | `/${FragmentPathScope}/`;
+export type CanonicalFragmentPathQuery = '/' | `/${FragmentPathScope}/`;
 
-export type PathMode = "legal" | "fragment";
+export type PathMode = 'legal' | 'fragment';
 export type PathModeTypeMap = {
   readonly legal: LegalNodePathString;
   readonly fragment: FragmentPathQuery;
 };
 
-export type ParsingStrategy = "legislative" | "simple" | "announcement" | "generic";
+export type ParsingStrategy = 'legislative' | 'simple' | 'announcement' | 'generic';
 
 export interface ParagraphBlock {
-  readonly kind: "paragraph";
+  readonly kind: 'paragraph';
   readonly className: string;
   readonly text: string;
 }
 
 export interface TableBlock {
-  readonly kind: "table";
+  readonly kind: 'table';
   readonly text: string;
 }
 

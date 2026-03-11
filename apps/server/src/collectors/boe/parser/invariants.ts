@@ -1,7 +1,8 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
-import { EmptyFragmentContentError, NodePathCollisionError } from "./errors";
-import type { BoeFragment } from "./types";
+import type { BoeFragment } from './types';
+
+import { EmptyFragmentContentError, NodePathCollisionError } from './errors';
 
 export const assertFragmentInvariants = (
   fragments: ReadonlyArray<BoeFragment>,

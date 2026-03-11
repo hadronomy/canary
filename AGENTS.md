@@ -41,10 +41,10 @@ Reduce total variable count by inlining when a value is only used once.
 
 ```ts
 // Good
-const journal = await Bun.file(path.join(dir, "journal.json")).json();
+const journal = await Bun.file(path.join(dir, 'journal.json')).json();
 
 // Bad
-const journalPath = path.join(dir, "journal.json");
+const journalPath = path.join(dir, 'journal.json');
 const journal = await Bun.file(journalPath).json();
 ```
 

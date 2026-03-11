@@ -1,4 +1,4 @@
-import type { KeyCombo, Shortcut, ShortcutCondition, ShortcutScope } from "~/app/shortcuts/types";
+import type { KeyCombo, Shortcut, ShortcutCondition, ShortcutScope } from '~/app/shortcuts/types';
 
 export type ShortcutDefinition = {
   scope: ShortcutScope;
@@ -12,7 +12,7 @@ export function shortcut(
   id: string,
   description: string,
   bindings: KeyCombo[] | readonly KeyCombo[],
-  action: Shortcut["action"],
+  action: Shortcut['action'],
   options?: {
     category?: string;
     condition?: ShortcutCondition;
@@ -21,7 +21,7 @@ export function shortcut(
 ): Shortcut {
   return {
     id,
-    scope: options?.scope ?? "global",
+    scope: options?.scope ?? 'global',
     bindings: [...bindings],
     description,
     category: options?.category,

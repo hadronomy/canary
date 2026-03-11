@@ -1,6 +1,6 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from '@opentui/core';
 
-import type { Theme } from "~/app/theme";
+import type { Theme } from '~/app/theme';
 
 type BrandingProps = {
   theme: Theme;
@@ -10,7 +10,7 @@ export function Branding({ theme }: BrandingProps) {
   const { palette } = theme;
 
   return (
-    <box style={{ alignItems: "center" }}>
+    <box style={{ alignItems: 'center' }}>
       <ascii-font font="tiny" text="Canary" style={{ color: palette.mauve }} />
       <text
         content="What will you search?"

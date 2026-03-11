@@ -5,7 +5,7 @@
 /** The Standard Typed interface. This is a base type extended by other specs. */
 export interface StandardTypedV1<Input = unknown, Output = Input> {
   /** The Standard properties. */
-  readonly "~standard": StandardTypedV1.Props<Input, Output>;
+  readonly '~standard': StandardTypedV1.Props<Input, Output>;
 }
 
 export declare namespace StandardTypedV1 {
@@ -29,19 +29,19 @@ export declare namespace StandardTypedV1 {
 
   /** Infers the input type of a Standard Typed. */
   export type InferInput<Schema extends StandardTypedV1> = NonNullable<
-    Schema["~standard"]["types"]
-  >["input"];
+    Schema['~standard']['types']
+  >['input'];
 
   /** Infers the output type of a Standard Typed. */
   export type InferOutput<Schema extends StandardTypedV1> = NonNullable<
-    Schema["~standard"]["types"]
-  >["output"];
+    Schema['~standard']['types']
+  >['output'];
 }
 
 /** The Standard Schema interface. */
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
   /** The Standard Schema properties. */
-  readonly "~standard": StandardSchemaV1.Props<Input, Output>;
+  readonly '~standard': StandardSchemaV1.Props<Input, Output>;
 }
 
 export declare namespace StandardSchemaV1 {
@@ -109,7 +109,7 @@ export declare namespace StandardSchemaV1 {
 /** The Standard JSON Schema interface. */
 export interface StandardJSONSchemaV1<Input = unknown, Output = Input> {
   /** The Standard JSON Schema properties. */
-  readonly "~standard": StandardJSONSchemaV1.Props<Input, Output>;
+  readonly '~standard': StandardJSONSchemaV1.Props<Input, Output>;
 }
 
 export declare namespace StandardJSONSchemaV1 {
@@ -138,9 +138,9 @@ export declare namespace StandardJSONSchemaV1 {
    * The `"openapi-3.0"` target is intended as a standardized specifier for OpenAPI 3.0 which is a superset of JSON Schema `"draft-04"`.
    */
   export type Target =
-    | "draft-2020-12"
-    | "draft-07"
-    | "openapi-3.0"
+    | 'draft-2020-12'
+    | 'draft-07'
+    | 'openapi-3.0'
     // Accepts any string: allows future targets while preserving autocomplete
     | ({} & string);
 

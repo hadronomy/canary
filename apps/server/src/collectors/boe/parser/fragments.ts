@@ -1,13 +1,14 @@
-import type { BuildState } from "./traversal";
+import type { BuildState } from './traversal';
+import type { FragmentSeed } from './traversal';
+import type { BoeAstDocument, BoeFragment, BoeTextNode, BuildInput, LinearBlock } from './types';
+
 import {
   applyToken,
   classifyBlock,
   finalizeAstDocument,
   initialState,
   toTextNode,
-} from "./traversal";
-import type { FragmentSeed } from "./traversal";
-import type { BoeAstDocument, BoeFragment, BoeTextNode, BuildInput, LinearBlock } from "./types";
+} from './traversal';
 
 export function blocksToTextNodes(blocks: ReadonlyArray<LinearBlock>): ReadonlyArray<BoeTextNode> {
   return blocks.map(classifyBlock).map(toTextNode);

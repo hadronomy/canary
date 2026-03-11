@@ -1,9 +1,10 @@
-import { createAstNodeId } from "../ast-id";
-import { buildAstIndexes } from "../ast-index";
-import { parseLegalPath } from "../path-query";
-import type { AstNodeId, BoeAstDocument, BoeAstNode, BoeFragment } from "../types";
-import { renderPath } from "./path-allocator";
-import type { FragmentSeed } from "./types";
+import type { AstNodeId, BoeAstDocument, BoeAstNode, BoeFragment } from '../types';
+import type { FragmentSeed } from './types';
+
+import { createAstNodeId } from '../ast-id';
+import { buildAstIndexes } from '../ast-index';
+import { parseLegalPath } from '../path-query';
+import { renderPath } from './path-allocator';
 
 export const finalizeFragments = (seeds: ReadonlyArray<FragmentSeed>): ReadonlyArray<BoeFragment> =>
   finalizeAstDocument(seeds).fragments;

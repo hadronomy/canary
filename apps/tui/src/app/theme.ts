@@ -15,15 +15,15 @@ export type Theme = {
 
 export const catppuccinMocha: Theme = {
   palette: {
-    base: "#1e1e2e",
-    surface0: "#313244",
-    surface1: "#45475a",
-    surface2: "#585b70",
-    text: "#cdd6f4",
-    subtext0: "#a6adc8",
-    overlay0: "#6c7086",
-    mauve: "#cba6f7",
-    lavender: "#b4befe",
-    blue: "#89b4fa",
+    base: '#1e1e2e',
+    surface0: '#313244',
+    surface1: '#45475a',
+    surface2: '#585b70',
+    text: '#cdd6f4',
+    subtext0: '#a6adc8',
+    overlay0: '#6c7086',
+    mauve: '#cba6f7',
+    lavender: '#b4befe',
+    blue: '#89b4fa',
   },
 };

@@ -1,7 +1,8 @@
-import type { TextareaRenderable } from "@opentui/core";
-import { useEffect, useRef } from "react";
+import type { TextareaRenderable } from '@opentui/core';
 
-import type { Theme } from "~/app/theme";
+import { useEffect, useRef } from 'react';
+
+import type { Theme } from '~/app/theme';
 
 type SearchBarProps = {
   theme: Theme;
@@ -26,17 +27,17 @@ export function SearchBar({ theme, query, onQueryChange, focused, inputId }: Sea
   return (
     <box
       style={{
-        width: "72%",
+        width: '72%',
         height: 3,
         paddingLeft: 1,
         paddingRight: 1,
         paddingTop: 0,
         paddingBottom: 0,
-        flexDirection: "row",
-        alignItems: "center",
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: palette.surface0,
-        borderStyle: "heavy",
-        border: ["left"],
+        borderStyle: 'heavy',
+        border: ['left'],
         borderColor: palette.surface2,
       }}
     >

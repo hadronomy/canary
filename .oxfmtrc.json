@@ -1,8 +1,21 @@
 {
-  "experimentalSortImports": {
-    "groups": ["builtin", "external", "internal", ["parent", "sibling", "index"]],
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "jsxSingleQuote": false,
+  "sortImports": {
     "internalPattern": ["@canary/", "~/"],
-    "newlinesBetween": true,
-    "ignorePatterns": ["routeTree.gen.ts"]
+    "ignorePatterns": ["routeTree.gen.ts"],
+    "groups": [
+      "type-import",
+      ["value-builtin", "value-external"],
+      { "newlinesBetween": true },
+      "type-internal",
+      "value-internal",
+      { "newlinesBetween": true },
+      ["type-parent", "type-sibling", "type-index"],
+      ["value-parent", "value-sibling", "value-index"],
+      { "newlinesBetween": true },
+      "unknown"
+    ]
   }
 }

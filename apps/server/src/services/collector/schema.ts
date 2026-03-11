@@ -1,18 +1,18 @@
 // apps/server/src/services/collector/schema.ts
 // Domain schema types for the collector system
 
-import { Brand, Data, Duration, Option, type Option as OptionType } from "effect";
-import { Schema } from "effect";
+import { Brand, Data, Duration, Option, type Option as OptionType } from 'effect';
+import { Schema } from 'effect';
 
 // ─── Branded IDs ─────────────────────────────────────────────────────────────
 
-export type CollectorId = string & Brand.Brand<"CollectorId">;
+export type CollectorId = string & Brand.Brand<'CollectorId'>;
 export const CollectorId = Brand.nominal<CollectorId>();
 
-export type FactoryId = string & Brand.Brand<"FactoryId">;
+export type FactoryId = string & Brand.Brand<'FactoryId'>;
 export const FactoryId = Brand.nominal<FactoryId>();
 
-export type CollectionRunId = string & Brand.Brand<"CollectionRunId">;
+export type CollectionRunId = string & Brand.Brand<'CollectionRunId'>;
 export const CollectionRunId = Brand.nominal<CollectionRunId>();
 
 export const CollectorIdSchema = Schema.String.pipe(Schema.fromBrand(CollectorId));
@@ -22,13 +22,13 @@ export const CollectionRunIdSchema = Schema.String.pipe(Schema.fromBrand(Collect
 // ─── Capability ──────────────────────────────────────────────────────────────
 
 export const Capability = Schema.Literal(
-  "FullSync",
-  "Incremental",
-  "Backfill",
-  "Validation",
-  "Continuous",
-  "Resume",
-  "ChangeDetection",
+  'FullSync',
+  'Incremental',
+  'Backfill',
+  'Validation',
+  'Continuous',
+  'Resume',
+  'ChangeDetection',
 );
 
 export type Capability = typeof Capability.Type;
@@ -138,79 +138,79 @@ export const ValidationStrategy = Data.taggedEnum<ValidationStrategy>();
 // ─── Schema Versions for Persistence ─────────────────────────────────────────
 
 export const ValidationStrategySchema = Schema.Union(
-  Schema.TaggedStruct("CheckOnly", {}),
-  Schema.TaggedStruct("RefetchInvalid", {}),
-  Schema.TaggedStruct("RefetchAll", {}),
+  Schema.TaggedStruct('CheckOnly', {}),
+  Schema.TaggedStruct('RefetchInvalid', {}),
+  Schema.TaggedStruct('RefetchAll', {}),
 );
 
 export const CollectionModeSchema: Schema.Schema<CollectionMode, CollectionModeEncoded> =
   Schema.suspend(() =>
     Schema.Union(
-      Schema.TaggedStruct("FullSync", {
+      Schema.TaggedStruct('FullSync', {
         startDate: Schema.optional(Schema.DateFromSelf),
         batchSize: Schema.optional(Schema.Number),
       }),
-      Schema.TaggedStruct("Incremental", {
+      Schema.TaggedStruct('Incremental', {
         since: Schema.DateFromSelf,
         lookBackWindow: Schema.optional(Schema.DurationFromMillis),
       }),
-      Schema.TaggedStruct("Backfill", {
+      Schema.TaggedStruct('Backfill', {
         from: Schema.DateFromSelf,
         to: Schema.DateFromSelf,
         batchSize: Schema.optional(Schema.Number),
       }),
-      Schema.TaggedStruct("Validation", {
+      Schema.TaggedStruct('Validation', {
         from: Schema.optional(Schema.DateFromSelf),
         to: Schema.optional(Schema.DateFromSelf),
         strategy: ValidationStrategySchema,
       }),
-      Schema.TaggedStruct("Resume", {
+      Schema.TaggedStruct('Resume', {
         originalMode: CollectionModeSchema,
         cursor: Schema.String,
         runId: Schema.String,
       }),
-      Schema.TaggedStruct("Continuous", {
+      Schema.TaggedStruct('Continuous', {
         bufferSize: Schema.optional(Schema.Number),
       }),
-    ).pipe(Schema.annotations({ identifier: "CollectionMode" })),
+    ).pipe(Schema.annotations({ identifier: 'CollectionMode' })),
   );
 
 // ─── Collected Document ──────────────────────────────────────────────────────
 
-export class CollectedDocument extends Schema.Class<CollectedDocument>("CollectedDocument")({
+export class CollectedDocument extends Schema.Class<CollectedDocument>('CollectedDocument')({
   externalId: Schema.String,
   title: Schema.String.pipe(Schema.minLength(1)),
   content: Schema.String,
   metadata: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   publishedAt: Schema.DateTimeUtc,
-  updatedAt: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
-  sourceUrl: Schema.optionalWith(Schema.String, { as: "Option" }),
-  contentHash: Schema.optionalWith(Schema.String, { as: "Option" }),
-  kind: Schema.Literal("New", "Update", "Unchanged"),
+  updatedAt: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
+  sourceUrl: Schema.optionalWith(Schema.String, { as: 'Option' }),
+  contentHash: Schema.optionalWith(Schema.String, { as: 'Option' }),
+  kind: Schema.Literal('New', 'Update', 'Unchanged'),
 }) {}
 
 // ─── Collection Cursor ───────────────────────────────────────────────────────
 
-export class CollectionCursor extends Schema.Class<CollectionCursor>("CollectionCursor")({
+export class CollectionCursor extends Schema.Class<CollectionCursor>('CollectionCursor')({
   value: Schema.String,
-  displayLabel: Schema.optionalWith(Schema.String, { as: "Option" }),
+  displayLabel: Schema.optionalWith(Schema.String, { as: 'Option' }),
 }) {}
 
 // ─── Collection Batch ────────────────────────────────────────────────────────
 
-export class CollectionBatch extends Schema.Class<CollectionBatch>("CollectionBatch")({
+export class CollectionBatch extends Schema.Class<CollectionBatch>('CollectionBatch')({
   documents: Schema.Array(CollectedDocument),
-  cursor: Schema.optionalWith(CollectionCursor, { as: "Option" }),
+  cursor: Schema.optionalWith(CollectionCursor, { as: 'Option' }),
   hasMore: Schema.Boolean,
 }) {}
 
 // ─── Collection Progress ─────────────────────────────────────────────────────
 
-export class CollectionProgress extends Schema.Class<CollectionProgress>("CollectionProgress")({
+export class CollectionProgress extends Schema.Class<CollectionProgress>('CollectionProgress')({
   runId: CollectionRunIdSchema,
   collectorId: CollectorIdSchema,
   mode: CollectionModeSchema,
-  cursor: Schema.optionalWith(CollectionCursor, { as: "Option" }),
+  cursor: Schema.optionalWith(CollectionCursor, { as: 'Option' }),
   processed: Schema.Number,
   inserted: Schema.Number,
   updated: Schema.Number,
@@ -218,13 +218,13 @@ export class CollectionProgress extends Schema.Class<CollectionProgress>("Collec
   failed: Schema.Number,
   startedAt: Schema.DateTimeUtc,
   lastProgressAt: Schema.DateTimeUtc,
-  estimatedTotal: Schema.optionalWith(Schema.Number, { as: "Option" }),
-  estimatedCompletion: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
+  estimatedTotal: Schema.optionalWith(Schema.Number, { as: 'Option' }),
+  estimatedCompletion: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
 }) {}
 
 // ─── Collection Stats ────────────────────────────────────────────────────────
 
-export class CollectionStats extends Schema.Class<CollectionStats>("CollectionStats")({
+export class CollectionStats extends Schema.Class<CollectionStats>('CollectionStats')({
   processed: Schema.Number,
   inserted: Schema.Number,
   updated: Schema.Number,
@@ -253,19 +253,19 @@ export type CollectionRunStatus = Data.TaggedEnum<{
 export const CollectionRunStatus = Data.taggedEnum<CollectionRunStatus>();
 
 export const CollectionRunStatusSchema = Schema.Union(
-  Schema.TaggedStruct("Queued", {}),
-  Schema.TaggedStruct("Running", {
+  Schema.TaggedStruct('Queued', {}),
+  Schema.TaggedStruct('Running', {
     progress: CollectionProgress,
   }),
-  Schema.TaggedStruct("Completed", {
+  Schema.TaggedStruct('Completed', {
     stats: CollectionStats,
   }),
-  Schema.TaggedStruct("Failed", {
+  Schema.TaggedStruct('Failed', {
     error: Schema.String,
     progress: Schema.Union(CollectionProgress, Schema.Undefined),
     retryable: Schema.Boolean,
   }),
-  Schema.TaggedStruct("Cancelled", {
+  Schema.TaggedStruct('Cancelled', {
     reason: Schema.Union(Schema.String, Schema.Undefined),
     progress: Schema.Union(CollectionProgress, Schema.Undefined),
   }),
@@ -273,41 +273,41 @@ export const CollectionRunStatusSchema = Schema.Union(
 
 // ─── Collection Run ──────────────────────────────────────────────────────────
 
-export class CollectionRun extends Schema.Class<CollectionRun>("CollectionRun")({
+export class CollectionRun extends Schema.Class<CollectionRun>('CollectionRun')({
   runId: CollectionRunIdSchema,
   collectorId: CollectorIdSchema,
   mode: CollectionModeSchema,
   status: CollectionRunStatusSchema,
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
-  completedAt: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
+  completedAt: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
 }) {}
 
 // ─── Collection State ────────────────────────────────────────────────────────
 
-export class CollectionState extends Schema.Class<CollectionState>("CollectionState")({
+export class CollectionState extends Schema.Class<CollectionState>('CollectionState')({
   collectorId: CollectorIdSchema,
-  lastFullSync: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
-  lastIncremental: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
-  lastCursor: Schema.optionalWith(CollectionCursor, { as: "Option" }),
+  lastFullSync: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
+  lastIncremental: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
+  lastCursor: Schema.optionalWith(CollectionCursor, { as: 'Option' }),
   totalDocumentsCollected: Schema.Number,
-  lastDocumentDate: Schema.optionalWith(Schema.DateTimeUtc, { as: "Option" }),
+  lastDocumentDate: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option' }),
   metadata: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   updatedAt: Schema.DateTimeUtc,
 }) {}
 
 // ─── Collector Entry (DB row) ─────────────────────────────────────────────────
 
-export class CollectorEntry extends Schema.Class<CollectorEntry>("CollectorEntry")({
+export class CollectorEntry extends Schema.Class<CollectorEntry>('CollectorEntry')({
   collectorId: CollectorIdSchema,
   factoryId: FactoryIdSchema,
   name: Schema.String.pipe(Schema.minLength(1)),
-  description: Schema.optionalWith(Schema.String, { as: "Option" }),
+  description: Schema.optionalWith(Schema.String, { as: 'Option' }),
   enabled: Schema.Boolean,
   schedule: Schema.String.pipe(Schema.minLength(1)), // cron
   defaultMode: CollectionModeSchema,
   config: Schema.Unknown,
-  state: Schema.optionalWith(CollectionState, { as: "Option" }),
+  state: Schema.optionalWith(CollectionState, { as: 'Option' }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
 }) {}

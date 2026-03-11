@@ -1,2 +1,2 @@
-export * from "./legislation";
-export * from "./relations";
+export * from './legislation';
+export * from './relations';

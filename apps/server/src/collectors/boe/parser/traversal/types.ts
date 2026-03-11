@@ -1,25 +1,25 @@
-import type { NodeType } from "@canary/db/schema/legislation";
+import type { NodeType } from '@canary/db/schema/legislation';
 
-import type { BoeMetadata, LegalNodePathString, LegalPathSegment, NodePath } from "../types";
+import type { BoeMetadata, LegalNodePathString, LegalPathSegment, NodePath } from '../types';
 
 export type ClassifiedBlock =
-  | { readonly _tag: "table"; readonly content: string }
-  | { readonly _tag: "titleHeading"; readonly title: string }
-  | { readonly _tag: "chapter"; readonly title: string; readonly isSpecial: boolean }
-  | { readonly _tag: "sectionHeading"; readonly title: string }
+  | { readonly _tag: 'table'; readonly content: string }
+  | { readonly _tag: 'titleHeading'; readonly title: string }
+  | { readonly _tag: 'chapter'; readonly title: string; readonly isSpecial: boolean }
+  | { readonly _tag: 'sectionHeading'; readonly title: string }
   | {
-      readonly _tag: "article";
+      readonly _tag: 'article';
       readonly number: string;
       readonly title: string;
       readonly content: string;
     }
-  | { readonly _tag: "subsection"; readonly title: string }
-  | { readonly _tag: "annexNumber"; readonly number: string }
-  | { readonly _tag: "annexTitle"; readonly title: string }
-  | { readonly _tag: "subparagraph"; readonly marker: string; readonly content: string }
-  | { readonly _tag: "paragraph"; readonly content: string }
-  | { readonly _tag: "signature"; readonly role: string; readonly content: string }
-  | { readonly _tag: "raw"; readonly content: string; readonly className: string };
+  | { readonly _tag: 'subsection'; readonly title: string }
+  | { readonly _tag: 'annexNumber'; readonly number: string }
+  | { readonly _tag: 'annexTitle'; readonly title: string }
+  | { readonly _tag: 'subparagraph'; readonly marker: string; readonly content: string }
+  | { readonly _tag: 'paragraph'; readonly content: string }
+  | { readonly _tag: 'signature'; readonly role: string; readonly content: string }
+  | { readonly _tag: 'raw'; readonly content: string; readonly className: string };
 
 interface SharedState {
   readonly chapterIndex: number;
@@ -47,12 +47,12 @@ interface SharedState {
 }
 
 export interface MainState extends SharedState {
-  readonly mode: "main";
+  readonly mode: 'main';
   readonly currentChapter?: number;
 }
 
 export interface AnnexState extends SharedState {
-  readonly mode: "annex";
+  readonly mode: 'annex';
   readonly currentAnnex: number;
   readonly currentChapter?: number;
 }
@@ -71,13 +71,13 @@ export interface FragmentSeed {
 }
 
 export const initialState = (): MainState => ({
-  mode: "main",
+  mode: 'main',
   chapterIndex: 0,
   annexIndex: 0,
   currentChapter: undefined,
   currentArticle: undefined,
-  currentArticleNumber: "",
-  currentArticleTitle: "",
+  currentArticleNumber: '',
+  currentArticleTitle: '',
   currentArticleLegalPath: undefined,
   legalArticleScopeBase: [],
   preambuloParagraphIndex: 0,

@@ -1,83 +1,83 @@
-import type { KeyEvent } from "@opentui/core";
+import type { KeyEvent } from '@opentui/core';
 
-export type ShortcutScope = "global" | "view" | "component";
+export type ShortcutScope = 'global' | 'view' | 'component';
 
-export type Modifier = "ctrl" | "meta" | "super" | "shift" | "alt";
+export type Modifier = 'ctrl' | 'meta' | 'super' | 'shift' | 'alt';
 
 export type LetterKey =
-  | "a"
-  | "b"
-  | "c"
-  | "d"
-  | "e"
-  | "f"
-  | "g"
-  | "h"
-  | "i"
-  | "j"
-  | "k"
-  | "l"
-  | "m"
-  | "n"
-  | "o"
-  | "p"
-  | "q"
-  | "r"
-  | "s"
-  | "t"
-  | "u"
-  | "v"
-  | "w"
-  | "x"
-  | "y"
-  | "z";
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
 
-export type DigitKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+export type DigitKey = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 
 export type NavigationKey =
-  | "up"
-  | "down"
-  | "left"
-  | "right"
-  | "pageup"
-  | "pagedown"
-  | "home"
-  | "end";
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'pageup'
+  | 'pagedown'
+  | 'home'
+  | 'end';
 
-export type EditingKey = "enter" | "escape" | "esc" | "tab" | "backspace" | "delete" | "space";
+export type EditingKey = 'enter' | 'escape' | 'esc' | 'tab' | 'backspace' | 'delete' | 'space';
 
 export type SymbolKey =
-  | "/"
-  | "?"
-  | "."
-  | ","
-  | ":"
-  | ";"
-  | "-"
-  | "="
-  | "["
-  | "]"
-  | "\\"
+  | '/'
+  | '?'
+  | '.'
+  | ','
+  | ':'
+  | ';'
+  | '-'
+  | '='
+  | '['
+  | ']'
+  | '\\'
   | "'"
-  | "`";
+  | '`';
 
 export type FunctionKey =
-  | "f1"
-  | "f2"
-  | "f3"
-  | "f4"
-  | "f5"
-  | "f6"
-  | "f7"
-  | "f8"
-  | "f9"
-  | "f10"
-  | "f11"
-  | "f12";
+  | 'f1'
+  | 'f2'
+  | 'f3'
+  | 'f4'
+  | 'f5'
+  | 'f6'
+  | 'f7'
+  | 'f8'
+  | 'f9'
+  | 'f10'
+  | 'f11'
+  | 'f12';
 
 export type BaseKey = LetterKey | DigitKey | NavigationKey | EditingKey | SymbolKey | FunctionKey;
 
-export type ModifierOrder = ["ctrl", "meta", "super", "shift", "alt"];
+export type ModifierOrder = ['ctrl', 'meta', 'super', 'shift', 'alt'];
 
 export type ModifierCombos<T extends readonly string[] = ModifierOrder> = T extends [
   infer Head extends string,
@@ -86,10 +86,10 @@ export type ModifierCombos<T extends readonly string[] = ModifierOrder> = T exte
   ? Head | `${Head}+${ModifierCombos<Tail>}` | ModifierCombos<Tail>
   : never;
 
-export type ModifierSequence = ModifierCombos | "";
+export type ModifierSequence = ModifierCombos | '';
 
 export type KeyCombo = ModifierSequence extends infer T extends string
-  ? T extends ""
+  ? T extends ''
     ? BaseKey
     : `${T}+${BaseKey}`
   : BaseKey;

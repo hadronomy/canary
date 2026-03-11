@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
 const BoeDateSchema = Schema.String.pipe(Schema.pattern(/^\d{8}$/));
 const BoeDateTimeSchema = Schema.String.pipe(Schema.pattern(/^\d{8}T\d{6}Z$/));
@@ -25,14 +25,14 @@ export const BoeLawItemSchema = Schema.Struct({
   fecha_vigencia: Schema.optionalWith(Schema.NullOr(BoeDateSchema), {
     default: () => null,
   }),
-  vigencia_agotada: Schema.Literal("S", "N"),
+  vigencia_agotada: Schema.Literal('S', 'N'),
   estado_consolidacion: BoeTaxonomyValueSchema,
   url_eli: Schema.optionalWith(Schema.NullOr(Schema.String), {
     default: () => null,
   }),
   url_html_consolidada: Schema.String,
-  estatus_derogacion: Schema.optional(Schema.Literal("S", "N")),
-  estatus_anulacion: Schema.optional(Schema.Literal("S", "N")),
+  estatus_derogacion: Schema.optional(Schema.Literal('S', 'N')),
+  estatus_anulacion: Schema.optional(Schema.Literal('S', 'N')),
 });
 
 const BoeArrayDataSchema = Schema.Struct({
@@ -59,7 +59,7 @@ const BoeEmptyDataSchema = Schema.Struct({
     code: Schema.String,
     text: Schema.String,
   }),
-  data: Schema.Literal(""),
+  data: Schema.Literal(''),
 });
 
 export const BoeResponseSchema = Schema.Union(
@@ -71,15 +71,15 @@ export const BoeResponseSchema = Schema.Union(
 export type BoeLawItem = typeof BoeLawItemSchema.Type;
 export type BoeResponse = typeof BoeResponseSchema.Type;
 
-type BoeObjectData = Extract<BoeResponse["data"], { readonly item: unknown }>;
+type BoeObjectData = Extract<BoeResponse['data'], { readonly item: unknown }>;
 
-const isBoeObjectData = (data: BoeResponse["data"]): data is BoeObjectData => !Array.isArray(data);
-const isBoeLawItemArray = (item: BoeObjectData["item"]): item is ReadonlyArray<BoeLawItem> =>
+const isBoeObjectData = (data: BoeResponse['data']): data is BoeObjectData => !Array.isArray(data);
+const isBoeLawItemArray = (item: BoeObjectData['item']): item is ReadonlyArray<BoeLawItem> =>
   Array.isArray(item);
 
 export const normalizeBoeItems = (response: BoeResponse): ReadonlyArray<BoeLawItem> => {
   const data = response.data;
-  if (typeof data === "string") {
+  if (typeof data === 'string') {
     return [];
   }
 

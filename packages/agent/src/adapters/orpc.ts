@@ -8,7 +8,7 @@ import type {
   HarnessSubmitRequest,
   HarnessSessionCommandRequest,
   WireEventEnvelope,
-} from "~/adapters/types";
+} from '~/adapters/types';
 
 export interface ORPCHarnessRouter<
   TRunRequest extends HarnessRunRequest = HarnessRunRequest,
@@ -48,9 +48,9 @@ export interface ORPCHarnessRouter<
   ) => AsyncIterable<WireEventEnvelope> | Promise<AsyncIterable<WireEventEnvelope>>;
 }
 
-type RunRequestFor<TClient extends ORPCHarnessRouter<any, any>> = Parameters<TClient["run"]>[0];
+type RunRequestFor<TClient extends ORPCHarnessRouter<any, any>> = Parameters<TClient['run']>[0];
 type SubmitRequestFor<TClient extends ORPCHarnessRouter<any, any>> = Parameters<
-  TClient["submit"]
+  TClient['submit']
 >[0];
 
 export function createORPCAdapter<TClient extends ORPCHarnessRouter<any, any>>(
@@ -72,7 +72,7 @@ export function createORPCAdapter<TClient extends ORPCHarnessRouter<any, any>>(
     },
     events: (request, options) => {
       if (!request.sessionId) {
-        throw new TypeError("oRPC adapter requires sessionId for events stream");
+        throw new TypeError('oRPC adapter requires sessionId for events stream');
       }
 
       const stream = client.events(
@@ -87,7 +87,7 @@ export function createORPCAdapter<TClient extends ORPCHarnessRouter<any, any>>(
         async *[Symbol.asyncIterator]() {
           const resolved = await stream;
           for await (const event of resolved) {
-            if (event.type === "__keepalive") {
+            if (event.type === '__keepalive') {
               continue;
             }
 

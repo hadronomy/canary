@@ -1,6 +1,6 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from '@opentui/core';
 
-import type { Theme } from "~/app/theme";
+import type { Theme } from '~/app/theme';
 
 type FooterHintsProps = {
   theme: Theme;
@@ -14,7 +14,7 @@ export function FooterHints({ theme }: FooterHintsProps) {
       style={{
         paddingLeft: 2,
         paddingBottom: 1,
-        flexDirection: "row",
+        flexDirection: 'row',
         gap: 2,
       }}
     >

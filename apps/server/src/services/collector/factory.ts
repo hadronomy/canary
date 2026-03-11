@@ -1,9 +1,10 @@
-import { Context, Effect, HashMap, Layer, Option, Ref, Runtime, Schema } from "effect";
+import { Context, Effect, HashMap, Layer, Option, Ref, Runtime, Schema } from 'effect';
 
-import type { Collector } from "./collector";
-import { ConfigValidationError, FactoryNotFoundError, type CollectorError } from "./errors";
-import { FactoryId } from "./schema";
-import type { Capabilities, CollectorEntry, CollectorId } from "./schema";
+import type { Collector } from './collector';
+import type { Capabilities, CollectorEntry, CollectorId } from './schema';
+
+import { ConfigValidationError, FactoryNotFoundError, type CollectorError } from './errors';
+import { FactoryId } from './schema';
 
 type AnySchema = Schema.Schema.AnyNoContext;
 type AnyCollectorFactory = CollectorFactory<AnySchema, unknown>;
@@ -14,7 +15,7 @@ type FactoryEnvironmentUnion<Factories extends ReadonlyArray<AnyCollectorFactory
 
 export type ConfigType<S extends AnySchema> = Schema.Schema.Type<S>;
 
-export type CollectorRuntime = Omit<Collector, "id" | "factoryId" | "name" | "capabilities">;
+export type CollectorRuntime = Omit<Collector, 'id' | 'factoryId' | 'name' | 'capabilities'>;
 
 export interface CollectorFactory<S extends AnySchema = AnySchema, R = never> {
   readonly id: FactoryId;
@@ -40,7 +41,7 @@ interface RegisteredFactory extends FactorySummary {
   readonly decodeConfig: (
     collectorId: CollectorId,
     config: unknown,
-  ) => Effect.Effect<AnySchema["Type"], ConfigValidationError>;
+  ) => Effect.Effect<AnySchema['Type'], ConfigValidationError>;
   readonly instantiateFromEntry: (
     entry: CollectorEntry,
   ) => Effect.Effect<Collector, CollectorError>;
@@ -52,7 +53,7 @@ export const defineFactory = <S extends AnySchema, R = never>(definition: {
   readonly description: string;
   readonly configSchema: S;
   readonly capabilities: Capabilities;
-  readonly make: CollectorFactory<S, R>["make"];
+  readonly make: CollectorFactory<S, R>['make'];
 }): CollectorFactory<S, R> => ({
   ...definition,
   id: FactoryId(definition.id),
@@ -75,7 +76,7 @@ export interface CollectorFactoryRegistryShape {
 const makeRegistryService = Effect.gen(function* () {
   const registryRef = yield* Ref.make(HashMap.empty<FactoryId, RegisteredFactory>());
 
-  const lookup = Effect.fn("CollectorFactoryRegistry.lookup")(function* (id: FactoryId) {
+  const lookup = Effect.fn('CollectorFactoryRegistry.lookup')(function* (id: FactoryId) {
     const registry = yield* Ref.get(registryRef);
     return yield* HashMap.get(registry, id).pipe(
       Option.match({
@@ -91,7 +92,7 @@ const makeRegistryService = Effect.gen(function* () {
     );
   });
 
-  const register = Effect.fn("CollectorFactoryRegistry.register")(
+  const register = Effect.fn('CollectorFactoryRegistry.register')(
     <S extends AnySchema, R>(factory: CollectorFactory<S, R>) =>
       Effect.gen(function* () {
         const runtime = yield* Effect.runtime<R>();
@@ -142,7 +143,7 @@ const makeRegistryService = Effect.gen(function* () {
       }),
   );
 
-  const get = Effect.fn("CollectorFactoryRegistry.get")((id: FactoryId) =>
+  const get = Effect.fn('CollectorFactoryRegistry.get')((id: FactoryId) =>
     lookup(id).pipe(
       Effect.map(({ instantiateFromEntry: _, decodeConfig: __, ...summary }) => summary),
     ),
@@ -156,11 +157,11 @@ const makeRegistryService = Effect.gen(function* () {
     ),
   );
 
-  const instantiate = Effect.fn("CollectorFactoryRegistry.instantiate")((entry: CollectorEntry) =>
+  const instantiate = Effect.fn('CollectorFactoryRegistry.instantiate')((entry: CollectorEntry) =>
     lookup(entry.factoryId).pipe(Effect.flatMap((factory) => factory.instantiateFromEntry(entry))),
   );
 
-  const validateConfig = Effect.fn("CollectorFactoryRegistry.validateConfig")(
+  const validateConfig = Effect.fn('CollectorFactoryRegistry.validateConfig')(
     (factoryId: FactoryId, collectorId: CollectorId, config: unknown) =>
       lookup(factoryId).pipe(
         Effect.flatMap((factory) => factory.decodeConfig(collectorId, config)),
@@ -176,7 +177,7 @@ const makeRegistryService = Effect.gen(function* () {
   };
 });
 
-export class CollectorFactoryRegistry extends Context.Tag("@canary/CollectorFactoryRegistry")<
+export class CollectorFactoryRegistry extends Context.Tag('@canary/CollectorFactoryRegistry')<
   CollectorFactoryRegistry,
   CollectorFactoryRegistryShape
 >() {

@@ -1,13 +1,14 @@
-import * as WorkflowEngine from "@effect/workflow/WorkflowEngine";
-import { Effect, Layer } from "effect";
+import * as WorkflowEngine from '@effect/workflow/WorkflowEngine';
+import { Effect, Layer } from 'effect';
 
-import { BoeIndexingActivities } from "./activities";
-import { BoeWorkflowEngineLayer } from "./engine";
-import type { IndexingTriggerPayload } from "./schema";
-import { BoeDocumentIndexWorkflow, BoeDocumentIndexWorkflowLayer } from "./workflow-definition";
+import type { IndexingTriggerPayload } from './schema';
+
+import { BoeIndexingActivities } from './activities';
+import { BoeWorkflowEngineLayer } from './engine';
+import { BoeDocumentIndexWorkflow, BoeDocumentIndexWorkflowLayer } from './workflow-definition';
 
 export class BoeIndexingWorkflow extends Effect.Service<BoeIndexingWorkflow>()(
-  "BoeIndexingWorkflow",
+  'BoeIndexingWorkflow',
   {
     accessors: true,
     dependencies: [BoeWorkflowEngineLayer, BoeIndexingActivities.Default],
@@ -22,11 +23,11 @@ export class BoeIndexingWorkflow extends Effect.Service<BoeIndexingWorkflow>()(
         ),
       );
 
-      const start = Effect.fn("BoeIndexingWorkflow.start")((payload: IndexingTriggerPayload) =>
+      const start = Effect.fn('BoeIndexingWorkflow.start')((payload: IndexingTriggerPayload) =>
         BoeDocumentIndexWorkflow.execute(payload).pipe(Effect.provide(workflowContext)),
       );
 
-      const startMany = Effect.fn("BoeIndexingWorkflow.startMany")(
+      const startMany = Effect.fn('BoeIndexingWorkflow.startMany')(
         (payloads: ReadonlyArray<IndexingTriggerPayload>) =>
           Effect.forEach(payloads, start, {
             discard: true,
@@ -34,11 +35,11 @@ export class BoeIndexingWorkflow extends Effect.Service<BoeIndexingWorkflow>()(
           }),
       );
 
-      const resume = Effect.fn("BoeIndexingWorkflow.resume")((executionId: string) =>
+      const resume = Effect.fn('BoeIndexingWorkflow.resume')((executionId: string) =>
         BoeDocumentIndexWorkflow.resume(executionId).pipe(Effect.provide(workflowContext)),
       );
 
-      const poll = Effect.fn("BoeIndexingWorkflow.poll")((executionId: string) =>
+      const poll = Effect.fn('BoeIndexingWorkflow.poll')((executionId: string) =>
         BoeDocumentIndexWorkflow.poll(executionId).pipe(Effect.provide(workflowContext)),
       );
 

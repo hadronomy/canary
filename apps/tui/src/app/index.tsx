@@ -1,20 +1,20 @@
-import { useAtom } from "@effect-atom/atom-react";
-import { KeyEvent } from "@opentui/core";
-import { useEffect, useMemo, useRef } from "react";
+import { useAtom } from '@effect-atom/atom-react';
+import { KeyEvent } from '@opentui/core';
+import { useEffect, useMemo, useRef } from 'react';
 
-import { Branding } from "~/app/components/Branding";
-import { DashboardView } from "~/app/components/DashboardView";
-import { FooterHints } from "~/app/components/FooterHints";
-import { ResultsList } from "~/app/components/ResultsList";
-import { SearchBar } from "~/app/components/SearchBar";
-import { ShortcutDebugToast } from "~/app/components/ShortcutDebugToast";
-import { useShortcutList, useShortcutRegistry, useShortcuts } from "~/app/shortcuts";
-import { CommandPalette } from "~/app/shortcuts/components/CommandPalette";
-import { ShortcutsHelp } from "~/app/shortcuts/components/ShortcutsHelp";
-import { createGlobalShortcuts } from "~/app/shortcuts/definitions/global";
-import { createHelpShortcuts } from "~/app/shortcuts/definitions/help";
-import { createSearchShortcuts } from "~/app/shortcuts/definitions/search";
-import { createViewShortcuts } from "~/app/shortcuts/definitions/view";
+import { Branding } from '~/app/components/Branding';
+import { DashboardView } from '~/app/components/DashboardView';
+import { FooterHints } from '~/app/components/FooterHints';
+import { ResultsList } from '~/app/components/ResultsList';
+import { SearchBar } from '~/app/components/SearchBar';
+import { ShortcutDebugToast } from '~/app/components/ShortcutDebugToast';
+import { useShortcutList, useShortcutRegistry, useShortcuts } from '~/app/shortcuts';
+import { CommandPalette } from '~/app/shortcuts/components/CommandPalette';
+import { ShortcutsHelp } from '~/app/shortcuts/components/ShortcutsHelp';
+import { createGlobalShortcuts } from '~/app/shortcuts/definitions/global';
+import { createHelpShortcuts } from '~/app/shortcuts/definitions/help';
+import { createSearchShortcuts } from '~/app/shortcuts/definitions/search';
+import { createViewShortcuts } from '~/app/shortcuts/definitions/view';
 import {
   activeViewAtom,
   cmdkOpenAtom,
@@ -24,33 +24,33 @@ import {
   debugToastVisibleAtom,
   helpOpenAtom,
   queryAtom,
-} from "~/app/state";
-import { catppuccinMocha } from "~/app/theme";
+} from '~/app/state';
+import { catppuccinMocha } from '~/app/theme';
 
 const PLACEHOLDER_RESULTS = [
   {
-    title: "Regulation 102: Canary Flight Paths",
-    summary: "Safety guidance for approved flight corridors across the islands.",
+    title: 'Regulation 102: Canary Flight Paths',
+    summary: 'Safety guidance for approved flight corridors across the islands.',
   },
   {
-    title: "Law 404: Coal Mine Safety Protocols",
-    summary: "Emergency response requirements for subterranean operations.",
+    title: 'Law 404: Coal Mine Safety Protocols',
+    summary: 'Emergency response requirements for subterranean operations.',
   },
   {
-    title: "Ordinance 88: Yellow Feather Standards",
-    summary: "Certification for protected species handling and transport.",
+    title: 'Ordinance 88: Yellow Feather Standards',
+    summary: 'Certification for protected species handling and transport.',
   },
   {
-    title: "Act 12: Harbor Access Controls",
-    summary: "Credentialing and entry rules for port facilities.",
+    title: 'Act 12: Harbor Access Controls',
+    summary: 'Credentialing and entry rules for port facilities.',
   },
   {
-    title: "Directive 9: Maritime Radio Compliance",
-    summary: "Channel assignment and signal clarity requirements.",
+    title: 'Directive 9: Maritime Radio Compliance',
+    summary: 'Channel assignment and signal clarity requirements.',
   },
   {
-    title: "Protocol 7: Volcanic Air Quality Alerts",
-    summary: "Thresholds and mitigation guidelines for sulfur emissions.",
+    title: 'Protocol 7: Volcanic Air Quality Alerts',
+    summary: 'Thresholds and mitigation guidelines for sulfur emissions.',
   },
 ];
 
@@ -76,18 +76,18 @@ export function App() {
   const shortcuts = useMemo(() => {
     const globalShortcuts = createGlobalShortcuts({
       toggleCommandPalette: () => setCmdkOpen((open: boolean) => !open),
-      clearSearch: () => setQuery(""),
+      clearSearch: () => setQuery(''),
       openDashboard: () => {
-        setActiveView("dashboard");
+        setActiveView('dashboard');
         setCmdkOpen(false);
         setHelpOpen(false);
       },
       openMain: () => {
-        setActiveView("main");
+        setActiveView('main');
         setCmdkOpen(false);
         setHelpOpen(false);
       },
-      isDashboardOpen: () => activeView === "dashboard",
+      isDashboardOpen: () => activeView === 'dashboard',
     });
 
     const viewShortcuts = createViewShortcuts({
@@ -95,13 +95,13 @@ export function App() {
       closeHelp: () => setHelpOpen(false),
       isCmdkOpen: () => cmdkOpen,
       isHelpOpen: () => helpOpen,
-      closeDashboard: () => setActiveView("main"),
-      isDashboardOpen: () => activeView === "dashboard",
+      closeDashboard: () => setActiveView('main'),
+      isDashboardOpen: () => activeView === 'dashboard',
     });
 
     const searchShortcuts = createSearchShortcuts({
       focusSearch: () => {
-        setActiveView("main");
+        setActiveView('main');
         setCmdkOpen(false);
       },
     });
@@ -112,11 +112,11 @@ export function App() {
 
     const debugShortcuts = [
       {
-        id: "debug.toggle",
-        scope: "global" as const,
-        bindings: [] as (typeof globalShortcuts)[number]["bindings"],
-        description: debugMode ? "Disable debug mode" : "Enable debug mode",
-        category: "Developer",
+        id: 'debug.toggle',
+        scope: 'global' as const,
+        bindings: [] as (typeof globalShortcuts)[number]['bindings'],
+        description: debugMode ? 'Disable debug mode' : 'Enable debug mode',
+        category: 'Developer',
         action: () => setDebugMode((value: boolean) => !value),
       },
     ];
@@ -153,8 +153,8 @@ export function App() {
   useShortcuts(shortcuts);
 
   const shortcutContext = {
-    currentView: cmdkOpen ? "cmdk" : helpOpen ? "help" : activeView,
-    focusedComponentId: activeView === "main" ? "search-input" : undefined,
+    currentView: cmdkOpen ? 'cmdk' : helpOpen ? 'help' : activeView,
+    focusedComponentId: activeView === 'main' ? 'search-input' : undefined,
     appState: { cmdkOpen, helpOpen, query, activeView },
     onShortcutFired: (id: string, combo: string) => {
       showDebugToast(`${id} → ${combo}`);
@@ -172,15 +172,15 @@ export function App() {
 
   const showResults = query.trim().length > 0;
   const theme = catppuccinMocha;
-  const mainActive = activeView === "main";
-  const dashboardActive = activeView === "dashboard";
+  const mainActive = activeView === 'main';
+  const dashboardActive = activeView === 'dashboard';
 
   return (
     <box
       style={{
-        width: "100%",
-        height: "100%",
-        flexDirection: "column",
+        width: '100%',
+        height: '100%',
+        flexDirection: 'column',
         backgroundColor: theme.palette.base,
       }}
     >
@@ -188,9 +188,9 @@ export function App() {
         <box
           style={{
             flexGrow: 1,
-            flexDirection: "column",
-            justifyContent: showResults ? "flex-start" : "center",
-            alignItems: "center",
+            flexDirection: 'column',
+            justifyContent: showResults ? 'flex-start' : 'center',
+            alignItems: 'center',
             padding: 2,
             gap: 2,
           }}
@@ -223,7 +223,7 @@ export function App() {
         <box
           style={{
             flexGrow: 1,
-            flexDirection: "column",
+            flexDirection: 'column',
             padding: 1,
           }}
         >
@@ -241,20 +241,20 @@ export function App() {
         shortcuts={commandPaletteShortcuts}
         onSelect={(shortcut) => {
           const event = new KeyEvent({
-            name: "enter",
+            name: 'enter',
             ctrl: false,
             meta: false,
             shift: false,
             option: false,
-            sequence: "",
+            sequence: '',
             number: false,
-            raw: "",
-            eventType: "press",
-            source: "raw",
+            raw: '',
+            eventType: 'press',
+            source: 'raw',
           });
           shortcut.action(event);
           setCmdkOpen(false);
-          setCmdkQuery("");
+          setCmdkQuery('');
         }}
       />
 

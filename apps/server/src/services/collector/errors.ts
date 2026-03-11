@@ -1,12 +1,12 @@
 // apps/server/src/services/collector/errors.ts
 // Structured error types for the collector system
 
-import { Schema } from "effect";
+import { Schema } from 'effect';
 
-import { CollectorIdSchema, CollectionRunIdSchema, FactoryIdSchema } from "./schema";
+import { CollectorIdSchema, CollectionRunIdSchema, FactoryIdSchema } from './schema';
 
 export class CollectorNotFoundError extends Schema.TaggedError<CollectorNotFoundError>()(
-  "CollectorNotFoundError",
+  'CollectorNotFoundError',
   {
     collectorId: CollectorIdSchema,
     message: Schema.String,
@@ -14,7 +14,7 @@ export class CollectorNotFoundError extends Schema.TaggedError<CollectorNotFound
 ) {}
 
 export class FactoryNotFoundError extends Schema.TaggedError<FactoryNotFoundError>()(
-  "FactoryNotFoundError",
+  'FactoryNotFoundError',
   {
     factoryId: FactoryIdSchema,
     message: Schema.String,
@@ -22,7 +22,7 @@ export class FactoryNotFoundError extends Schema.TaggedError<FactoryNotFoundErro
 ) {}
 
 export class ConfigValidationError extends Schema.TaggedError<ConfigValidationError>()(
-  "ConfigValidationError",
+  'ConfigValidationError',
   {
     collectorId: CollectorIdSchema,
     issues: Schema.Array(Schema.String),
@@ -30,7 +30,7 @@ export class ConfigValidationError extends Schema.TaggedError<ConfigValidationEr
   },
 ) {}
 
-export class CollectionError extends Schema.TaggedError<CollectionError>()("CollectionError", {
+export class CollectionError extends Schema.TaggedError<CollectionError>()('CollectionError', {
   collectorId: CollectorIdSchema,
   runId: Schema.optional(CollectionRunIdSchema),
   reason: Schema.String,
@@ -39,7 +39,7 @@ export class CollectionError extends Schema.TaggedError<CollectionError>()("Coll
 }) {}
 
 export class SourceConnectionError extends Schema.TaggedError<SourceConnectionError>()(
-  "SourceConnectionError",
+  'SourceConnectionError',
   {
     collectorId: CollectorIdSchema,
     sourceUrl: Schema.String,
@@ -48,7 +48,7 @@ export class SourceConnectionError extends Schema.TaggedError<SourceConnectionEr
   },
 ) {}
 
-export class ScheduleError extends Schema.TaggedError<ScheduleError>()("ScheduleError", {
+export class ScheduleError extends Schema.TaggedError<ScheduleError>()('ScheduleError', {
   collectorId: CollectorIdSchema,
   schedule: Schema.String,
   reason: Schema.String,
@@ -56,7 +56,7 @@ export class ScheduleError extends Schema.TaggedError<ScheduleError>()("Schedule
 }) {}
 
 export class ModeNotSupportedError extends Schema.TaggedError<ModeNotSupportedError>()(
-  "ModeNotSupportedError",
+  'ModeNotSupportedError',
   {
     collectorId: CollectorIdSchema,
     requestedMode: Schema.String,
@@ -65,14 +65,14 @@ export class ModeNotSupportedError extends Schema.TaggedError<ModeNotSupportedEr
   },
 ) {}
 
-export class ResumeError extends Schema.TaggedError<ResumeError>()("ResumeError", {
+export class ResumeError extends Schema.TaggedError<ResumeError>()('ResumeError', {
   collectorId: CollectorIdSchema,
   runId: CollectionRunIdSchema,
   reason: Schema.String,
   message: Schema.String,
 }) {}
 
-export class ValidationError extends Schema.TaggedError<ValidationError>()("ValidationError", {
+export class ValidationError extends Schema.TaggedError<ValidationError>()('ValidationError', {
   collectorId: CollectorIdSchema,
   field: Schema.String,
   value: Schema.Unknown,
@@ -80,14 +80,14 @@ export class ValidationError extends Schema.TaggedError<ValidationError>()("Vali
   message: Schema.String,
 }) {}
 
-export class HealthCheckError extends Schema.TaggedError<HealthCheckError>()("HealthCheckError", {
+export class HealthCheckError extends Schema.TaggedError<HealthCheckError>()('HealthCheckError', {
   collectorId: CollectorIdSchema,
   reason: Schema.String,
   message: Schema.String,
 }) {}
 
 export class CollectionStallError extends Schema.TaggedError<CollectionStallError>()(
-  "CollectionStallError",
+  'CollectionStallError',
   {
     runId: CollectionRunIdSchema,
     durationMs: Schema.Number,

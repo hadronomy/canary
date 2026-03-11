@@ -1,11 +1,13 @@
-import { TextAttributes } from "@opentui/core";
-import type { TextareaRenderable } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { TextareaRenderable } from '@opentui/core';
 
-import { formatKeyCombo } from "~/app/shortcuts/helpers";
-import type { Shortcut } from "~/app/shortcuts/types";
-import type { Theme } from "~/app/theme";
+import { TextAttributes } from '@opentui/core';
+import { useKeyboard } from '@opentui/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import type { Shortcut } from '~/app/shortcuts/types';
+import type { Theme } from '~/app/theme';
+
+import { formatKeyCombo } from '~/app/shortcuts/helpers';
 
 export type CommandPaletteProps = {
   theme: Theme;
@@ -41,7 +43,7 @@ export function CommandPalette({
   }, [open, query]);
 
   const paletteShortcuts = useMemo(
-    () => shortcuts.filter((shortcut) => shortcut.id !== "cmdk.close"),
+    () => shortcuts.filter((shortcut) => shortcut.id !== 'cmdk.close'),
     [shortcuts],
   );
 
@@ -49,13 +51,13 @@ export function CommandPalette({
     if (!query.trim()) return paletteShortcuts;
     const needle = query.trim().toLowerCase();
     return paletteShortcuts.filter((shortcut) =>
-      `${shortcut.description} ${shortcut.category ?? ""}`.toLowerCase().includes(needle),
+      `${shortcut.description} ${shortcut.category ?? ''}`.toLowerCase().includes(needle),
     );
   }, [query, paletteShortcuts]);
 
   const grouped = useMemo(() => {
     return filtered.reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
-      const category = shortcut.category ?? "General";
+      const category = shortcut.category ?? 'General';
       acc[category] = acc[category] ? [...acc[category], shortcut] : [shortcut];
       return acc;
     }, {});
@@ -93,13 +95,13 @@ export function CommandPalette({
     if (!open) return;
     if (!flattened.length) return;
 
-    if (key.name === "down" || (key.ctrl && key.name === "n")) {
+    if (key.name === 'down' || (key.ctrl && key.name === 'n')) {
       move(1);
     }
-    if (key.name === "up" || (key.ctrl && key.name === "p")) {
+    if (key.name === 'up' || (key.ctrl && key.name === 'p')) {
       move(-1);
     }
-    if (key.name === "enter" || key.name === "return") {
+    if (key.name === 'enter' || key.name === 'return') {
       const selected = flattened.find((item) => item.id === selectedId);
       if (selected) onSelect(selected);
     }
@@ -112,32 +114,32 @@ export function CommandPalette({
   return (
     <box
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
-        justifyContent: "center",
-        alignItems: "center",
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
         zIndex: 40,
       }}
     >
       <box
         style={{
-          width: "60%",
-          height: "60%",
+          width: '60%',
+          height: '60%',
           border: true,
-          borderStyle: "rounded",
+          borderStyle: 'rounded',
           borderColor: palette.mauve,
           backgroundColor: palette.base,
           padding: 1,
-          flexDirection: "column",
+          flexDirection: 'column',
         }}
       >
         <box
           style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
+            flexDirection: 'row',
+            justifyContent: 'space-between',
             paddingLeft: 1,
             paddingRight: 1,
             marginBottom: 1,
@@ -156,8 +158,8 @@ export function CommandPalette({
             paddingLeft: 1,
             paddingRight: 1,
             marginBottom: 1,
-            flexDirection: "row",
-            alignItems: "center",
+            flexDirection: 'row',
+            alignItems: 'center',
           }}
         >
           <textarea
@@ -190,7 +192,7 @@ export function CommandPalette({
             rootOptions: { backgroundColor: palette.base },
             wrapperOptions: { backgroundColor: palette.base },
             viewportOptions: { backgroundColor: palette.base },
-            contentOptions: { backgroundColor: palette.base, flexDirection: "column" },
+            contentOptions: { backgroundColor: palette.base, flexDirection: 'column' },
             scrollbarOptions: {
               visible: false,
             },
@@ -205,8 +207,8 @@ export function CommandPalette({
               <box
                 key={category}
                 style={{
-                  flexDirection: "column",
-                  width: "100%",
+                  flexDirection: 'column',
+                  width: '100%',
                 }}
               >
                 <box paddingLeft={2} paddingTop={1} paddingBottom={0}>
@@ -224,13 +226,13 @@ export function CommandPalette({
                     <box
                       key={shortcut.id}
                       style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        width: "100%",
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        width: '100%',
                         height: 1,
                         paddingLeft: 2,
                         paddingRight: 2,
-                        backgroundColor: isSelected ? palette.surface1 : "transparent",
+                        backgroundColor: isSelected ? palette.surface1 : 'transparent',
                       }}
                     >
                       <text
@@ -242,7 +244,7 @@ export function CommandPalette({
                       />
                       {shortcut.bindings.length ? (
                         <text
-                          content={shortcut.bindings.map(formatKeyCombo).join(" ")}
+                          content={shortcut.bindings.map(formatKeyCombo).join(' ')}
                           style={{ fg: isSelected ? palette.mauve : palette.subtext0 }}
                         />
                       ) : null}
@@ -259,7 +261,7 @@ export function CommandPalette({
             marginTop: 1,
             paddingLeft: 1,
             paddingRight: 1,
-            flexDirection: "row",
+            flexDirection: 'row',
             gap: 2,
           }}
         >

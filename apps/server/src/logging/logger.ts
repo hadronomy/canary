@@ -1,41 +1,40 @@
-import { resolve } from "node:path";
-
-import { Ansis } from "ansis";
-import { Cause, FiberId, HashMap, Inspectable, Logger } from "effect";
+import { Ansis } from 'ansis';
+import { Cause, FiberId, HashMap, Inspectable, Logger } from 'effect';
+import { resolve } from 'node:path';
 
 const JSON_TOKEN_PATTERN =
   /("(?:\\.|[^"\\])*(?<!\\)")(?=\s*:)|("(?:\\.|[^"\\])*(?<!\\)")|\b-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\btrue\b|\bfalse\b|\bnull\b|[{}[\]:,]/g;
 
 const TREE = {
-  vertical: "│",
-  branch: "├─",
-  corner: "└─",
-  indent: "  ",
+  vertical: '│',
+  branch: '├─',
+  corner: '└─',
+  indent: '  ',
 } as const;
 
 const LEVEL_SYMBOLS = {
-  Trace: "●",
-  Debug: "◆",
-  Info: "ℹ",
-  Warning: "⚠",
-  Error: "✖",
-  Fatal: "💀",
+  Trace: '●',
+  Debug: '◆',
+  Info: 'ℹ',
+  Warning: '⚠',
+  Error: '✖',
+  Fatal: '💀',
 } as const;
 
 function envDisablesColors() {
   const noColor = process.env.NO_COLOR;
-  if (noColor !== undefined && noColor !== "") {
+  if (noColor !== undefined && noColor !== '') {
     return true;
   }
   const forceColor = process.env.FORCE_COLOR?.toLowerCase();
-  return forceColor === "0" || forceColor === "false";
+  return forceColor === '0' || forceColor === 'false';
 }
 
 function formatTime(date: Date): string {
-  const h = String(date.getHours()).padStart(2, "0");
-  const m = String(date.getMinutes()).padStart(2, "0");
-  const s = String(date.getSeconds()).padStart(2, "0");
-  const ms = String(date.getMilliseconds()).padStart(3, "0");
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  const s = String(date.getSeconds()).padStart(2, '0');
+  const ms = String(date.getMilliseconds()).padStart(3, '0');
   return `${h}:${m}:${s}.${ms}`;
 }
 
@@ -46,8 +45,8 @@ function truncate(value: string, maxLength: number): string {
 function looksLikeJsonString(value: string): boolean {
   const trimmed = value.trim();
   return (
-    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
   );
 }
 
@@ -61,10 +60,10 @@ function highlightJson(color: Ansis, json: string): string {
       if (valueString !== undefined) {
         return color.greenBright(token);
       }
-      if (token === "true" || token === "false") {
+      if (token === 'true' || token === 'false') {
         return color.yellowBright.bold(token);
       }
-      if (token === "null") {
+      if (token === 'null') {
         return color.gray.dim(token);
       }
       if (/^-?\d/.test(token)) {
@@ -76,7 +75,7 @@ function highlightJson(color: Ansis, json: string): string {
 }
 
 function safeJson(value: unknown): string | undefined {
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     if (!looksLikeJsonString(value)) {
       return undefined;
     }
@@ -87,7 +86,7 @@ function safeJson(value: unknown): string | undefined {
     }
   }
 
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === 'object' && value !== null) {
     try {
       return JSON.stringify(Inspectable.redact(value), null, 2);
     } catch {
@@ -99,13 +98,13 @@ function safeJson(value: unknown): string | undefined {
 }
 
 function renderInlineValue(color: Ansis, value: unknown): string {
-  if (typeof value === "string" && !looksLikeJsonString(value)) {
+  if (typeof value === 'string' && !looksLikeJsonString(value)) {
     return color.white(value);
   }
 
   const prettyJson = safeJson(value);
   if (prettyJson !== undefined) {
-    const oneLine = prettyJson.replaceAll("\n", " ");
+    const oneLine = prettyJson.replaceAll('\n', ' ');
     return highlightJson(color, oneLine);
   }
 
@@ -113,9 +112,9 @@ function renderInlineValue(color: Ansis, value: unknown): string {
 }
 
 function renderJsonBlock(color: Ansis, json: string): Array<string> {
-  const lines = json.split("\n");
+  const lines = json.split('\n');
   return lines.map((line, index) => {
-    const edge = index === 0 ? "╭─" : index === lines.length - 1 ? "╰─" : "│ ";
+    const edge = index === 0 ? '╭─' : index === lines.length - 1 ? '╰─' : '│ ';
     return `${color.gray(edge)} ${highlightJson(color, line)}`;
   });
 }
@@ -127,13 +126,13 @@ function renderMultilineValue(color: Ansis, value: unknown): Array<string> {
   }
 
   const rendered = Inspectable.toStringUnknown(Inspectable.redact(value), 2);
-  return rendered.split("\n").map((line) => color.gray(line));
+  return rendered.split('\n').map((line) => color.gray(line));
 }
 
 function isSimpleContext(context: unknown): boolean {
   try {
     const redacted = Inspectable.redact(context);
-    if (typeof redacted !== "object" || redacted === null) {
+    if (typeof redacted !== 'object' || redacted === null) {
       return false;
     }
     const record = redacted as Record<string, unknown>;
@@ -141,10 +140,10 @@ function isSimpleContext(context: unknown): boolean {
     if (keys.length === 0) {
       return true;
     }
-    if (keys.length === 1 && keys[0] === "locals") {
+    if (keys.length === 1 && keys[0] === 'locals') {
       const locals = record.locals;
       return (
-        typeof locals === "object" &&
+        typeof locals === 'object' &&
         locals !== null &&
         Object.keys(locals as Record<string, unknown>).length === 0
       );
@@ -156,7 +155,7 @@ function isSimpleContext(context: unknown): boolean {
 }
 
 function shouldShowContext(levelTag: string, context: unknown): boolean {
-  if (levelTag === "Trace" || levelTag === "Debug") {
+  if (levelTag === 'Trace' || levelTag === 'Debug') {
     return true;
   }
   return !isSimpleContext(context);
@@ -168,17 +167,17 @@ function asMessages(message: unknown): ReadonlyArray<unknown> {
 
 function levelStyle(color: Ansis, levelTag: string) {
   switch (levelTag) {
-    case "Trace":
+    case 'Trace':
       return color.magentaBright;
-    case "Debug":
+    case 'Debug':
       return color.cyanBright;
-    case "Info":
+    case 'Info':
       return color.blueBright;
-    case "Warning":
+    case 'Warning':
       return color.yellowBright;
-    case "Error":
+    case 'Error':
       return color.redBright;
-    case "Fatal":
+    case 'Fatal':
       return color.white.bgRed;
     default:
       return color.white;
@@ -200,7 +199,7 @@ interface StackFrame {
 function pushNode(lines: Array<string>, color: Ansis, node: Node, isLast: boolean): void {
   const branch = color.gray(isLast ? TREE.corner : TREE.branch);
 
-  if (node.label === "" && node.block !== undefined && node.block.length > 0) {
+  if (node.label === '' && node.block !== undefined && node.block.length > 0) {
     for (let index = 0; index < node.block.length; index++) {
       const line = node.block[index]!;
       if (index === 0) {
@@ -216,8 +215,8 @@ function pushNode(lines: Array<string>, color: Ansis, node: Node, isLast: boolea
   const suffix =
     node.inline === undefined
       ? node.block !== undefined && node.block.length > 0
-        ? ":"
-        : ""
+        ? ':'
+        : ''
       : `: ${node.inline}`;
   lines.push(`${branch} ${node.label}${suffix}`);
 
@@ -232,18 +231,18 @@ function pushNode(lines: Array<string>, color: Ansis, node: Node, isLast: boolea
 }
 
 function compactPath(path: string): string {
-  let clean = path.replace(/^file:\/\//, "");
+  let clean = path.replace(/^file:\/\//, '');
   const cwd = process.cwd();
-  const roots = [cwd, resolve(cwd, ".."), resolve(cwd, "../..")] as const;
+  const roots = [cwd, resolve(cwd, '..'), resolve(cwd, '../..')] as const;
   for (const root of roots) {
     if (clean.startsWith(root)) {
-      clean = clean.slice(root.length).replace(/^\//, "");
+      clean = clean.slice(root.length).replace(/^\//, '');
       break;
     }
   }
 
-  clean = clean.replace(/\/node_modules\/\.bun\/[^/]+\/node_modules\//g, "/");
-  clean = clean.replace(/\/node_modules\/((@[^/]+\/[^/]+)|[^/]+)\//g, "/$1/");
+  clean = clean.replace(/\/node_modules\/\.bun\/[^/]+\/node_modules\//g, '/');
+  clean = clean.replace(/\/node_modules\/((@[^/]+\/[^/]+)|[^/]+)\//g, '/$1/');
 
   return clean;
 }
@@ -259,11 +258,11 @@ function parseStackLine(line: string): StackFrame | undefined {
   const functionName =
     rawFunctionName === undefined ||
     rawFunctionName.length === 0 ||
-    rawFunctionName === "<anonymous>"
-      ? "(anonymous)"
+    rawFunctionName === '<anonymous>'
+      ? '(anonymous)'
       : rawFunctionName;
   const location = compactPath(rawLocation && rawLocation.length > 0 ? rawLocation : functionName);
-  const isNative = location.includes("native:") || location.startsWith("node:");
+  const isNative = location.includes('native:') || location.startsWith('node:');
 
   return {
     functionName,
@@ -273,10 +272,10 @@ function parseStackLine(line: string): StackFrame | undefined {
 }
 
 function renderStackFrames(color: Ansis, error: Error, prefix: string): Array<string> {
-  const stackFrames = (error.stack ?? "")
-    .split("\n")
+  const stackFrames = (error.stack ?? '')
+    .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.startsWith("at"))
+    .filter((line) => line.startsWith('at'))
     .slice(0, 5);
 
   const lines: Array<string> = [];
@@ -286,11 +285,11 @@ function renderStackFrames(color: Ansis, error: Error, prefix: string): Array<st
       continue;
     }
 
-    const framePrefix = color.gray(index === stackFrames.length - 1 ? "└─" : "├─");
+    const framePrefix = color.gray(index === stackFrames.length - 1 ? '└─' : '├─');
     const functionPart =
-      parsed.functionName !== "(anonymous)"
-        ? `${color.white.dim(parsed.functionName)} ${color.gray("at")} `
-        : "";
+      parsed.functionName !== '(anonymous)'
+        ? `${color.white.dim(parsed.functionName)} ${color.gray('at')} `
+        : '';
     const locationPart = parsed.isNative
       ? color.gray(parsed.location)
       : color.gray.dim(parsed.location);
@@ -303,7 +302,7 @@ function renderStackFrames(color: Ansis, error: Error, prefix: string): Array<st
 function renderCausedByChain(color: Ansis, error: Error, prefix: string): Array<string> {
   const lines: Array<string> = [];
   lines.push(
-    `${prefix}${color.gray("╰→ caused by")} ${color.red.bold(error.name || "Error")}: ${color.white(error.message)}`,
+    `${prefix}${color.gray('╰→ caused by')} ${color.red.bold(error.name || 'Error')}: ${color.white(error.message)}`,
   );
 
   const childPrefix = `${prefix}${TREE.indent}`;
@@ -321,15 +320,15 @@ function renderErrorChain(
   color: Ansis,
   error: Error,
   prefix: string,
-  connector: "├─" | "└─",
+  connector: '├─' | '└─',
 ): Array<string> {
   const lines: Array<string> = [];
-  const errorName = error.name || "Error";
+  const errorName = error.name || 'Error';
   lines.push(
     `${prefix}${color.gray(connector)} ${color.red.bold(errorName)}: ${color.white(error.message)}`,
   );
 
-  const childPrefix = `${prefix}${connector === "└─" ? "   " : "│  "}`;
+  const childPrefix = `${prefix}${connector === '└─' ? '   ' : '│  '}`;
   lines.push(...renderStackFrames(color, error, childPrefix));
 
   const nestedCause = (error as { cause?: unknown }).cause;
@@ -349,7 +348,7 @@ function causeNode(color: Ansis, cause: Cause.Cause<unknown>): Node | undefined 
   const uniqueErrors: Array<Cause.PrettyError> = [];
   const seen = new Set<string>();
   for (const error of prettyErrors) {
-    const signature = `${error.name}|${error.message}|${error.stack ?? ""}`;
+    const signature = `${error.name}|${error.message}|${error.stack ?? ''}`;
     if (!seen.has(signature)) {
       seen.add(signature);
       uniqueErrors.push(error);
@@ -357,25 +356,25 @@ function causeNode(color: Ansis, cause: Cause.Cause<unknown>): Node | undefined 
   }
 
   if (uniqueErrors.length > 0) {
-    const block: Array<string> = [color.red.bold("✖ Cause")];
+    const block: Array<string> = [color.red.bold('✖ Cause')];
     for (let index = 0; index < uniqueErrors.length; index++) {
-      const connector: "├─" | "└─" =
-        uniqueErrors.length === 1 || index < uniqueErrors.length - 1 ? "├─" : "└─";
-      block.push(...renderErrorChain(color, uniqueErrors[index]!, "", connector));
+      const connector: '├─' | '└─' =
+        uniqueErrors.length === 1 || index < uniqueErrors.length - 1 ? '├─' : '└─';
+      block.push(...renderErrorChain(color, uniqueErrors[index]!, '', connector));
     }
 
     return {
-      label: "",
+      label: '',
       block,
     };
   }
 
   const pretty = Cause.pretty(cause, { renderErrorCause: true });
-  const causeLines = pretty.split("\n");
+  const causeLines = pretty.split('\n');
   return {
-    label: "",
+    label: '',
     block: [
-      color.red.bold("✖ Cause"),
+      color.red.bold('✖ Cause'),
       ...(causeLines.length > 0 ? causeLines.map((line) => color.gray.dim(line)) : []),
     ],
   };
@@ -397,13 +396,13 @@ function annotationNode(
   const pretty = safeJson(annotationRecord);
   if (pretty !== undefined) {
     return {
-      label: color.gray("Annotations"),
+      label: color.gray('Annotations'),
       block: renderJsonBlock(color, pretty),
     };
   }
 
   return {
-    label: color.gray("Annotations"),
+    label: color.gray('Annotations'),
     inline: renderInlineValue(color, annotationRecord),
   };
 }
@@ -416,13 +415,13 @@ function contextNode(color: Ansis, levelTag: string, context: unknown): Node | u
   const pretty = safeJson(context);
   if (pretty !== undefined) {
     return {
-      label: color.gray("Context"),
+      label: color.gray('Context'),
       block: renderJsonBlock(color, pretty),
     };
   }
 
   return {
-    label: color.gray("Context"),
+    label: color.gray('Context'),
     inline: renderInlineValue(color, context),
   };
 }
@@ -436,8 +435,8 @@ export function makeAppStringLogger(options?: { readonly noColor?: boolean }) {
 
   return Logger.make(({ annotations, cause, context, date, fiberId, logLevel, message, spans }) => {
     const levelColor = levelStyle(color, logLevel._tag);
-    const symbol = LEVEL_SYMBOLS[logLevel._tag as keyof typeof LEVEL_SYMBOLS] ?? "•";
-    const levelText = levelColor.bold(logLevel._tag.toUpperCase().padEnd(5, " "));
+    const symbol = LEVEL_SYMBOLS[logLevel._tag as keyof typeof LEVEL_SYMBOLS] ?? '•';
+    const levelText = levelColor.bold(logLevel._tag.toUpperCase().padEnd(5, ' '));
     const timeText = color.gray(formatTime(date));
     const fiberName = truncate(FiberId.threadName(fiberId), 12);
     const fiberText = color.gray.dim(`[${fiberName}]`);
@@ -448,36 +447,36 @@ export function makeAppStringLogger(options?: { readonly noColor?: boolean }) {
         const name = truncate(span.label, 20);
         return color.gray.dim(`[${name}: ${durationMs}ms]`);
       })
-      .join(" ");
+      .join(' ');
 
     const header = [levelColor(symbol), levelText, timeText, fiberText, spanText]
       .filter((part) => part.length > 0)
-      .join(" ");
+      .join(' ');
 
     const nodes: Array<Node> = [];
     const messages = asMessages(message);
 
     if (messages.length === 0) {
-      nodes.push({ label: color.white("Message"), inline: color.gray("(empty)") });
+      nodes.push({ label: color.white('Message'), inline: color.gray('(empty)') });
     } else {
       const first = messages[0];
-      const firstIsHeadline = typeof first === "string" && !looksLikeJsonString(first);
+      const firstIsHeadline = typeof first === 'string' && !looksLikeJsonString(first);
 
       if (firstIsHeadline) {
-        nodes.push({ label: color.white.bold("Message"), inline: color.white(first) });
+        nodes.push({ label: color.white.bold('Message'), inline: color.white(first) });
       } else {
         nodes.push({
-          label: color.white.bold("Payload"),
+          label: color.white.bold('Payload'),
           block: renderMultilineValue(color, first),
         });
       }
 
       const start = firstIsHeadline ? 1 : 1;
       for (let index = start; index < messages.length; index++) {
-        const label = index === 1 && firstIsHeadline ? "Payload" : `Payload ${index}`;
+        const label = index === 1 && firstIsHeadline ? 'Payload' : `Payload ${index}`;
         const value = messages[index];
         const multiline = renderMultilineValue(color, value);
-        if (multiline.length === 1 && !multiline[0]?.startsWith("╭─")) {
+        if (multiline.length === 1 && !multiline[0]?.startsWith('╭─')) {
           nodes.push({ label: color.white.bold(label), inline: renderInlineValue(color, value) });
         } else {
           nodes.push({ label: color.white.bold(label), block: multiline });
@@ -505,7 +504,7 @@ export function makeAppStringLogger(options?: { readonly noColor?: boolean }) {
       pushNode(lines, color, nodes[index]!, index === nodes.length - 1);
     }
 
-    return lines.join("\n");
+    return lines.join('\n');
   });
 }
 

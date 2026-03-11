@@ -1,17 +1,17 @@
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import { Duration, Effect, Schema } from "effect";
+import * as FetchHttpClient from '@effect/platform/FetchHttpClient';
+import { Duration, Effect, Schema } from 'effect';
 
-import { and, eq, sql } from "@canary/db/drizzle";
-import { DatabaseService } from "@canary/db/effect";
-import { documentVersions, senseFragments } from "@canary/db/schema/legislation";
-import { BoeIndexingQueue } from "~/collectors/boe/indexing/queue";
-import { IndexingTriggerPayload } from "~/collectors/boe/indexing/schema";
-import { BoeIndexingWorkflow } from "~/collectors/boe/indexing/workflow";
+import { and, eq, sql } from '@canary/db/drizzle';
+import { DatabaseService } from '@canary/db/effect';
+import { documentVersions, senseFragments } from '@canary/db/schema/legislation';
+import { BoeIndexingQueue } from '~/collectors/boe/indexing/queue';
+import { IndexingTriggerPayload } from '~/collectors/boe/indexing/schema';
+import { BoeIndexingWorkflow } from '~/collectors/boe/indexing/workflow';
 
-const canonicalId = "BOE-A-1989-22056";
-const sourceId = "22222222-2222-4222-8222-222222222222";
-const docIdSeed = "44444444-4444-4444-8444-444444444444";
-const useQueue = Bun.env.BOE_INDEXING_SMOKE_USE_QUEUE === "true";
+const canonicalId = 'BOE-A-1989-22056';
+const sourceId = '22222222-2222-4222-8222-222222222222';
+const docIdSeed = '44444444-4444-4444-8444-444444444444';
+const useQueue = Bun.env.BOE_INDEXING_SMOKE_USE_QUEUE === 'true';
 
 const program = Effect.gen(function* () {
   const db = yield* DatabaseService.client();
@@ -52,11 +52,11 @@ const program = Effect.gen(function* () {
 
   const docId = (docs as ReadonlyArray<{ doc_id: string }>)[0]?.doc_id ?? docIdSeed;
   if (!docId) {
-    return yield* Effect.fail(new Error("Unable to resolve smoke document id"));
+    return yield* Effect.fail(new Error('Unable to resolve smoke document id'));
   }
 
   const fixture = yield* Effect.tryPromise({
-    try: () => Bun.file("./test/fixtures/boe/legislative-full.xml").text(),
+    try: () => Bun.file('./test/fixtures/boe/legislative-full.xml').text(),
     catch: (cause) => new Error(`Unable to read fixture XML: ${String(cause)}`),
   });
 
@@ -71,16 +71,16 @@ const program = Effect.gen(function* () {
 
   const versionId = (versions as ReadonlyArray<{ version_id: string }>)[0]?.version_id;
   if (!versionId) {
-    return yield* Effect.fail(new Error("Unable to resolve smoke version id"));
+    return yield* Effect.fail(new Error('Unable to resolve smoke version id'));
   }
 
   const payload = Schema.decodeUnknownSync(IndexingTriggerPayload)({
-    runId: "11111111-1111-4111-8111-111111111111",
+    runId: '11111111-1111-4111-8111-111111111111',
     docId,
     versionId,
     canonicalId,
     contentHash: null,
-    kind: "New",
+    kind: 'New',
     requestedAt: new Date().toISOString(),
   });
 
@@ -100,14 +100,14 @@ const program = Effect.gen(function* () {
       `)) as ReadonlyArray<{ status: string; last_error: string | null }>;
 
       const current = rows[0];
-      if (current && current.status !== "in_progress") {
+      if (current && current.status !== 'in_progress') {
         return current;
       }
 
       yield* Effect.sleep(Duration.seconds(1));
     }
 
-    return { status: "timeout", last_error: "Timed out waiting for indexing completion" };
+    return { status: 'timeout', last_error: 'Timed out waiting for indexing completion' };
   });
 
   const rows = yield* db

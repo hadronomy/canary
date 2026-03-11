@@ -1,10 +1,10 @@
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import ansis from "ansis";
-import { ConfigProvider, Effect, Layer } from "effect";
-import { barplot, bench, boxplot, group, run, summary } from "mitata";
-import { Client } from "pg";
+import * as FetchHttpClient from '@effect/platform/FetchHttpClient';
+import ansis from 'ansis';
+import { ConfigProvider, Effect, Layer } from 'effect';
+import { barplot, bench, boxplot, group, run, summary } from 'mitata';
+import { Client } from 'pg';
 
-import { EmbeddingService, EmbeddingServiceLive } from "~/services/embedding";
+import { EmbeddingService, EmbeddingServiceLive } from '~/services/embedding';
 
 type SearchHit = {
   fragment_id: string;
@@ -23,7 +23,7 @@ type SearchHit = {
   score: number;
 };
 
-type SearchHitRow = Omit<SearchHit, "rerank_1024" | "semantic_256" | "hop_distance" | "score"> & {
+type SearchHitRow = Omit<SearchHit, 'rerank_1024' | 'semantic_256' | 'hop_distance' | 'score'> & {
   rerank_1024: number | string;
   semantic_256: number | string;
   hop_distance: number | string;
@@ -61,10 +61,10 @@ type QueryAuditResult = {
 };
 
 type RetrievalToolName =
-  | "polyvector_scout"
-  | "temporal_structural"
-  | "context_expansion"
-  | "legal_multisearch";
+  | 'polyvector_scout'
+  | 'temporal_structural'
+  | 'context_expansion'
+  | 'legal_multisearch';
 
 type StructuralHints = {
   articleNumbers: string[];
@@ -93,7 +93,7 @@ type SearchHitWithRole = SearchHit & {
 
 type SearchHitWithRoleRow = Omit<
   SearchHitWithRole,
-  "rerank_1024" | "semantic_256" | "hop_distance" | "score" | "intent_index"
+  'rerank_1024' | 'semantic_256' | 'hop_distance' | 'score' | 'intent_index'
 > & {
   rerank_1024: number | string;
   semantic_256: number | string;
@@ -139,36 +139,36 @@ const toolScenarios: Array<{
   input: LegalMultiSearchInput;
 }> = [
   {
-    label: "Constitucional limits after Penal Code reform (2015)",
+    label: 'Constitucional limits after Penal Code reform (2015)',
     input: {
       intents: [
-        "libertad de expresion limites constitucionales articulo 20",
-        "reforma codigo penal 2015 delitos expresion",
+        'libertad de expresion limites constitucionales articulo 20',
+        'reforma codigo penal 2015 delitos expresion',
       ],
-      temporalContext: new Date("2016-01-01T00:00:00.000Z"),
+      temporalContext: new Date('2016-01-01T00:00:00.000Z'),
       structuralHints: {
-        articleNumbers: ["20"],
-        hierarchyLevel: "constitucion",
+        articleNumbers: ['20'],
+        hierarchyLevel: 'constitucion',
       },
     },
   },
   {
-    label: "Constitution article 14 equality principle",
+    label: 'Constitution article 14 equality principle',
     input: {
-      intents: ["artículo 14 constitución igualdad ante la ley"],
+      intents: ['artículo 14 constitución igualdad ante la ley'],
       temporalContext: new Date(),
       structuralHints: {
-        articleNumbers: ["14"],
-        hierarchyLevel: "constitucion",
+        articleNumbers: ['14'],
+        hierarchyLevel: 'constitucion',
       },
     },
   },
   {
-    label: "Derogation clauses and final provisions",
+    label: 'Derogation clauses and final provisions',
     input: {
       intents: [
-        "disposicion derogatoria unica deroga normas anteriores",
-        "disposicion final modificaciones normas vigentes",
+        'disposicion derogatoria unica deroga normas anteriores',
+        'disposicion final modificaciones normas vigentes',
       ],
       temporalContext: new Date(),
       structuralHints: {
@@ -178,11 +178,11 @@ const toolScenarios: Array<{
     },
   },
   {
-    label: "Regional competencies and regulatory powers",
+    label: 'Regional competencies and regulatory powers',
     input: {
       intents: [
-        "competencias del gobierno y potestad reglamentaria",
-        "competencias exclusivas autonomia canarias",
+        'competencias del gobierno y potestad reglamentaria',
+        'competencias exclusivas autonomia canarias',
       ],
       temporalContext: new Date(),
       structuralHints: {
@@ -228,70 +228,70 @@ function parseFloatEnv(key: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-const annCandidates = parseIntegerEnvWithMin("RETRIEVAL_ANN_CANDIDATES", 64, 1);
-const rerankCandidates = parseIntegerEnvWithMin("RETRIEVAL_RERANK_CANDIDATES", 16, 1);
-const seedCount = parseIntegerEnvWithMin("RETRIEVAL_LTREE_SEEDS", 4, 1);
-const neighborsPerSeed = parseIntegerEnvWithMin("RETRIEVAL_LTREE_NEIGHBORS", 6, 1);
-const hnswEfSearch = parseIntegerEnvWithMin("RETRIEVAL_HNSW_EF_SEARCH", 48, 1);
-const expansionMinRerank = parseFloatEnv("RETRIEVAL_EXPANSION_MIN_RERANK", 0.45);
-const maxPerNode = parseIntegerEnvWithMin("RETRIEVAL_MAX_PER_NODE", 2, 1);
-const finalLimit = parseIntegerEnvWithMin("RETRIEVAL_FINAL_LIMIT", 12, 1);
-const citationExactBoost = parseFloatEnv("RETRIEVAL_CITATION_EXACT_BOOST", 0.14);
-const citationMismatchPenalty = parseFloatEnv("RETRIEVAL_CITATION_MISMATCH_PENALTY", 0.1);
+const annCandidates = parseIntegerEnvWithMin('RETRIEVAL_ANN_CANDIDATES', 64, 1);
+const rerankCandidates = parseIntegerEnvWithMin('RETRIEVAL_RERANK_CANDIDATES', 16, 1);
+const seedCount = parseIntegerEnvWithMin('RETRIEVAL_LTREE_SEEDS', 4, 1);
+const neighborsPerSeed = parseIntegerEnvWithMin('RETRIEVAL_LTREE_NEIGHBORS', 6, 1);
+const hnswEfSearch = parseIntegerEnvWithMin('RETRIEVAL_HNSW_EF_SEARCH', 48, 1);
+const expansionMinRerank = parseFloatEnv('RETRIEVAL_EXPANSION_MIN_RERANK', 0.45);
+const maxPerNode = parseIntegerEnvWithMin('RETRIEVAL_MAX_PER_NODE', 2, 1);
+const finalLimit = parseIntegerEnvWithMin('RETRIEVAL_FINAL_LIMIT', 12, 1);
+const citationExactBoost = parseFloatEnv('RETRIEVAL_CITATION_EXACT_BOOST', 0.14);
+const citationMismatchPenalty = parseFloatEnv('RETRIEVAL_CITATION_MISMATCH_PENALTY', 0.1);
 const authorityHintBoost = parseFloatEnv(
-  "RETRIEVAL_AUTHORITY_HINT_BOOST",
-  parseFloatEnv("RETRIEVAL_CONSTITUTION_HINT_BOOST", 0.12),
+  'RETRIEVAL_AUTHORITY_HINT_BOOST',
+  parseFloatEnv('RETRIEVAL_CONSTITUTION_HINT_BOOST', 0.12),
 );
 const authorityMismatchPenalty = parseFloatEnv(
-  "RETRIEVAL_AUTHORITY_MISMATCH_PENALTY",
-  parseFloatEnv("RETRIEVAL_CONSTITUTION_MISMATCH_PENALTY", 0.08),
+  'RETRIEVAL_AUTHORITY_MISMATCH_PENALTY',
+  parseFloatEnv('RETRIEVAL_CONSTITUTION_MISMATCH_PENALTY', 0.08),
 );
-const strictArticleExactBoost = parseFloatEnv("RETRIEVAL_STRICT_ARTICLE_EXACT_BOOST", 0.24);
+const strictArticleExactBoost = parseFloatEnv('RETRIEVAL_STRICT_ARTICLE_EXACT_BOOST', 0.24);
 const strictArticleMismatchPenalty = parseFloatEnv(
-  "RETRIEVAL_STRICT_ARTICLE_MISMATCH_PENALTY",
+  'RETRIEVAL_STRICT_ARTICLE_MISMATCH_PENALTY',
   0.1,
 );
-const titleExactBoost = parseFloatEnv("RETRIEVAL_TITLE_EXACT_BOOST", 0.06);
-const nodeTitleExactBoost = parseFloatEnv("RETRIEVAL_NODE_TITLE_EXACT_BOOST", 0.035);
-const lexicalBoostRerankFloor = parseFloatEnv("RETRIEVAL_LEXICAL_BOOST_RERANK_FLOOR", 0.58);
-const citationCandidates = parseIntegerEnvWithMin("RETRIEVAL_CITATION_CANDIDATES", 8, 1);
+const titleExactBoost = parseFloatEnv('RETRIEVAL_TITLE_EXACT_BOOST', 0.06);
+const nodeTitleExactBoost = parseFloatEnv('RETRIEVAL_NODE_TITLE_EXACT_BOOST', 0.035);
+const lexicalBoostRerankFloor = parseFloatEnv('RETRIEVAL_LEXICAL_BOOST_RERANK_FLOOR', 0.58);
+const citationCandidates = parseIntegerEnvWithMin('RETRIEVAL_CITATION_CANDIDATES', 8, 1);
 
 const embeddingLayer = EmbeddingServiceLive.pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provideMerge(Layer.setConfigProvider(ConfigProvider.fromEnv())),
 );
 
-const tokenLimitPauseMs = parseIntegerEnvWithMin("RETRIEVAL_TOKEN_LIMIT_PAUSE_MS", 65000, 0);
+const tokenLimitPauseMs = parseIntegerEnvWithMin('RETRIEVAL_TOKEN_LIMIT_PAUSE_MS', 65000, 0);
 const concurrencyBaseBackoffMs = parseIntegerEnvWithMin(
-  "RETRIEVAL_CONCURRENCY_BACKOFF_MS",
+  'RETRIEVAL_CONCURRENCY_BACKOFF_MS',
   1200,
   0,
 );
 
-const outputFormat = (Bun.env.RETRIEVAL_AUDIT_OUTPUT_FORMAT ?? "pretty").toLowerCase();
+const outputFormat = (Bun.env.RETRIEVAL_AUDIT_OUTPUT_FORMAT ?? 'pretty').toLowerCase();
 const hnswIterativeScanMode =
-  Bun.env.RETRIEVAL_HNSW_ITERATIVE_SCAN === "strict_order"
-    ? "strict_order"
-    : Bun.env.RETRIEVAL_HNSW_ITERATIVE_SCAN === "off"
-      ? "off"
-      : "relaxed_order";
+  Bun.env.RETRIEVAL_HNSW_ITERATIVE_SCAN === 'strict_order'
+    ? 'strict_order'
+    : Bun.env.RETRIEVAL_HNSW_ITERATIVE_SCAN === 'off'
+      ? 'off'
+      : 'relaxed_order';
 
 function toVectorLiteral(vector: number[]): string {
   return `[${vector
     .map((value) => {
       if (!Number.isFinite(value)) {
-        throw new Error("Embedding vector contains a non-finite number");
+        throw new Error('Embedding vector contains a non-finite number');
       }
       return value.toFixed(8);
     })
-    .join(",")}]`;
+    .join(',')}]`;
 }
 
 function normalizeQueryText(query: string): string {
   return query
-    .normalize("NFKC")
-    .replace(/\bart\.?\s*(\d+)/giu, "artículo $1")
-    .replace(/\s+/g, " ")
+    .normalize('NFKC')
+    .replace(/\bart\.?\s*(\d+)/giu, 'artículo $1')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -302,11 +302,11 @@ function extractArticleNumberDigits(query: string): string | null {
 
 function normalizeHintText(input: string): string {
   return input
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -316,14 +316,14 @@ function extractAuthorityHint(query: string): string | null {
     return null;
   }
 
-  const stopwords = new Set(["de", "del", "la", "el", "las", "los", "y", "en", "para"]);
+  const stopwords = new Set(['de', 'del', 'la', 'el', 'las', 'los', 'y', 'en', 'para']);
   const tokens = normalizeHintText(citationTail)
-    .split(" ")
+    .split(' ')
     .filter((token) => token.length >= 4 && !stopwords.has(token));
   if (tokens.length === 0) {
     return null;
   }
-  return tokens.slice(0, 3).join(" ");
+  return tokens.slice(0, 3).join(' ');
 }
 
 function buildRetrievalStrategy(query: string): RetrievalStrategy {
@@ -343,7 +343,7 @@ function normalizeArticleNumbers(values: string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of values) {
-    const digits = value.replace(/[^0-9]/g, "");
+    const digits = value.replace(/[^0-9]/g, '');
     if (digits.length === 0 || seen.has(digits)) {
       continue;
     }
@@ -356,7 +356,7 @@ function normalizeArticleNumbers(values: string[]): string[] {
 function extractArticleNumbersFromIntents(intents: string[]): string[] {
   const allMatches = intents.flatMap((intent) => {
     const matches = intent.matchAll(/\bart[ií]culo\s+(\d+)\b/giu);
-    return Array.from(matches, (match) => match[1] ?? "");
+    return Array.from(matches, (match) => match[1] ?? '');
   });
   return normalizeArticleNumbers(allMatches);
 }
@@ -365,10 +365,10 @@ async function prepareLegalMultiSearchInput(
   input: LegalMultiSearchInput,
 ): Promise<PreparedLegalMultiSearchInput> {
   if (input.intents.length === 0) {
-    throw new Error("At least one intent is required");
+    throw new Error('At least one intent is required');
   }
   if (input.intents.length > 3) {
-    throw new Error("A maximum of 3 intents is supported per tool call");
+    throw new Error('A maximum of 3 intents is supported per tool call');
   }
 
   const normalizedIntents = input.intents
@@ -376,7 +376,7 @@ async function prepareLegalMultiSearchInput(
     .filter((intent) => intent.length > 0);
 
   if (normalizedIntents.length === 0) {
-    throw new Error("All intents are empty after normalization");
+    throw new Error('All intents are empty after normalization');
   }
 
   const embeddings = await Promise.all(normalizedIntents.map((intent) => embedQuery(intent)));
@@ -389,7 +389,7 @@ async function prepareLegalMultiSearchInput(
       ? articleNumbersFromHints
       : extractArticleNumbersFromIntents(normalizedIntents);
 
-  const mergedText = normalizedIntents.join(" ");
+  const mergedText = normalizedIntents.join(' ');
   const mergedStrategy = buildRetrievalStrategy(mergedText);
 
   return {
@@ -441,19 +441,19 @@ function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  if (typeof error === "string") {
+  if (typeof error === 'string') {
     return error;
   }
   return JSON.stringify(error);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function parseMitataSummary(input: unknown): MitataSummary {
   if (!isRecord(input)) {
-    throw new Error("Mitata did not return a structured benchmark payload");
+    throw new Error('Mitata did not return a structured benchmark payload');
   }
 
   const rawBenchmarks = input.benchmarks;
@@ -467,8 +467,8 @@ function parseMitataSummary(input: unknown): MitataSummary {
     }
 
     const runs = rawBenchmark.runs.map((rawRun): MitataRunResult => {
-      if (!isRecord(rawRun) || typeof rawRun.name !== "string") {
-        throw new Error("Mitata run entry is invalid");
+      if (!isRecord(rawRun) || typeof rawRun.name !== 'string') {
+        throw new Error('Mitata run entry is invalid');
       }
 
       const rawStats = rawRun.stats;
@@ -489,12 +489,12 @@ function parseMitataSummary(input: unknown): MitataSummary {
       };
 
       if (
-        typeof values.avg !== "number" ||
-        typeof values.min !== "number" ||
-        typeof values.p75 !== "number" ||
-        typeof values.p99 !== "number" ||
-        typeof values.p999 !== "number" ||
-        typeof values.max !== "number"
+        typeof values.avg !== 'number' ||
+        typeof values.min !== 'number' ||
+        typeof values.p75 !== 'number' ||
+        typeof values.p99 !== 'number' ||
+        typeof values.p999 !== 'number' ||
+        typeof values.max !== 'number'
       ) {
         throw new Error(`Mitata stats are incomplete for benchmark '${rawRun.name}'`);
       }
@@ -517,9 +517,9 @@ function parseMitataSummary(input: unknown): MitataSummary {
   });
 
   const context = isRecord(input.context) ? input.context : undefined;
-  const runtime = typeof context?.runtime === "string" ? context.runtime : undefined;
-  const version = typeof context?.version === "string" ? context.version : undefined;
-  const arch = typeof context?.arch === "string" ? context.arch : undefined;
+  const runtime = typeof context?.runtime === 'string' ? context.runtime : undefined;
+  const version = typeof context?.version === 'string' ? context.version : undefined;
+  const arch = typeof context?.arch === 'string' ? context.arch : undefined;
   const cpuRecord = isRecord(context?.cpu) ? context.cpu : undefined;
 
   return {
@@ -529,43 +529,43 @@ function parseMitataSummary(input: unknown): MitataSummary {
       version,
       arch,
       cpu: {
-        name: typeof cpuRecord?.name === "string" ? cpuRecord.name : undefined,
-        freq: typeof cpuRecord?.freq === "number" ? cpuRecord.freq : undefined,
+        name: typeof cpuRecord?.name === 'string' ? cpuRecord.name : undefined,
+        freq: typeof cpuRecord?.freq === 'number' ? cpuRecord.freq : undefined,
       },
     },
   };
 }
 
 function renderPrettyReport(summaryPayload: MitataSummary, queryResults: QueryAuditResult[]): void {
-  const border = "=".repeat(96);
+  const border = '='.repeat(96);
   console.log(ansis.cyan(border));
-  console.log(ansis.bold.cyan("Retrieval Audit Report"));
+  console.log(ansis.bold.cyan('Retrieval Audit Report'));
 
   const context = summaryPayload.context;
-  const runtimeText = [context?.runtime, context?.version].filter(Boolean).join(" ").trim();
-  const hardwareText = [context?.cpu?.name, context?.arch].filter(Boolean).join(" | ").trim();
+  const runtimeText = [context?.runtime, context?.version].filter(Boolean).join(' ').trim();
+  const hardwareText = [context?.cpu?.name, context?.arch].filter(Boolean).join(' | ').trim();
   if (runtimeText.length > 0) {
-    console.log(`${ansis.gray("Runtime:")} ${ansis.white(runtimeText)}`);
+    console.log(`${ansis.gray('Runtime:')} ${ansis.white(runtimeText)}`);
   }
   if (hardwareText.length > 0) {
-    console.log(`${ansis.gray("Host:")}    ${ansis.white(hardwareText)}`);
+    console.log(`${ansis.gray('Host:')}    ${ansis.white(hardwareText)}`);
   }
 
   console.log(ansis.cyan(border));
   console.log(
-    `${ansis.bold("Bench Config")} ann=${annCandidates} rerank=${rerankCandidates} seeds=${seedCount} neighbors=${neighborsPerSeed} ef_search=${hnswEfSearch}`,
+    `${ansis.bold('Bench Config')} ann=${annCandidates} rerank=${rerankCandidates} seeds=${seedCount} neighbors=${neighborsPerSeed} ef_search=${hnswEfSearch}`,
   );
   console.log(
-    `${ansis.bold("Scoring")} citationBoost=${citationExactBoost} citationPenalty=${citationMismatchPenalty} authorityBoost=${authorityHintBoost} authorityPenalty=${authorityMismatchPenalty}`,
+    `${ansis.bold('Scoring')} citationBoost=${citationExactBoost} citationPenalty=${citationMismatchPenalty} authorityBoost=${authorityHintBoost} authorityPenalty=${authorityMismatchPenalty}`,
   );
   console.log(
-    `${ansis.bold("Limits")} maxPerNode=${maxPerNode} finalLimit=${finalLimit} citationCandidates=${citationCandidates} expansionMinRerank=${expansionMinRerank}`,
+    `${ansis.bold('Limits')} maxPerNode=${maxPerNode} finalLimit=${finalLimit} citationCandidates=${citationCandidates} expansionMinRerank=${expansionMinRerank}`,
   );
-  console.log(ansis.cyan("-".repeat(96)));
+  console.log(ansis.cyan('-'.repeat(96)));
 
-  const title = `${"Tool".padEnd(18)} ${"Scenario".padEnd(34)} ${"Avg".padStart(10)} ${"P75".padStart(10)} ${"P99".padStart(10)} ${"Hits".padStart(6)}`;
+  const title = `${'Tool'.padEnd(18)} ${'Scenario'.padEnd(34)} ${'Avg'.padStart(10)} ${'P75'.padStart(10)} ${'P99'.padStart(10)} ${'Hits'.padStart(6)}`;
   console.log(ansis.bold.white(title));
-  console.log(ansis.gray("-".repeat(96)));
+  console.log(ansis.gray('-'.repeat(96)));
 
   for (const result of queryResults) {
     const scenarioLabel =
@@ -580,24 +580,24 @@ function renderPrettyReport(summaryPayload: MitataSummary, queryResults: QueryAu
       formatMs(result.stats.p75Ms).padStart(10),
       formatMs(result.stats.p99Ms).padStart(10),
       String(result.hits.length).padStart(6),
-    ].join(" ");
+    ].join(' ');
     console.log(ansis.white(row));
   }
 
-  console.log(ansis.cyan("-".repeat(96)));
-  console.log(ansis.bold("Top Results Snapshot (legal_multisearch)"));
+  console.log(ansis.cyan('-'.repeat(96)));
+  console.log(ansis.bold('Top Results Snapshot (legal_multisearch)'));
 
-  for (const result of queryResults.filter((item) => item.toolName === "legal_multisearch")) {
+  for (const result of queryResults.filter((item) => item.toolName === 'legal_multisearch')) {
     console.log(`- ${ansis.bold(result.scenarioLabel)}`);
     if (result.hits.length === 0) {
-      console.log(`  ${ansis.gray("No hits returned")}`);
+      console.log(`  ${ansis.gray('No hits returned')}`);
       continue;
     }
 
     for (const [index, hit] of result.hits.slice(0, 3).entries()) {
-      const nodeLabel = [hit.node_type, hit.node_number].filter(Boolean).join(" ").trim();
+      const nodeLabel = [hit.node_type, hit.node_number].filter(Boolean).join(' ').trim();
       const nodeText = nodeLabel.length > 0 ? nodeLabel : hit.node_path;
-      const snippet = hit.snippet.replace(/\s+/g, " ").trim();
+      const snippet = hit.snippet.replace(/\s+/g, ' ').trim();
       const preview = snippet.length > 132 ? `${snippet.slice(0, 129)}...` : snippet;
       console.log(
         `  ${index + 1}. ${ansis.yellow(hit.canonical_id)} | ${ansis.green(nodeText)} | role=${hit.role} | score=${formatScore(hit.score)}`,
@@ -655,7 +655,7 @@ async function embedQuery(query: string): Promise<QueryEmbedding> {
 
       const result = await Effect.runPromise(program);
       if (Array.isArray(result)) {
-        throw new Error("Expected single embedding result");
+        throw new Error('Expected single embedding result');
       }
 
       return {
@@ -665,12 +665,12 @@ async function embedQuery(query: string): Promise<QueryEmbedding> {
     } catch (error) {
       const message = String(error);
       const isConcurrencyLimited =
-        message.includes("RATE_CONCURRENCY_LIMIT_EXCEEDED") ||
-        message.includes("Concurrency limit exceeded");
+        message.includes('RATE_CONCURRENCY_LIMIT_EXCEEDED') ||
+        message.includes('Concurrency limit exceeded');
       const isTokenLimited =
-        message.includes("RATE_TOKEN_LIMIT_EXCEEDED") ||
-        message.includes("Token rate limit exceeded");
-      const retryable = message.includes("429") || isConcurrencyLimited || isTokenLimited;
+        message.includes('RATE_TOKEN_LIMIT_EXCEEDED') ||
+        message.includes('Token rate limit exceeded');
+      const retryable = message.includes('429') || isConcurrencyLimited || isTokenLimited;
       if (!retryable || attempt === maxAttempts) {
         throw error;
       }
@@ -685,7 +685,7 @@ async function embedQuery(query: string): Promise<QueryEmbedding> {
     }
   }
 
-  throw new Error("Unable to generate query embedding after retries");
+  throw new Error('Unable to generate query embedding after retries');
 }
 
 const fastSql = `
@@ -1005,14 +1005,14 @@ async function runFastQuery(
     maxPerNode,
     finalLimit,
     strategy.articleNumberDigits !== null,
-    strategy.articleNumberDigits ?? "",
+    strategy.articleNumberDigits ?? '',
     strategy.authorityHintNormalized !== null,
     citationExactBoost,
     citationMismatchPenalty,
     authorityHintBoost,
     authorityMismatchPenalty,
     citationCandidates,
-    strategy.authorityHintNormalized ?? "",
+    strategy.authorityHintNormalized ?? '',
     strategy.queryNormalized,
     titleExactBoost,
     nodeTitleExactBoost,
@@ -1023,15 +1023,15 @@ async function runFastQuery(
 
   return result.rows.map((row) => ({
     ...row,
-    rerank_1024: toFiniteNumber(row.rerank_1024, "rerank_1024"),
-    semantic_256: toFiniteNumber(row.semantic_256, "semantic_256"),
-    hop_distance: toFiniteNumber(row.hop_distance, "hop_distance"),
-    score: toFiniteNumber(row.score, "score"),
+    rerank_1024: toFiniteNumber(row.rerank_1024, 'rerank_1024'),
+    semantic_256: toFiniteNumber(row.semantic_256, 'semantic_256'),
+    hop_distance: toFiniteNumber(row.hop_distance, 'hop_distance'),
+    score: toFiniteNumber(row.score, 'score'),
   }));
 }
 
 function toFiniteNumber(value: number | string, label: string): number {
-  const parsed = typeof value === "number" ? value : Number(value);
+  const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed)) {
     throw new Error(`Non-finite numeric value returned for '${label}'`);
   }
@@ -1049,11 +1049,11 @@ function toFiniteIntegerOrNull(value: number | string | null, label: string): nu
 function toSearchHitWithRole(row: SearchHitWithRoleRow): SearchHitWithRole {
   return {
     ...row,
-    rerank_1024: toFiniteNumber(row.rerank_1024, "rerank_1024"),
-    semantic_256: toFiniteNumber(row.semantic_256, "semantic_256"),
-    hop_distance: toFiniteNumber(row.hop_distance, "hop_distance"),
-    score: toFiniteNumber(row.score, "score"),
-    intent_index: toFiniteIntegerOrNull(row.intent_index, "intent_index"),
+    rerank_1024: toFiniteNumber(row.rerank_1024, 'rerank_1024'),
+    semantic_256: toFiniteNumber(row.semantic_256, 'semantic_256'),
+    hop_distance: toFiniteNumber(row.hop_distance, 'hop_distance'),
+    score: toFiniteNumber(row.score, 'score'),
+    intent_index: toFiniteIntegerOrNull(row.intent_index, 'intent_index'),
   };
 }
 
@@ -1614,7 +1614,7 @@ async function executeContextExpansionTool(
   const hits = await runFastQuery(client, primaryScout, input.primaryRerankVectorLiteral, strategy);
   return hits.map((hit) => ({
     ...hit,
-    role: hit.hop_distance <= 0 ? "seed" : hit.hop_distance <= 1 ? "sibling" : "context",
+    role: hit.hop_distance <= 0 ? 'seed' : hit.hop_distance <= 1 ? 'sibling' : 'context',
     intent_index: null,
     relation_type: null,
   }));
@@ -1651,13 +1651,13 @@ async function executeRetrievalTool(
   input: PreparedLegalMultiSearchInput,
 ): Promise<SearchHitWithRole[]> {
   switch (toolName) {
-    case "polyvector_scout":
+    case 'polyvector_scout':
       return executePolyvectorScoutTool(client, input);
-    case "temporal_structural":
+    case 'temporal_structural':
       return executeTemporalStructuralTool(client, input);
-    case "context_expansion":
+    case 'context_expansion':
       return executeContextExpansionTool(client, input);
-    case "legal_multisearch":
+    case 'legal_multisearch':
       return executeLegalMultiSearchTool(client, input);
     default:
       return [];
@@ -1667,7 +1667,7 @@ async function executeRetrievalTool(
 async function main() {
   const databaseUrl = Bun.env.DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
+    throw new Error('DATABASE_URL is required');
   }
 
   const client = new Client({ connectionString: databaseUrl });
@@ -1675,7 +1675,7 @@ async function main() {
 
   try {
     await client.query(`SET hnsw.ef_search = ${hnswEfSearch}`);
-    if (hnswIterativeScanMode !== "off") {
+    if (hnswIterativeScanMode !== 'off') {
       await client.query(`SET hnsw.iterative_scan = '${hnswIterativeScanMode}'`);
     }
 
@@ -1697,10 +1697,10 @@ async function main() {
 
     const benchmarkDefinitions = preparedScenarios.flatMap((scenario) => {
       const tools: RetrievalToolName[] = [
-        "polyvector_scout",
-        "temporal_structural",
-        "context_expansion",
-        "legal_multisearch",
+        'polyvector_scout',
+        'temporal_structural',
+        'context_expansion',
+        'legal_multisearch',
       ];
       return tools.map((toolName) => ({
         benchmarkName: scenario.benchmarkNames[toolName],
@@ -1712,7 +1712,7 @@ async function main() {
 
     const latestHitsByBenchmarkName = new Map<string, SearchHitWithRole[]>();
 
-    group("retrieval_tools", () => {
+    group('retrieval_tools', () => {
       barplot(() => {
         boxplot(() => {
           summary(() => {
@@ -1732,14 +1732,14 @@ async function main() {
     });
 
     const rawSummary =
-      outputFormat === "json"
+      outputFormat === 'json'
         ? await run({
-            format: "json",
+            format: 'json',
             colors: false,
             print: () => {},
           })
         : await run({
-            format: "mitata",
+            format: 'mitata',
             colors: true,
           });
 
@@ -1777,7 +1777,7 @@ async function main() {
       };
     });
 
-    if (outputFormat === "json") {
+    if (outputFormat === 'json') {
       renderJsonReport(queryResults);
     } else {
       renderPrettyReport(summaryPayload, queryResults);

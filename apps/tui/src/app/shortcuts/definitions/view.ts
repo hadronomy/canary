@@ -1,5 +1,6 @@
-import { defineShortcuts, shortcut } from "~/app/shortcuts/api";
-import type { Shortcut } from "~/app/shortcuts/types";
+import type { Shortcut } from '~/app/shortcuts/types';
+
+import { defineShortcuts, shortcut } from '~/app/shortcuts/api';
 
 type ViewHandlers = {
   closeCmdk: () => void;
@@ -12,19 +13,19 @@ type ViewHandlers = {
 
 export function createViewShortcuts(handlers: ViewHandlers): Shortcut[] {
   return defineShortcuts({
-    scope: "view",
-    category: "Navigation",
+    scope: 'view',
+    category: 'Navigation',
     shortcuts: [
-      shortcut("cmdk.close", "Close command palette", ["escape"], () => handlers.closeCmdk(), {
+      shortcut('cmdk.close', 'Close command palette', ['escape'], () => handlers.closeCmdk(), {
         condition: { when: () => handlers.isCmdkOpen() },
       }),
-      shortcut("help.close", "Close shortcuts help", ["escape"], () => handlers.closeHelp(), {
+      shortcut('help.close', 'Close shortcuts help', ['escape'], () => handlers.closeHelp(), {
         condition: { when: () => handlers.isHelpOpen() },
       }),
       shortcut(
-        "dashboard.close",
-        "Close control center",
-        ["escape"],
+        'dashboard.close',
+        'Close control center',
+        ['escape'],
         () => handlers.closeDashboard(),
         {
           condition: { when: () => handlers.isDashboardOpen() },

@@ -1,11 +1,11 @@
-import { Duration, Schema } from "effect";
+import { Duration, Schema } from 'effect';
 
-export const UnknownRangeStrategy = Schema.Literal("fail", "regulation");
+export const UnknownRangeStrategy = Schema.Literal('fail', 'regulation');
 
-export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCollectorConfig")({
+export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>('BoeCollectorConfig')({
   sourceId: Schema.UUID,
   baseUrl: Schema.optionalWith(Schema.String.pipe(Schema.pattern(/^https?:\/\//)), {
-    default: () => "https://boe.es/datosabiertos/api/legislacion-consolidada",
+    default: () => 'https://boe.es/datosabiertos/api/legislacion-consolidada',
   }),
   batchSize: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
     default: () => 500,
@@ -35,12 +35,12 @@ export class BoeCollectorConfig extends Schema.Class<BoeCollectorConfig>("BoeCol
     default: () => true,
   }),
   unknownRangeStrategy: Schema.optionalWith(UnknownRangeStrategy, {
-    default: () => "regulation",
+    default: () => 'regulation',
   }),
   upsertActor: Schema.optionalWith(Schema.NonEmptyString, {
-    default: () => "collector:boe-laws",
+    default: () => 'collector:boe-laws',
   }),
   staticQuery: Schema.optionalWith(Schema.String, {
-    default: () => "",
+    default: () => '',
   }),
 }) {}

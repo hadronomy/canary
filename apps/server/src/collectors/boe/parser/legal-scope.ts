@@ -1,13 +1,14 @@
-import type { NodeType } from "@canary/db/schema/legislation";
+import type { NodeType } from '@canary/db/schema/legislation';
 
-import { normalizeLegalPathSegment } from "./normalize";
-import type { DispositionPathScope, LegalPathSegment } from "./types";
+import type { DispositionPathScope, LegalPathSegment } from './types';
+
+import { normalizeLegalPathSegment } from './normalize';
 
 export const LEGAL_DISPOSITION_SCOPES = [
-  "disposicion-adicional",
-  "disposicion-final",
-  "disposicion-transitoria",
-  "disposicion-derogatoria",
+  'disposicion-adicional',
+  'disposicion-final',
+  'disposicion-transitoria',
+  'disposicion-derogatoria',
 ] as const satisfies ReadonlyArray<DispositionPathScope>;
 
 const LEGAL_SCOPE_RULES: ReadonlyArray<{
@@ -17,23 +18,23 @@ const LEGAL_SCOPE_RULES: ReadonlyArray<{
 }> = [
   {
     match: /ADICIONAL/,
-    scope: "disposicion-adicional",
-    nodeType: "chapter",
+    scope: 'disposicion-adicional',
+    nodeType: 'chapter',
   },
   {
     match: /TRANSITORIA/,
-    scope: "disposicion-transitoria",
-    nodeType: "disposicion_transitoria",
+    scope: 'disposicion-transitoria',
+    nodeType: 'disposicion_transitoria',
   },
   {
     match: /FINAL/,
-    scope: "disposicion-final",
-    nodeType: "disposicion_final",
+    scope: 'disposicion-final',
+    nodeType: 'disposicion_final',
   },
   {
     match: /DEROGATORIA/,
-    scope: "disposicion-derogatoria",
-    nodeType: "chapter",
+    scope: 'disposicion-derogatoria',
+    nodeType: 'chapter',
   },
 ];
 
@@ -60,15 +61,15 @@ export function legalScopeSegments(
     return [];
   }
 
-  return [{ _tag: "scope", value: matched.scope }];
+  return [{ _tag: 'scope', value: matched.scope }];
 }
 
 export function specialSectionNodeType(title: string, isSpecial: boolean): NodeType {
   if (!isSpecial) {
-    return "chapter";
+    return 'chapter';
   }
 
   const normalized = normalizeLegalPathSegment(title).toUpperCase();
   const matched = LEGAL_SCOPE_RULES.find((rule) => rule.match.test(normalized));
-  return matched?.nodeType ?? "chapter";
+  return matched?.nodeType ?? 'chapter';
 }

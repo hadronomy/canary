@@ -1,12 +1,13 @@
-import { legalPathAstToLtree, nodePathSegmentsToLtree, type LtreePathString } from "./ltree-path";
-import { toCanonicalFragmentPathQuery } from "./path-query";
-import { parseLegalPath } from "./path-query";
 import type {
   BoeAstDocument,
   BoeAstNode,
   CanonicalFragmentPathQuery,
   FragmentPathQuery,
-} from "./types";
+} from './types';
+
+import { legalPathAstToLtree, nodePathSegmentsToLtree, type LtreePathString } from './ltree-path';
+import { toCanonicalFragmentPathQuery } from './path-query';
+import { parseLegalPath } from './path-query';
 
 export interface AstNodePaths {
   readonly nodePathLtree: LtreePathString;

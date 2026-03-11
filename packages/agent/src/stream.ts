@@ -1,4 +1,4 @@
-import type { Codec } from "~/codec";
+import type { Codec } from '~/codec';
 import type {
   AnyEventEnvelope,
   EventIndex,
@@ -8,8 +8,9 @@ import type {
   SessionId,
   TurnId,
   EventType,
-} from "~/protocol";
-import { toEventIndex, toSessionId, toTurnId } from "~/protocol";
+} from '~/protocol';
+
+import { toEventIndex, toSessionId, toTurnId } from '~/protocol';
 
 export interface SseEventFrame {
   readonly id?: string;
@@ -64,22 +65,22 @@ export function encodeSseRaw(frame: SseEventFrame): string {
   const lines = [
     frame.id ? `id: ${frame.id}` : undefined,
     frame.event ? `event: ${frame.event}` : undefined,
-    ...frame.data.split("\n").map((line) => `data: ${line}`),
+    ...frame.data.split('\n').map((line) => `data: ${line}`),
   ].filter((line) => line !== undefined);
 
-  return `${lines.join("\n")}\n\n`;
+  return `${lines.join('\n')}\n\n`;
 }
 
 function encodeRawComment(comment: string): string {
   return comment
-    .split("\n")
+    .split('\n')
     .map((line) => `: ${line}`)
-    .join("\n")
-    .concat("\n\n");
+    .join('\n')
+    .concat('\n\n');
 }
 
 function normalizeSessionId(sessionId: SessionId | string): SessionId {
-  return typeof sessionId === "string" ? toSessionId(sessionId) : sessionId;
+  return typeof sessionId === 'string' ? toSessionId(sessionId) : sessionId;
 }
 
 function normalizeTurnId(turnId: TurnId | string | undefined): TurnId | undefined {
@@ -87,11 +88,11 @@ function normalizeTurnId(turnId: TurnId | string | undefined): TurnId | undefine
     return undefined;
   }
 
-  return typeof turnId === "string" ? toTurnId(turnId) : turnId;
+  return typeof turnId === 'string' ? toTurnId(turnId) : turnId;
 }
 
 function normalizeEventIndex(index: EventIndex | number): EventIndex {
-  return typeof index === "number" ? toEventIndex(index) : index;
+  return typeof index === 'number' ? toEventIndex(index) : index;
 }
 
 export function encodeSse<TMap extends object, TType extends EventType<TMap>>(
@@ -138,8 +139,8 @@ export function decodeSseWithRegistry<TMap extends object = EventMap>(
   }
 
   const rawData = JSON.parse(frame.data) as unknown;
-  if (typeof rawData !== "object" || rawData === null) {
-    throw new TypeError("SSE data must be an object envelope");
+  if (typeof rawData !== 'object' || rawData === null) {
+    throw new TypeError('SSE data must be an object envelope');
   }
 
   const wireEnvelope = rawData as {
@@ -150,15 +151,15 @@ export function decodeSseWithRegistry<TMap extends object = EventMap>(
     readonly payload?: unknown;
   };
 
-  if (typeof wireEnvelope.sessionId !== "string") {
-    throw new TypeError("SSE envelope is missing a valid sessionId");
+  if (typeof wireEnvelope.sessionId !== 'string') {
+    throw new TypeError('SSE envelope is missing a valid sessionId');
   }
 
   const payload = eventDefinition.codec.decode(wireEnvelope.payload);
 
   const index = Number(frame.id ?? wireEnvelope.index ?? -1);
   if (!Number.isFinite(index) || index < 0) {
-    throw new TypeError(`Invalid SSE id '${frame.id ?? ""}'`);
+    throw new TypeError(`Invalid SSE id '${frame.id ?? ''}'`);
   }
 
   return {
@@ -243,8 +244,8 @@ export function createSseServer<TMap extends object = EventMap>(
         return encodeEnvelope(envelope(type, payload, encodeOptions));
       },
       envelope,
-      keepalive(data = "{}") {
-        return encodeSseRaw({ event: "keepalive", data });
+      keepalive(data = '{}') {
+        return encodeSseRaw({ event: 'keepalive', data });
       },
       comment(text) {
         return encodeRawComment(text);
@@ -257,8 +258,8 @@ export function createSseServer<TMap extends object = EventMap>(
       return decodeSseWithRegistry(frame, options.eventRegistry);
     },
     encodeRaw: encodeSseRaw,
-    keepalive(data = "{}") {
-      return encodeSseRaw({ event: "keepalive", data });
+    keepalive(data = '{}') {
+      return encodeSseRaw({ event: 'keepalive', data });
     },
     comment(text) {
       return encodeRawComment(text);

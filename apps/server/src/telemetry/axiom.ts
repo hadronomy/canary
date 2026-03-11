@@ -1,26 +1,26 @@
-import { NodeSdk, OtlpLogger, OtlpSerialization } from "@effect/opentelemetry";
-import * as FetchHttpClient from "@effect/platform/FetchHttpClient";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
-import { Config, Effect, Layer, Option, Redacted } from "effect";
+import { NodeSdk, OtlpLogger, OtlpSerialization } from '@effect/opentelemetry';
+import * as FetchHttpClient from '@effect/platform/FetchHttpClient';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { Config, Effect, Layer, Option, Redacted } from 'effect';
 
-import { AxiomConfig } from "./config.js";
+import { AxiomConfig } from './config.js';
 
 export class AxiomTelemetryService extends Effect.Service<AxiomTelemetryService>()(
-  "AxiomTelemetryService",
+  'AxiomTelemetryService',
   {
     accessors: true,
     effect: Effect.gen(function* () {
       const config = yield* AxiomConfig;
       const tracesDataset = Option.getOrElse(config.tracesDataset, () => config.dataset);
       const logsDataset = Option.getOrElse(config.logsDataset, () => config.dataset);
-      const defaultSampleRate = config.environment === "development" ? 1 : 0.1;
+      const defaultSampleRate = config.environment === 'development' ? 1 : 0.1;
       const tracesSampleRate = Option.match(config.tracesSampleRate, {
         onNone: () => defaultSampleRate,
         onSome: (rate) => Math.max(0, Math.min(1, rate)),
       });
 
-      yield* Effect.logInfo("Axiom OTLP routing", {
+      yield* Effect.logInfo('Axiom OTLP routing', {
         serviceName: config.serviceName,
         environment: config.environment,
         traces: {
@@ -36,13 +36,13 @@ export class AxiomTelemetryService extends Effect.Service<AxiomTelemetryService>
 
       if (Option.isNone(config.tracesDataset)) {
         yield* Effect.logWarning(
-          "AXIOM_TRACES_DATASET not set; using AXIOM_DATASET. Create and configure a dedicated OTel Traces dataset in Axiom for the Traces UI.",
+          'AXIOM_TRACES_DATASET not set; using AXIOM_DATASET. Create and configure a dedicated OTel Traces dataset in Axiom for the Traces UI.',
         );
       }
 
       if (Option.isNone(config.logsDataset)) {
         yield* Effect.logWarning(
-          "AXIOM_LOGS_DATASET not set; using AXIOM_DATASET. Create and configure a dedicated OTel Logs dataset in Axiom.",
+          'AXIOM_LOGS_DATASET not set; using AXIOM_DATASET. Create and configure a dedicated OTel Logs dataset in Axiom.',
         );
       }
 
@@ -61,14 +61,14 @@ export const OtlpInfraLive = Layer.mergeAll(FetchHttpClient.layer, OtlpSerializa
 // Use NodeSdk.layer for proper context propagation across fibers
 const AxiomNodeSdkLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    yield* Effect.logInfo("Building NodeSdk layer for proper context propagation");
+    yield* Effect.logInfo('Building NodeSdk layer for proper context propagation');
     const service = yield* AxiomTelemetryService;
 
     const traceExporter = new OTLPTraceExporter({
       url: `${service.config.url}/v1/traces`,
       headers: {
         Authorization: `Bearer ${Redacted.value(service.config.apiToken)}`,
-        "X-Axiom-Dataset": service.tracesDataset,
+        'X-Axiom-Dataset': service.tracesDataset,
       },
     });
 
@@ -77,7 +77,7 @@ const AxiomNodeSdkLive = Layer.unwrapEffect(
         serviceName: service.config.serviceName,
         serviceVersion: Option.getOrUndefined(service.config.serviceVersion),
         attributes: {
-          "deployment.environment": service.config.environment,
+          'deployment.environment': service.config.environment,
         },
       },
       spanProcessor: new BatchSpanProcessor(traceExporter, {
@@ -93,7 +93,7 @@ const AxiomNodeSdkLive = Layer.unwrapEffect(
 
 const AxiomOtlpLoggerLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    yield* Effect.logInfo("Building OTLP logger layer");
+    yield* Effect.logInfo('Building OTLP logger layer');
     const service = yield* AxiomTelemetryService;
     const url = `${service.config.url}/v1/logs`;
     yield* Effect.logInfo(`OTLP Logger endpoint: ${url}`);
@@ -104,12 +104,12 @@ const AxiomOtlpLoggerLive = Layer.unwrapEffect(
         serviceName: service.config.serviceName,
         serviceVersion: Option.getOrUndefined(service.config.serviceVersion),
         attributes: {
-          "deployment.environment": service.config.environment,
+          'deployment.environment': service.config.environment,
         },
       },
       headers: {
         Authorization: `Bearer ${Redacted.value(service.config.apiToken)}`,
-        "X-Axiom-Dataset": service.logsDataset,
+        'X-Axiom-Dataset': service.logsDataset,
       },
       exportInterval: service.config.batchTimeoutMs,
       shutdownTimeout: service.config.shutdownTimeoutMs,
@@ -119,10 +119,10 @@ const AxiomOtlpLoggerLive = Layer.unwrapEffect(
 
 export const AxiomTelemetryLive = Layer.unwrapEffect(
   Effect.gen(function* () {
-    const apiToken = yield* Config.redacted("AXIOM_API_TOKEN").pipe(Effect.option);
+    const apiToken = yield* Config.redacted('AXIOM_API_TOKEN').pipe(Effect.option);
 
     if (Option.isNone(apiToken)) {
-      yield* Effect.logWarning("Axiom telemetry disabled: AXIOM_API_TOKEN not set");
+      yield* Effect.logWarning('Axiom telemetry disabled: AXIOM_API_TOKEN not set');
       return Layer.empty;
     }
 

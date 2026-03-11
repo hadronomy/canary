@@ -1,5 +1,6 @@
-import type { AstNodeId, NodePathSegment } from "./types";
-import { AstNodeId as AstNodeIdBrand } from "./types";
+import type { AstNodeId, NodePathSegment } from './types';
+
+import { AstNodeId as AstNodeIdBrand } from './types';
 
 interface NodeIdInput {
   readonly sequenceIndex: number;
@@ -17,10 +18,10 @@ export function createAstNodeId(input: NodeIdInput): AstNodeId {
 }
 
 function serializePath(segments: ReadonlyArray<NodePathSegment>): string {
-  return segments.map((segment) => `${segment._tag}:${segment.index}`).join("|");
+  return segments.map((segment) => `${segment._tag}:${segment.index}`).join('|');
 }
 
 function bunHashHex(value: string): string {
   const hash = Bun.hash(value, NODE_ID_HASH_SEED);
-  return hash.toString(16).padStart(16, "0");
+  return hash.toString(16).padStart(16, '0');
 }

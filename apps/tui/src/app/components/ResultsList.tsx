@@ -1,8 +1,8 @@
-import { TextAttributes } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
-import { useEffect, useState } from "react";
+import { TextAttributes } from '@opentui/core';
+import { useKeyboard } from '@opentui/react';
+import { useEffect, useState } from 'react';
 
-import type { Theme } from "~/app/theme";
+import type { Theme } from '~/app/theme';
 
 type ResultItem = {
   title: string;
@@ -29,15 +29,15 @@ export function ResultsList({ theme, query, results, onSelect, active }: Results
     if (!active) return;
     if (results.length === 0) return;
 
-    if (key.name === "down") {
+    if (key.name === 'down') {
       setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
     }
 
-    if (key.name === "up") {
+    if (key.name === 'up') {
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
     }
 
-    if (key.name === "enter" || key.name === "return") {
+    if (key.name === 'enter' || key.name === 'return') {
       const selected = results[selectedIndex];
       if (selected && onSelect) {
         onSelect(selected);
@@ -48,7 +48,7 @@ export function ResultsList({ theme, query, results, onSelect, active }: Results
   return (
     <scrollbox
       style={{
-        width: "72%",
+        width: '72%',
         flexGrow: 1,
         rootOptions: {
           backgroundColor: palette.base,
@@ -61,7 +61,7 @@ export function ResultsList({ theme, query, results, onSelect, active }: Results
         },
         contentOptions: {
           backgroundColor: palette.base,
-          flexDirection: "column",
+          flexDirection: 'column',
         },
         scrollbarOptions: {
           showArrows: false,
@@ -92,7 +92,7 @@ export function ResultsList({ theme, query, results, onSelect, active }: Results
             <box
               key={result.title}
               style={{
-                width: "100%",
+                width: '100%',
                 padding: 1,
                 marginBottom: 1,
                 backgroundColor: isSelected ? palette.surface1 : palette.surface0,

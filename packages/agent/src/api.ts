@@ -1,4 +1,4 @@
-import type { SessionOrchestrator } from "~/orchestrator";
+import type { SessionOrchestrator } from '~/orchestrator';
 import type {
   AnyEventEnvelope,
   EventMap,
@@ -7,7 +7,7 @@ import type {
   SessionSnapshot,
   SubmitTurnInput,
   SubmitTurnResult,
-} from "~/protocol";
+} from '~/protocol';
 
 export interface RestateAuthz<TContext = unknown> {
   readonly createSession?: (context: TContext) => Promise<void> | void;

@@ -1,19 +1,18 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, mock } from 'bun:test';
+import { Effect, Schema } from 'effect';
 
-import { Effect, Schema } from "effect";
-
-import { defineQueue, defineQueues } from "~/queues/registry";
-import { QueueError, QueueService, QueueServiceLive, makeWorker } from "~/services/queue";
+import { defineQueue, defineQueues } from '~/queues/registry';
+import { QueueError, QueueService, QueueServiceLive, makeWorker } from '~/services/queue';
 
 // Mock BullMQ
-mock.module("bullmq", () => {
+mock.module('bullmq', () => {
   return {
     Queue: class MockQueue {
       name: string;
       constructor(name: string, _opts: any) {
         this.name = name;
       }
-      add = mock(() => Promise.resolve({ id: "123", name: "job", data: {} } as any));
+      add = mock(() => Promise.resolve({ id: '123', name: 'job', data: {} } as any));
       close = mock(() => Promise.resolve());
     },
     Worker: class MockWorker {
@@ -29,17 +28,17 @@ mock.module("bullmq", () => {
   };
 });
 
-describe("QueueService", () => {
-  it("should add a job to the queue", async () => {
+describe('QueueService', () => {
+  it('should add a job to the queue', async () => {
     const payloadSchema = Schema.Struct({ foo: Schema.String });
     const queues = defineQueues({
-      test: defineQueue("test-queue", payloadSchema),
+      test: defineQueue('test-queue', payloadSchema),
     });
 
     const program = Effect.gen(function* () {
       const service = yield* QueueService;
-      const job = yield* service.add(queues.test, { foo: "bar" });
-      expect(job.id).toBe("123");
+      const job = yield* service.add(queues.test, { foo: 'bar' });
+      expect(job.id).toBe('123');
     });
 
     // QueueServiceLive is a Layer that might have Scope requirements (e.g. for finalizers).
@@ -48,10 +47,10 @@ describe("QueueService", () => {
     await Effect.runPromise(runnable);
   });
 
-  it("should reject invalid payloads", async () => {
+  it('should reject invalid payloads', async () => {
     const payloadSchema = Schema.Struct({ id: Schema.String });
     const queues = defineQueues({
-      refinery: defineQueue("refinery-queue", payloadSchema),
+      refinery: defineQueue('refinery-queue', payloadSchema),
     });
     const badPayload = { id: 123 } as unknown as Schema.Schema.Type<typeof payloadSchema>;
 
@@ -63,15 +62,15 @@ describe("QueueService", () => {
     const runnable = Effect.scoped(Effect.provide(program, QueueServiceLive));
     const result = await Effect.runPromise(Effect.either(runnable));
 
-    expect(result._tag).toBe("Left");
-    if (result._tag === "Left") {
+    expect(result._tag).toBe('Left');
+    if (result._tag === 'Left') {
       expect(result.left).toBeInstanceOf(QueueError);
     }
   });
 });
 
-describe("makeWorker", () => {
-  it("should create a worker and process jobs", async () => {
+describe('makeWorker', () => {
+  it('should create a worker and process jobs', async () => {
     let processed = false;
     const processor = (_job: any) =>
       Effect.sync(() => {
@@ -80,7 +79,7 @@ describe("makeWorker", () => {
 
     const workerSchema = Schema.Struct({ id: Schema.String });
     const queues = defineQueues({
-      worker: defineQueue("test-worker-queue", workerSchema),
+      worker: defineQueue('test-worker-queue', workerSchema),
     });
 
     const workerEffect = makeWorker(queues.worker, processor);

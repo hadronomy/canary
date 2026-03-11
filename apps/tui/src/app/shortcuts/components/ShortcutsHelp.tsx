@@ -1,8 +1,9 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes } from '@opentui/core';
 
-import { formatKeyCombo } from "~/app/shortcuts/helpers";
-import type { Shortcut } from "~/app/shortcuts/types";
-import type { Theme } from "~/app/theme";
+import type { Shortcut } from '~/app/shortcuts/types';
+import type { Theme } from '~/app/theme';
+
+import { formatKeyCombo } from '~/app/shortcuts/helpers';
 
 type ShortcutsHelpProps = {
   theme: Theme;
@@ -21,7 +22,7 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
   const grouped = shortcuts
     .filter((shortcut) => shortcut.bindings.length > 0)
     .reduce<Record<string, Shortcut[]>>((acc, shortcut) => {
-      const category = shortcut.category ?? "General";
+      const category = shortcut.category ?? 'General';
       acc[category] = acc[category] ? [...acc[category], shortcut] : [shortcut];
       return acc;
     }, {});
@@ -31,28 +32,28 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
   return (
     <box
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 0,
         left: 0,
-        width: "100%",
-        height: "100%",
-        justifyContent: "center",
-        alignItems: "center",
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
         zIndex: 30,
       }}
     >
       <box
         style={{
-          width: "50%",
-          height: "80%",
+          width: '50%',
+          height: '80%',
           border: true,
-          borderStyle: "rounded",
+          borderStyle: 'rounded',
           borderColor: palette.mauve,
           backgroundColor: palette.base,
           paddingTop: 1,
           paddingLeft: 1,
           paddingRight: 1,
-          flexDirection: "column",
+          flexDirection: 'column',
           gap: 1,
         }}
       >
@@ -62,7 +63,7 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
             rootOptions: { backgroundColor: palette.base },
             wrapperOptions: { backgroundColor: palette.base },
             viewportOptions: { backgroundColor: palette.base },
-            contentOptions: { backgroundColor: palette.base, flexDirection: "column" },
+            contentOptions: { backgroundColor: palette.base, flexDirection: 'column' },
             scrollbarOptions: {
               showArrows: false,
               trackOptions: {
@@ -80,8 +81,8 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
               <box
                 key={category}
                 style={{
-                  flexDirection: "column",
-                  width: "100%",
+                  flexDirection: 'column',
+                  width: '100%',
                   marginBottom: 1,
                 }}
               >
@@ -97,16 +98,16 @@ export function ShortcutsHelp({ theme, open, shortcuts }: ShortcutsHelpProps) {
                   <box
                     key={shortcut.id}
                     style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      width: "100%",
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      width: '100%',
                       height: 1,
                       paddingRight: 2,
                     }}
                   >
                     <text content={shortcut.description} style={{ fg: palette.text }} />
                     <text
-                      content={shortcut.bindings.map(formatKeyCombo).join(" ")}
+                      content={shortcut.bindings.map(formatKeyCombo).join(' ')}
                       style={{ fg: palette.lavender }}
                     />
                   </box>

@@ -1,14 +1,14 @@
-import { PersistedQueue } from "@effect/experimental";
-import { SqlPersistedQueue } from "@effect/sql";
-import { SqliteClient } from "@effect/sql-sqlite-bun";
-import { Cause, Config, Duration, Effect, Layer, Schema } from "effect";
+import { PersistedQueue } from '@effect/experimental';
+import { SqlPersistedQueue } from '@effect/sql';
+import { SqliteClient } from '@effect/sql-sqlite-bun';
+import { Cause, Config, Duration, Effect, Layer, Schema } from 'effect';
 
-import { IndexingWorkflowError } from "./errors";
-import { IndexingTriggerPayload } from "./schema";
-import { BoeIndexingWorkflow } from "./workflow";
+import { IndexingWorkflowError } from './errors';
+import { IndexingTriggerPayload } from './schema';
+import { BoeIndexingWorkflow } from './workflow';
 
 export class BoeIndexingQueueError extends Schema.TaggedError<BoeIndexingQueueError>()(
-  "BoeIndexingQueueError",
+  'BoeIndexingQueueError',
   {
     message: Schema.String,
     cause: Schema.optional(Schema.Unknown),
@@ -17,14 +17,14 @@ export class BoeIndexingQueueError extends Schema.TaggedError<BoeIndexingQueueEr
 
 export const BoeIndexingQueuePersistenceLayer = Layer.unwrapEffect(
   Config.all({
-    sqlitePath: Config.string("BOE_INDEXING_QUEUE_SQLITE_PATH").pipe(
-      Config.withDefault("./.canary-indexing-queue.sqlite"),
+    sqlitePath: Config.string('BOE_INDEXING_QUEUE_SQLITE_PATH').pipe(
+      Config.withDefault('./.canary-indexing-queue.sqlite'),
     ),
-    pollMs: Config.integer("BOE_INDEXING_QUEUE_POLL_MS").pipe(Config.withDefault(500)),
-    lockRefreshSeconds: Config.integer("BOE_INDEXING_QUEUE_LOCK_REFRESH_SECONDS").pipe(
+    pollMs: Config.integer('BOE_INDEXING_QUEUE_POLL_MS').pipe(Config.withDefault(500)),
+    lockRefreshSeconds: Config.integer('BOE_INDEXING_QUEUE_LOCK_REFRESH_SECONDS').pipe(
       Config.withDefault(30),
     ),
-    lockExpirationSeconds: Config.integer("BOE_INDEXING_QUEUE_LOCK_EXPIRATION_SECONDS").pipe(
+    lockExpirationSeconds: Config.integer('BOE_INDEXING_QUEUE_LOCK_EXPIRATION_SECONDS').pipe(
       Config.withDefault(180),
     ),
   }).pipe(
@@ -33,7 +33,7 @@ export const BoeIndexingQueuePersistenceLayer = Layer.unwrapEffect(
       PersistedQueue.layer.pipe(
         Layer.provide(
           SqlPersistedQueue.layerStore({
-            tableName: "boe_indexing_queue",
+            tableName: 'boe_indexing_queue',
             pollInterval: Duration.millis(pollMs),
             lockRefreshInterval: Duration.seconds(lockRefreshSeconds),
             lockExpiration: Duration.seconds(lockExpirationSeconds),
@@ -45,20 +45,20 @@ export const BoeIndexingQueuePersistenceLayer = Layer.unwrapEffect(
   ),
 );
 
-export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeIndexingQueue", {
+export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()('BoeIndexingQueue', {
   accessors: true,
   dependencies: [BoeIndexingWorkflow.Default, BoeIndexingQueuePersistenceLayer],
   scoped: Effect.gen(function* () {
-    const workerConcurrencyRaw = yield* Config.integer("BOE_INDEXING_QUEUE_CONCURRENCY").pipe(
+    const workerConcurrencyRaw = yield* Config.integer('BOE_INDEXING_QUEUE_CONCURRENCY').pipe(
       Config.withDefault(2),
       Effect.orDie,
     );
-    const maxAttemptsRaw = yield* Config.integer("BOE_INDEXING_QUEUE_MAX_ATTEMPTS").pipe(
+    const maxAttemptsRaw = yield* Config.integer('BOE_INDEXING_QUEUE_MAX_ATTEMPTS').pipe(
       Config.withDefault(6),
       Effect.orDie,
     );
     const enqueueConcurrencyRaw = yield* Config.integer(
-      "BOE_INDEXING_QUEUE_ENQUEUE_CONCURRENCY",
+      'BOE_INDEXING_QUEUE_ENQUEUE_CONCURRENCY',
     ).pipe(Config.withDefault(8), Effect.orDie);
 
     const queueWorkerConcurrency = Math.min(2, Math.max(1, workerConcurrencyRaw));
@@ -67,16 +67,16 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
 
     const indexingWorkflow = yield* BoeIndexingWorkflow;
     const queue = yield* PersistedQueue.make({
-      name: "boe-indexing",
+      name: 'boe-indexing',
       schema: IndexingTriggerPayload,
     });
 
     const makeIdempotencyKey = (payload: Schema.Schema.Type<typeof IndexingTriggerPayload>) =>
-      `${payload.versionId}:${payload.contentHash ?? "none"}`;
+      `${payload.versionId}:${payload.contentHash ?? 'none'}`;
 
     const summarizeCause = (cause: unknown): string => {
       if (cause instanceof IndexingWorkflowError) {
-        const inner = cause.cause === undefined ? "" : `: ${summarizeCause(cause.cause)}`;
+        const inner = cause.cause === undefined ? '' : `: ${summarizeCause(cause.cause)}`;
         return `${cause._tag}:${cause.stage}:${cause.message}${inner}`;
       }
       if (Cause.isCause(cause)) {
@@ -88,20 +88,20 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
       return String(cause);
     };
 
-    const enqueue = Effect.fn("BoeIndexingQueue.enqueue")(
+    const enqueue = Effect.fn('BoeIndexingQueue.enqueue')(
       (payload: Schema.Schema.Type<typeof IndexingTriggerPayload>) =>
         queue.offer(payload, { id: makeIdempotencyKey(payload) }).pipe(
           Effect.mapError(
             (cause) =>
               new BoeIndexingQueueError({
-                message: "Unable to enqueue BOE indexing payload",
+                message: 'Unable to enqueue BOE indexing payload',
                 cause,
               }),
           ),
         ),
     );
 
-    const enqueueMany = Effect.fn("BoeIndexingQueue.enqueueMany")(
+    const enqueueMany = Effect.fn('BoeIndexingQueue.enqueueMany')(
       (payloads: ReadonlyArray<Schema.Schema.Type<typeof IndexingTriggerPayload>>) =>
         Effect.forEach(payloads, enqueue, {
           discard: true,
@@ -117,9 +117,9 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
             indexingWorkflow.start(payload).pipe(
               Effect.tapError((cause) =>
                 Effect.logWarning(
-                  "Boe indexing durable queue worker failed; item will be retried",
+                  'Boe indexing durable queue worker failed; item will be retried',
                   {
-                    queue: "boe-indexing",
+                    queue: 'boe-indexing',
                     attempt: metadata.attempts + 1,
                     maxAttempts,
                     docId: payload.docId,
@@ -132,11 +132,11 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
             ),
           { maxAttempts },
         )
-        .pipe(Effect.catchTag("IndexingWorkflowError", () => Effect.void));
+        .pipe(Effect.catchTag('IndexingWorkflowError', () => Effect.void));
     }).pipe(
       Effect.catchAllCause((cause) =>
-        Effect.logWarning("Boe indexing durable queue take failed", {
-          queue: "boe-indexing",
+        Effect.logWarning('Boe indexing durable queue take failed', {
+          queue: 'boe-indexing',
           cause: String(cause),
         }),
       ),
@@ -148,7 +148,7 @@ export class BoeIndexingQueue extends Effect.Service<BoeIndexingQueue>()("BoeInd
       (_, workerIndex) =>
         Effect.forkScoped(
           worker.pipe(
-            Effect.withSpan("BoeIndexingQueue.worker", {
+            Effect.withSpan('BoeIndexingQueue.worker', {
               attributes: { workerIndex },
             }),
           ),

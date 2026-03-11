@@ -1,4 +1,4 @@
-export type RuntimeTransport = "sse" | "none";
+export type RuntimeTransport = 'sse' | 'none';
 
 export interface RuntimeOptions<TModel, TTools, TConversation, TLlmInput, TContext = unknown> {
   readonly model: TModel;
@@ -24,6 +24,6 @@ export function createRuntime<TModel, TTools, TConversation, TLlmInput, TContext
     tools: options.tools,
     convertToLlm: options.convertToLlm,
     transformContext: options.transformContext,
-    transport: options.transport ?? "sse",
+    transport: options.transport ?? 'sse',
   };
 }
