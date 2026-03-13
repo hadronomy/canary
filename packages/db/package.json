@@ -23,15 +23,15 @@
     "@effect/sql-pg": "^0.50.3",
     "dotenv": "catalog:",
     "drizzle-orm": "1.0.0-beta.15-90d1d1a",
-    "effect": "^3.19.16",
-    "pg": "^8.16.3",
+    "effect": "^3.19.19",
+    "pg": "^8.20.0",
     "pgvector": "^0.2.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "@types/bun": "^1.2.0",
-    "@types/pg": "^8.15.5",
+    "@types/bun": "^1.3.10",
+    "@types/pg": "^8.18.0",
     "drizzle-kit": "1.0.0-beta.15-90d1d1a",
     "typescript": "catalog:"
   }
