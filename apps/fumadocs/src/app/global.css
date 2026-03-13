@@ -1,3 +1,8 @@
 @import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/vitepress.css';
 @import 'fumadocs-ui/css/preset.css';
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-title: var(--font-geist-pixel-grid);
+}
