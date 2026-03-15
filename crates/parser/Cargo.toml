@@ -1,11 +1,26 @@
 [package]
-name              = "parser"
+name = "pdf-hierarchy"
 publish.workspace = true
 
-authors.workspace    = true
-edition.workspace    = true
-license.workspace    = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 repository.workspace = true
-version.workspace    = true
+version.workspace = true
 
 [dependencies]
+indextree.workspace = true
+pdf_oxide.workspace = true
+rayon = { workspace = true, optional = true }
+regex = "1.12.3"
+rushdown.workspace  = true
+serde.workspace     = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+insta = { version = "1.40", features = ["yaml"] }
+
+[features]
+default = []
+parallel = ["indextree/par_iter", "dep:rayon"]

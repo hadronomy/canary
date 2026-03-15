@@ -12,6 +12,12 @@ repository  = "https://github.com/hadronomy/ram"
 version     = "0.1.0-alpha.1"
 
 [workspace.dependencies]
+indextree = { version = "4.7", features = ["par_iter", "deser"] }
+pdf_oxide = "0.3"
+rayon     = "1.10"
+rushdown  = "0.9"
+serde     = { version = "1", features = ["derive"] }
+thiserror = "2"
 
 
 [profile.release]
