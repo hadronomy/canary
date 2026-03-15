@@ -49,3 +49,7 @@ coverage
 tmp
 temp.worktrees/
 *.sqlite*
+
+# Added by cargo
+
+/target
