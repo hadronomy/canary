@@ -3,8 +3,9 @@
 use indextree::NodeId;
 use regex::Regex;
 
-use crate::error::Result;
 use crate::tree::{DocumentNode, DocumentTree};
+
+type Transform = Box<dyn Fn(&str) -> Option<String>>;
 
 /// Resolves cross-references like "Section 1.2" or "#intro" to NodeIds
 ///
@@ -15,7 +16,11 @@ use crate::tree::{DocumentNode, DocumentTree};
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let parser = TreeParser::new();
-/// let tree = parser.parse_markdown("# Introduction\n## Methods")?;
+/// let xml = r#"<response><data><texto>
+///   <bloque id='intro' tipo='encabezado' titulo='Introduction'><version fecha_vigencia='20200101'><p class='titulo'>Introduction</p></version></bloque>
+///   <bloque id='methods' tipo='encabezado' titulo='Methods'><version fecha_vigencia='20200101'><p class='capitulo'>Methods</p></version></bloque>
+/// </texto></data></response>"#;
+/// let tree = parser.parse_xml(xml)?;
 /// let resolver = CrossRefResolver::new(&tree);
 ///
 /// // By anchor
@@ -28,10 +33,29 @@ use crate::tree::{DocumentNode, DocumentTree};
 /// ```
 pub struct CrossRefResolver<'a> {
     tree: &'a DocumentTree,
-    patterns: Vec<(Regex, Box<dyn Fn(&str) -> Option<String>>)>,
+    patterns: Vec<(Regex, Transform)>,
 }
 
 impl<'a> CrossRefResolver<'a> {
+    fn figure(&self, target: &str) -> Option<NodeId> {
+        let idx = target
+            .strip_prefix("fig-")
+            .and_then(|s| s.split('-').next())
+            .and_then(|s| s.parse::<usize>().ok())?;
+        if idx == 0 {
+            return None;
+        }
+        self.tree
+            .descendants(self.tree.root())
+            .filter(|&id| {
+                self.tree
+                    .get(id)
+                    .map(|node| matches!(node.kind, crate::tree::NodeKind::Image { .. }))
+                    .unwrap_or(false)
+            })
+            .nth(idx - 1)
+    }
+
     /// Create resolver for a tree
     pub fn new(tree: &'a DocumentTree) -> Self {
         let patterns = vec![
@@ -65,18 +89,20 @@ impl<'a> CrossRefResolver<'a> {
         let trimmed = reference.trim();
 
         for (regex, transform) in &self.patterns {
-            if let Some(caps) = regex.captures(trimmed) {
-                if let Some(m) = caps.get(1) {
-                    if let Some(target) = transform(m.as_str()) {
-                        // Try as anchor first
-                        if let Some(id) = self.tree.find_by_anchor(&target) {
-                            return Some(id);
-                        }
-                        // Try as path
-                        if let Ok(id) = self.tree.find_by_path(&target) {
-                            return Some(id);
-                        }
-                    }
+            if let Some(caps) = regex.captures(trimmed)
+                && let Some(m) = caps.get(1)
+                && let Some(target) = transform(m.as_str())
+            {
+                // Try as anchor first
+                if let Some(id) = self.tree.find_by_anchor(&target) {
+                    return Some(id);
+                }
+                // Try as path
+                if let Ok(id) = self.tree.find_by_path(&target) {
+                    return Some(id);
+                }
+                if let Some(id) = self.figure(&target) {
+                    return Some(id);
                 }
             }
         }
@@ -97,15 +123,21 @@ impl<'a> CrossRefResolver<'a> {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let parser = TreeParser::new();
-    /// let tree = parser.parse_markdown("# A\n## B\n### C")?;
+    /// let xml = r#"<response><data><texto>
+    ///   <bloque id='a' tipo='encabezado' titulo='A'><version fecha_vigencia='20200101'><p class='titulo'>A</p></version></bloque>
+    ///   <bloque id='b' tipo='encabezado' titulo='B'><version fecha_vigencia='20200101'><p class='capitulo'>B</p></version></bloque>
+    ///   <bloque id='c' tipo='encabezado' titulo='C'><version fecha_vigencia='20200101'><p class='seccion'>C</p><p class='parrafo'>Text</p></version></bloque>
+    /// </texto></data></response>"#;
+    /// let tree = parser.parse_xml(xml)?;
     /// let resolver = CrossRefResolver::new(&tree);
     ///
     /// let c_id = tree.find_by_anchor("c").unwrap();
     /// let crumbs = resolver.breadcrumbs(c_id);
     ///
-    /// assert_eq!(crumbs.len(), 2); // A and B (C is the node itself, not in breadcrumbs)
+    /// assert_eq!(crumbs.len(), 3);
     /// assert_eq!(crumbs[0].1, "A");
     /// assert_eq!(crumbs[1].1, "B");
+    /// assert_eq!(crumbs[2].1, "C");
     /// # Ok(())
     /// }
     pub fn breadcrumbs(&self, id: NodeId) -> Vec<(String, String)> {
@@ -153,52 +185,73 @@ impl<'a> CrossRefResolver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::TreeParser;
+
+    fn tree() -> DocumentTree {
+        let mut tree = DocumentTree::new();
+        let a = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
+        let b = tree.add_child(a, DocumentNode::section(2, "B"));
+        let c = tree.add_child(b, DocumentNode::section(3, "C"));
+        tree.add_child(c, DocumentNode::new(crate::tree::NodeKind::Paragraph, "Text"));
+        let fig = tree.add_child(
+            a,
+            DocumentNode {
+                kind: crate::tree::NodeKind::Image {
+                    url: "image.png".to_string(),
+                    alt: "Caption".to_string(),
+                },
+                anchor: Some("fig-caption".to_string()),
+                source_pos: None,
+                page_hint: None,
+                content: "Caption".to_string(),
+            },
+        );
+        tree.add_child(
+            b,
+            DocumentNode::new(
+                crate::tree::NodeKind::Link { url: "fig-caption".to_string(), title: None },
+                "ref".to_string(),
+            ),
+        );
+        assert!(tree.find_by_anchor("fig-caption").is_some());
+        assert_eq!(tree.find_by_anchor("fig-caption"), Some(fig));
+        tree
+    }
 
     #[test]
     fn test_resolve_anchor() {
-        let parser = TreeParser::new();
-        let tree = parser.parse_markdown("# Introduction\n## Methods").unwrap();
+        let tree = tree();
         let resolver = CrossRefResolver::new(&tree);
 
-        assert_eq!(resolver.resolve("#introduction"), tree.find_by_anchor("introduction"));
-        assert_eq!(resolver.resolve("#methods"), tree.find_by_anchor("methods"));
+        assert_eq!(resolver.resolve("#a"), tree.find_by_anchor("a"));
+        assert_eq!(resolver.resolve("#b"), tree.find_by_anchor("b"));
         assert!(resolver.resolve("#nonexistent").is_none());
     }
 
     #[test]
     fn test_resolve_section_path() {
-        let parser = TreeParser::new();
-        let tree = parser.parse_markdown("# First\n## Second\n### Third").unwrap();
+        let tree = tree();
         let resolver = CrossRefResolver::new(&tree);
 
-        assert_eq!(resolver.resolve("Section 1"), tree.find_by_path("1"));
-        assert_eq!(resolver.resolve("section 1.1"), tree.find_by_path("1.1"));
-        assert_eq!(resolver.resolve("Section 1.1.1"), tree.find_by_path("1.1.1"));
+        assert_eq!(resolver.resolve("Section 1"), tree.find_by_path("1").ok());
+        assert_eq!(resolver.resolve("section 1.1"), tree.find_by_path("1.1").ok());
+        assert_eq!(resolver.resolve("Section 1.1.1"), tree.find_by_path("1.1.1").ok());
     }
 
     #[test]
     fn test_resolve_figure() {
-        let parser = TreeParser::new();
-        let md = r#"# Doc
-![Caption](image.png)
-"#;
-        let tree = parser.parse_markdown(md).unwrap();
+        let tree = tree();
         let resolver = CrossRefResolver::new(&tree);
 
-        // Images get fig- anchors
         let fig_id = tree.find_by_anchor("fig-caption");
         assert!(fig_id.is_some());
 
-        // Should resolve via "Figure" reference
         assert_eq!(resolver.resolve("Figure 1"), fig_id);
         assert_eq!(resolver.resolve("Fig. 1"), fig_id);
     }
 
     #[test]
     fn test_breadcrumbs() {
-        let parser = TreeParser::new();
-        let tree = parser.parse_markdown("# A\n## B\n### C\nText").unwrap();
+        let tree = tree();
         let resolver = CrossRefResolver::new(&tree);
 
         let text_id = tree

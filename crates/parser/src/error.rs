@@ -5,16 +5,17 @@ use thiserror::Error;
 /// Result type alias for this crate
 pub type Result<T> = std::result::Result<T, DocumentError>;
 
+impl DocumentError {
+    pub fn xml(msg: impl Into<String>) -> Self {
+        Self::Xml(msg.into())
+    }
+}
+
 /// Errors that can occur during document processing
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum DocumentError {
-    /// PDF extraction failed
-    #[error("PDF extraction failed: {0}")]
-    Pdf(String),
-
-    /// Markdown parsing failed
-    #[error("Markdown parsing failed: {0}")]
-    Markdown(String),
+    #[error("XML parsing failed: {0}")]
+    Xml(String),
 
     /// Anchor not found in document
     #[error("Anchor not found: {0}")]
@@ -36,11 +37,5 @@ pub enum DocumentError {
 impl From<std::io::Error> for DocumentError {
     fn from(e: std::io::Error) -> Self {
         DocumentError::Io(e.to_string())
-    }
-}
-
-impl From<pdf_oxide::Error> for DocumentError {
-    fn from(e: pdf_oxide::Error) -> Self {
-        DocumentError::Pdf(e.to_string())
     }
 }

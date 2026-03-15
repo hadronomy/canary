@@ -1,26 +1,28 @@
 [package]
-name = "pdf-hierarchy"
+name              = "pdf-hierarchy"
 publish.workspace = true
 
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
+authors.workspace    = true
+edition.workspace    = true
+license.workspace    = true
 repository.workspace = true
-version.workspace = true
+version.workspace    = true
 
 [dependencies]
-indextree.workspace = true
-pdf_oxide.workspace = true
-rayon = { workspace = true, optional = true }
-regex = "1.12.3"
-rushdown.workspace  = true
-serde.workspace     = true
-thiserror.workspace = true
+chrono.workspace      = true
+deunicode.workspace   = true
+indextree.workspace   = true
+quick-xml.workspace   = true
+rayon                 = { workspace = true, optional = true }
+regex                 = "1.12.3"
+serde.workspace       = true
+thiserror.workspace   = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
+insta    = { version = "1.40", features = ["yaml"] }
 tempfile = "3"
-insta = { version = "1.40", features = ["yaml"] }
 
 [features]
-default = []
+default  = []
 parallel = ["indextree/par_iter", "dep:rayon"]

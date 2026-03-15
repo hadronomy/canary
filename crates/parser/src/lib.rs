@@ -1,6 +1,6 @@
 //! # pdf-hierarchy
 //!
-//! Parse PDF documents into hierarchical trees with stable anchor-based navigation.
+//! Parse XML documents into hierarchical trees with stable anchor-based navigation.
 //!
 //! ## Quick Start
 //!
@@ -9,7 +9,7 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let parser = TreeParser::new();
-//! let tree = parser.parse_file("document.pdf")?;
+//! let tree = parser.parse_xml_file("document.xml")?;
 //!
 //! // Find section by anchor
 //! if let Some(id) = tree.find_by_anchor("introduction") {
@@ -32,9 +32,10 @@ pub mod resolve;
 pub mod tree;
 
 pub use error::{DocumentError, Result};
+pub use indextree::NodeId;
 pub use parser::TreeParser;
 pub use resolve::CrossRefResolver;
-pub use tree::{ColumnAlign, DocumentNode, DocumentTree, NodeId, NodeKind};
+pub use tree::{ColumnAlign, DocumentNode, DocumentTree, NodeKind};
 
 #[cfg(feature = "parallel")]
 pub mod parallel;

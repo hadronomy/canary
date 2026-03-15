@@ -1,9 +1,13 @@
 //! Core tree data structures and navigation
 
 use std::collections::HashMap;
+use std::fmt;
+use std::ops::{Index, IndexMut};
 
+use deunicode::deunicode;
 use indextree::{Arena, NodeId};
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::error::{DocumentError, Result};
 
@@ -94,7 +98,7 @@ pub enum NodeKind {
 /// assert!(section.is_section());
 /// assert_eq!(section.anchor, Some("introduction".to_string()));
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentNode {
     /// Semantic type of this node
     pub kind: NodeKind,
@@ -102,7 +106,7 @@ pub struct DocumentNode {
     pub anchor: Option<String>,
     /// Source position in original text (start, end)
     pub source_pos: Option<(usize, usize)>,
-    /// Original PDF page number if available
+    /// Original source page number if available
     pub page_hint: Option<u32>,
     /// Text content of this node
     pub content: String,
@@ -161,12 +165,32 @@ impl DocumentNode {
     /// assert_eq!(DocumentNode::slugify("--trim--me--"), "trim-me");
     /// ```
     pub fn slugify(text: &str) -> String {
-        text.to_lowercase()
-            .replace(|c: char| !c.is_alphanumeric() && c != ' ', "-")
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
+        Self::slug(text.nfkc().flat_map(char::to_lowercase))
+    }
+
+    pub fn slugify_ascii(text: &str) -> String {
+        Self::slug(deunicode(text).chars().flat_map(char::to_lowercase))
+    }
+
+    fn slug(iter: impl Iterator<Item = char>) -> String {
+        let mut out = String::new();
+        let mut dash = false;
+        for ch in iter {
+            if ch.is_alphanumeric() {
+                out.push(ch);
+                dash = false;
+                continue;
+            }
+            if out.is_empty() || dash {
+                continue;
+            }
+            out.push('-');
+            dash = true;
+        }
+        if out.ends_with('-') {
+            out.pop();
+        }
+        out
     }
 
     /// Check if this node is a section (heading)
@@ -213,10 +237,12 @@ impl DocumentNode {
 ///
 /// Uses `indextree::Arena` internally, so NodeIds are valid for the
 /// lifetime of the DocumentTree.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentTree {
     arena: Arena<DocumentNode>,
     root: NodeId,
-    anchor_index: HashMap<String, NodeId>,
+    index: HashMap<String, NodeId>,
+    alias: HashMap<String, NodeId>,
 }
 
 impl DocumentTree {
@@ -240,7 +266,7 @@ impl DocumentTree {
             content: String::new(),
         });
 
-        Self { arena, root, anchor_index: HashMap::new() }
+        Self { arena, root, index: HashMap::new(), alias: HashMap::new() }
     }
 
     /// Get the root node ID
@@ -297,7 +323,11 @@ impl DocumentTree {
         parent.append(id, &mut self.arena);
 
         if let Some(a) = anchor {
-            self.anchor_index.insert(a, id);
+            self.index.entry(a.clone()).or_insert(id);
+            let alias = DocumentNode::slugify_ascii(&a);
+            if alias != a {
+                self.alias.entry(alias).or_insert(id);
+            }
         }
 
         id
@@ -318,7 +348,21 @@ impl DocumentTree {
     /// assert!(found.is_some());
     /// ```
     pub fn find_by_anchor(&self, anchor: &str) -> Option<NodeId> {
-        self.anchor_index.get(anchor).copied()
+        if let Some(id) = self.index.get(anchor) {
+            return Some(*id);
+        }
+        let slug = DocumentNode::slugify(anchor);
+        if let Some(id) = self.index.get(&slug) {
+            return Some(*id);
+        }
+        if let Some(id) = self.alias.get(&slug) {
+            return Some(*id);
+        }
+        let ascii = DocumentNode::slugify_ascii(anchor);
+        if let Some(id) = self.alias.get(&ascii) {
+            return Some(*id);
+        }
+        self.index.get(&ascii).copied()
     }
 
     /// Get anchor string for a node if it has one
@@ -343,10 +387,10 @@ impl DocumentTree {
     /// assert_eq!(tree.hierarchical_path(sec2), "1.1");
     /// ```
     pub fn hierarchical_path(&self, id: NodeId) -> String {
-        let mut indices = Vec::new();
+        let mut indices: Vec<usize> = Vec::new();
         let mut current = id;
 
-        while let Some(parent) = current.parent(&self.arena) {
+        while let Some(parent) = current.ancestors(&self.arena).nth(1) {
             let idx = parent.children(&self.arena).position(|c| c == current).unwrap_or(0);
             indices.push(idx + 1);
             current = parent;
@@ -363,10 +407,10 @@ impl DocumentTree {
 
     /// Get path as zero-indexed vector (useful for sorting)
     pub fn path_vec(&self, id: NodeId) -> Vec<usize> {
-        let mut indices = Vec::new();
+        let mut indices: Vec<usize> = Vec::new();
         let mut current = id;
 
-        while let Some(parent) = current.parent(&self.arena) {
+        while let Some(parent) = current.ancestors(&self.arena).nth(1) {
             let idx = parent.children(&self.arena).position(|c| c == current).unwrap_or(0);
             indices.push(idx);
             current = parent;
@@ -481,7 +525,9 @@ impl DocumentTree {
     /// assert_eq!(tree.parent_section(para).unwrap(), sec);
     /// ```
     pub fn parent_section(&self, id: NodeId) -> Option<NodeId> {
-        self.ancestors(id).find(|&aid| self.get(aid).map(|n| n.is_section()).unwrap_or(false))
+        self.ancestors(id)
+            .skip(1)
+            .find(|&aid| self.get(aid).map(|n| n.is_section()).unwrap_or(false))
     }
 
     /// Extract all text content from a subtree
@@ -525,14 +571,9 @@ impl DocumentTree {
                     ));
                 }
                 NodeKind::Paragraph if !node.content.is_empty() => {
-                    let preview = if node.content.len() > 40 {
-                        format!("{}...", &node.content[..40])
-                    } else {
-                        node.content.clone()
-                    };
                     output.push_str(&format!(
                         "{}[{}]{} P: {}\n",
-                        indent, path, anchor_display, preview
+                        indent, path, anchor_display, node.content
                     ));
                 }
                 _ => {
@@ -559,6 +600,56 @@ impl Default for DocumentTree {
     }
 }
 
+impl fmt::Display for DocumentTree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.debug_tree())
+    }
+}
+
+impl AsRef<Arena<DocumentNode>> for DocumentTree {
+    fn as_ref(&self) -> &Arena<DocumentNode> {
+        &self.arena
+    }
+}
+
+impl AsMut<Arena<DocumentNode>> for DocumentTree {
+    fn as_mut(&mut self) -> &mut Arena<DocumentNode> {
+        &mut self.arena
+    }
+}
+
+impl Index<NodeId> for DocumentTree {
+    type Output = DocumentNode;
+
+    fn index(&self, id: NodeId) -> &Self::Output {
+        self.arena[id].get()
+    }
+}
+
+impl IndexMut<NodeId> for DocumentTree {
+    fn index_mut(&mut self, id: NodeId) -> &mut Self::Output {
+        self.arena[id].get_mut()
+    }
+}
+
+impl<'a> IntoIterator for &'a DocumentTree {
+    type Item = NodeId;
+    type IntoIter = indextree::Descendants<'a, DocumentNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.root.descendants(&self.arena)
+    }
+}
+
+impl<'a> IntoIterator for &'a mut DocumentTree {
+    type Item = NodeId;
+    type IntoIter = indextree::Descendants<'a, DocumentNode>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.root.descendants(&self.arena)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -569,6 +660,8 @@ mod tests {
         assert_eq!(DocumentNode::slugify("Section 1.2.3"), "section-1-2-3");
         assert_eq!(DocumentNode::slugify("  Trim  Me  "), "trim-me");
         assert_eq!(DocumentNode::slugify("UPPERCASE"), "uppercase");
+        assert_eq!(DocumentNode::slugify("TÍTULO PRELIMINAR"), "título-preliminar");
+        assert_eq!(DocumentNode::slugify_ascii("TÍTULO PRELIMINAR"), "titulo-preliminar");
     }
 
     #[test]
@@ -599,9 +692,12 @@ mod tests {
         let mut tree = DocumentTree::new();
         tree.add_child(tree.root(), DocumentNode::section(1, "Introduction"));
         tree.add_child(tree.root(), DocumentNode::section(1, "Results"));
+        tree.add_child(tree.root(), DocumentNode::section(1, "TÍTULO PRELIMINAR"));
 
         assert!(tree.find_by_anchor("introduction").is_some());
         assert!(tree.find_by_anchor("results").is_some());
+        assert!(tree.find_by_anchor("título-preliminar").is_some());
+        assert!(tree.find_by_anchor("titulo-preliminar").is_some());
         assert!(tree.find_by_anchor("nonexistent").is_none());
     }
 

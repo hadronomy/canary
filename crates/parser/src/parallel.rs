@@ -3,7 +3,7 @@
 use indextree::NodeId;
 use rayon::prelude::*;
 
-use crate::tree::{DocumentNode, DocumentTree, NodeKind};
+use crate::tree::{DocumentTree, NodeKind};
 
 /// Parallel operations for DocumentTree
 pub trait ParallelTreeOps {
@@ -49,15 +49,15 @@ impl ParallelTreeOps for DocumentTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::TreeParser;
+    use crate::DocumentNode;
 
     #[test]
     #[cfg(feature = "parallel")]
     fn test_par_sections() {
-        let parser = TreeParser::new();
-        let md =
-            (1..=100).map(|i| format!("# Section {}\n\nText", i)).collect::<Vec<_>>().join("\n");
-        let tree = parser.parse_markdown(&md).unwrap();
+        let mut tree = DocumentTree::new();
+        for i in 1..=100 {
+            tree.add_child(tree.root(), DocumentNode::section(1, format!("Section {i}")));
+        }
 
         let sections = tree.par_sections();
         assert_eq!(sections.len(), 100);
