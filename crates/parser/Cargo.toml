@@ -1,11 +1,11 @@
 [package]
-name = "parser"
+name              = "parser"
 publish.workspace = true
 
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
+authors.workspace    = true
+edition.workspace    = true
+license.workspace    = true
 repository.workspace = true
-version.workspace = true
+version.workspace    = true
 
 [dependencies]

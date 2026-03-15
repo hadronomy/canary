@@ -1,4 +1,4 @@
 [tools]
 "cargo:cargo-nextest" = "latest"
-just = "latest"
-taplo = { version = "latest", matching = "full" }
+just                  = "latest"
+taplo                 = { version = "latest", matching = "full" }

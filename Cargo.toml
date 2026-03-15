@@ -1,25 +1,25 @@
 [workspace]
-members = ["crates/*"]
+members  = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-authors = ["Pablo Hernandez <hadronomy@gmail.com> (https://hadronomy.com/)"]
+authors     = ["Pablo Hernandez <hadronomy@gmail.com> (https://hadronomy.com/)"]
 description = "Language tools for the `ram` language"
-edition = "2024"
-license = "MIT"
-publish = false
-repository = "https://github.com/hadronomy/ram"
-version = "0.1.0-alpha.1"
+edition     = "2024"
+license     = "MIT"
+publish     = false
+repository  = "https://github.com/hadronomy/ram"
+version     = "0.1.0-alpha.1"
 
 [workspace.dependencies]
 
 
 [profile.release]
-debug = 1
+debug       = 1
 incremental = true
-lto = true
-opt-level = 3
-strip = "none"
+lto         = true
+opt-level   = 3
+strip       = "none"
 
 [profile.bench]
 debug = true
