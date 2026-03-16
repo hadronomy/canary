@@ -871,10 +871,10 @@ mod tests {
         let art = tree.find_by_anchor("artículo-1").unwrap();
         let mut found_divider = false;
         for child in tree.children(art) {
-            if let Some(node) = tree.get(child) {
-                if matches!(node.kind, NodeKind::ThematicBreak) {
-                    found_divider = true;
-                }
+            if let Some(node) = tree.get(child)
+                && matches!(node.kind, NodeKind::ThematicBreak)
+            {
+                found_divider = true;
             }
         }
         assert!(found_divider);
