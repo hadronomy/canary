@@ -133,7 +133,7 @@ fn print_anchors(tree: &DocumentTree, n: usize) {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = xml();
     let n = limit();
-    let tree = TreeParser::new().parse_file(&path)?;
+    let tree = TreeParser::new().parse_xml_file(&path)?;
 
     println!("XML: {}", path.display());
     println!("top_limit: {}", n);
