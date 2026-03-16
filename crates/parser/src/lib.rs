@@ -28,6 +28,7 @@
 
 pub mod error;
 pub mod parser;
+pub mod render;
 pub mod resolve;
 pub mod tree;
 
@@ -48,6 +49,8 @@ impl NodeId {
 
 pub use error::{DocumentError, Result};
 pub use parser::TreeParser;
+pub use render::markdown::MarkdownWriter;
+pub use render::writer::TreeWriter;
 pub use resolve::CrossRefResolver;
 pub use tree::{
     ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, NodeKind, SectionEntry,
