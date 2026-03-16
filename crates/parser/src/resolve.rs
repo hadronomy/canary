@@ -50,7 +50,7 @@ impl<'a> CrossRefResolver<'a> {
             .filter(|&id| {
                 self.tree
                     .get(id)
-                    .map(|node| matches!(node.kind, crate::tree::NodeKind::Image { .. }))
+                    .map(|node| matches!(node.kind, crate::tree::NodeKind::Image))
                     .unwrap_or(false)
             })
             .nth(idx - 1)
@@ -147,10 +147,7 @@ impl<'a> CrossRefResolver<'a> {
             .filter_map(|aid| {
                 let node = self.tree.get(aid)?;
                 let anchor = node.anchor.clone()?;
-                let title = match &node.kind {
-                    crate::tree::NodeKind::Section { title, .. } => title.clone(),
-                    _ => node.content.clone(),
-                };
+                let title = node.content.clone();
                 Some((anchor, title))
             })
             .collect::<Vec<_>>()
@@ -170,11 +167,10 @@ impl<'a> CrossRefResolver<'a> {
                 self.tree
                     .get(id)
                     .map(|node| {
-                        if let crate::tree::NodeKind::Link { url, .. } = &node.kind {
-                            url == target_anchor || url == &format!("#{}", target_anchor)
-                        } else {
-                            false
-                        }
+                        node.link_url().is_some_and(|url| {
+                            let hash = format!("#{}", target_anchor);
+                            url == target_anchor || url == hash.as_str()
+                        })
                     })
                     .unwrap_or(false)
             })
@@ -194,23 +190,12 @@ mod tests {
         tree.add_child(c, DocumentNode::new(crate::tree::NodeKind::Paragraph, "Text"));
         let fig = tree.add_child(
             a,
-            DocumentNode {
-                kind: crate::tree::NodeKind::Image {
-                    url: "image.png".to_string(),
-                    alt: "Caption".to_string(),
-                },
-                anchor: Some("fig-caption".to_string()),
-                source_pos: None,
-                page_hint: None,
-                content: "Caption".to_string(),
-            },
+            DocumentNode::image("image.png", "Caption"),
         );
+        let _ = tree.set_anchor(fig, Some("fig-caption".to_string()));
         tree.add_child(
             b,
-            DocumentNode::new(
-                crate::tree::NodeKind::Link { url: "fig-caption".to_string(), title: None },
-                "ref".to_string(),
-            ),
+            DocumentNode::link("fig-caption", None, "ref"),
         );
         assert!(tree.find_by_anchor("fig-caption").is_some());
         assert_eq!(tree.find_by_anchor("fig-caption"), Some(fig));

@@ -28,16 +28,16 @@ fn kind(kind: &NodeKind) -> &'static str {
         NodeKind::Paragraph => "paragraph",
         NodeKind::List { .. } => "list",
         NodeKind::ListItem => "list_item",
-        NodeKind::CodeBlock { .. } => "code_block",
+        NodeKind::CodeBlock => "code_block",
         NodeKind::BlockQuote => "blockquote",
-        NodeKind::Table { .. } => "table",
+        NodeKind::Table => "table",
         NodeKind::TableRow => "table_row",
         NodeKind::TableCell => "table_cell",
-        NodeKind::Text(_) => "text",
+        NodeKind::Text => "text",
         NodeKind::Strong => "strong",
         NodeKind::Emphasis => "emphasis",
-        NodeKind::Link { .. } => "link",
-        NodeKind::Image { .. } => "image",
+        NodeKind::Link => "link",
+        NodeKind::Image => "image",
         NodeKind::ThematicBreak => "thematic_break",
     }
 }
@@ -75,13 +75,9 @@ fn print_sections(tree: &DocumentTree, n: usize) {
     let mut rows = tree
         .sections()
         .into_iter()
-        .filter_map(|(id, _, path, level)| {
-            let node = tree.get(id)?;
-            let title = match &node.kind {
-                NodeKind::Section { title, .. } => title.clone(),
-                _ => String::new(),
-            };
-            Some((id, title, path, level, span(tree, id)))
+        .filter_map(|it| {
+            let node = tree.get(it.id)?;
+            Some((it.id, node.content.clone(), it.path, it.level, span(tree, it.id)))
         })
         .collect::<Vec<_>>();
 

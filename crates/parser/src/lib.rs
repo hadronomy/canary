@@ -35,7 +35,9 @@ pub use error::{DocumentError, Result};
 pub use indextree::NodeId;
 pub use parser::TreeParser;
 pub use resolve::CrossRefResolver;
-pub use tree::{ColumnAlign, DocumentNode, DocumentTree, NodeKind};
+pub use tree::{
+    ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, NodeKind, NodeMeta, SectionEntry,
+};
 
 #[cfg(feature = "parallel")]
 pub mod parallel;

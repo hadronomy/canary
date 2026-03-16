@@ -535,7 +535,7 @@ pub struct TreeParser {
 
 impl TreeParser {
     /// Decodes UTF-8 bytes into XML text.
-    fn decode<'a>(bytes: &'a [u8]) -> Result<&'a str> {
+    fn decode(bytes: &[u8]) -> Result<&str> {
         std::str::from_utf8(bytes)
             .map_err(|e| DocumentError::xml(format!("decode: invalid UTF-8 bytes: {e}")))
     }
@@ -619,13 +619,7 @@ impl TreeParser {
                 let pid =
                     tree.add_child(id, DocumentNode::new(NodeKind::Paragraph, value.to_string()));
                 for reference in &para.refs {
-                    tree.add_child(
-                        pid,
-                        DocumentNode::new(
-                            NodeKind::Link { url: reference.clone(), title: None },
-                            reference.clone(),
-                        ),
-                    );
+                    tree.add_child(pid, DocumentNode::link(reference.clone(), None, reference));
                 }
             }
         }

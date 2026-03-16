@@ -3,31 +3,34 @@
 use indextree::NodeId;
 use rayon::prelude::*;
 
-use crate::tree::{DocumentTree, NodeKind};
+use crate::tree::{DocumentTree, NodeKind, SectionEntry};
 
 /// Parallel operations for DocumentTree
 pub trait ParallelTreeOps {
     /// Extract sections in parallel
-    fn par_sections(&self) -> Vec<(NodeId, String, String, u8)>;
+    fn par_sections(&self) -> Vec<SectionEntry>;
 
     /// Parallel text extraction (aggregate)
     fn par_extract_all_text(&self) -> Vec<(NodeId, String)>;
 }
 
 impl ParallelTreeOps for DocumentTree {
-    fn par_sections(&self) -> Vec<(NodeId, String, String, u8)> {
+    fn par_sections(&self) -> Vec<SectionEntry> {
         let nodes: Vec<NodeId> = self.descendants(self.root()).collect();
 
         nodes
             .into_par_iter()
             .filter_map(|id| {
                 let node = self.get(id)?;
-                if let NodeKind::Section { level, .. } = &node.kind {
-                    let path = self.hierarchical_path(id);
-                    let anchor = node.anchor.clone().unwrap_or_default();
-                    Some((id, anchor, path, *level))
-                } else {
+                if !matches!(node.kind, NodeKind::Section { .. }) {
                     None
+                } else {
+                    Some(SectionEntry {
+                        id,
+                        anchor: node.anchor.clone().unwrap_or_default(),
+                        path: self.hierarchical_path(id),
+                        level: node.section_level().unwrap_or(0),
+                    })
                 }
             })
             .collect()

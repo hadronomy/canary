@@ -2,7 +2,8 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::{Index, IndexMut};
+use std::fmt::Write;
+use std::ops::{Index, Range};
 
 use deunicode::deunicode;
 use indextree::{Arena, NodeId};
@@ -20,12 +21,12 @@ pub enum ColumnAlign {
     Center,
     /// Right-aligned
     Right,
-    /// No alignment specified
-    None,
 }
 
+pub type ColumnAlignment = Option<ColumnAlign>;
+
 /// Semantic types for document nodes
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum NodeKind {
     /// Root document container
     Root,
@@ -33,8 +34,6 @@ pub enum NodeKind {
     Section {
         /// Heading level (H1 = 1, H6 = 6)
         level: u8,
-        /// Section title
-        title: String,
     },
     /// Paragraph block
     Paragraph,
@@ -48,43 +47,35 @@ pub enum NodeKind {
     /// List item
     ListItem,
     /// Code block
-    CodeBlock {
-        /// Programming language identifier
-        language: Option<String>,
-    },
+    CodeBlock,
     /// Block quotation
     BlockQuote,
     /// Table container
-    Table {
-        /// Column alignments
-        alignments: Vec<ColumnAlign>,
-    },
+    Table,
     /// Table row
     TableRow,
     /// Table cell
     TableCell,
     /// Inline text
-    Text(String),
+    Text,
     /// Strong emphasis (bold)
     Strong,
     /// Emphasis (italic)
     Emphasis,
     /// Hyperlink
-    Link {
-        /// URL destination
-        url: String,
-        /// Optional title attribute
-        title: Option<String>,
-    },
+    Link,
     /// Image
-    Image {
-        /// Source URL
-        url: String,
-        /// Alt text
-        alt: String,
-    },
+    Image,
     /// Horizontal rule
     ThematicBreak,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeMeta {
+    Link { url: String, title: Option<String> },
+    Image { url: String, alt: String },
+    CodeBlock { language: Option<String> },
+    Table { alignments: Vec<ColumnAlignment> },
 }
 
 /// A node in the document tree
@@ -104,12 +95,12 @@ pub struct DocumentNode {
     pub kind: NodeKind,
     /// Stable anchor ID for linking (e.g., "introduction")
     pub anchor: Option<String>,
-    /// Source position in original text (start, end)
-    pub source_pos: Option<(usize, usize)>,
+    pub source_pos: Option<Range<usize>>,
     /// Original source page number if available
     pub page_hint: Option<u32>,
     /// Text content of this node
     pub content: String,
+    pub meta: Option<NodeMeta>,
 }
 
 impl DocumentNode {
@@ -124,8 +115,43 @@ impl DocumentNode {
     /// assert_eq!(node.content, "Hello world");
     /// assert!(node.anchor.is_none());
     /// ```
+    #[must_use]
     pub fn new(kind: NodeKind, content: impl Into<String>) -> Self {
-        Self { kind, anchor: None, source_pos: None, page_hint: None, content: content.into() }
+        Self {
+            kind,
+            anchor: None,
+            source_pos: None,
+            page_hint: None,
+            content: content.into(),
+            meta: None,
+        }
+    }
+
+    /// Create a link node with URL/title metadata and visible content.
+    #[must_use]
+    pub fn link(url: impl Into<String>, title: Option<String>, content: impl Into<String>) -> Self {
+        Self {
+            kind: NodeKind::Link,
+            anchor: None,
+            source_pos: None,
+            page_hint: None,
+            content: content.into(),
+            meta: Some(NodeMeta::Link { url: url.into(), title }),
+        }
+    }
+
+    /// Create an image node from source URL and alt text.
+    #[must_use]
+    pub fn image(url: impl Into<String>, alt: impl Into<String>) -> Self {
+        let alt = alt.into();
+        Self {
+            kind: NodeKind::Image,
+            anchor: None,
+            source_pos: None,
+            page_hint: None,
+            content: alt.clone(),
+            meta: Some(NodeMeta::Image { url: url.into(), alt }),
+        }
     }
 
     /// Create a section node with auto-generated anchor
@@ -142,14 +168,16 @@ impl DocumentNode {
     /// assert_eq!(sec.anchor, Some("getting-started".to_string()));
     /// assert!(matches!(sec.kind, pdf_hierarchy::NodeKind::Section { level: 2, .. }));
     /// ```
+    #[must_use]
     pub fn section(level: u8, title: impl AsRef<str>) -> Self {
         let title = title.as_ref();
         Self {
-            kind: NodeKind::Section { level, title: title.to_string() },
+            kind: NodeKind::Section { level },
             anchor: Some(Self::slugify(title)),
             source_pos: None,
             page_hint: None,
             content: title.to_string(),
+            meta: None,
         }
     }
 
@@ -164,10 +192,13 @@ impl DocumentNode {
     /// assert_eq!(DocumentNode::slugify("Section 1.2.3"), "section-1-2-3");
     /// assert_eq!(DocumentNode::slugify("--trim--me--"), "trim-me");
     /// ```
+    #[must_use]
     pub fn slugify(text: &str) -> String {
         Self::slug(text.nfkc().flat_map(char::to_lowercase))
     }
 
+    /// Generate an ASCII-transliterated URL-safe slug from text.
+    #[must_use]
     pub fn slugify_ascii(text: &str) -> String {
         Self::slug(deunicode(text).chars().flat_map(char::to_lowercase))
     }
@@ -203,8 +234,15 @@ impl DocumentNode {
     /// assert!(DocumentNode::section(1, "Title").is_section());
     /// assert!(!DocumentNode::new(NodeKind::Paragraph, "text").is_section());
     /// ```
+    #[inline]
     pub fn is_section(&self) -> bool {
         matches!(self.kind, NodeKind::Section { .. })
+    }
+
+    /// Return section title when this node is a section.
+    #[inline]
+    pub fn section_title(&self) -> Option<&str> {
+        self.is_section().then_some(self.content.as_str())
     }
 
     /// Get section level if this is a section, None otherwise
@@ -220,9 +258,34 @@ impl DocumentNode {
     /// let h3 = DocumentNode::section(3, "Deep");
     /// assert_eq!(h3.section_level(), Some(3));
     /// ```
+    #[inline]
     pub fn section_level(&self) -> Option<u8> {
-        match &self.kind {
-            NodeKind::Section { level, .. } => Some(*level),
+        match self.kind {
+            NodeKind::Section { level } => Some(level),
+            _ => None,
+        }
+    }
+
+    /// Return link URL when this node is a link.
+    #[inline]
+    pub fn link_url(&self) -> Option<&str> {
+        if !matches!(self.kind, NodeKind::Link) {
+            return None;
+        }
+        match &self.meta {
+            Some(NodeMeta::Link { url, .. }) => Some(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Return image URL when this node is an image.
+    #[inline]
+    pub fn image_url(&self) -> Option<&str> {
+        if !matches!(self.kind, NodeKind::Image) {
+            return None;
+        }
+        match &self.meta {
+            Some(NodeMeta::Image { url, .. }) => Some(url.as_str()),
             _ => None,
         }
     }
@@ -245,6 +308,14 @@ pub struct DocumentTree {
     alias: HashMap<String, NodeId>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SectionEntry {
+    pub id: NodeId,
+    pub anchor: String,
+    pub path: String,
+    pub level: u8,
+}
+
 impl DocumentTree {
     /// Create a new empty document tree with a root node
     ///
@@ -256,6 +327,7 @@ impl DocumentTree {
     /// let tree = DocumentTree::new();
     /// assert_eq!(tree.hierarchical_path(tree.root()), "root");
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         let mut arena = Arena::new();
         let root = arena.new_node(DocumentNode {
@@ -264,12 +336,14 @@ impl DocumentTree {
             source_pos: None,
             page_hint: None,
             content: String::new(),
+            meta: None,
         });
 
         Self { arena, root, index: HashMap::new(), alias: HashMap::new() }
     }
 
     /// Get the root node ID
+    #[inline]
     pub fn root(&self) -> NodeId {
         self.root
     }
@@ -279,9 +353,30 @@ impl DocumentTree {
         &self.arena
     }
 
-    /// Access mutable arena (careful: breaks invariants if misused)
-    pub fn arena_mut(&mut self) -> &mut Arena<DocumentNode> {
+    /// Return total nodes currently stored in the arena.
+    #[inline]
+    pub fn node_count(&self) -> usize {
+        self.arena.count()
+    }
+
+    /// Mutable arena access for advanced operations.
+    ///
+    /// Caller is responsible for calling `rebuild_index` if anchors change.
+    pub fn arena_mut_unchecked(&mut self) -> &mut Arena<DocumentNode> {
         &mut self.arena
+    }
+
+    /// Rebuild anchor indexes from current arena contents.
+    pub fn rebuild_index(&mut self) {
+        self.index.clear();
+        self.alias.clear();
+        let ids = self.root.descendants(&self.arena).collect::<Vec<_>>();
+        for id in ids {
+            let anchor = self.get(id).and_then(|n| n.anchor.clone());
+            if let Some(anchor) = anchor {
+                self.put_anchor(id, &anchor);
+            }
+        }
     }
 
     /// Get reference to node data by ID
@@ -299,9 +394,61 @@ impl DocumentTree {
         self.arena.get(id).map(|n| n.get())
     }
 
-    /// Get mutable reference to node data
-    pub fn get_mut(&mut self, id: NodeId) -> Option<&mut DocumentNode> {
-        self.arena.get_mut(id).map(|n| n.get_mut())
+    /// Set node anchor while keeping indexes consistent.
+    ///
+    /// Returns `false` when `id` is not present in this tree.
+    #[must_use]
+    pub fn set_anchor(&mut self, id: NodeId, anchor: Option<String>) -> bool {
+        let (old, new) = {
+            let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
+                return false;
+            };
+            let old = node.anchor.take();
+            node.anchor = anchor;
+            let new = node.anchor.clone();
+            (old, new)
+        };
+
+        if let Some(old) = old {
+            self.drop_anchor(id, &old);
+        }
+        if let Some(new) = new {
+            self.put_anchor(id, &new);
+        }
+        true
+    }
+
+    /// Mutate a node and re-sync anchor indexes when anchor changes.
+    ///
+    /// Returns `false` when `id` is not present in this tree.
+    #[must_use]
+    pub fn update<F>(&mut self, id: NodeId, f: F) -> bool
+    where
+        F: FnOnce(&mut DocumentNode),
+    {
+        let (old, new) = {
+            let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
+                return false;
+            };
+            let old = node.anchor.clone();
+            f(node);
+            if old.as_ref() == node.anchor.as_ref() {
+                return true;
+            }
+            let new = node.anchor.clone();
+            (old, new)
+        };
+
+        if old == new {
+            return true;
+        }
+        if let Some(old) = old {
+            self.drop_anchor(id, &old);
+        }
+        if let Some(new) = new {
+            self.put_anchor(id, &new);
+        }
+        true
     }
 
     /// Add a child node to a parent, updating anchor index
@@ -322,18 +469,18 @@ impl DocumentTree {
         let id = self.arena.new_node(node);
         parent.append(id, &mut self.arena);
 
-        if let Some(a) = anchor {
-            self.index.entry(a.clone()).or_insert(id);
-            let alias = DocumentNode::slugify_ascii(&a);
-            if alias != a {
-                self.alias.entry(alias).or_insert(id);
-            }
+        if let Some(anchor) = anchor {
+            self.put_anchor(id, &anchor);
         }
 
         id
     }
 
-    /// Find node by anchor (O(1) lookup)
+    /// Find node by anchor.
+    ///
+    /// Tries exact match, then Unicode-normalized slug, then
+    /// ASCII-transliterated slug. Each form is checked against
+    /// both the primary index and the alias map.
     ///
     /// # Examples
     ///
@@ -347,27 +494,62 @@ impl DocumentTree {
     /// let found = tree.find_by_anchor("methodology");
     /// assert!(found.is_some());
     /// ```
-    pub fn find_by_anchor(&self, anchor: &str) -> Option<NodeId> {
-        if let Some(id) = self.index.get(anchor) {
-            return Some(*id);
+    #[must_use]
+    pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
+        let lookup = |key: &str| self.index.get(key).or_else(|| self.alias.get(key)).copied();
+
+        if let Some(id) = lookup(query) {
+            return Some(id);
         }
-        let slug = DocumentNode::slugify(anchor);
-        if let Some(id) = self.index.get(&slug) {
-            return Some(*id);
+
+        let slug = DocumentNode::slugify(query);
+        if slug != query
+            && let Some(id) = lookup(&slug)
+        {
+            return Some(id);
         }
-        if let Some(id) = self.alias.get(&slug) {
-            return Some(*id);
+
+        let ascii = DocumentNode::slugify_ascii(query);
+        if ascii != query && ascii != slug {
+            return lookup(&ascii);
         }
-        let ascii = DocumentNode::slugify_ascii(anchor);
-        if let Some(id) = self.alias.get(&ascii) {
-            return Some(*id);
-        }
-        self.index.get(&ascii).copied()
+
+        None
     }
 
     /// Get anchor string for a node if it has one
     pub fn get_anchor(&self, id: NodeId) -> Option<&str> {
         self.get(id).and_then(|n| n.anchor.as_deref())
+    }
+
+    fn put_anchor(&mut self, id: NodeId, anchor: &str) {
+        self.index.entry(anchor.to_string()).or_insert(id);
+        let alias = DocumentNode::slugify_ascii(anchor);
+        if alias != anchor {
+            self.alias.entry(alias).or_insert(id);
+        }
+    }
+
+    fn drop_anchor(&mut self, id: NodeId, anchor: &str) {
+        if self.index.get(anchor) == Some(&id) {
+            self.index.remove(anchor);
+        }
+        let alias = DocumentNode::slugify_ascii(anchor);
+        if self.alias.get(&alias) == Some(&id) {
+            self.alias.remove(&alias);
+        }
+    }
+
+    fn child_indices(&self, id: NodeId) -> Vec<usize> {
+        let mut out = Vec::new();
+        let mut current = id;
+        while let Some(parent) = self.arena[current].parent() {
+            let idx = parent.children(&self.arena).position(|child| child == current).unwrap_or(0);
+            out.push(idx);
+            current = parent;
+        }
+        out.reverse();
+        out
     }
 
     /// Generate hierarchical path string (e.g., "1.2.3")
@@ -386,38 +568,20 @@ impl DocumentTree {
     /// assert_eq!(tree.hierarchical_path(sec1), "1");
     /// assert_eq!(tree.hierarchical_path(sec2), "1.1");
     /// ```
+    #[must_use]
     pub fn hierarchical_path(&self, id: NodeId) -> String {
-        let mut indices: Vec<usize> = Vec::new();
-        let mut current = id;
-
-        while let Some(parent) = current.ancestors(&self.arena).nth(1) {
-            let idx = parent.children(&self.arena).position(|c| c == current).unwrap_or(0);
-            indices.push(idx + 1);
-            current = parent;
-        }
-
-        indices.reverse();
-
+        let indices = self.child_indices(id);
         if indices.is_empty() {
             "root".to_string()
         } else {
-            indices.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(".")
+            indices.iter().map(|n| (n + 1).to_string()).collect::<Vec<_>>().join(".")
         }
     }
 
     /// Get path as zero-indexed vector (useful for sorting)
+    #[must_use]
     pub fn path_vec(&self, id: NodeId) -> Vec<usize> {
-        let mut indices: Vec<usize> = Vec::new();
-        let mut current = id;
-
-        while let Some(parent) = current.ancestors(&self.arena).nth(1) {
-            let idx = parent.children(&self.arena).position(|c| c == current).unwrap_or(0);
-            indices.push(idx);
-            current = parent;
-        }
-
-        indices.reverse();
-        indices
+        self.child_indices(id)
     }
 
     /// Iterate all descendants of a node (pre-order)
@@ -435,7 +599,6 @@ impl DocumentTree {
         node.children(&self.arena)
     }
 
-    /// Get all sections (headings) with (id, anchor, path, level)
     ///
     /// # Examples
     ///
@@ -450,17 +613,20 @@ impl DocumentTree {
     /// let sections = tree.sections();
     /// assert_eq!(sections.len(), 3);
     /// ```
-    pub fn sections(&self) -> Vec<(NodeId, String, String, u8)> {
+    #[must_use]
+    pub fn sections(&self) -> Vec<SectionEntry> {
         self.descendants(self.root)
             .filter_map(|id| {
                 let node = self.get(id)?;
-                if let NodeKind::Section { level, .. } = &node.kind {
-                    let path = self.hierarchical_path(id);
-                    let anchor = node.anchor.clone().unwrap_or_default();
-                    Some((id, anchor, path, *level))
-                } else {
-                    None
+                if !matches!(node.kind, NodeKind::Section { .. }) {
+                    return None;
                 }
+                Some(SectionEntry {
+                    id,
+                    anchor: node.anchor.clone().unwrap_or_default(),
+                    path: self.hierarchical_path(id),
+                    level: node.section_level().unwrap_or(0),
+                })
             })
             .collect()
     }
@@ -502,11 +668,11 @@ impl DocumentTree {
             if idx == 0 {
                 return Err(DocumentError::InvalidPath("path indices are 1-based".to_string()));
             }
-            let children: Vec<NodeId> = current.children(&self.arena).collect();
-            if idx > children.len() {
-                return Err(DocumentError::InvalidPath(format!("index {} out of bounds", idx)));
+            if let Some(child) = current.children(&self.arena).nth(idx - 1) {
+                current = child;
+                continue;
             }
-            current = children[idx - 1];
+            return Err(DocumentError::InvalidPath(format!("index {} out of bounds", idx)));
         }
         Ok(current)
     }
@@ -534,16 +700,10 @@ impl DocumentTree {
     pub fn extract_text(&self, id: NodeId) -> String {
         let mut parts = Vec::new();
         for node_id in id.descendants(&self.arena) {
-            if let Some(node) = self.get(node_id) {
-                match &node.kind {
-                    NodeKind::Text(text) => parts.push(text.as_str()),
-                    NodeKind::Section { title, .. } => parts.push(title.as_str()),
-                    _ => {
-                        if !node.content.is_empty() {
-                            parts.push(&node.content);
-                        }
-                    }
-                }
+            if let Some(node) = self.get(node_id)
+                && !node.content.is_empty()
+            {
+                parts.push(node.content.as_str());
             }
         }
         parts.join(" ")
@@ -563,27 +723,30 @@ impl DocumentTree {
             let anchor_display =
                 node.anchor.as_ref().map(|a| format!("[#{}]", a)).unwrap_or_default();
 
-            match &node.kind {
-                NodeKind::Section { title, level } => {
-                    output.push_str(&format!(
-                        "{}[{}]{} H{}: {}\n",
-                        indent, path, anchor_display, level, title
-                    ));
+            match node.kind {
+                NodeKind::Section { level } => {
+                    let _ = writeln!(
+                        output,
+                        "{}[{}]{} H{}: {}",
+                        indent, path, anchor_display, level, node.content
+                    );
                 }
                 NodeKind::Paragraph if !node.content.is_empty() => {
-                    output.push_str(&format!(
-                        "{}[{}]{} P: {}\n",
+                    let _ = writeln!(
+                        output,
+                        "{}[{}]{} P: {}",
                         indent, path, anchor_display, node.content
-                    ));
+                    );
                 }
                 _ => {
-                    output.push_str(&format!(
-                        "{}[{}]{} {:?}\n",
+                    let _ = writeln!(
+                        output,
+                        "{}[{}]{} {:?}",
                         indent,
                         path,
                         anchor_display,
                         std::mem::discriminant(&node.kind)
-                    ));
+                    );
                 }
             }
 
@@ -612,12 +775,6 @@ impl AsRef<Arena<DocumentNode>> for DocumentTree {
     }
 }
 
-impl AsMut<Arena<DocumentNode>> for DocumentTree {
-    fn as_mut(&mut self) -> &mut Arena<DocumentNode> {
-        &mut self.arena
-    }
-}
-
 impl Index<NodeId> for DocumentTree {
     type Output = DocumentNode;
 
@@ -626,22 +783,7 @@ impl Index<NodeId> for DocumentTree {
     }
 }
 
-impl IndexMut<NodeId> for DocumentTree {
-    fn index_mut(&mut self, id: NodeId) -> &mut Self::Output {
-        self.arena[id].get_mut()
-    }
-}
-
 impl<'a> IntoIterator for &'a DocumentTree {
-    type Item = NodeId;
-    type IntoIter = indextree::Descendants<'a, DocumentNode>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.root.descendants(&self.arena)
-    }
-}
-
-impl<'a> IntoIterator for &'a mut DocumentTree {
     type Item = NodeId;
     type IntoIter = indextree::Descendants<'a, DocumentNode>;
 
@@ -734,8 +876,8 @@ mod tests {
         assert_eq!(sections.len(), 3);
 
         // Check ordering (pre-order)
-        assert_eq!(sections[0].1, "first");
-        assert_eq!(sections[1].1, "second");
-        assert_eq!(sections[2].1, "nested");
+        assert_eq!(sections[0].anchor, "first");
+        assert_eq!(sections[1].anchor, "second");
+        assert_eq!(sections[2].anchor, "nested");
     }
 }
