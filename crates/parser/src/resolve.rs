@@ -1,18 +1,24 @@
 //! Cross-reference resolution
 
-use indextree::NodeId;
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 use crate::tree::{DocumentNode, DocumentTree};
+use crate::NodeId;
 
-type Transform = Box<dyn Fn(&str) -> Option<String>>;
+static ANCHOR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#(.+)$").unwrap());
+static SECTION_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[Ss]ection\s+(\d+(?:\.\d+)*)$").unwrap());
+static FIGURE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[Ff]ig(?:ure)?\.?\s+(\d+(?:\.\d+)*)$").unwrap());
 
 /// Resolves cross-references like "Section 1.2" or "#intro" to NodeIds
 ///
 /// # Examples
 ///
 /// ```
-/// use pdf_hierarchy::{TreeParser, CrossRefResolver};
+/// use document_hierarchy::{TreeParser, CrossRefResolver};
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let parser = TreeParser::new();
@@ -33,7 +39,6 @@ type Transform = Box<dyn Fn(&str) -> Option<String>>;
 /// ```
 pub struct CrossRefResolver<'a> {
     tree: &'a DocumentTree,
-    patterns: Vec<(Regex, Transform)>,
 }
 
 impl<'a> CrossRefResolver<'a> {
@@ -50,7 +55,7 @@ impl<'a> CrossRefResolver<'a> {
             .filter(|&id| {
                 self.tree
                     .get(id)
-                    .map(|node| matches!(node.kind, crate::tree::NodeKind::Image))
+                    .map(|node| matches!(&node.kind, crate::tree::NodeKind::Image { .. }))
                     .unwrap_or(false)
             })
             .nth(idx - 1)
@@ -58,25 +63,7 @@ impl<'a> CrossRefResolver<'a> {
 
     /// Create resolver for a tree
     pub fn new(tree: &'a DocumentTree) -> Self {
-        let patterns = vec![
-            // "#anchor" format
-            (
-                Regex::new(r"^#(.+)$").unwrap(),
-                Box::new(|s: &str| Some(s.to_string())) as Box<dyn Fn(&str) -> Option<String>>,
-            ),
-            // "Section X.Y.Z" format
-            (
-                Regex::new(r"^[Ss]ection\s+(\d+(?:\.\d+)*)$").unwrap(),
-                Box::new(|s: &str| Some(s.to_string())),
-            ),
-            // "Fig/Figure X" format
-            (
-                Regex::new(r"^[Ff]ig(?:ure)?\.?\s+(\d+(?:\.\d+)*)$").unwrap(),
-                Box::new(|s: &str| Some(format!("fig-{}", s.replace('.', "-")))),
-            ),
-        ];
-
-        Self { tree, patterns }
+        Self { tree }
     }
 
     /// Resolve a reference string to a NodeId
@@ -88,22 +75,34 @@ impl<'a> CrossRefResolver<'a> {
     pub fn resolve(&self, reference: &str) -> Option<NodeId> {
         let trimmed = reference.trim();
 
-        for (regex, transform) in &self.patterns {
-            if let Some(caps) = regex.captures(trimmed)
-                && let Some(m) = caps.get(1)
-                && let Some(target) = transform(m.as_str())
-            {
-                // Try as anchor first
-                if let Some(id) = self.tree.find_by_anchor(&target) {
-                    return Some(id);
-                }
-                // Try as path
-                if let Ok(id) = self.tree.find_by_path(&target) {
-                    return Some(id);
-                }
-                if let Some(id) = self.figure(&target) {
-                    return Some(id);
-                }
+        if let Some(caps) = ANCHOR_RE.captures(trimmed)
+            && let Some(m) = caps.get(1)
+            && let Some(id) = self.tree.find_by_anchor(m.as_str())
+        {
+            return Some(id);
+        }
+
+        if let Some(caps) = SECTION_RE.captures(trimmed)
+            && let Some(m) = caps.get(1)
+        {
+            let target = m.as_str();
+            if let Some(id) = self.tree.find_by_anchor(target) {
+                return Some(id);
+            }
+            if let Ok(id) = self.tree.find_by_path(target) {
+                return Some(id);
+            }
+        }
+
+        if let Some(caps) = FIGURE_RE.captures(trimmed)
+            && let Some(m) = caps.get(1)
+        {
+            let target = format!("fig-{}", m.as_str().replace('.', "-"));
+            if let Some(id) = self.tree.find_by_anchor(&target) {
+                return Some(id);
+            }
+            if let Some(id) = self.figure(&target) {
+                return Some(id);
             }
         }
 
@@ -119,7 +118,7 @@ impl<'a> CrossRefResolver<'a> {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{TreeParser, CrossRefResolver, DocumentNode};
+    /// use document_hierarchy::{TreeParser, CrossRefResolver, DocumentNode};
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let parser = TreeParser::new();
@@ -141,7 +140,8 @@ impl<'a> CrossRefResolver<'a> {
     /// # Ok(())
     /// }
     pub fn breadcrumbs(&self, id: NodeId) -> Vec<(String, String)> {
-        self.tree
+        let mut out = self
+            .tree
             .ancestors(id)
             .filter(|&aid| aid != self.tree.root())
             .filter_map(|aid| {
@@ -150,10 +150,9 @@ impl<'a> CrossRefResolver<'a> {
                 let title = node.content.clone();
                 Some((anchor, title))
             })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect()
+            .collect::<Vec<_>>();
+        out.reverse();
+        out
     }
 
     /// Find all nodes linking to a specific anchor (reverse lookup)

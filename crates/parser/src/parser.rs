@@ -7,7 +7,7 @@
 //! The split keeps XML parsing reusable and makes policy-driven tree construction
 //! explicit.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use chrono::NaiveDate;
@@ -19,6 +19,7 @@ use crate::error::{DocumentError, Result};
 use crate::tree::{DocumentNode, DocumentTree, NodeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum VersionPolicy {
     #[default]
     Latest,
@@ -27,6 +28,7 @@ pub enum VersionPolicy {
 
 /// A parsed XML block under `<texto>`.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct XmlBlock {
     /// Source block identifier (`id` attribute).
     pub id: String,
@@ -40,6 +42,7 @@ pub struct XmlBlock {
 
 /// A single temporal version of a block.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct XmlVersion {
     /// Effective date (`fecha_vigencia`).
     pub date: NaiveDate,
@@ -49,6 +52,7 @@ pub struct XmlVersion {
 
 /// Paragraph-like content extracted from XML.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct XmlPara {
     /// Paragraph semantic kind from class name.
     pub kind: ParaKind,
@@ -60,6 +64,7 @@ pub struct XmlPara {
 
 /// Paragraph classification used by XML extraction and tree projection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ParaKind {
     Titulo,
     Capitulo,
@@ -110,6 +115,7 @@ impl From<&str> for ParaKind {
 
 /// Top-level block classification from `bloque@tipo`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlockKind {
     Preambulo,
     Encabezado,
@@ -166,35 +172,35 @@ impl Attrs {
 /// Anchor uniqueness tracker for generated tree anchors.
 #[derive(Debug, Default)]
 struct Anchor {
+    counts: HashMap<String, usize>,
     used: HashSet<String>,
 }
 
 impl Anchor {
-    /// Produces a deterministic unique anchor with bounded suffix attempts.
-    fn next(&mut self, title: &str, id: &str) -> Result<String> {
+    /// Produces a deterministic unique anchor with stable suffixing.
+    fn next(&mut self, title: &str, id: &str) -> String {
         let base = DocumentNode::slugify(title);
-        if !self.used.contains(&base) {
-            self.used.insert(base.clone());
-            return Ok(base);
+        let count = self.counts.entry(base.clone()).or_insert(0);
+        *count += 1;
+
+        if *count == 1 && self.used.insert(base.clone()) {
+            return base;
         }
 
         if !id.is_empty() {
             let alt = format!("{}-{}", base, DocumentNode::slugify(id));
-            if !self.used.contains(&alt) {
-                self.used.insert(alt.clone());
-                return Ok(alt);
+            if self.used.insert(alt.clone()) {
+                return alt;
             }
         }
 
-        for n in 2..=10_000usize {
-            let value = format!("{}-{}", base, n);
-            if !self.used.contains(&value) {
-                self.used.insert(value.clone());
-                return Ok(value);
+        loop {
+            let value = format!("{}-{}", base, *count);
+            *count += 1;
+            if self.used.insert(value.clone()) {
+                return value;
             }
         }
-
-        Err(DocumentError::xml(format!("anchor: unable to create unique anchor for '{title}'")))
     }
 }
 
@@ -214,10 +220,10 @@ impl<'a> BoeReader<'a> {
     /// Reads the next XML event, mapping errors once.
     fn next(&mut self) -> Result<Event<'a>> {
         self.inner.read_event().map_err(|e| {
-            DocumentError::xml(format!(
-                "parse: XML error at byte {}: {e}",
-                self.inner.buffer_position()
-            ))
+            DocumentError::xml_at(
+                self.inner.buffer_position() as usize,
+                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+            )
         })
     }
 
@@ -264,7 +270,6 @@ impl<'a> BoeReader<'a> {
                 Event::Start(_) => depth += 1,
                 Event::End(tag) if tag.name().as_ref() == closing && depth == 0 => break,
                 Event::End(_) => {
-                    debug_assert!(depth > 0, "unbalanced close tag while skipping element");
                     if depth == 0 {
                         return Err(DocumentError::xml("skip: unbalanced close tag"));
                     }
@@ -296,7 +301,6 @@ impl<'a> BoeReader<'a> {
                 Event::Start(_) => depth += 1,
                 Event::End(tag) if tag.name().as_ref() == closing && depth == 0 => break,
                 Event::End(_) => {
-                    debug_assert!(depth > 0, "unbalanced close tag while reading text");
                     if depth == 0 {
                         return Err(DocumentError::xml("text: unbalanced close tag"));
                     }
@@ -380,7 +384,6 @@ impl<'a> BoeReader<'a> {
                 }
                 Event::End(tag) if tag.name().as_ref() == b"p" && depth == 0 => break,
                 Event::End(_) => {
-                    debug_assert!(depth > 0, "unbalanced close tag inside paragraph");
                     if depth == 0 {
                         return Err(DocumentError::xml("p: unbalanced close tag"));
                     }
@@ -465,7 +468,7 @@ impl<'a> BoeReader<'a> {
             return Ok(LegalDocument { blocks });
         }
 
-        Err(DocumentError::xml("Missing BOE bloques at response/data/texto"))
+        Err(DocumentError::MissingElement { path: "response/data/texto/bloque" })
     }
 
     /// Reads `<data>` and returns the first parsed `<texto>` payload.
@@ -523,7 +526,7 @@ impl LegalDocument {
                 _ => {}
             }
         }
-        Err(DocumentError::xml("Missing required root path response/data/texto"))
+        Err(DocumentError::MissingElement { path: "response/data/texto" })
     }
 }
 
@@ -604,7 +607,7 @@ impl TreeParser {
             let parent = stack.last().map(|it| it.1).unwrap_or(tree.root());
 
             let mut section = DocumentNode::section(level, &title);
-            section.anchor = Some(anchor.next(&title, &block.id)?);
+            section.anchor = Some(anchor.next(&title, &block.id));
             let id = tree.add_child(parent, section);
             stack.push((level, id));
 

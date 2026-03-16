@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
-use std::ops::{Index, Range};
+use std::ops::Index;
 
 use deunicode::deunicode;
-use indextree::{Arena, NodeId};
+use indextree::Arena;
 use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 
+use crate::NodeId;
 use crate::error::{DocumentError, Result};
 
 /// Alignment for table columns
@@ -26,7 +27,7 @@ pub enum ColumnAlign {
 pub type ColumnAlignment = Option<ColumnAlign>;
 
 /// Semantic types for document nodes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum NodeKind {
     /// Root document container
     Root,
@@ -47,11 +48,17 @@ pub enum NodeKind {
     /// List item
     ListItem,
     /// Code block
-    CodeBlock,
+    CodeBlock {
+        /// Programming language identifier
+        language: Option<String>,
+    },
     /// Block quotation
     BlockQuote,
     /// Table container
-    Table,
+    Table {
+        /// Column alignments
+        alignments: Vec<ColumnAlignment>,
+    },
     /// Table row
     TableRow,
     /// Table cell
@@ -63,19 +70,21 @@ pub enum NodeKind {
     /// Emphasis (italic)
     Emphasis,
     /// Hyperlink
-    Link,
+    Link {
+        /// URL destination
+        url: String,
+        /// Optional title attribute
+        title: Option<String>,
+    },
     /// Image
-    Image,
+    Image {
+        /// Source URL
+        url: String,
+        /// Alt text
+        alt: String,
+    },
     /// Horizontal rule
     ThematicBreak,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum NodeMeta {
-    Link { url: String, title: Option<String> },
-    Image { url: String, alt: String },
-    CodeBlock { language: Option<String> },
-    Table { alignments: Vec<ColumnAlignment> },
 }
 
 /// A node in the document tree
@@ -83,7 +92,7 @@ pub enum NodeMeta {
 /// # Examples
 ///
 /// ```
-/// use pdf_hierarchy::{DocumentNode, NodeKind};
+/// use document_hierarchy::{DocumentNode, NodeKind};
 ///
 /// let section = DocumentNode::section(1, "Introduction");
 /// assert!(section.is_section());
@@ -95,12 +104,8 @@ pub struct DocumentNode {
     pub kind: NodeKind,
     /// Stable anchor ID for linking (e.g., "introduction")
     pub anchor: Option<String>,
-    pub source_pos: Option<Range<usize>>,
-    /// Original source page number if available
-    pub page_hint: Option<u32>,
     /// Text content of this node
     pub content: String,
-    pub meta: Option<NodeMeta>,
 }
 
 impl DocumentNode {
@@ -109,7 +114,7 @@ impl DocumentNode {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentNode, NodeKind};
+    /// use document_hierarchy::{DocumentNode, NodeKind};
     ///
     /// let node = DocumentNode::new(NodeKind::Paragraph, "Hello world");
     /// assert_eq!(node.content, "Hello world");
@@ -117,26 +122,16 @@ impl DocumentNode {
     /// ```
     #[must_use]
     pub fn new(kind: NodeKind, content: impl Into<String>) -> Self {
-        Self {
-            kind,
-            anchor: None,
-            source_pos: None,
-            page_hint: None,
-            content: content.into(),
-            meta: None,
-        }
+        Self { kind, anchor: None, content: content.into() }
     }
 
     /// Create a link node with URL/title metadata and visible content.
     #[must_use]
     pub fn link(url: impl Into<String>, title: Option<String>, content: impl Into<String>) -> Self {
         Self {
-            kind: NodeKind::Link,
+            kind: NodeKind::Link { url: url.into(), title },
             anchor: None,
-            source_pos: None,
-            page_hint: None,
             content: content.into(),
-            meta: Some(NodeMeta::Link { url: url.into(), title }),
         }
     }
 
@@ -145,12 +140,9 @@ impl DocumentNode {
     pub fn image(url: impl Into<String>, alt: impl Into<String>) -> Self {
         let alt = alt.into();
         Self {
-            kind: NodeKind::Image,
+            kind: NodeKind::Image { url: url.into(), alt: alt.clone() },
             anchor: None,
-            source_pos: None,
-            page_hint: None,
             content: alt.clone(),
-            meta: Some(NodeMeta::Image { url: url.into(), alt }),
         }
     }
 
@@ -162,11 +154,11 @@ impl DocumentNode {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::DocumentNode;
+    /// use document_hierarchy::DocumentNode;
     ///
     /// let sec = DocumentNode::section(2, "Getting Started");
     /// assert_eq!(sec.anchor, Some("getting-started".to_string()));
-    /// assert!(matches!(sec.kind, pdf_hierarchy::NodeKind::Section { level: 2, .. }));
+    /// assert!(matches!(sec.kind, document_hierarchy::NodeKind::Section { level: 2, .. }));
     /// ```
     #[must_use]
     pub fn section(level: u8, title: impl AsRef<str>) -> Self {
@@ -174,10 +166,7 @@ impl DocumentNode {
         Self {
             kind: NodeKind::Section { level },
             anchor: Some(Self::slugify(title)),
-            source_pos: None,
-            page_hint: None,
             content: title.to_string(),
-            meta: None,
         }
     }
 
@@ -186,7 +175,7 @@ impl DocumentNode {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::DocumentNode;
+    /// use document_hierarchy::DocumentNode;
     ///
     /// assert_eq!(DocumentNode::slugify("Hello World!"), "hello-world");
     /// assert_eq!(DocumentNode::slugify("Section 1.2.3"), "section-1-2-3");
@@ -229,14 +218,14 @@ impl DocumentNode {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentNode, NodeKind};
+    /// use document_hierarchy::{DocumentNode, NodeKind};
     ///
     /// assert!(DocumentNode::section(1, "Title").is_section());
     /// assert!(!DocumentNode::new(NodeKind::Paragraph, "text").is_section());
     /// ```
     #[inline]
     pub fn is_section(&self) -> bool {
-        matches!(self.kind, NodeKind::Section { .. })
+        matches!(&self.kind, NodeKind::Section { .. })
     }
 
     /// Return section title when this node is a section.
@@ -250,7 +239,7 @@ impl DocumentNode {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::DocumentNode;
+    /// use document_hierarchy::DocumentNode;
     ///
     /// let h1 = DocumentNode::section(1, "Title");
     /// assert_eq!(h1.section_level(), Some(1));
@@ -260,8 +249,8 @@ impl DocumentNode {
     /// ```
     #[inline]
     pub fn section_level(&self) -> Option<u8> {
-        match self.kind {
-            NodeKind::Section { level } => Some(level),
+        match &self.kind {
+            NodeKind::Section { level } => Some(*level),
             _ => None,
         }
     }
@@ -269,11 +258,8 @@ impl DocumentNode {
     /// Return link URL when this node is a link.
     #[inline]
     pub fn link_url(&self) -> Option<&str> {
-        if !matches!(self.kind, NodeKind::Link) {
-            return None;
-        }
-        match &self.meta {
-            Some(NodeMeta::Link { url, .. }) => Some(url.as_str()),
+        match &self.kind {
+            NodeKind::Link { url, .. } => Some(url.as_str()),
             _ => None,
         }
     }
@@ -281,11 +267,8 @@ impl DocumentNode {
     /// Return image URL when this node is an image.
     #[inline]
     pub fn image_url(&self) -> Option<&str> {
-        if !matches!(self.kind, NodeKind::Image) {
-            return None;
-        }
-        match &self.meta {
-            Some(NodeMeta::Image { url, .. }) => Some(url.as_str()),
+        match &self.kind {
+            NodeKind::Image { url, .. } => Some(url.as_str()),
             _ => None,
         }
     }
@@ -303,9 +286,9 @@ impl DocumentNode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentTree {
     arena: Arena<DocumentNode>,
-    root: NodeId,
-    index: HashMap<String, NodeId>,
-    alias: HashMap<String, NodeId>,
+    root: indextree::NodeId,
+    index: HashMap<String, indextree::NodeId>,
+    alias: HashMap<String, indextree::NodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -322,7 +305,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::DocumentTree;
+    /// use document_hierarchy::DocumentTree;
     ///
     /// let tree = DocumentTree::new();
     /// assert_eq!(tree.hierarchical_path(tree.root()), "root");
@@ -333,10 +316,7 @@ impl DocumentTree {
         let root = arena.new_node(DocumentNode {
             kind: NodeKind::Root,
             anchor: Some("root".to_string()),
-            source_pos: None,
-            page_hint: None,
             content: String::new(),
-            meta: None,
         });
 
         Self { arena, root, index: HashMap::new(), alias: HashMap::new() }
@@ -345,7 +325,7 @@ impl DocumentTree {
     /// Get the root node ID
     #[inline]
     pub fn root(&self) -> NodeId {
-        self.root
+        NodeId::from_raw(self.root)
     }
 
     /// Access the underlying arena (advanced usage)
@@ -372,9 +352,10 @@ impl DocumentTree {
         self.alias.clear();
         let ids = self.root.descendants(&self.arena).collect::<Vec<_>>();
         for id in ids {
+            let id = NodeId::from_raw(id);
             let anchor = self.get(id).and_then(|n| n.anchor.clone());
             if let Some(anchor) = anchor {
-                self.put_anchor(id, &anchor);
+                self.put_anchor(id.into_raw(), &anchor);
             }
         }
     }
@@ -384,14 +365,14 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode, NodeKind};
+    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
     ///
     /// let mut tree = DocumentTree::new();
     /// let child = tree.add_child(tree.root(), DocumentNode::new(NodeKind::Paragraph, "test"));
     /// assert_eq!(tree.get(child).unwrap().content, "test");
     /// ```
     pub fn get(&self, id: NodeId) -> Option<&DocumentNode> {
-        self.arena.get(id).map(|n| n.get())
+        self.arena.get(id.into_raw()).map(|n| n.get())
     }
 
     /// Set node anchor while keeping indexes consistent.
@@ -399,6 +380,7 @@ impl DocumentTree {
     /// Returns `false` when `id` is not present in this tree.
     #[must_use]
     pub fn set_anchor(&mut self, id: NodeId, anchor: Option<String>) -> bool {
+        let id = id.into_raw();
         let (old, new) = {
             let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
                 return false;
@@ -426,6 +408,7 @@ impl DocumentTree {
     where
         F: FnOnce(&mut DocumentNode),
     {
+        let id = id.into_raw();
         let (old, new) = {
             let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
                 return false;
@@ -456,7 +439,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode};
+    /// use document_hierarchy::{DocumentTree, DocumentNode};
     ///
     /// let mut tree = DocumentTree::new();
     /// let section = DocumentNode::section(1, "Intro");
@@ -465,6 +448,7 @@ impl DocumentTree {
     /// assert!(tree.find_by_anchor("intro").is_some());
     /// ```
     pub fn add_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
+        let parent = parent.into_raw();
         let anchor = node.anchor.clone();
         let id = self.arena.new_node(node);
         parent.append(id, &mut self.arena);
@@ -473,7 +457,7 @@ impl DocumentTree {
             self.put_anchor(id, &anchor);
         }
 
-        id
+        NodeId::from_raw(id)
     }
 
     /// Find node by anchor.
@@ -485,7 +469,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode};
+    /// use document_hierarchy::{DocumentTree, DocumentNode};
     ///
     /// let mut tree = DocumentTree::new();
     /// let node = DocumentNode::section(1, "Methodology");
@@ -499,19 +483,19 @@ impl DocumentTree {
         let lookup = |key: &str| self.index.get(key).or_else(|| self.alias.get(key)).copied();
 
         if let Some(id) = lookup(query) {
-            return Some(id);
+            return Some(NodeId::from_raw(id));
         }
 
         let slug = DocumentNode::slugify(query);
         if slug != query
             && let Some(id) = lookup(&slug)
         {
-            return Some(id);
+            return Some(NodeId::from_raw(id));
         }
 
         let ascii = DocumentNode::slugify_ascii(query);
         if ascii != query && ascii != slug {
-            return lookup(&ascii);
+            return lookup(&ascii).map(NodeId::from_raw);
         }
 
         None
@@ -522,7 +506,7 @@ impl DocumentTree {
         self.get(id).and_then(|n| n.anchor.as_deref())
     }
 
-    fn put_anchor(&mut self, id: NodeId, anchor: &str) {
+    fn put_anchor(&mut self, id: indextree::NodeId, anchor: &str) {
         self.index.entry(anchor.to_string()).or_insert(id);
         let alias = DocumentNode::slugify_ascii(anchor);
         if alias != anchor {
@@ -530,7 +514,7 @@ impl DocumentTree {
         }
     }
 
-    fn drop_anchor(&mut self, id: NodeId, anchor: &str) {
+    fn drop_anchor(&mut self, id: indextree::NodeId, anchor: &str) {
         if self.index.get(anchor) == Some(&id) {
             self.index.remove(anchor);
         }
@@ -542,7 +526,7 @@ impl DocumentTree {
 
     fn child_indices(&self, id: NodeId) -> Vec<usize> {
         let mut out = Vec::new();
-        let mut current = id;
+        let mut current = id.into_raw();
         while let Some(parent) = self.arena[current].parent() {
             let idx = parent.children(&self.arena).position(|child| child == current).unwrap_or(0);
             out.push(idx);
@@ -559,7 +543,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode, NodeKind};
+    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
     ///
     /// let mut tree = DocumentTree::new();
     /// let sec1 = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
@@ -586,49 +570,46 @@ impl DocumentTree {
 
     /// Iterate all descendants of a node (pre-order)
     pub fn descendants(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.descendants(&self.arena)
+        node.into_raw().descendants(&self.arena).map(NodeId::from_raw)
     }
 
     /// Iterate ancestors from immediate parent to root
     pub fn ancestors(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.ancestors(&self.arena)
+        node.into_raw().ancestors(&self.arena).map(NodeId::from_raw)
     }
 
     /// Iterate immediate children
     pub fn children(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.children(&self.arena)
+        node.into_raw().children(&self.arena).map(NodeId::from_raw)
     }
 
     ///
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode};
+    /// use document_hierarchy::{DocumentTree, DocumentNode};
     ///
     /// let mut tree = DocumentTree::new();
     /// tree.add_child(tree.root(), DocumentNode::section(1, "First"));
     /// let sec = tree.add_child(tree.root(), DocumentNode::section(2, "Second"));
     /// tree.add_child(sec, DocumentNode::section(3, "Nested"));
     ///
-    /// let sections = tree.sections();
+    /// let sections = tree.sections().collect::<Vec<_>>();
     /// assert_eq!(sections.len(), 3);
     /// ```
-    #[must_use]
-    pub fn sections(&self) -> Vec<SectionEntry> {
-        self.descendants(self.root)
-            .filter_map(|id| {
-                let node = self.get(id)?;
-                if !matches!(node.kind, NodeKind::Section { .. }) {
-                    return None;
-                }
-                Some(SectionEntry {
-                    id,
-                    anchor: node.anchor.clone().unwrap_or_default(),
-                    path: self.hierarchical_path(id),
-                    level: node.section_level().unwrap_or(0),
-                })
+    pub fn sections(&self) -> impl Iterator<Item = SectionEntry> + '_ {
+        self.descendants(NodeId::from_raw(self.root)).filter_map(|id| {
+            let node = self.get(id)?;
+            if !matches!(&node.kind, NodeKind::Section { .. }) {
+                return None;
+            }
+            Some(SectionEntry {
+                id,
+                anchor: node.anchor.clone().unwrap_or_default(),
+                path: self.hierarchical_path(id),
+                level: node.section_level().unwrap_or(0),
             })
-            .collect()
+        })
     }
 
     /// Find node by hierarchical path "1.2.3"
@@ -640,7 +621,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode};
+    /// use document_hierarchy::{DocumentTree, DocumentNode};
     ///
     /// let mut tree = DocumentTree::new();
     /// let sec = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
@@ -650,7 +631,7 @@ impl DocumentTree {
     /// ```
     pub fn find_by_path(&self, path: &str) -> Result<NodeId> {
         if path == "root" {
-            return Ok(self.root);
+            return Ok(NodeId::from_raw(self.root));
         }
 
         let parts: Vec<usize> = path
@@ -660,7 +641,7 @@ impl DocumentTree {
             .map_err(|_| DocumentError::InvalidPath(path.to_string()))?;
 
         if parts.is_empty() {
-            return Ok(self.root);
+            return Ok(NodeId::from_raw(self.root));
         }
 
         let mut current = self.root;
@@ -674,7 +655,7 @@ impl DocumentTree {
             }
             return Err(DocumentError::InvalidPath(format!("index {} out of bounds", idx)));
         }
-        Ok(current)
+        Ok(NodeId::from_raw(current))
     }
 
     /// Get nearest parent that is a section
@@ -682,7 +663,7 @@ impl DocumentTree {
     /// # Examples
     ///
     /// ```
-    /// use pdf_hierarchy::{DocumentTree, DocumentNode, NodeKind};
+    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
     ///
     /// let mut tree = DocumentTree::new();
     /// let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
@@ -699,8 +680,8 @@ impl DocumentTree {
     /// Extract all text content from a subtree
     pub fn extract_text(&self, id: NodeId) -> String {
         let mut parts = Vec::new();
-        for node_id in id.descendants(&self.arena) {
-            if let Some(node) = self.get(node_id)
+        for node_id in id.into_raw().descendants(&self.arena) {
+            if let Some(node) = self.get(NodeId::from_raw(node_id))
                 && !node.content.is_empty()
             {
                 parts.push(node.content.as_str());
@@ -712,7 +693,7 @@ impl DocumentTree {
     /// Debug representation of tree structure
     pub fn debug_tree(&self) -> String {
         let mut output = String::new();
-        self.debug_node(self.root, 0, &mut output);
+        self.debug_node(NodeId::from_raw(self.root), 0, &mut output);
         output
     }
 
@@ -723,7 +704,7 @@ impl DocumentTree {
             let anchor_display =
                 node.anchor.as_ref().map(|a| format!("[#{}]", a)).unwrap_or_default();
 
-            match node.kind {
+            match &node.kind {
                 NodeKind::Section { level } => {
                     let _ = writeln!(
                         output,
@@ -750,8 +731,8 @@ impl DocumentTree {
                 }
             }
 
-            for child in id.children(&self.arena) {
-                self.debug_node(child, depth + 1, output);
+            for child in id.into_raw().children(&self.arena) {
+                self.debug_node(NodeId::from_raw(child), depth + 1, output);
             }
         }
     }
@@ -779,16 +760,21 @@ impl Index<NodeId> for DocumentTree {
     type Output = DocumentNode;
 
     fn index(&self, id: NodeId) -> &Self::Output {
-        self.arena[id].get()
+        self.arena[id.into_raw()].get()
     }
+}
+
+fn wrap_id(id: indextree::NodeId) -> NodeId {
+    NodeId::from_raw(id)
 }
 
 impl<'a> IntoIterator for &'a DocumentTree {
     type Item = NodeId;
-    type IntoIter = indextree::Descendants<'a, DocumentNode>;
+    type IntoIter =
+        std::iter::Map<indextree::Descendants<'a, DocumentNode>, fn(indextree::NodeId) -> NodeId>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.root.descendants(&self.arena)
+        self.root.descendants(&self.arena).map(wrap_id as fn(indextree::NodeId) -> NodeId)
     }
 }
 
@@ -872,7 +858,7 @@ mod tests {
         let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Second"));
         tree.add_child(sec, DocumentNode::section(2, "Nested"));
 
-        let sections = tree.sections();
+        let sections = tree.sections().collect::<Vec<_>>();
         assert_eq!(sections.len(), 3);
 
         // Check ordering (pre-order)

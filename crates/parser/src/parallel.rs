@@ -1,8 +1,8 @@
 //! Parallel iteration support (requires "parallel" feature)
 
-use indextree::NodeId;
 use rayon::prelude::*;
 
+use crate::NodeId;
 use crate::tree::{DocumentTree, NodeKind, SectionEntry};
 
 /// Parallel operations for DocumentTree
@@ -22,7 +22,7 @@ impl ParallelTreeOps for DocumentTree {
             .into_par_iter()
             .filter_map(|id| {
                 let node = self.get(id)?;
-                if !matches!(node.kind, NodeKind::Section { .. }) {
+                if !matches!(&node.kind, NodeKind::Section { .. }) {
                     None
                 } else {
                     Some(SectionEntry {

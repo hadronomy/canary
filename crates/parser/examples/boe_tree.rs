@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use pdf_hierarchy::TreeParser;
+use document_hierarchy::TreeParser;
 
 fn xml() -> PathBuf {
     if let Some(path) = std::env::args_os().nth(1) {

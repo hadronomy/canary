@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use indextree::NodeId;
-use pdf_hierarchy::{DocumentTree, NodeKind, TreeParser};
+use document_hierarchy::{DocumentTree, NodeId, NodeKind, TreeParser};
 
 fn xml() -> PathBuf {
     if let Some(path) = std::env::args_os().nth(1) {
@@ -28,16 +27,16 @@ fn kind(kind: &NodeKind) -> &'static str {
         NodeKind::Paragraph => "paragraph",
         NodeKind::List { .. } => "list",
         NodeKind::ListItem => "list_item",
-        NodeKind::CodeBlock => "code_block",
+        NodeKind::CodeBlock { .. } => "code_block",
         NodeKind::BlockQuote => "blockquote",
-        NodeKind::Table => "table",
+        NodeKind::Table { .. } => "table",
         NodeKind::TableRow => "table_row",
         NodeKind::TableCell => "table_cell",
         NodeKind::Text => "text",
         NodeKind::Strong => "strong",
         NodeKind::Emphasis => "emphasis",
-        NodeKind::Link => "link",
-        NodeKind::Image => "image",
+        NodeKind::Link { .. } => "link",
+        NodeKind::Image { .. } => "image",
         NodeKind::ThematicBreak => "thematic_break",
     }
 }
@@ -74,7 +73,6 @@ fn print_kinds(tree: &DocumentTree) {
 fn print_sections(tree: &DocumentTree, n: usize) {
     let mut rows = tree
         .sections()
-        .into_iter()
         .filter_map(|it| {
             let node = tree.get(it.id)?;
             Some((it.id, node.content.clone(), it.path, it.level, span(tree, it.id)))

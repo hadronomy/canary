@@ -117,6 +117,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
+name = "document-hierarchy"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "chrono",
+ "deunicode",
+ "indextree",
+ "insta",
+ "quick-xml",
+ "rayon",
+ "regex",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,23 +305,6 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
-
-[[package]]
-name = "pdf-hierarchy"
-version = "0.1.0-alpha.1"
-dependencies = [
- "chrono",
- "deunicode",
- "indextree",
- "insta",
- "quick-xml",
- "rayon",
- "regex",
- "serde",
- "tempfile",
- "thiserror",
- "unicode-normalization",
-]
 
 [[package]]
 name = "proc-macro2"

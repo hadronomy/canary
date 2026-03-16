@@ -1,5 +1,5 @@
 [package]
-name              = "pdf-hierarchy"
+name              = "document-hierarchy"
 publish.workspace = true
 
 authors.workspace    = true
@@ -14,7 +14,7 @@ deunicode.workspace   = true
 indextree.workspace   = true
 quick-xml.workspace   = true
 rayon                 = { workspace = true, optional = true }
-regex                 = "1.12.3"
+regex                 = "1"
 serde.workspace       = true
 thiserror.workspace   = true
 unicode-normalization.workspace = true
