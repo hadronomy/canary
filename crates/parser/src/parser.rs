@@ -60,6 +60,8 @@ pub struct XmlPara {
     pub text: String,
     /// Inline references captured from `<a class="refPost">...`.
     pub refs: Vec<String>,
+    /// Whether this paragraph is nested inside a blockquote element.
+    pub quote: bool,
 }
 
 /// Paragraph classification used by XML extraction and tree projection.
@@ -72,6 +74,7 @@ pub enum ParaKind {
     Articulo,
     Parrafo,
     Nota,
+    Centro,
     Other,
 }
 
@@ -84,6 +87,11 @@ impl ParaKind {
     /// Returns `true` if this kind should become body text.
     fn body(self) -> bool {
         matches!(self, Self::Parrafo | Self::Nota)
+    }
+
+    /// Returns `true` when this paragraph kind acts as an in-section divider.
+    fn divider(self) -> bool {
+        matches!(self, Self::Centro)
     }
 
     /// Maps heading kind to tree section level.
@@ -108,6 +116,7 @@ impl From<&str> for ParaKind {
             s if s.starts_with("capitulo") => Self::Capitulo,
             s if s.starts_with("seccion") => Self::Seccion,
             s if s.starts_with("parrafo") => Self::Parrafo,
+            s if s.starts_with("centro") => Self::Centro,
             _ => Self::Other,
         }
     }
@@ -361,7 +370,7 @@ impl<'a> BoeReader<'a> {
     }
 
     /// Reads one paragraph element and captures inline reference anchors.
-    fn read_paragraph(&mut self, start: &BytesStart<'_>) -> Result<XmlPara> {
+    fn read_paragraph(&mut self, start: &BytesStart<'_>, quote: bool) -> Result<XmlPara> {
         let attrs = Attrs::from_tag(start, "p")?;
         let class = attrs.get("class").unwrap_or_default().to_string();
         let mut text = String::new();
@@ -374,9 +383,10 @@ impl<'a> BoeReader<'a> {
                 Event::CData(value) => text.push_str(&Self::text(value.xml_content(), "cdata")?),
                 Event::Start(tag) if tag.name().as_ref() == b"a" => {
                     let (value, reference) = self.read_anchor(&tag)?;
-                    text.push_str(&value);
                     if let Some(reference) = reference {
                         refs.push(reference);
+                    } else {
+                        text.push_str(&value);
                     }
                 }
                 Event::Start(_) => {
@@ -394,7 +404,14 @@ impl<'a> BoeReader<'a> {
             }
         }
 
-        Ok(XmlPara { kind: ParaKind::from(class.as_str()), text: Self::normalize(&text), refs })
+        let mut text = Self::normalize(&text);
+        if !refs.is_empty() {
+            while text.ends_with("..") {
+                text.pop();
+            }
+        }
+
+        Ok(XmlPara { kind: ParaKind::from(class.as_str()), text, refs, quote })
     }
 
     /// Processes a node under `<version>`, recursively flattening wrappers.
@@ -402,9 +419,10 @@ impl<'a> BoeReader<'a> {
         &mut self,
         start: &BytesStart<'_>,
         version: &mut XmlVersion,
+        quote: bool,
     ) -> Result<()> {
         if start.name().as_ref() == b"p" {
-            let para = self.read_paragraph(start)?;
+            let para = self.read_paragraph(start, quote)?;
             if !para.text.is_empty() {
                 version.paras.push(para);
             }
@@ -412,8 +430,9 @@ impl<'a> BoeReader<'a> {
         }
 
         let closing = start.name().as_ref().to_vec();
+        let quote = quote || start.name().as_ref() == b"blockquote";
         self.each_child(&closing, "version", |tag, reader| {
-            reader.read_version_node(tag, version)?;
+            reader.read_version_node(tag, version, quote)?;
             Ok(ChildAction::Consumed)
         })
     }
@@ -425,7 +444,7 @@ impl<'a> BoeReader<'a> {
         let mut version = XmlVersion { date, paras: Vec::new() };
 
         self.each_child(b"version", "version", |tag, reader| {
-            reader.read_version_node(tag, &mut version)?;
+            reader.read_version_node(tag, &mut version, false)?;
             Ok(ChildAction::Consumed)
         })?;
 
@@ -612,6 +631,32 @@ impl TreeParser {
             stack.push((level, id));
 
             for para in &version.paras {
+                let parent = if para.quote {
+                    tree.add_child(id, DocumentNode::new(NodeKind::BlockQuote, String::new()))
+                } else {
+                    id
+                };
+
+                if para.kind.divider() {
+                    let value = para.text.trim();
+                    if !value.is_empty() {
+                        let pid = tree.add_child(
+                            parent,
+                            DocumentNode::new(NodeKind::Paragraph, value.to_string()),
+                        );
+                        for reference in &para.refs {
+                            tree.add_child(
+                                pid,
+                                DocumentNode::link(reference.clone(), None, reference),
+                            );
+                        }
+                    }
+                    tree.add_child(
+                        parent,
+                        DocumentNode::new(NodeKind::ThematicBreak, String::new()),
+                    );
+                    continue;
+                }
                 if !para.kind.body() {
                     continue;
                 }
@@ -619,8 +664,8 @@ impl TreeParser {
                 if value.is_empty() {
                     continue;
                 }
-                let pid =
-                    tree.add_child(id, DocumentNode::new(NodeKind::Paragraph, value.to_string()));
+                let pid = tree
+                    .add_child(parent, DocumentNode::new(NodeKind::Paragraph, value.to_string()));
                 for reference in &para.refs {
                     tree.add_child(pid, DocumentNode::link(reference.clone(), None, reference));
                 }
@@ -742,5 +787,98 @@ mod tests {
     fn validates_root_path() {
         let err = TreeParser::new().parse_xml("<root><x/></root>").unwrap_err();
         assert!(err.to_string().contains("response/data/texto"));
+    }
+
+    #[test]
+    fn does_not_duplicate_refpost_text() {
+        let tree = TreeParser::new().parse_xml(sample()).unwrap();
+        let id = tree.find_by_anchor("artículo-1").unwrap();
+
+        let mut found = false;
+        for desc in tree.descendants(id).skip(1) {
+            let Some(node) = tree.get(desc) else {
+                continue;
+            };
+            if !matches!(node.kind, NodeKind::Paragraph) {
+                continue;
+            }
+            if !node.content.contains("Texto nota") {
+                continue;
+            }
+            found = true;
+            assert!(!node.content.contains("Ref. BOE-A-1992-20403"));
+        }
+
+        assert!(found);
+    }
+
+    #[test]
+    fn compacts_double_dot_before_ref_link() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="a1" tipo="precepto" titulo="Artículo 1">
+        <version fecha_vigencia="20110927">
+          <p class="articulo">Artículo 1</p>
+          <blockquote>
+            <p class="nota_pie">Se modifica por el art. único de la Reforma de 27 de septiembre de 2011. <a class="refPost">Ref. BOE-A-2011-15210</a>.</p>
+          </blockquote>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let tree = TreeParser::new().parse_xml(xml).unwrap();
+        let mut out = String::new();
+        let mut md = crate::MarkdownWriter::new(&mut out);
+        crate::render::render(&tree, tree.root(), &mut md).unwrap();
+
+        assert!(out.contains("2011.[Ref. BOE-A-2011-15210](Ref. BOE-A-2011-15210)"));
+        assert!(!out.contains("2011..[Ref. BOE-A-2011-15210](Ref. BOE-A-2011-15210)"));
+    }
+
+    #[test]
+    fn renders_blockquote_notes() {
+        let tree = TreeParser::new().parse_xml(sample()).unwrap();
+        let mut out = String::new();
+        let mut md = crate::MarkdownWriter::new(&mut out);
+        crate::render::render(&tree, tree.root(), &mut md).unwrap();
+
+        assert!(out.contains("> Texto nota"));
+        assert!(out.contains("[Ref. BOE-A-1992-20403](Ref. BOE-A-1992-20403)"));
+    }
+
+    #[test]
+    fn keeps_centro_as_in_section_divider() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="a1" tipo="precepto" titulo="Artículo 1">
+        <version fecha_vigencia="19781229">
+          <p class="centro_negrita">CONSTITUCIÓN</p>
+          <p class="articulo">Artículo 1</p>
+          <p class="parrafo">Uno.</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let tree = TreeParser::new().parse_xml(xml).unwrap();
+        let art = tree.find_by_anchor("artículo-1").unwrap();
+        let mut found_divider = false;
+        for child in tree.children(art) {
+            if let Some(node) = tree.get(child) {
+                if matches!(node.kind, NodeKind::ThematicBreak) {
+                    found_divider = true;
+                }
+            }
+        }
+        assert!(found_divider);
+        assert!(tree.extract_text(art).contains("CONSTITUCIÓN"));
+        assert!(tree.extract_text(art).contains("Uno."));
     }
 }

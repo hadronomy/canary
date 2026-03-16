@@ -67,6 +67,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
     fn enter_blockquote(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
         self.line()?;
         self.quote += 1;
+        self.brk = false;
         Ok(())
     }
 
@@ -273,5 +274,19 @@ mod tests {
         assert!(out.contains("**bold**"));
         assert!(out.contains("*soft*"));
         assert!(out.contains("[ref](https://x.test)"));
+    }
+
+    #[test]
+    fn does_not_emit_empty_quote_line_before_content() {
+        let mut tree = DocumentTree::new();
+        let quote = tree.add_child(tree.root(), DocumentNode::new(NodeKind::BlockQuote, ""));
+        tree.add_child(quote, DocumentNode::new(NodeKind::Paragraph, "Texto nota"));
+
+        let mut out = String::new();
+        let mut w = MarkdownWriter::new(&mut out);
+        render::render(&tree, tree.root(), &mut w).unwrap();
+
+        assert!(out.contains("> Texto nota"));
+        assert!(!out.contains("\n>\n> Texto nota"));
     }
 }
