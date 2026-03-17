@@ -8,6 +8,7 @@
 //! explicit.
 
 use std::collections::{HashMap, HashSet};
+use std::io::{BufRead, BufReader, Cursor};
 use std::path::Path;
 
 use chrono::NaiveDate;
@@ -154,13 +155,19 @@ enum ChildAction {
 struct Attrs(Vec<(String, String)>);
 
 impl Attrs {
+    fn decode_attr(attr: &Attribute<'_>, tag: &BytesStart<'_>, phase: &str) -> Result<String> {
+        attr.decode_and_unescape_value(tag.decoder())
+            .map(|it| it.into_owned())
+            .map_err(|e| DocumentError::xml(format!("{phase}: invalid attribute: {e}")))
+    }
+
     /// Decodes and collects all attributes from a start tag.
     fn from_tag(tag: &BytesStart<'_>, phase: &str) -> Result<Self> {
         let mut values = Vec::new();
         for attr in tag.attributes().with_checks(false).flatten() {
             values.push((
                 String::from_utf8_lossy(attr.key.as_ref()).to_string(),
-                BoeReader::decode_attr(&attr, tag, phase)?,
+                Self::decode_attr(&attr, tag, phase)?,
             ));
         }
         Ok(Self(values))
@@ -214,26 +221,30 @@ impl Anchor {
 }
 
 /// Thin XML reader wrapper with centralized error mapping and traversal helpers.
-struct BoeReader<'a> {
-    inner: Reader<&'a [u8]>,
+struct BoeReader<R> {
+    inner: Reader<R>,
+    buf: Vec<u8>,
 }
 
-impl<'a> BoeReader<'a> {
-    /// Creates a trimmed XML event reader.
-    fn new(xml: &'a str) -> Self {
-        let mut inner = Reader::from_str(xml);
+impl<R: BufRead> BoeReader<R> {
+    fn new(reader: R) -> Self {
+        let mut inner = Reader::from_reader(reader);
         inner.config_mut().trim_text(true);
-        Self { inner }
+        Self { inner, buf: Vec::new() }
     }
 
     /// Reads the next XML event, mapping errors once.
-    fn next(&mut self) -> Result<Event<'a>> {
-        self.inner.read_event().map_err(|e| {
-            DocumentError::xml_at(
-                self.inner.buffer_position() as usize,
-                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
-            )
-        })
+    fn next(&mut self) -> Result<Event<'static>> {
+        self.buf.clear();
+        self.inner
+            .read_event_into(&mut self.buf)
+            .map(|it| it.into_owned())
+            .map_err(|e| {
+                DocumentError::xml_at(
+                    self.inner.buffer_position() as usize,
+                    format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+                )
+            })
     }
 
     /// Decodes text-like nodes with phase context.
@@ -243,13 +254,6 @@ impl<'a> BoeReader<'a> {
     ) -> Result<String> {
         raw.map(|it| it.into_owned())
             .map_err(|e| DocumentError::xml(format!("{phase}: invalid node: {e}")))
-    }
-
-    /// Decodes a single attribute value with phase context.
-    fn decode_attr(attr: &Attribute<'_>, tag: &BytesStart<'_>, phase: &str) -> Result<String> {
-        attr.decode_and_unescape_value(tag.decoder())
-            .map(|it| it.into_owned())
-            .map_err(|e| DocumentError::xml(format!("{phase}: invalid attribute: {e}")))
     }
 
     /// Parses dates in `YYYYMMDD` BOE format.
@@ -534,12 +538,8 @@ pub struct LegalDocument {
 }
 
 impl LegalDocument {
-    /// Parses XML into a `LegalDocument` IR.
-    ///
-    /// This function is intentionally stateless and independent of
-    /// `TreeParser` policy.
-    pub fn from_xml(xml: &str) -> Result<Self> {
-        let mut reader = BoeReader::new(xml);
+    pub fn from_reader<R: BufRead>(reader: R) -> Result<Self> {
+        let mut reader = BoeReader::new(reader);
         loop {
             match reader.next()? {
                 Event::Start(tag) if tag.name().as_ref() == b"response" => {
@@ -554,6 +554,14 @@ impl LegalDocument {
             }
         }
         Err(DocumentError::MissingElement { path: "response/data/texto" })
+    }
+
+    /// Parses XML into a `LegalDocument` IR.
+    ///
+    /// This function is intentionally stateless and independent of
+    /// `TreeParser` policy.
+    pub fn from_xml(xml: &str) -> Result<Self> {
+        Self::from_reader(Cursor::new(xml.as_bytes()))
     }
 }
 
@@ -735,14 +743,24 @@ impl TreeParser {
 
     /// Parses an XML file and returns a projected tree.
     pub fn parse_xml_file<P: AsRef<Path>>(&self, path: P) -> Result<DocumentTree> {
-        let bytes = std::fs::read(path)?;
-        self.parse_bytes(&bytes)
+        let file = std::fs::File::open(path)?;
+        let reader = BufReader::new(file);
+        self.parse_reader(reader)
+    }
+
+    pub fn parse_reader_document<R: BufRead>(&self, reader: R) -> Result<LegalDocument> {
+        LegalDocument::from_reader(reader)
     }
 
     /// Parses XML bytes into the intermediate representation.
     pub fn parse_bytes_document(&self, bytes: &[u8]) -> Result<LegalDocument> {
         let xml = Self::decode(bytes)?;
         LegalDocument::from_xml(xml)
+    }
+
+    pub fn parse_reader<R: BufRead>(&self, reader: R) -> Result<DocumentTree> {
+        self.parse_reader_document(reader)
+            .and_then(|doc| self.build_tree(&doc.blocks))
     }
 
     /// Parses XML bytes and returns a projected tree.
@@ -1031,5 +1049,16 @@ mod tests {
         let doc = TreeParser::new().parse_bytes_document(xml.as_bytes()).unwrap();
         assert_eq!(doc.blocks.len(), 1);
         assert_eq!(doc.blocks[0].title, None);
+    }
+
+    #[test]
+    fn parses_from_streaming_reader() {
+        let reader = std::io::BufReader::with_capacity(
+            1,
+            std::io::Cursor::new(sample().as_bytes()),
+        );
+
+        let tree = TreeParser::new().parse_reader(reader).unwrap();
+        assert!(tree.find_by_anchor("artículo-1").is_some());
     }
 }
