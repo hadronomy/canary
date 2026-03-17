@@ -31,7 +31,7 @@ pub enum VersionPolicy {
 #[non_exhaustive]
 pub struct XmlBlock {
     /// Source block identifier (`id` attribute).
-    pub id: String,
+    pub id: Option<String>,
     /// Block semantic kind parsed from `tipo`.
     pub kind: BlockKind,
     /// Optional title from `titulo`.
@@ -187,7 +187,7 @@ struct Anchor {
 
 impl Anchor {
     /// Produces a deterministic unique anchor with stable suffixing.
-    fn next(&mut self, title: &str, id: &str) -> String {
+    fn next(&mut self, title: &str, id: Option<&str>) -> String {
         let base = DocumentNode::slugify(title);
 
         if self.used.insert(base.clone()) {
@@ -195,7 +195,7 @@ impl Anchor {
             return base;
         }
 
-        if !id.is_empty() {
+        if let Some(id) = id.filter(|it| !it.is_empty()) {
             let alt = format!("{}-{}", base, DocumentNode::slugify(id));
             if self.used.insert(alt.clone()) {
                 return alt;
@@ -455,9 +455,17 @@ impl<'a> BoeReader<'a> {
     fn read_block(&mut self, start: &BytesStart<'_>) -> Result<XmlBlock> {
         let attrs = Attrs::from_tag(start, "bloque")?;
         let mut block = XmlBlock {
-            id: attrs.get("id").unwrap_or_default().to_string(),
+            id: attrs
+                .get("id")
+                .map(str::trim)
+                .filter(|it| !it.is_empty())
+                .map(str::to_string),
             kind: BlockKind::from(attrs.get("tipo").unwrap_or_default()),
-            title: attrs.get("titulo").map(str::to_string),
+            title: attrs
+                .get("titulo")
+                .map(str::trim)
+                .filter(|it| !it.is_empty())
+                .map(str::to_string),
             versions: Vec::new(),
         };
 
@@ -591,10 +599,30 @@ impl TreeParser {
         if block.kind == BlockKind::Preambulo {
             return Some((ParaKind::Titulo, "Preámbulo".to_string()));
         }
-        for para in &version.paras {
-            if para.kind.heading() && !para.text.trim().is_empty() {
-                return Some((para.kind, para.text.trim().to_string()));
+        for (idx, para) in version.paras.iter().enumerate() {
+            if !para.kind.heading() {
+                continue;
             }
+            let text = para.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+
+            let mut parts = vec![text.to_string()];
+            for next in &version.paras[idx + 1..] {
+                if next.kind != para.kind {
+                    break;
+                }
+                if !next.kind.heading() {
+                    break;
+                }
+                let text = next.text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                parts.push(text.to_string());
+            }
+            return Some((para.kind, parts.join(" ")));
         }
         if let Some(title) = &block.title {
             let value = title.trim();
@@ -626,14 +654,30 @@ impl TreeParser {
             let parent = stack.last().map(|it| it.1).unwrap_or(tree.root());
 
             let mut section = DocumentNode::section(level, &title);
-            section.anchor = Some(anchor.next(&title, &block.id));
+            section.anchor = Some(anchor.next(&title, block.id.as_deref()));
             let id = tree.add_child(parent, section);
             stack.push((level, id));
+            let mut quote = None;
 
             for para in &version.paras {
+                if !para.kind.body() && !para.kind.divider() {
+                    if !para.quote {
+                        quote = None;
+                    }
+                    continue;
+                }
+
                 let parent = if para.quote {
-                    tree.add_child(id, DocumentNode::new(NodeKind::BlockQuote, String::new()))
+                    if let Some(parent) = quote {
+                        parent
+                    } else {
+                        let parent =
+                            tree.add_child(id, DocumentNode::new(NodeKind::BlockQuote, String::new()));
+                        quote = Some(parent);
+                        parent
+                    }
                 } else {
+                    quote = None;
                     id
                 };
 
@@ -655,9 +699,6 @@ impl TreeParser {
                         parent,
                         DocumentNode::new(NodeKind::ThematicBreak, String::new()),
                     );
-                    continue;
-                }
-                if !para.kind.body() {
                     continue;
                 }
                 let value = para.text.trim();
@@ -880,5 +921,115 @@ mod tests {
         assert!(found_divider);
         assert!(tree.extract_text(art).contains("CONSTITUCIÓN"));
         assert!(tree.extract_text(art).contains("Uno."));
+    }
+
+    #[test]
+    fn groups_consecutive_quote_paragraphs_under_one_blockquote() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="a1" tipo="precepto" titulo="Artículo 1">
+        <version fecha_vigencia="19781229">
+          <p class="articulo">Artículo 1</p>
+          <blockquote>
+            <p class="nota_pie">Nota uno.</p>
+            <p class="nota_pie">Nota dos.</p>
+          </blockquote>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let tree = TreeParser::new().parse_xml(xml).unwrap();
+        let art = tree.find_by_anchor("artículo-1").unwrap();
+        let quotes = tree
+            .children(art)
+            .filter(|id| {
+                tree.get(*id)
+                    .map(|node| matches!(node.kind, NodeKind::BlockQuote))
+                    .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(quotes.len(), 1);
+        let paras = tree
+            .children(quotes[0])
+            .filter(|id| {
+                tree.get(*id)
+                    .map(|node| matches!(node.kind, NodeKind::Paragraph))
+                    .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(paras, 2);
+    }
+
+    #[test]
+    fn combines_adjacent_heading_paragraphs() {
+        let tree = TreeParser::new().parse_xml(sample()).unwrap();
+        let id = tree.find_by_anchor("título-i-derechos").unwrap();
+        let section = tree.get(id).unwrap();
+        assert_eq!(section.content, "TÍTULO I Derechos");
+    }
+
+    #[test]
+    fn keeps_missing_block_id_as_none() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque tipo="encabezado" titulo="TÍTULO I">
+        <version fecha_vigencia="19781229">
+          <p class="titulo_num">TÍTULO I</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let doc = TreeParser::new().parse_bytes_document(xml.as_bytes()).unwrap();
+        assert_eq!(doc.blocks.len(), 1);
+        assert_eq!(doc.blocks[0].id, None);
+    }
+
+    #[test]
+    fn trims_blank_block_id_to_none() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="   " tipo="encabezado" titulo="TÍTULO I">
+        <version fecha_vigencia="19781229">
+          <p class="titulo_num">TÍTULO I</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let doc = TreeParser::new().parse_bytes_document(xml.as_bytes()).unwrap();
+        assert_eq!(doc.blocks.len(), 1);
+        assert_eq!(doc.blocks[0].id, None);
+    }
+
+    #[test]
+    fn trims_blank_block_title_to_none() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="a1" tipo="encabezado" titulo="   ">
+        <version fecha_vigencia="19781229">
+          <p class="titulo_num">TÍTULO I</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let doc = TreeParser::new().parse_bytes_document(xml.as_bytes()).unwrap();
+        assert_eq!(doc.blocks.len(), 1);
+        assert_eq!(doc.blocks[0].title, None);
     }
 }
