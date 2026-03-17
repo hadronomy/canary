@@ -144,14 +144,14 @@ impl From<&str> for BlockKind {
     }
 }
 
-/// Lightweight decoded attribute container for one XML start tag.
-struct Attrs(Vec<(String, String)>);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ChildAction {
     Consumed,
     Skip,
 }
+
+/// Lightweight decoded attribute container for one XML start tag.
+struct Attrs(Vec<(String, String)>);
 
 impl Attrs {
     /// Decodes and collects all attributes from a start tag.
