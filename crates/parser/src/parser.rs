@@ -9,7 +9,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::rc::Rc;
 
 use chrono::NaiveDate;
 use quick_xml::Reader;
@@ -182,40 +181,34 @@ impl Attrs {
 /// Anchor uniqueness tracker for generated tree anchors.
 #[derive(Debug, Default)]
 struct Anchor {
-    counts: HashMap<String, usize>,
-    used: HashSet<Rc<str>>,
+    next_suffix: HashMap<String, usize>,
+    used: HashSet<String>,
 }
 
 impl Anchor {
     /// Produces a deterministic unique anchor with stable suffixing.
     fn next(&mut self, title: &str, id: &str) -> String {
         let base = DocumentNode::slugify(title);
-        let count = self.counts.entry(base.clone()).or_insert(0);
-        *count += 1;
 
-        if *count == 1 {
-            let rc: Rc<str> = Rc::from(base.as_str());
-            if self.used.insert(rc) {
-                return base;
-            }
+        if self.used.insert(base.clone()) {
+            self.next_suffix.entry(base.clone()).or_insert(2);
+            return base;
         }
 
         if !id.is_empty() {
             let alt = format!("{}-{}", base, DocumentNode::slugify(id));
-            let rc: Rc<str> = Rc::from(alt.as_str());
-            if self.used.insert(rc) {
+            if self.used.insert(alt.clone()) {
                 return alt;
             }
         }
 
-        let mut n = *count;
+        let next = self.next_suffix.entry(base.clone()).or_insert(2);
         loop {
-            let candidate = format!("{base}-{n}");
-            let rc: Rc<str> = Rc::from(candidate.as_str());
-            if self.used.insert(rc) {
+            let candidate = format!("{}-{}", base, *next);
+            *next += 1;
+            if self.used.insert(candidate.clone()) {
                 return candidate;
             }
-            n += 1;
         }
     }
 }
