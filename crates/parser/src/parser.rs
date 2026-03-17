@@ -9,6 +9,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::rc::Rc;
 
 use chrono::NaiveDate;
 use quick_xml::Reader;
@@ -182,7 +183,7 @@ impl Attrs {
 #[derive(Debug, Default)]
 struct Anchor {
     counts: HashMap<String, usize>,
-    used: HashSet<String>,
+    used: HashSet<Rc<str>>,
 }
 
 impl Anchor {
@@ -192,23 +193,29 @@ impl Anchor {
         let count = self.counts.entry(base.clone()).or_insert(0);
         *count += 1;
 
-        if *count == 1 && self.used.insert(base.clone()) {
-            return base;
+        if *count == 1 {
+            let rc: Rc<str> = Rc::from(base.as_str());
+            if self.used.insert(rc) {
+                return base;
+            }
         }
 
         if !id.is_empty() {
             let alt = format!("{}-{}", base, DocumentNode::slugify(id));
-            if self.used.insert(alt.clone()) {
+            let rc: Rc<str> = Rc::from(alt.as_str());
+            if self.used.insert(rc) {
                 return alt;
             }
         }
 
+        let mut n = *count;
         loop {
-            let value = format!("{}-{}", base, *count);
-            *count += 1;
-            if self.used.insert(value.clone()) {
-                return value;
+            let candidate = format!("{base}-{n}");
+            let rc: Rc<str> = Rc::from(candidate.as_str());
+            if self.used.insert(rc) {
+                return candidate;
             }
+            n += 1;
         }
     }
 }
