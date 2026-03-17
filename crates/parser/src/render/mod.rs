@@ -1,9 +1,10 @@
 pub mod markdown;
 pub mod writer;
 
+use writer::{NodeContext, TreeWriter};
+
 use crate::NodeId;
 use crate::tree::{DocumentTree, NodeKind};
-use writer::{NodeContext, TreeWriter};
 
 pub fn render<W: TreeWriter>(tree: &DocumentTree, root: NodeId, w: &mut W) -> Result<(), W::Error> {
     walk(tree, root, 0, w)
@@ -19,11 +20,7 @@ fn walk<W: TreeWriter>(
         return Ok(());
     };
 
-    let last = tree
-        .arena()
-        .get(id.into_raw())
-        .and_then(|n| n.next_sibling())
-        .is_none();
+    let last = tree.arena().get(id.into_raw()).and_then(|n| n.next_sibling()).is_none();
 
     let ctx = NodeContext {
         depth,
@@ -37,10 +34,10 @@ fn walk<W: TreeWriter>(
         NodeKind::Root => {
             kids(tree, id, depth, w)?;
         }
-        NodeKind::Section { level } => {
-            w.enter_section(*level, &ctx)?;
+        NodeKind::Section { level, kind } => {
+            w.enter_section(*level, *kind, &ctx)?;
             kids(tree, id, depth + 1, w)?;
-            w.leave_section(*level, &ctx)?;
+            w.leave_section(*level, *kind, &ctx)?;
         }
         NodeKind::Paragraph => {
             w.enter_paragraph(&ctx)?;
@@ -49,6 +46,9 @@ fn walk<W: TreeWriter>(
             }
             kids(tree, id, depth + 1, w)?;
             w.leave_paragraph(&ctx)?;
+        }
+        NodeKind::Html => {
+            w.write_html(&ctx)?;
         }
         NodeKind::BlockQuote => {
             w.enter_blockquote(&ctx)?;

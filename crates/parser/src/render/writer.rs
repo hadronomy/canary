@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::tree::ColumnAlignment;
+use crate::tree::{ColumnAlignment, SectionKind};
 
 #[derive(Debug, Clone)]
 pub struct NodeContext<'a> {
@@ -14,8 +14,18 @@ pub struct NodeContext<'a> {
 pub trait TreeWriter {
     type Error: From<fmt::Error>;
 
-    fn enter_section(&mut self, level: u8, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
-    fn leave_section(&mut self, _level: u8, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_section(
+        &mut self,
+        level: u8,
+        kind: SectionKind,
+        ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error>;
+    fn leave_section(
+        &mut self,
+        _level: u8,
+        _kind: SectionKind,
+        _ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -85,6 +95,8 @@ pub trait TreeWriter {
         alt: &str,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
+
+    fn write_html(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
 
     fn write_thematic_break(&mut self) -> Result<(), Self::Error>;
 }

@@ -1,25 +1,86 @@
 use std::fmt::{self, Write};
 
+use crate::parser::DocumentMeta;
 use crate::render::writer::{NodeContext, TreeWriter};
-use crate::tree::ColumnAlignment;
+use crate::tree::{ColumnAlignment, SectionKind};
+
+#[derive(Debug, Clone)]
+pub enum HeadingMode {
+    None,
+    Boe { meta: DocumentMeta, fragments: usize },
+}
 
 pub struct MarkdownWriter<W> {
     out: W,
     lists: Vec<usize>,
     quote: usize,
     brk: bool,
+    mode: HeadingMode,
+    started: bool,
+    sections: Vec<bool>,
+    heads: usize,
 }
 
 impl<W: Write> MarkdownWriter<W> {
     pub fn new(out: W) -> Self {
-        Self { out, lists: Vec::new(), quote: 0, brk: false }
+        Self::with_heading(out, HeadingMode::None)
+    }
+
+    pub fn with_heading(out: W, mode: HeadingMode) -> Self {
+        Self {
+            out,
+            lists: Vec::new(),
+            quote: 0,
+            brk: false,
+            mode,
+            started: false,
+            sections: Vec::new(),
+            heads: 0,
+        }
     }
 
     pub fn into_inner(self) -> W {
         self.out
     }
 
+    fn start(&mut self) -> fmt::Result {
+        if self.started {
+            return Ok(());
+        }
+        self.started = true;
+        let HeadingMode::Boe { meta, fragments } = &self.mode else {
+            return Ok(());
+        };
+
+        writeln!(self.out, "# {}", meta.title.as_deref().unwrap_or("Documento"))?;
+        writeln!(self.out)?;
+        if let Some(value) = &meta.identifier {
+            writeln!(self.out, "- Identificador: {value}")?;
+        }
+        if let Some(value) = &meta.rango {
+            writeln!(self.out, "- Rango: {value}")?;
+        }
+        if let Some(value) = &meta.department {
+            writeln!(self.out, "- Departamento: {value}")?;
+        }
+        if let Some(value) = &meta.publication {
+            writeln!(self.out, "- Publicación: {value}")?;
+        }
+        if let Some(value) = &meta.eli {
+            writeln!(self.out, "- ELI: {value}")?;
+        }
+        writeln!(self.out, "- Consulta: /")?;
+        writeln!(self.out, "- Fragmentos: {fragments}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
+    fn marker(kind: SectionKind) -> bool {
+        matches!(kind, SectionKind::Capitulo | SectionKind::Seccion)
+    }
+
     fn line(&mut self) -> fmt::Result {
+        self.start()?;
         if self.brk {
             self.pref()?;
             writeln!(self.out)?;
@@ -43,12 +104,49 @@ impl<W: Write> MarkdownWriter<W> {
 impl<W: Write> TreeWriter for MarkdownWriter<W> {
     type Error = fmt::Error;
 
-    fn enter_section(&mut self, level: u8, ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_section(
+        &mut self,
+        level: u8,
+        kind: SectionKind,
+        ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error> {
+        let boe = matches!(&self.mode, HeadingMode::Boe { .. });
+        if boe && Self::marker(kind) {
+            self.sections.push(false);
+            self.line()?;
+            self.pref()?;
+            writeln!(self.out, "{}", ctx.content)?;
+            self.pref()?;
+            writeln!(self.out, "---")?;
+            self.brk = true;
+            return Ok(());
+        }
+
+        if boe {
+            self.sections.push(true);
+            self.heads += 1;
+        }
         self.line()?;
         self.pref()?;
-        let h = "#".repeat(level.min(6) as usize);
+        let level = if boe { (self.heads + 1).min(6) as u8 } else { level.min(6) };
+        let h = "#".repeat(level as usize);
         writeln!(self.out, "{h} {}", ctx.content)?;
         self.brk = true;
+        Ok(())
+    }
+
+    fn leave_section(
+        &mut self,
+        _level: u8,
+        _kind: SectionKind,
+        _ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error> {
+        if matches!(&self.mode, HeadingMode::Boe { .. })
+            && let Some(counted) = self.sections.pop()
+            && counted
+        {
+            self.heads = self.heads.saturating_sub(1);
+        }
         Ok(())
     }
 
@@ -230,6 +328,27 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
+    fn write_html(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+        self.line()?;
+        self.pref()?;
+        if let Ok(md) = htmd::convert(ctx.content) {
+            let txt = md.trim();
+            if !txt.is_empty() {
+                for (idx, line) in txt.lines().enumerate() {
+                    if idx > 0 {
+                        self.pref()?;
+                    }
+                    writeln!(self.out, "{line}")?;
+                }
+                self.brk = true;
+                return Ok(());
+            }
+        }
+        writeln!(self.out, "{}", ctx.content)?;
+        self.brk = true;
+        Ok(())
+    }
+
     fn write_thematic_break(&mut self) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
@@ -241,9 +360,10 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::DocumentMeta;
     use crate::render;
-    use crate::render::markdown::MarkdownWriter;
-    use crate::tree::{DocumentNode, DocumentTree, NodeKind};
+    use crate::render::markdown::{HeadingMode, MarkdownWriter};
+    use crate::tree::{DocumentNode, DocumentTree, NodeKind, SectionKind};
 
     #[test]
     fn renders_markdown_section_and_paragraph() {
@@ -288,5 +408,75 @@ mod tests {
 
         assert!(out.contains("> Texto nota"));
         assert!(!out.contains("\n>\n> Texto nota"));
+    }
+
+    #[test]
+    fn renders_html_fallback_as_markdown() {
+        let mut tree = DocumentTree::new();
+        tree.add_child(
+            tree.root(),
+            DocumentNode::new(
+                NodeKind::Html,
+                "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>",
+            ),
+        );
+
+        let mut out = String::new();
+        let mut w = MarkdownWriter::new(&mut out);
+        render::render(&tree, tree.root(), &mut w).unwrap();
+
+        assert!(out.contains("| A |"));
+        assert!(out.contains("| 1 |"));
+    }
+
+    #[test]
+    fn renders_boe_heading_when_enabled() {
+        let mut tree = DocumentTree::new();
+        tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
+
+        let mut out = String::new();
+        let mut w = MarkdownWriter::with_heading(
+            &mut out,
+            HeadingMode::Boe {
+                meta: DocumentMeta {
+                    identifier: Some("BOE-A-1978-31229".to_string()),
+                    title: Some("Constitución Española.".to_string()),
+                    department: Some("Cortes Generales".to_string()),
+                    rango: Some("Constitución".to_string()),
+                    publication: Some("19781229".to_string()),
+                    eli: Some("https://www.boe.es/eli/es/c/1978/12/27/(1)".to_string()),
+                },
+                fragments: 800,
+            },
+        );
+        render::render(&tree, tree.root(), &mut w).unwrap();
+
+        assert!(out.contains("# Constitución Española."));
+        assert!(out.contains("- Identificador: BOE-A-1978-31229"));
+        assert!(out.contains("- Fragmentos: 800"));
+        assert!(out.contains("## Intro"));
+    }
+
+    #[test]
+    fn forces_article_sections_to_h3() {
+        let mut tree = DocumentTree::new();
+        let title = tree
+            .add_child(tree.root(), DocumentNode::section_with(2, SectionKind::Titulo, "TÍTULO I"));
+        let chap = tree.add_child(
+            title,
+            DocumentNode::section_with(3, SectionKind::Capitulo, "CAPÍTULO PRIMERO"),
+        );
+        tree.add_child(chap, DocumentNode::section_with(4, SectionKind::Articulo, "Artículo 15"));
+
+        let mut out = String::new();
+        let mut w = MarkdownWriter::with_heading(
+            &mut out,
+            HeadingMode::Boe { meta: DocumentMeta::default(), fragments: 0 },
+        );
+        render::render(&tree, tree.root(), &mut w).unwrap();
+
+        assert!(out.contains("CAPÍTULO PRIMERO\n---"));
+        assert!(out.contains("### Artículo 15"));
+        assert!(!out.contains("##### Artículo 15"));
     }
 }

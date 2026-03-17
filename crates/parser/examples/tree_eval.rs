@@ -25,6 +25,7 @@ fn kind(kind: &NodeKind) -> &'static str {
         NodeKind::Root => "root",
         NodeKind::Section { .. } => "section",
         NodeKind::Paragraph => "paragraph",
+        NodeKind::Html => "html",
         NodeKind::List { .. } => "list",
         NodeKind::ListItem => "list_item",
         NodeKind::CodeBlock { .. } => "code_block",
