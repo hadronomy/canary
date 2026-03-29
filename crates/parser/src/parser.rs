@@ -373,11 +373,10 @@ impl<R: BufRead> BoeReader<R> {
     {
         loop {
             match self.next()? {
-                Event::Start(tag) => {
-                    if f(&tag, self)? == ChildAction::Skip {
-                        self.skip_element(tag.name().as_ref())?;
-                    }
-                }
+                Event::Start(tag) => match f(&tag, self)? {
+                    ChildAction::Skip => self.skip_element(tag.name().as_ref())?,
+                    ChildAction::Consumed => {}
+                },
                 Event::End(tag) if tag.name().as_ref() == closing => break,
                 Event::Eof => {
                     return Err(DocumentError::xml(format!(
