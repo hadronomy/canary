@@ -2,17 +2,6 @@
 //!
 //! This module provides [`Matches`], the main user-facing runtime result for
 //! parsing a compiled [`crate::Command`].
-//!
-//! It wraps the lower-level raw parse output and exposes a convenient typed API.
-//!
-//! Typical usage:
-//!
-//! ```rust,ignore
-//! let matches = command.parse_env()?;
-//!
-//! let verbose = matches.get_count_or_exit("verbose");
-//! let config: Option<std::path::PathBuf> = matches.get_one_or_exit("config");
-//! ```
 
 use crate::decode::{ArgMatchRef, DecodeError, FromRawValue, MatchRef};
 use crate::parse::ParseOutput;
@@ -65,17 +54,15 @@ impl Matches {
         &self.snapshot
     }
 
-    /// Print a decode error with full diagnostic context and exit.
-    pub fn exit_with_error(&self, err: DecodeError) -> ! {
-        let runtime_err = crate::RuntimeError::Decode(err);
-        let _ = runtime_err.eprint_with_argv(self.snapshot.clone());
-        std::process::exit(2);
-    }
-
     /// Return the root matched command as a typed decode view.
     #[must_use]
     pub fn root(&self) -> MatchRef<'_> {
-        self.output.root_ref(&self.command)
+        self.output.root_ref(&self.command).with_snapshot(&self.snapshot)
+    }
+
+    /// Print a decode error with full diagnostic context and exit.
+    pub fn exit_with_error(&self, err: DecodeError) -> ! {
+        self.root().exit_with_error(err)
     }
 
     /// Return the matched root command name.
@@ -106,9 +93,9 @@ impl Matches {
         self.root().get_flag(id)
     }
 
-    /// Return a boolean-style presence value for `id`, or exit with a beautiful diagnostic on error.
+    /// Return a boolean-style presence value for `id`, or exit with error.
     pub fn get_flag_or_exit(&self, id: &str) -> bool {
-        self.get_flag(id).unwrap_or_else(|err| self.exit_with_error(err))
+        self.root().get_flag_or_exit(id)
     }
 
     /// Return the occurrence count for `id`.
@@ -116,9 +103,9 @@ impl Matches {
         self.root().get_count(id)
     }
 
-    /// Return the occurrence count for `id`, or exit with a beautiful diagnostic on error.
+    /// Return the occurrence count for `id`, or exit with error.
     pub fn get_count_or_exit(&self, id: &str) -> u64 {
-        self.get_count(id).unwrap_or_else(|err| self.exit_with_error(err))
+        self.root().get_count_or_exit(id)
     }
 
     /// Decode zero or one typed value for `id`.
@@ -129,12 +116,12 @@ impl Matches {
         self.root().get_one(id)
     }
 
-    /// Decode zero or one typed value for `id`, or exit with a beautiful diagnostic on error.
+    /// Decode zero or one typed value for `id`, or exit with error.
     pub fn get_one_or_exit<T>(&self, id: &str) -> Option<T>
     where
         T: FromRawValue,
     {
-        self.get_one(id).unwrap_or_else(|err| self.exit_with_error(err))
+        self.root().get_one_or_exit(id)
     }
 
     /// Decode all values for `id`.
@@ -145,12 +132,12 @@ impl Matches {
         self.root().get_many(id)
     }
 
-    /// Decode all values for `id`, or exit with a beautiful diagnostic on error.
+    /// Decode all values for `id`, or exit with error.
     pub fn get_many_or_exit<T>(&self, id: &str) -> Vec<T>
     where
         T: FromRawValue,
     {
-        self.get_many(id).unwrap_or_else(|err| self.exit_with_error(err))
+        self.root().get_many_or_exit(id)
     }
 
     /// Return one raw value for `id`, if present.

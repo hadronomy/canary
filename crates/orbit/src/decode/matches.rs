@@ -26,6 +26,7 @@ pub struct MatchRef<'a> {
     command: CommandRef<'a>,
     matched: &'a CommandMatch,
     values: &'a ValueStore,
+    snapshot: Option<&'a crate::runtime_error::ArgvSnapshot>,
 }
 
 impl<'a> MatchRef<'a> {
@@ -33,7 +34,7 @@ impl<'a> MatchRef<'a> {
     /// shared value store.
     #[must_use]
     pub fn new(command: &'a Command, matched: &'a CommandMatch, values: &'a ValueStore) -> Self {
-        Self { command: command.as_ref(), matched, values }
+        Self { command: command.as_ref(), matched, values, snapshot: None }
     }
 
     /// Construct a `MatchRef` from a command view directly.
@@ -43,7 +44,25 @@ impl<'a> MatchRef<'a> {
         matched: &'a CommandMatch,
         values: &'a ValueStore,
     ) -> Self {
-        Self { command, matched, values }
+        Self { command, matched, values, snapshot: None }
+    }
+
+    /// Attach an argv snapshot for beautiful diagnostic errors.
+    #[must_use]
+    pub fn with_snapshot(mut self, snapshot: &'a crate::runtime_error::ArgvSnapshot) -> Self {
+        self.snapshot = Some(snapshot);
+        self
+    }
+
+    /// Print a decode error with full diagnostic context and exit.
+    pub fn exit_with_error(&self, err: DecodeError) -> ! {
+        let runtime_err = crate::RuntimeError::Decode(err);
+        if let Some(snapshot) = self.snapshot {
+            let _ = runtime_err.eprint_with_argv(snapshot.clone());
+        } else {
+            let _ = runtime_err.eprint();
+        }
+        std::process::exit(2);
     }
 
     /// Return the matched command view.
@@ -74,7 +93,9 @@ impl<'a> MatchRef<'a> {
             .find(|sub| sub.id() == matched.command)
             .expect("matched subcommand id must exist in schema");
 
-        Some(Self::from_parts(command, matched, self.values))
+        let mut next = Self::from_parts(command, matched, self.values);
+        next.snapshot = self.snapshot;
+        Some(next)
     }
 
     /// Return the deepest matched subcommand if any, otherwise `self`.
@@ -141,7 +162,26 @@ impl<'a> MatchRef<'a> {
             ));
         }
 
-        Ok(self.arg_match_by_arg(arg.id()).is_some())
+        if self.arg_match_by_arg(arg.id()).is_some() {
+            return Ok(true);
+        }
+
+        // Fallback: Environment variable
+        if let Some(env_name) = arg.env()
+            && let Ok(val) = std::env::var(env_name)
+        {
+            let lower = val.to_lowercase();
+            if !val.is_empty() && lower != "0" && lower != "false" {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Return a boolean-style presence value for `id`, or exit with error.
+    pub fn get_flag_or_exit(&self, id: &str) -> bool {
+        self.get_flag(id).unwrap_or_else(|err| self.exit_with_error(err))
     }
 
     /// Return the occurrence count for `id`.
@@ -153,12 +193,30 @@ impl<'a> MatchRef<'a> {
     /// Returns [`DecodeError`] if the arg is unknown.
     pub fn get_count(&self, id: &str) -> Result<u64, DecodeError> {
         let arg = self.schema_arg_by_id(id)?;
-        let count = self
-            .arg_match_by_arg(arg.id())
-            .map(|matched| matched.occurrence_count() as u64)
-            .unwrap_or(0);
 
-        Ok(count)
+        if let Some(matched) = self.arg_match_by_arg(arg.id()) {
+            return Ok(matched.occurrence_count() as u64);
+        }
+
+        // Fallback: Environment variable
+        if let Some(env_name) = arg.env()
+            && let Ok(val) = std::env::var(env_name)
+        {
+            if let Ok(count) = val.parse::<u64>() {
+                return Ok(count);
+            }
+            let lower = val.to_lowercase();
+            if !val.is_empty() && lower != "0" && lower != "false" {
+                return Ok(1);
+            }
+        }
+
+        Ok(0)
+    }
+
+    /// Return the occurrence count for `id`, or exit with error.
+    pub fn get_count_or_exit(&self, id: &str) -> u64 {
+        self.get_count(id).unwrap_or_else(|err| self.exit_with_error(err))
     }
 
     /// Decode zero or one typed value for `id`.
@@ -180,6 +238,28 @@ impl<'a> MatchRef<'a> {
         let arg = self.schema_arg_by_id(id)?;
 
         let Some(matched) = self.arg_match_by_arg(arg.id()) else {
+            // Fallback 1: Environment variable
+            if let Some(env_name) = arg.env()
+                && let Some(env_val) = std::env::var_os(env_name)
+            {
+                let raw = RawValue::from(env_val);
+                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                return T::from_raw_value(&raw)
+                    .map(Some)
+                    .map_err(|err| err.with_arg(id.to_owned()));
+            }
+
+            // Fallback 2: Default value
+            if let Some(spec) = arg.value_spec()
+                && let Some(crate::schema::DefaultValueRef::String(default_str)) = spec.default()
+            {
+                let raw = RawValue::from(default_str);
+                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                return T::from_raw_value(&raw)
+                    .map(Some)
+                    .map_err(|err| err.with_arg(id.to_owned()));
+            }
+
             return Ok(None);
         };
 
@@ -226,6 +306,14 @@ impl<'a> MatchRef<'a> {
             .map_err(|err| err.with_arg(id.to_owned()).with_span(value_occurrence.span))
     }
 
+    /// Decode zero or one typed value for `id`, or exit with error.
+    pub fn get_one_or_exit<T>(&self, id: &str) -> Option<T>
+    where
+        T: FromRawValue,
+    {
+        self.get_one(id).unwrap_or_else(|err| self.exit_with_error(err))
+    }
+
     /// Decode all values for `id`.
     ///
     /// If the arg is absent, returns an empty vector.
@@ -241,6 +329,26 @@ impl<'a> MatchRef<'a> {
         let arg = self.schema_arg_by_id(id)?;
 
         let Some(matched) = self.arg_match_by_arg(arg.id()) else {
+            // Fallback 1: Environment variable
+            if let Some(env_name) = arg.env()
+                && let Some(env_val) = std::env::var_os(env_name)
+            {
+                let raw = RawValue::from(env_val);
+                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                let decoded = T::from_raw_value(&raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                return Ok(vec![decoded]);
+            }
+
+            // Fallback 2: Default value
+            if let Some(spec) = arg.value_spec()
+                && let Some(crate::schema::DefaultValueRef::String(default_str)) = spec.default()
+            {
+                let raw = RawValue::from(default_str);
+                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                let decoded = T::from_raw_value(&raw).map_err(|err| err.with_arg(id.to_owned()))?;
+                return Ok(vec![decoded]);
+            }
+
             return Ok(Vec::new());
         };
 
@@ -261,6 +369,14 @@ impl<'a> MatchRef<'a> {
         }
 
         Ok(out)
+    }
+
+    /// Decode all values for `id`, or exit with error.
+    pub fn get_many_or_exit<T>(&self, id: &str) -> Vec<T>
+    where
+        T: FromRawValue,
+    {
+        self.get_many(id).unwrap_or_else(|err| self.exit_with_error(err))
     }
 
     /// Return one raw value for `id`, if present.
