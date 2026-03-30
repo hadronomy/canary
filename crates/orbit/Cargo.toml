@@ -1,0 +1,18 @@
+[package]
+name              = "orbit"
+publish.workspace = true
+
+authors.workspace     = true
+description.workspace = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+version.workspace     = true
+
+[dependencies]
+ariadne             = "0.6.0"
+fixedbitset         = "0.5.7"
+terminal_size       = "0.4"
+textwrap            = "0.16"
+thiserror.workspace = true
+unicode-width       = "0.2"
