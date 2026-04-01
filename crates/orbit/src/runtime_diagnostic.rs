@@ -52,30 +52,6 @@ impl RuntimeDiagnostic {
 
     fn emit(&self, stream: Stream) -> Result<(), RuntimeEmitError> {
         match &self.error {
-            RuntimeError::Normalize(err) => {
-                let span = Span { arg_index: err.arg_index(), part: SpanPart::Whole };
-
-                if let Some(argv) = &self.argv {
-                    emit_with_real_argv(
-                        err.to_string(),
-                        err.message(),
-                        &[],
-                        Some("try `--help` to see supported arguments"),
-                        argv,
-                        span,
-                        stream,
-                    )
-                } else {
-                    emit_with_synthetic_argv(
-                        err.to_string(),
-                        err.message(),
-                        &[],
-                        Some("try `--help` to see supported arguments"),
-                        span,
-                        stream,
-                    )
-                }
-            }
             RuntimeError::Parse(errors) => {
                 for err in errors {
                     emit_parse_error(err, self.argv.as_ref(), stream)?;
@@ -94,7 +70,9 @@ fn emit_parse_error(
     stream: Stream,
 ) -> Result<(), RuntimeEmitError> {
     if let Some(span) = err.span() {
-        if let Some(argv) = argv {
+        let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+
+        if let Some(argv) = argv.filter(|_| !is_synthetic) {
             emit_with_real_argv(
                 err.to_string(),
                 err.message(),
@@ -111,6 +89,7 @@ fn emit_parse_error(
                 err.notes(),
                 err.help(),
                 span,
+                None,
                 stream,
             )
         }
@@ -125,10 +104,20 @@ fn emit_decode_error(
     stream: Stream,
 ) -> Result<(), RuntimeEmitError> {
     if let Some(span) = err.span() {
-        if let Some(argv) = argv {
+        let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+
+        if let Some(argv) = argv.filter(|_| !is_synthetic) {
             emit_with_real_argv(err.to_string(), err.message(), &[], None, argv, span, stream)
         } else {
-            emit_with_synthetic_argv(err.to_string(), err.message(), &[], None, span, stream)
+            emit_with_synthetic_argv(
+                err.to_string(),
+                err.message(),
+                &[],
+                None,
+                span,
+                err.value(),
+                stream,
+            )
         }
     } else {
         emit_plain_with_extras(&err.to_string(), &[], None, stream)
@@ -179,10 +168,15 @@ fn emit_with_synthetic_argv(
     notes: &[Box<str>],
     help: Option<&str>,
     span: Span,
+    synthetic_value: Option<&str>,
     stream: Stream,
 ) -> Result<(), RuntimeEmitError> {
-    let rendered = render_synthetic_argv_source(span);
-    let source_id = "argv://runtime";
+    let rendered = render_synthetic_argv_source(span, synthetic_value);
+    let source_id = match span.part {
+        SpanPart::Default => "schema://default",
+        SpanPart::Environment => "env://runtime",
+        _ => "argv://runtime",
+    };
 
     let mut report = Report::build(ReportKind::Error, (source_id, rendered.range.clone()))
         .with_message(title)
@@ -265,7 +259,13 @@ fn render_real_argv_source(argv: &ArgvSnapshot, span: Span) -> RenderedArgvSourc
     RenderedArgvSource { text: raw, range: highlight }
 }
 
-fn render_synthetic_argv_source(span: Span) -> RenderedArgvSource {
+fn render_synthetic_argv_source(span: Span, synthetic_value: Option<&str>) -> RenderedArgvSource {
+    if let Some(val) = synthetic_value
+        && matches!(span.part, SpanPart::Environment | SpanPart::Default)
+    {
+        return RenderedArgvSource { text: val.to_string(), range: 0..val.len() };
+    }
+
     let part = match span.part {
         SpanPart::Whole => "<arg>",
         SpanPart::LongName => "<long-name>",
@@ -277,7 +277,6 @@ fn render_synthetic_argv_source(span: Span) -> RenderedArgvSource {
         SpanPart::Default => "<default value>",
     };
 
-    // Synthetically injected values are not actually in the argv array!
     if matches!(span.part, SpanPart::Environment | SpanPart::Default) {
         return RenderedArgvSource { text: part.to_string(), range: 0..part.len() };
     }

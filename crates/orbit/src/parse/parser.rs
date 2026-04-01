@@ -1,50 +1,53 @@
 //! Core schema-driven CLI parser.
 //!
-//! This parser consumes normalized tokens and produces raw matched command/arg
-//! occurrences. It uses an iterative, non-recursive state loop for maximum
+//! This parser consumes raw tokenized argv and normalizes tokens on the fly
+//! against the active command schema. It produces raw matched command/arg
+//! occurrences using an iterative, non-recursive state loop for maximum
 //! performance and defers errors so that `--help` can reliably bypass them.
 
-use std::iter::Peekable;
-use std::slice::Iter;
+use std::collections::VecDeque;
 
 use crate::ids::LocalArgIndex;
-use crate::parse::error::{ParseError, ParseFailure};
+use crate::parse::error::{ParseError, ParseErrorKind, ParseFailure};
 use crate::parse::model::{
-    CommandMatch, ParseOutput, RawValue, Span, ValueOccurrence, ValueOrigin,
+    CommandMatch, NormalizedToken, ParseOutput, RawValue, Span, SpanPart, ValueId, ValueOccurrence,
+    ValueOrigin,
 };
-use crate::parse::normalize::{NormalizedArgv, NormalizedToken};
 use crate::parse::state::CommandState;
+use crate::parse::token::{RawToken, TokenizedArgv};
 use crate::parse::validate::validate_command;
-use crate::parse::{SpanPart, ValueId};
 use crate::schema::{ArgRef, Command, CommandRef, LookupRef};
 
-/// Parse normalized argv against a compiled command schema.
+/// Parse tokenized argv against a compiled command schema.
 ///
 /// If validation fails, this returns a vector of `ParseError`s, allowing
 /// the caller to render rich, multi-label diagnostics.
 pub fn parse_command(
     command: &Command,
-    input: NormalizedArgv,
+    input: TokenizedArgv,
 ) -> Result<ParseOutput, Vec<ParseError>> {
-    let mut values_builder = input.values().clone().unfreeze();
-    let parser = Parser::new(input.tokens(), &mut values_builder);
+    let (program, source_values, raw_tokens) = input.into_parts();
+    let mut values_builder = crate::parse::model::ValueStoreBuilder::from_store(&source_values);
+
+    let parser = Parser::new(&raw_tokens, &mut values_builder);
     let root_match = parser.parse(command.as_ref())?;
 
-    Ok(ParseOutput {
-        program: input.program().cloned(),
-        root: root_match,
-        values: values_builder.freeze(),
-    })
+    Ok(ParseOutput { program, root: root_match, values: values_builder.freeze() })
 }
 
 /// Encapsulated parser state for the token stream.
 ///
 /// This struct holds the mutable context required to process tokens iteratively,
-/// dynamically inject environment variables and defaults, and accumulate all
-/// syntax and validation errors for beautiful multi-label diagnostics.
+/// normalize raw tokens against the active command schema, dynamically inject
+/// environment variables and defaults, and accumulate all syntax and validation
+/// errors for beautiful multi-label diagnostics.
 struct Parser<'a> {
-    /// Iterator over the normalized token stream.
-    iter: Peekable<Iter<'a, NormalizedToken>>,
+    /// The raw lexical tokens produced from argv.
+    raw_tokens: &'a [RawToken],
+    /// Current index into `raw_tokens`.
+    cursor: usize,
+    /// A buffer of normalized tokens ready for parsing.
+    normalized_buffer: VecDeque<NormalizedToken>,
     /// A mutable builder enabling us to dynamically inject environment and default values.
     values: &'a mut crate::parse::model::ValueStoreBuilder,
     /// Flattened list of constructed commands.
@@ -53,21 +56,204 @@ struct Parser<'a> {
     errors: Vec<ParseError>,
     /// Short-circuit flag when `--help` is encountered anywhere in the input.
     help_triggered: bool,
+    /// Tracks whether the `--` terminator has been encountered.
+    after_terminator: bool,
 }
 
 impl<'a> Parser<'a> {
     /// Initialize a new parser from the token stream.
     fn new(
-        tokens: &'a [NormalizedToken],
+        raw_tokens: &'a [RawToken],
         values: &'a mut crate::parse::model::ValueStoreBuilder,
     ) -> Self {
         Self {
-            iter: tokens.iter().peekable(),
+            raw_tokens,
+            cursor: 0,
+            normalized_buffer: VecDeque::new(),
             values,
             commands: Vec::new(),
             errors: Vec::new(),
             help_triggered: false,
+            after_terminator: false,
         }
+    }
+
+    /// Peek at the next normalized token using the current subcommand's schema.
+    fn peek_token(&mut self, current_cmd: CommandRef<'a>) -> Option<NormalizedToken> {
+        self.fill_buffer(current_cmd);
+        self.normalized_buffer.front().cloned()
+    }
+
+    /// Consume the next normalized token using the current subcommand's schema.
+    fn next_token(&mut self, current_cmd: CommandRef<'a>) -> Option<NormalizedToken> {
+        self.fill_buffer(current_cmd);
+        self.normalized_buffer.pop_front()
+    }
+
+    /// Read raw tokens and normalize them until the buffer has at least one token,
+    /// or we run out of input.
+    fn fill_buffer(&mut self, current_cmd: CommandRef<'a>) {
+        while self.normalized_buffer.is_empty() && self.cursor < self.raw_tokens.len() {
+            let token = self.raw_tokens[self.cursor];
+            self.cursor += 1;
+
+            match token {
+                RawToken::Terminator { span } => {
+                    self.after_terminator = true;
+                    self.normalized_buffer.push_back(NormalizedToken::Terminator { span });
+                }
+                RawToken::Value { value, span } => {
+                    self.normalized_buffer.push_back(NormalizedToken::Value { value, span });
+                }
+                RawToken::OptionLike { value, span } => {
+                    if self.after_terminator {
+                        self.normalized_buffer.push_back(NormalizedToken::Value {
+                            value,
+                            span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
+                        });
+                    } else if let Err(e) = self.normalize_option_like(current_cmd, value, span) {
+                        self.errors.push(e);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Schema-aware normalization for an option-like string (e.g., `-v`, `--config=file`).
+    fn normalize_option_like(
+        &mut self,
+        cmd: CommandRef<'a>,
+        value_id: ValueId,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        let text = {
+            let raw = self.values.get(value_id);
+            raw.try_as_str().map(ToOwned::to_owned).map_err(|err| {
+                ParseError::new(
+                    ParseErrorKind::NonUtf8OptionLike,
+                    Some(span),
+                    format!("option-like argv entry must be valid UTF-8: {err}"),
+                )
+            })?
+        };
+
+        // Now we can safely mutate `self` using slices of our local owned String
+        if let Some(rest) = text.strip_prefix("--") {
+            self.normalize_long(span, rest)
+        } else if let Some(rest) = text.strip_prefix('-') {
+            self.normalize_short_cluster(cmd, span, rest)
+        } else {
+            self.normalized_buffer.push_back(NormalizedToken::Value {
+                value: value_id,
+                span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
+            });
+            Ok(())
+        }
+    }
+
+    /// Normalize a long option (e.g., `verbose` or `config=file`).
+    fn normalize_long(&mut self, span: Span, rest: &str) -> Result<(), ParseError> {
+        if rest.is_empty() {
+            return Err(ParseError::new(
+                ParseErrorKind::InvalidLongSyntax,
+                Some(span),
+                "long option name must not be empty",
+            ));
+        }
+
+        match rest.split_once('=') {
+            Some((name, attached)) => {
+                if name.is_empty() {
+                    return Err(ParseError::new(
+                        ParseErrorKind::InvalidLongSyntax,
+                        Some(span),
+                        "long option name must not be empty",
+                    ));
+                }
+
+                self.normalized_buffer.push_back(NormalizedToken::Long {
+                    name: name.into(),
+                    span: Span { arg_index: span.arg_index, part: SpanPart::LongName },
+                });
+
+                let value = self.values.push(RawValue::from(attached));
+                self.normalized_buffer.push_back(NormalizedToken::Value {
+                    value,
+                    span: Span { arg_index: span.arg_index, part: SpanPart::AttachedValue },
+                });
+
+                Ok(())
+            }
+            None => {
+                self.normalized_buffer.push_back(NormalizedToken::Long {
+                    name: rest.into(),
+                    span: Span { arg_index: span.arg_index, part: SpanPart::LongName },
+                });
+                Ok(())
+            }
+        }
+    }
+
+    /// Normalize a cluster of short options (e.g., `-vab` or `-ofile.txt`).
+    fn normalize_short_cluster(
+        &mut self,
+        cmd: CommandRef<'a>,
+        span: Span,
+        rest: &str,
+    ) -> Result<(), ParseError> {
+        if rest.is_empty() {
+            return Err(ParseError::new(
+                ParseErrorKind::UnknownShort,
+                Some(span),
+                "short option cluster must not be empty",
+            ));
+        }
+
+        let iter = rest.char_indices();
+
+        for (byte_offset, short) in iter {
+            let arg = match cmd.lookup_short(short) {
+                Some(LookupRef::Arg(arg)) => arg,
+                Some(LookupRef::Subcommand(_)) => {
+                    return Err(ParseError::new(
+                        ParseErrorKind::UnknownShort,
+                        Some(span),
+                        format!("short option `-{short}` resolved unexpectedly to a subcommand"),
+                    ));
+                }
+                None => {
+                    return Err(ParseError::new(
+                        ParseErrorKind::UnknownShort,
+                        Some(span),
+                        format!("unknown short option `-{short}`"),
+                    )
+                    .with_help("try `--help` to see available options"));
+                }
+            };
+
+            self.normalized_buffer.push_back(NormalizedToken::Short {
+                name: short,
+                span: Span { arg_index: span.arg_index, part: SpanPart::ShortName },
+            });
+
+            if arg.takes_value() {
+                let value_start = byte_offset + short.len_utf8();
+                if value_start < rest.len() {
+                    let attached = &rest[value_start..];
+                    let value = self.values.push(RawValue::from(attached));
+
+                    self.normalized_buffer.push_back(NormalizedToken::Value {
+                        value,
+                        span: Span { arg_index: span.arg_index, part: SpanPart::AttachedValue },
+                    });
+
+                    // We consumed the rest of the cluster as an attached value.
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Execute the non-recursive parsing loop.
@@ -78,18 +264,17 @@ impl<'a> Parser<'a> {
             let mut state = CommandState::new(current_cmd);
             let mut next_cmd = None;
 
-            while let Some(token) = self.iter.next() {
+            while let Some(token) = self.next_token(current_cmd) {
                 match token {
                     NormalizedToken::Terminator { .. } => continue,
                     NormalizedToken::Long { name, span } => {
-                        self.handle_long(current_cmd, &mut state, name, *span);
+                        self.handle_long(current_cmd, &mut state, &name, span);
                     }
                     NormalizedToken::Short { name, span } => {
-                        self.handle_short(current_cmd, &mut state, *name, *span);
+                        self.handle_short(current_cmd, &mut state, name, span);
                     }
                     NormalizedToken::Value { value, span } => {
-                        if let Some(sub) = self.handle_value(current_cmd, &mut state, *value, *span)
-                        {
+                        if let Some(sub) = self.handle_value(current_cmd, &mut state, value, span) {
                             next_cmd = Some(sub);
                             break;
                         }
@@ -168,7 +353,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Now validate. Accumulate the error instead of crashing!
-                if let Err(failure) = validate_command(current_cmd, &state) {
+                if let Err(failure) = validate_command(current_cmd, &state, self.values) {
                     self.errors.push(enrich_validation_error(current_cmd, failure));
                 }
             }
@@ -176,7 +361,7 @@ impl<'a> Parser<'a> {
             // Validate the current command only if help was not triggered and no earlier error exists.
             if !self.help_triggered
                 && self.errors.is_empty()
-                && let Err(failure) = validate_command(current_cmd, &state)
+                && let Err(failure) = validate_command(current_cmd, &state, self.values)
             {
                 self.errors.push(enrich_validation_error(current_cmd, failure));
             }
@@ -233,10 +418,11 @@ impl<'a> Parser<'a> {
                 unreachable!("short lookup must never resolve to subcommand")
             }
             None => {
-                self.errors.push(
-                    ParseFailure::UnknownShort { name, span }
-                        .into_error(|a| render_arg(cmd, a), |c| render_command(cmd, c)),
-                );
+                self.errors.push(ParseFailure::UnknownShort { name, span }.into_error(
+                    |a| render_arg(cmd, a),
+                    |c| render_command(cmd, c),
+                    |g| render_group(cmd, g),
+                ));
             }
         }
     }
@@ -285,61 +471,72 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if let Err(e) = parse_arg_occurrence(arg, cmd, state, &mut self.iter, span) {
+        if let Err(e) = self.parse_arg_occurrence(arg, cmd, state, span) {
             self.errors.push(e);
         }
     }
-}
 
-fn parse_arg_occurrence<'a>(
-    arg: ArgRef<'_>,
-    command: CommandRef<'_>,
-    state: &mut CommandState,
-    iter: &mut Peekable<Iter<'a, NormalizedToken>>,
-    span: Span,
-) -> Result<(), ParseError> {
-    let local = command.local_arg_by_id(arg.id()).expect("effective arg must have local slot");
+    fn parse_arg_occurrence(
+        &mut self,
+        arg: ArgRef<'a>,
+        command: CommandRef<'a>,
+        state: &mut CommandState,
+        span: Span,
+    ) -> Result<(), ParseError> {
+        let local = command.local_arg_by_id(arg.id()).expect("effective arg must have local slot");
 
-    state.mark_seen(local);
+        state.mark_seen(local);
 
-    if arg.takes_value() {
-        if let Some(NormalizedToken::Value { value, span: value_span }) = iter.peek() {
-            let value_copy = *value;
-            let span_copy = *value_span;
+        if arg.takes_value() {
+            if let Some(NormalizedToken::Value { value, span: value_span }) =
+                self.peek_token(command)
+            {
+                let value_copy = value;
+                let span_copy = value_span;
 
-            iter.next();
+                self.next_token(command); // Consume it!
 
-            let origin = match span_copy.part {
-                crate::parse::model::SpanPart::AttachedValue => {
-                    if matches!(span.part, crate::parse::model::SpanPart::LongName) {
-                        ValueOrigin::AttachedLong
-                    } else {
-                        ValueOrigin::AttachedShort
+                let origin = match span_copy.part {
+                    SpanPart::AttachedValue => {
+                        if matches!(span.part, SpanPart::LongName) {
+                            ValueOrigin::AttachedLong
+                        } else {
+                            ValueOrigin::AttachedShort
+                        }
                     }
-                }
-                _ => ValueOrigin::Separate,
-            };
+                    _ => ValueOrigin::Separate,
+                };
 
-            state
-                .match_builder(local)
-                .push_value(span, ValueOccurrence { value: value_copy, span: span_copy, origin });
+                state.match_builder(local).push_value(
+                    span,
+                    ValueOccurrence { value: value_copy, span: span_copy, origin },
+                );
+            } else {
+                return Err(ParseFailure::MissingValue { arg: arg.id(), span }
+                    .into_error(
+                        |a| render_arg(command, a),
+                        |c| render_command(command, c),
+                        |g| render_group(command, g),
+                    )
+                    .with_help("pass a value after this option or use `--help`"));
+            }
         } else {
-            return Err(ParseFailure::MissingValue { arg: arg.id(), span }
-                .into_error(|a| render_arg(command, a), |c| render_command(command, c))
-                .with_help("pass a value after this option or use `--help`"));
+            state.match_builder(local).push_flag(span);
         }
-    } else {
-        state.match_builder(local).push_flag(span);
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseError {
     let suggestions = suggest_long(command, name);
 
     let mut err = ParseFailure::UnknownLong { name: name.into(), span }
-        .into_error(|arg| render_arg(command, arg), |cmd| render_command(command, cmd))
+        .into_error(
+            |arg| render_arg(command, arg),
+            |cmd| render_command(command, cmd),
+            |g| render_group(command, g),
+        )
         .with_help("try `--help` to see available options");
 
     if !suggestions.is_empty() {
@@ -352,7 +549,11 @@ fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseE
 fn unexpected_value_error(cmd: CommandRef<'_>, raw: &RawValue, span: Span) -> ParseError {
     let text = raw.display().to_string();
     let mut err = ParseFailure::UnexpectedValue { value: text.into_boxed_str(), span }
-        .into_error(|arg| render_arg(cmd, arg), |c| render_command(cmd, c))
+        .into_error(
+            |arg| render_arg(cmd, arg),
+            |c| render_command(cmd, c),
+            |g| render_group(cmd, g),
+        )
         .with_help("try `--help` to see supported arguments");
 
     if let Ok(s) = raw.try_as_str()
@@ -368,13 +569,17 @@ fn unexpected_value_error(cmd: CommandRef<'_>, raw: &RawValue, span: Span) -> Pa
 }
 
 fn enrich_validation_error(cmd: CommandRef<'_>, failure: ParseFailure) -> ParseError {
-    let mut err = failure.into_error(|arg| render_arg(cmd, arg), |c| render_command(cmd, c));
+    let mut err = failure.into_error(
+        |arg| render_arg(cmd, arg),
+        |c| render_command(cmd, c),
+        |g| render_group(cmd, g),
+    );
 
     match err.kind() {
-        crate::parse::ParseErrorKind::MissingRequired
-        | crate::parse::ParseErrorKind::Conflict
-        | crate::parse::ParseErrorKind::Requires
-        | crate::parse::ParseErrorKind::MissingValue => {
+        ParseErrorKind::MissingRequired
+        | ParseErrorKind::Conflict
+        | ParseErrorKind::Requires
+        | ParseErrorKind::MissingValue => {
             err = err.with_help("try `--help` to see supported arguments");
         }
         _ => {}
@@ -494,4 +699,9 @@ fn render_arg(command: CommandRef<'_>, arg: crate::ids::ArgId) -> String {
 fn render_command(command: CommandRef<'_>, id: crate::ids::CommandId) -> String {
     let cmd = crate::schema::CommandRef { schema: command.schema, id };
     cmd.name().to_owned()
+}
+
+fn render_group(command: CommandRef<'_>, id: crate::ids::GroupId) -> String {
+    let group = crate::schema::GroupRef { schema: command.schema, id };
+    group.id_string().to_owned()
 }

@@ -1,8 +1,6 @@
 //! Ergonomic access over raw parse output.
 
-use std::path::Path;
-
-use crate::builder::{ArgActionKind, Validator};
+use crate::builder::ArgActionKind;
 use crate::decode::{DecodeError, DecodeErrorKind, FromRawValue};
 use crate::ids::ArgId;
 use crate::parse::{ArgMatch, CommandMatch, ParseOutput, RawValue, ValueOccurrence, ValueStore};
@@ -24,6 +22,7 @@ use crate::schema::{ArgRef, Command, CommandRef};
 #[derive(Clone, Copy, Debug)]
 pub struct MatchRef<'a> {
     command: CommandRef<'a>,
+    root_matched: &'a CommandMatch,
     matched: &'a CommandMatch,
     values: &'a ValueStore,
     snapshot: Option<&'a crate::runtime_error::ArgvSnapshot>,
@@ -34,17 +33,18 @@ impl<'a> MatchRef<'a> {
     /// shared value store.
     #[must_use]
     pub fn new(command: &'a Command, matched: &'a CommandMatch, values: &'a ValueStore) -> Self {
-        Self { command: command.as_ref(), matched, values, snapshot: None }
+        Self { command: command.as_ref(), root_matched: matched, matched, values, snapshot: None }
     }
 
     /// Construct a `MatchRef` from a command view directly.
     #[must_use]
     pub fn from_parts(
         command: CommandRef<'a>,
+        root_matched: &'a CommandMatch,
         matched: &'a CommandMatch,
         values: &'a ValueStore,
     ) -> Self {
-        Self { command, matched, values, snapshot: None }
+        Self { command, root_matched, matched, values, snapshot: None }
     }
 
     /// Attach an argv snapshot for beautiful diagnostic errors.
@@ -93,7 +93,7 @@ impl<'a> MatchRef<'a> {
             .find(|sub| sub.id() == matched.command)
             .expect("matched subcommand id must exist in schema");
 
-        let mut next = Self::from_parts(command, matched, self.values);
+        let mut next = Self::from_parts(command, self.root_matched, matched, self.values);
         next.snapshot = self.snapshot;
         Some(next)
     }
@@ -162,21 +162,7 @@ impl<'a> MatchRef<'a> {
             ));
         }
 
-        if self.arg_match_by_arg(arg.id()).is_some() {
-            return Ok(true);
-        }
-
-        // Fallback: Environment variable
-        if let Some(env_name) = arg.env()
-            && let Ok(val) = std::env::var(env_name)
-        {
-            let lower = val.to_lowercase();
-            if !val.is_empty() && lower != "0" && lower != "false" {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
+        Ok(self.arg_match_by_arg(arg.id()).is_some())
     }
 
     /// Return a boolean-style presence value for `id`, or exit with error.
@@ -195,23 +181,10 @@ impl<'a> MatchRef<'a> {
         let arg = self.schema_arg_by_id(id)?;
 
         if let Some(matched) = self.arg_match_by_arg(arg.id()) {
-            return Ok(matched.occurrence_count() as u64);
+            Ok(matched.occurrence_count() as u64)
+        } else {
+            Ok(0)
         }
-
-        // Fallback: Environment variable
-        if let Some(env_name) = arg.env()
-            && let Ok(val) = std::env::var(env_name)
-        {
-            if let Ok(count) = val.parse::<u64>() {
-                return Ok(count);
-            }
-            let lower = val.to_lowercase();
-            if !val.is_empty() && lower != "0" && lower != "false" {
-                return Ok(1);
-            }
-        }
-
-        Ok(0)
     }
 
     /// Return the occurrence count for `id`, or exit with error.
@@ -238,28 +211,6 @@ impl<'a> MatchRef<'a> {
         let arg = self.schema_arg_by_id(id)?;
 
         let Some(matched) = self.arg_match_by_arg(arg.id()) else {
-            // Fallback 1: Environment variable
-            if let Some(env_name) = arg.env()
-                && let Some(env_val) = std::env::var_os(env_name)
-            {
-                let raw = RawValue::from(env_val);
-                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                return T::from_raw_value(&raw)
-                    .map(Some)
-                    .map_err(|err| err.with_arg(id.to_owned()));
-            }
-
-            // Fallback 2: Default value
-            if let Some(spec) = arg.value_spec()
-                && let Some(crate::schema::DefaultValueRef::String(default_str)) = spec.default()
-            {
-                let raw = RawValue::from(default_str);
-                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                return T::from_raw_value(&raw)
-                    .map(Some)
-                    .map_err(|err| err.with_arg(id.to_owned()));
-            }
-
             return Ok(None);
         };
 
@@ -298,12 +249,11 @@ impl<'a> MatchRef<'a> {
         let value_occurrence = &occurrence.values[0];
         let value = self.values.get(value_occurrence.value);
 
-        validate_raw_value(arg, value)
-            .map_err(|err| err.with_arg(id.to_owned()).with_span(value_occurrence.span))?;
-
-        T::from_raw_value(value)
-            .map(Some)
-            .map_err(|err| err.with_arg(id.to_owned()).with_span(value_occurrence.span))
+        T::from_raw_value(value).map(Some).map_err(|err| {
+            err.with_arg(id.to_owned())
+                .with_span(value_occurrence.span)
+                .with_value(value.display().to_string())
+        })
     }
 
     /// Decode zero or one typed value for `id`, or exit with error.
@@ -329,37 +279,14 @@ impl<'a> MatchRef<'a> {
         let arg = self.schema_arg_by_id(id)?;
 
         let Some(matched) = self.arg_match_by_arg(arg.id()) else {
-            // Fallback 1: Environment variable
-            if let Some(env_name) = arg.env()
-                && let Some(env_val) = std::env::var_os(env_name)
-            {
-                let raw = RawValue::from(env_val);
-                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                let decoded = T::from_raw_value(&raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                return Ok(vec![decoded]);
-            }
-
-            // Fallback 2: Default value
-            if let Some(spec) = arg.value_spec()
-                && let Some(crate::schema::DefaultValueRef::String(default_str)) = spec.default()
-            {
-                let raw = RawValue::from(default_str);
-                validate_raw_value(arg, &raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                let decoded = T::from_raw_value(&raw).map_err(|err| err.with_arg(id.to_owned()))?;
-                return Ok(vec![decoded]);
-            }
-
             return Ok(Vec::new());
         };
 
         let mut out = Vec::new();
 
         for occurrence in &matched.occurrences {
-            for value in &occurrence.values {
+            for value in &*occurrence.values {
                 let raw = self.values.get(value.value);
-
-                validate_raw_value(arg, raw)
-                    .map_err(|err| err.with_arg(id.to_owned()).with_span(value.span))?;
 
                 let decoded = T::from_raw_value(raw)
                     .map_err(|err| err.with_arg(id.to_owned()).with_span(value.span))?;
@@ -434,7 +361,27 @@ impl<'a> MatchRef<'a> {
     }
 
     fn arg_match_by_arg(&self, id: ArgId) -> Option<&'a ArgMatch> {
-        self.matched.args.iter().find(|matched| matched.arg == id)
+        let mut current = self.root_matched;
+
+        loop {
+            // 1. Check if the argument was captured at this level of the tree
+            if let Some(m) = current.args.iter().find(|m| m.arg == id) {
+                return Some(m);
+            }
+
+            // 2. Stop searching once we've checked the node this MatchRef represents
+            if std::ptr::eq(current, self.matched) {
+                break;
+            }
+
+            // 3. Otherwise, traverse down the actively parsed subcommand path
+            match &current.subcommand {
+                Some(sub) => current = sub.as_ref(),
+                None => break, // Should never happen on a valid active path
+            }
+        }
+
+        None
     }
 }
 
@@ -523,93 +470,11 @@ impl ParseOutput {
     }
 }
 
-fn validate_raw_value(arg: ArgRef<'_>, value: &RawValue) -> Result<(), DecodeError> {
-    for validator in arg.validators() {
-        apply_validator(validator, value)?;
-    }
-
-    for validator in arg.custom_validators() {
-        validator.validate(value).map_err(|err| {
-            DecodeError::new(
-                DecodeErrorKind::ValidationFailed,
-                Option::<Box<str>>::None,
-                None,
-                format!(
-                    "custom validator `{}` rejected value `{}`: {}",
-                    validator.name(),
-                    value.display(),
-                    err.message(),
-                ),
-            )
-        })?;
-    }
-
-    Ok(())
-}
-
-fn apply_validator(validator: &Validator, value: &RawValue) -> Result<(), DecodeError> {
-    match validator {
-        Validator::Exists => {
-            let path = Path::new(value.as_os_str());
-            if !path.exists() {
-                return Err(DecodeError::new(
-                    DecodeErrorKind::ValidationFailed,
-                    Option::<Box<str>>::None,
-                    None,
-                    format!("path does not exist: {}", value.display()),
-                ));
-            }
-        }
-        Validator::File => {
-            let path = Path::new(value.as_os_str());
-            if !path.exists() {
-                return Err(DecodeError::new(
-                    DecodeErrorKind::ValidationFailed,
-                    Option::<Box<str>>::None,
-                    None,
-                    format!("path does not exist: {}", value.display()),
-                ));
-            }
-
-            if !path.is_file() {
-                return Err(DecodeError::new(
-                    DecodeErrorKind::ValidationFailed,
-                    Option::<Box<str>>::None,
-                    None,
-                    format!("path is not a file: {}", value.display()),
-                ));
-            }
-        }
-        Validator::Directory => {
-            let path = Path::new(value.as_os_str());
-            if !path.exists() {
-                return Err(DecodeError::new(
-                    DecodeErrorKind::ValidationFailed,
-                    Option::<Box<str>>::None,
-                    None,
-                    format!("path does not exist: {}", value.display()),
-                ));
-            }
-
-            if !path.is_dir() {
-                return Err(DecodeError::new(
-                    DecodeErrorKind::ValidationFailed,
-                    Option::<Box<str>>::None,
-                    None,
-                    format!("path is not a directory: {}", value.display()),
-                ));
-            }
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::builder::{ArgAction, ArgBuilder, CommandBuilder};
-    use crate::parse::{Argv, normalize_for_command, parse_command, tokenize_argv};
+    use crate::parse::{Argv, parse_command, tokenize_argv};
 
     fn parsed_fixture() -> (Command, ParseOutput) {
         let command = CommandBuilder::new("demo")
@@ -621,8 +486,7 @@ mod tests {
 
         let argv = Argv::from_argv(["demo", "--verbose", "--config", "app.toml", "input.txt"]);
         let tokenized = tokenize_argv(argv);
-        let normalized = normalize_for_command(command.as_ref(), tokenized).expect("normalize");
-        let parsed = parse_command(&command, normalized).expect("parse");
+        let parsed = parse_command(&command, tokenized).expect("parse");
 
         (command, parsed)
     }

@@ -105,9 +105,13 @@ pub enum ParseErrorKind {
     UnexpectedValue,
     MissingValue,
     MissingRequired,
+    MissingGroup,
     Conflict,
     Requires,
     UnexpectedTerminator,
+    InvalidLongSyntax,
+    NonUtf8OptionLike,
+    ValidationFailed,
 }
 
 impl ParseErrorKind {
@@ -120,9 +124,13 @@ impl ParseErrorKind {
             Self::UnexpectedValue => "unexpected value",
             Self::MissingValue => "missing value",
             Self::MissingRequired => "missing required argument",
+            Self::MissingGroup => "missing required group",
             Self::Conflict => "conflicting arguments",
             Self::Requires => "missing required companion argument",
             Self::UnexpectedTerminator => "unexpected terminator",
+            Self::InvalidLongSyntax => "invalid long option syntax",
+            Self::NonUtf8OptionLike => "non-utf8 option-like argument",
+            Self::ValidationFailed => "validation failed",
         }
     }
 }
@@ -142,8 +150,10 @@ pub(crate) enum ParseFailure {
     UnexpectedValue { value: Box<str>, span: Span },
     MissingValue { arg: ArgId, span: Span },
     MissingRequired { arg: ArgId },
-    Conflict { left: ArgId, right: ArgId },
+    MissingGroup { group: crate::ids::GroupId },
+    Conflict { left: ArgId, right: ArgId, span: Option<Span> },
     Requires { arg: ArgId, required: ArgId },
+    ValidationError { arg: ArgId, span: Span, message: Box<str> },
 }
 
 impl ParseFailure {
@@ -151,6 +161,7 @@ impl ParseFailure {
         self,
         render_arg: impl Fn(ArgId) -> String,
         render_command: impl Fn(CommandId) -> String,
+        render_group: impl Fn(crate::ids::GroupId) -> String,
     ) -> ParseError {
         match self {
             Self::UnknownLong { name, span } => ParseError::new(
@@ -183,15 +194,25 @@ impl ParseFailure {
                 None,
                 format!("missing required argument `{}`", render_arg(arg)),
             ),
-            Self::Conflict { left, right } => ParseError::new(
-                ParseErrorKind::Conflict,
+            Self::MissingGroup { group } => ParseError::new(
+                ParseErrorKind::MissingGroup,
                 None,
+                format!("missing required group `{}`", render_group(group)),
+            ),
+            Self::Conflict { left, right, span } => ParseError::new(
+                ParseErrorKind::Conflict,
+                span,
                 format!("argument `{}` conflicts with `{}`", render_arg(left), render_arg(right)),
             ),
             Self::Requires { arg, required } => ParseError::new(
                 ParseErrorKind::Requires,
                 None,
                 format!("argument `{}` requires `{}`", render_arg(arg), render_arg(required)),
+            ),
+            Self::ValidationError { arg, span, message } => ParseError::new(
+                ParseErrorKind::ValidationFailed,
+                Some(span),
+                format!("invalid value for `{}`: {}", render_arg(arg), message),
             ),
         }
     }

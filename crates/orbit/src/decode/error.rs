@@ -5,7 +5,7 @@
 
 use thiserror::Error;
 
-use crate::parse::Span;
+use crate::parse::{Span, SpanPart};
 
 /// Error produced while decoding typed values from raw parse output.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -13,6 +13,7 @@ pub struct DecodeError {
     kind: DecodeErrorKind,
     arg: Option<Box<str>>,
     span: Option<Span>,
+    value: Option<Box<str>>,
     message: Box<str>,
 }
 
@@ -25,7 +26,20 @@ impl DecodeError {
         span: Option<Span>,
         message: impl Into<Box<str>>,
     ) -> Self {
-        Self { kind, arg: arg.map(Into::into), span, message: message.into() }
+        Self { kind, arg: arg.map(Into::into), span, value: None, message: message.into() }
+    }
+
+    /// Return the raw value string associated with this error, if any.
+    #[must_use]
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_deref()
+    }
+
+    /// Return a copy of this error with the raw value attached.
+    #[must_use]
+    pub fn with_value(mut self, value: impl Into<Box<str>>) -> Self {
+        self.value = Some(value.into());
+        self
     }
 
     /// Return the error kind.
@@ -69,19 +83,20 @@ impl DecodeError {
 
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let span_ctx = match self.span() {
+            Some(span) if span.part == SpanPart::Default => " from default value".to_string(),
+            Some(span) if span.part == SpanPart::Environment => {
+                " from environment variable".to_string()
+            }
+            Some(span) => format!(" at argv[{}]", span.arg_index),
+            None => "".to_string(),
+        };
+
         match (self.arg(), self.span()) {
-            (Some(arg), Some(span)) => write!(
-                f,
-                "{} for `{}` at argv[{}]: {}",
-                self.kind, arg, span.arg_index, self.message
-            ),
-            (Some(arg), None) => {
-                write!(f, "{} for `{}`: {}", self.kind, arg, self.message)
+            (Some(arg), _) => {
+                write!(f, "{} for `{}`{}: {}", self.kind, arg, span_ctx, self.message)
             }
-            (None, Some(span)) => {
-                write!(f, "{} at argv[{}]: {}", self.kind, span.arg_index, self.message)
-            }
-            (None, None) => write!(f, "{}: {}", self.kind, self.message),
+            (None, _) => write!(f, "{}{}: {}", self.kind, span_ctx, self.message),
         }
     }
 }

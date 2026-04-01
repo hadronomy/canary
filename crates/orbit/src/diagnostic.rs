@@ -245,6 +245,13 @@ impl Cache<SourceId> for SourceStore {
     }
 }
 
+/// The kind of a diagnostic label
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LabelKind {
+    Primary,
+    Secondary,
+}
+
 /// A labeled span attached to a [`BuildDiagnostic`].
 ///
 /// Labels are used by Ariadne to point to relevant source ranges.
@@ -269,23 +276,23 @@ impl Cache<SourceId> for SourceStore {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticLabel {
+    kind: LabelKind,
     source: SourceId,
     range: Range<usize>,
     message: Box<str>,
-    primary: bool,
 }
 
 impl DiagnosticLabel {
     /// Create a new primary label.
     #[must_use]
     pub fn primary(source: SourceId, range: Range<usize>, message: impl Into<Box<str>>) -> Self {
-        Self { source, range, message: message.into(), primary: true }
+        Self { source, range, message: message.into(), kind: LabelKind::Primary }
     }
 
     /// Create a new secondary label.
     #[must_use]
     pub fn secondary(source: SourceId, range: Range<usize>, message: impl Into<Box<str>>) -> Self {
-        Self { source, range, message: message.into(), primary: false }
+        Self { source, range, message: message.into(), kind: LabelKind::Secondary }
     }
 
     /// Return the source referenced by this label.
@@ -309,7 +316,7 @@ impl DiagnosticLabel {
     /// Return `true` if this is the primary label.
     #[must_use]
     pub fn is_primary(&self) -> bool {
-        self.primary
+        matches!(self.kind, LabelKind::Primary)
     }
 }
 

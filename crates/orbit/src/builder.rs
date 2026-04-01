@@ -86,6 +86,11 @@ macro_rules! impl_value_target_primitives {
             impl ValueTarget for $t {
                 fn configure(spec: &mut ValueSpecBuilder) {
                     spec.parser = ParserKind::String;
+                    spec.custom_validators.push(std::sync::Arc::new(ClosureValidator(|val: &crate::parse::RawValue| {
+                        let text = val.try_as_str().map_err(|_| "value must be valid UTF-8".to_string())?;
+                        text.parse::<$t>().map_err(|e| format!("invalid {}: {}", stringify!($t), e))?;
+                        Ok(())
+                    })));
                 }
             }
         )*

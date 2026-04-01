@@ -209,14 +209,6 @@ impl ValueStore {
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (ValueId, &RawValue)> + '_ {
         self.values.iter().enumerate().map(|(index, value)| (ValueId::from_index(index), value))
     }
-
-    /// Unfreeze this read-only value store back into a mutable builder.
-    ///
-    /// This is used internally by the parser to inject environment variables
-    /// and default values discovered during the resolution phase.
-    pub(crate) fn unfreeze(self) -> ValueStoreBuilder {
-        ValueStoreBuilder { values: self.values.into_vec() }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -397,6 +389,23 @@ pub struct ParseOutput {
     pub root: CommandMatch,
     /// Shared raw values used by the invocation tree.
     pub values: ValueStore,
+}
+
+/// A parser-ready normalized token.
+///
+/// Long and short option names are decoded into explicit tokens, while raw
+/// values still refer into the shared `ValueStore`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NormalizedToken {
+    /// A long option name without leading `--`.
+    Long { name: Box<str>, span: Span },
+    /// A short option name.
+    Short { name: char, span: Span },
+    /// A raw value token.
+    Value { value: ValueId, span: Span },
+    /// The `--` terminator.
+    Terminator { span: Span },
 }
 
 #[cfg(unix)]

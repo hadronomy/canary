@@ -146,7 +146,7 @@ impl Command {
     ///
     /// # Errors
     ///
-    /// Returns[`crate::RuntimeError`] if normalization or parsing fails.
+    /// Returns[`crate::RuntimeError`] if parsing fails.
     pub fn parse_from<I, T>(&self, iter: I) -> Result<crate::Matches, crate::RuntimeError>
     where
         I: IntoIterator<Item = T>,
@@ -155,9 +155,9 @@ impl Command {
         let collected = iter.into_iter().map(Into::into).collect::<Vec<_>>();
         let snapshot = ArgvSnapshot::from_argv(collected.iter().cloned());
         let argv = crate::parse::Argv::from_argv(collected);
+
         let tokenized = crate::parse::tokenize_argv(argv);
-        let normalized = crate::parse::normalize_for_command(self.as_ref(), tokenized)?;
-        let output = crate::parse::parse_command(self, normalized)?;
+        let output = crate::parse::parse_command(self, tokenized)?;
         let matches = crate::Matches::new(self.clone(), output, snapshot);
 
         if let Some(command) = matches.help_command() {

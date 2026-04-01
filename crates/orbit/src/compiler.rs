@@ -21,8 +21,8 @@ use std::sync::Arc;
 
 use crate::bitmask::{BitMask, FrozenBitMask};
 use crate::builder::{
-    ArgActionKind, ArgDecl, ArgKind, CommandBuilder, DefaultValue, GroupBuilder, HelpMeta,
-    ParserKind, Validator, ValueSpecBuilder, Visibility,
+    ArgActionKind, ArgDecl, ArgKind, CommandBuilder, DefaultValue, GroupBuilder, GroupRelation,
+    HelpMeta, ParserKind, Validator, ValueSpecBuilder, Visibility,
 };
 use crate::error::{BuildError, BuildErrorKind};
 use crate::ids::{ArgId, CommandId, GroupId, LocalArgIndex, Symbol, ValueSpecId};
@@ -402,7 +402,8 @@ impl CompileCx {
             let local = LocalArgIndex::from_index(index);
             let pending_arg = &self.args[entry.arg.index()];
 
-            let conflicts = self.resolve_conflicts_mask(
+            let mut conflicts_mask = BitMask::new(effective_args.len());
+            let explicit_conflicts = self.resolve_conflicts_mask(
                 path.as_str(),
                 effective_args.len(),
                 &pending_arg.conflicts,
@@ -410,6 +411,21 @@ impl CompileCx {
                 &group_by_name,
                 &local_by_arg,
             )?;
+            conflicts_mask.union_with(&explicit_conflicts);
+
+            for &group_id in &effective_groups {
+                let group = &self.groups[group_id.index()];
+                if group.relation == GroupRelation::OneOf && group.members.contains(&entry.arg) {
+                    for member in group.members.iter() {
+                        if *member != entry.arg
+                            && let Some(&member_local) = local_by_arg.get(member)
+                        {
+                            conflicts_mask.insert(member_local);
+                        }
+                    }
+                }
+            }
+            let conflicts = conflicts_mask.freeze();
 
             let requires = self.resolve_requires_mask(
                 path.as_str(),

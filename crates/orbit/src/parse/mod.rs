@@ -47,7 +47,6 @@
 mod argv;
 mod error;
 mod model;
-mod normalize;
 mod parser;
 mod state;
 mod token;
@@ -58,10 +57,6 @@ pub use error::{ParseError, ParseErrorKind};
 pub use model::{
     ArgMatch, CommandMatch, NonUtf8Value, Occurrence, ParseOutput, RawValue, RawValueDisplay, Span,
     SpanPart, ValueId, ValueOccurrence, ValueOrigin, ValueStore,
-};
-pub use normalize::{
-    NormalizeError, NormalizeErrorKind, NormalizedArgv, NormalizedToken, Normalizer,
-    normalize_for_command,
 };
 pub use parser::parse_command;
 pub use token::{RawToken, TokenizedArgv, Tokenizer, tokenize_argv};

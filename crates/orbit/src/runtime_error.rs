@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use crate::decode::DecodeError;
 use crate::ids::CommandId;
-use crate::parse::{NormalizeError, ParseError, RawValue};
+use crate::parse::{ParseError, RawValue};
 use crate::runtime_diagnostic::{RuntimeDiagnostic, RuntimeEmitError};
 
 /// Snapshot of the original argv used for runtime diagnostics.
@@ -81,10 +81,6 @@ impl ArgvSnapshot {
 #[derive(Debug, Clone, Error)]
 #[non_exhaustive]
 pub enum RuntimeError {
-    /// Token normalization failed.
-    #[error(transparent)]
-    Normalize(#[from] NormalizeError),
-
     /// Command parsing failed.
     #[error("command parsing failed")]
     Parse(Vec<ParseError>),
