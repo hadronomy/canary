@@ -92,7 +92,7 @@ fn main() {
                         .long("feature")
                         .short('F')
                         .action(ArgAction::Append) // TODO: If this line is removed and the type is Vec<String>, this should error, right?
-                        .help("List of features to enable")
+                        .help("List of features to enable") // TODO: See how to handle vecs here, as this right now has the type of ArgBuilder<Vec<Vec<String>>>
                         .arity(Arity::ONE_OR_MORE),
                 )
                 .arg(ArgBuilder::flag("fast").long("fast").in_group("speed-profile"))
