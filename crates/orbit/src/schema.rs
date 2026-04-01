@@ -60,11 +60,11 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::HelpRenderer;
+use crate::HelpRenderer as _;
 use crate::bitmask::FrozenBitMask;
 use crate::builder::{
-    ArgAction, ArgKind, Arity, ErasedValueValidator, GroupRelation, ParserKind, Validator,
-    ValueHint,
+    ArgAction, ArgActionKind, ArgKind, Arity, ErasedValueValidator, GroupRelation, ParserKind,
+    Validator, ValueHint,
 };
 use crate::ids::{ArgId, CommandId, GroupId, LocalArgIndex, Symbol, ValueSpecId};
 use crate::runtime_error::ArgvSnapshot;
@@ -297,7 +297,7 @@ pub(crate) struct CompiledArg {
     pub(crate) short: Option<char>,
     pub(crate) long: Option<Symbol>,
     pub(crate) aliases: Box<[CompiledArgAlias]>,
-    pub(crate) action: ArgAction,
+    pub(crate) action: ArgActionKind,
     pub(crate) value: Option<ValueSpecId>,
     pub(crate) env: Option<Symbol>,
     pub(crate) help: CompiledHelpMeta,
@@ -745,7 +745,7 @@ impl<'a> ArgRef<'a> {
 
     /// Return the semantic action of this arg.
     #[must_use]
-    pub fn action(self) -> ArgAction {
+    pub fn action(self) -> ArgActionKind {
         self.data().action
     }
 

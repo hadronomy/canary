@@ -1,5 +1,7 @@
+use std::path::PathBuf;
+
 use orbit::builder::{
-    ArgAction, ArgBuilder, CommandBuilder, ParserKind, Validator, ValueHint, ValueSpecBuilder,
+    ArgAction, ArgBuilder, CommandBuilder, Validator, ValueHint,
 };
 
 fn main() {
@@ -12,11 +14,10 @@ fn main() {
                 .help("Whaaat"),
         )
         .arg(
-            ArgBuilder::option("dir").long("dir").value(
-                ValueSpecBuilder::new(ParserKind::PathBuf)
-                    .hint(ValueHint::DirPath)
-                    .validate(Validator::Directory),
-            ),
+            ArgBuilder::option::<PathBuf>("dir")
+                .long("dir")
+                .hint(ValueHint::DirPath)
+                .validate(Validator::Directory),
         )
         .build()
         .expect("valid schema");

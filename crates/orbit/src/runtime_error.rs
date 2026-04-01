@@ -86,8 +86,8 @@ pub enum RuntimeError {
     Normalize(#[from] NormalizeError),
 
     /// Command parsing failed.
-    #[error(transparent)]
-    Parse(#[from] ParseError),
+    #[error("command parsing failed")]
+    Parse(Vec<ParseError>),
 
     /// Typed decode failed.
     #[error(transparent)]
@@ -99,6 +99,13 @@ pub enum RuntimeError {
         /// Command for which help should be shown.
         command: CommandId,
     },
+}
+
+/// Delightfully integrate multi-error accumulation into the standard `?` operator pipeline.
+impl From<Vec<ParseError>> for RuntimeError {
+    fn from(errors: Vec<ParseError>) -> Self {
+        Self::Parse(errors)
+    }
 }
 
 impl RuntimeError {

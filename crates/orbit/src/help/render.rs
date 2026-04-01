@@ -1,8 +1,9 @@
 //! Help document construction and rendering.
 
 use std::cmp;
-use std::io::{self, Write};
+use std::io::Write;
 
+use anstyle::{AnsiColor, Effects, Style};
 use terminal_size::{Width, terminal_size};
 use textwrap::{Options as WrapOptions, fill, wrap};
 use unicode_width::UnicodeWidthStr;
@@ -30,54 +31,53 @@ impl HelpRenderer for DefaultHelpRenderer {
     }
 }
 
-/// A lightweight, zero-dependency theme for ANSI colored output.
+/// A zero-configuration theme that provides stunning, robust ANSI colors.
+///
+/// Powered by `anstream` and `anstyle`, this perfectly detects terminal capabilities,
+/// respects `NO_COLOR`, and handles Windows API translation flawlessly.
 struct Theme {
-    enabled: bool,
+    heading: Style,
+    title: Style,
+    flag: Style,
+    metavar: Style,
 }
 
 impl Theme {
     fn new() -> Self {
-        let no_color = std::env::var_os("NO_COLOR").is_some();
-        let term_dumb = std::env::var_os("TERM").map(|v| v == "dumb").unwrap_or(false);
-        Self { enabled: !no_color && !term_dumb }
+        Self {
+            heading: Style::new().fg_color(Some(AnsiColor::Green.into())).effects(Effects::BOLD),
+            title: Style::new().fg_color(Some(AnsiColor::Green.into())).effects(Effects::BOLD),
+            flag: Style::new().fg_color(Some(AnsiColor::Cyan.into())).effects(Effects::BOLD),
+            metavar: Style::new().fg_color(Some(AnsiColor::Cyan.into())),
+        }
     }
 
-    fn heading(&self, text: &str) -> String {
-        if self.enabled { format!("\x1b[1;32m{text}\x1b[0m") } else { text.to_string() }
+    fn heading_str(&self, text: &str) -> String {
+        format!("{}{text}{:#}", self.heading, self.heading)
     }
-
-    fn title(&self, text: &str) -> String {
-        if self.enabled { format!("\x1b[1;32m{text}\x1b[0m") } else { text.to_string() }
+    fn title_str(&self, text: &str) -> String {
+        format!("{}{text}{:#}", self.title, self.title)
     }
-
-    fn bold(&self, text: &str) -> String {
-        if self.enabled { format!("\x1b[1m{text}\x1b[0m") } else { text.to_string() }
+    fn flag_str(&self, text: &str) -> String {
+        format!("{}{text}{:#}", self.flag, self.flag)
     }
-
-    fn flag(&self, text: &str) -> String {
-        if self.enabled { format!("\x1b[1;36m{text}\x1b[0m") } else { text.to_string() }
-    }
-
-    fn metavar(&self, text: &str) -> String {
-        if self.enabled { format!("\x1b[36m{text}\x1b[0m") } else { text.to_string() }
+    fn metavar_str(&self, text: &str) -> String {
+        format!("{}{text}{:#}", self.metavar, self.metavar)
     }
 
     fn usage_line(&self, line: &str) -> String {
-        if !self.enabled {
-            return line.to_string();
-        }
         let mut parts = line.splitn(2, ' ');
         let cmd = parts.next().unwrap_or("");
         let rest = parts.next().unwrap_or("");
 
-        let mut colored = format!("\x1b[1m{cmd}\x1b[0m");
+        let mut colored = format!("{}{cmd}{:#}", self.title, self.title);
         if !rest.is_empty() {
             colored.push(' ');
             let c_rest = rest
-                .replace("[OPTIONS]", "\x1b[36m[OPTIONS]\x1b[0m")
-                .replace("[COMMAND]", "\x1b[36m[COMMAND]\x1b[0m")
-                .replace("<", "\x1b[36m<")
-                .replace(">", ">\x1b[0m");
+                .replace("[OPTIONS]", &format!("{}[OPTIONS]{:#}", self.metavar, self.metavar))
+                .replace("[COMMAND]", &format!("{}[COMMAND]{:#}", self.metavar, self.metavar))
+                .replace("<", &format!("{}<", self.metavar))
+                .replace(">", &format!(">{:#}", self.metavar));
             colored.push_str(&c_rest);
         }
         colored
@@ -297,7 +297,7 @@ fn build_usage_lines(command: CommandRef<'_>) -> Vec<Box<str>> {
     }
 
     if command.subcommand_count() > 0 {
-        root.push_str("[COMMAND]");
+        root.push_str(" [COMMAND]");
     }
 
     lines.push(root.into_boxed_str());
@@ -320,7 +320,7 @@ fn build_usage_lines(command: CommandRef<'_>) -> Vec<Box<str>> {
         }
 
         if sub.subcommand_count() > 0 {
-            line.push_str(" [COMMAND]");
+            line.push_str("[COMMAND]");
         }
 
         lines.push(line.into_boxed_str());
@@ -382,14 +382,14 @@ fn format_colored_arg_label(arg: crate::schema::ArgRef<'_>, theme: &Theme) -> St
     match arg.kind() {
         ArgKind::Positional => {
             let name = positional_metavar(arg);
-            theme.metavar(&format!("<{name}>"))
+            theme.metavar_str(&format!("<{name}>"))
         }
         ArgKind::Flag | ArgKind::Option => {
             let mut label = String::new();
             let long_name = arg.long().or_else(|| arg.aliases().next().map(|a| a.name()));
 
             if let Some(c) = arg.short() {
-                label.push_str(&theme.flag(&format!("-{c}")));
+                label.push_str(&theme.flag_str(&format!("-{c}")));
                 if long_name.is_some() {
                     label.push_str(", ");
                 }
@@ -398,16 +398,16 @@ fn format_colored_arg_label(arg: crate::schema::ArgRef<'_>, theme: &Theme) -> St
             }
 
             if let Some(long) = long_name {
-                label.push_str(&theme.flag(&format!("--{long}")));
+                label.push_str(&theme.flag_str(&format!("--{long}")));
             }
 
             if arg.kind() == ArgKind::Option {
                 let value_name = option_metavar(arg);
-                let value_colored = theme.metavar(&format!("<{value_name}>"));
+                let value_colored = theme.metavar_str(&format!("<{value_name}>"));
                 if long_name.is_none() && arg.short().is_some() {
                     label = format!(
                         "{} {value_colored}",
-                        theme.flag(&format!("-{}", arg.short().unwrap()))
+                        theme.flag_str(&format!("-{}", arg.short().unwrap()))
                     );
                 } else {
                     label.push(' ');
@@ -442,7 +442,7 @@ fn render_default_help(doc: &HelpDoc<'_>, options: &HelpOptions) -> String {
 
     // Title / Description
     if let Some(desc) = doc.description {
-        out.push_str(&theme.title(doc.name));
+        out.push_str(&theme.title_str(doc.name));
         if !doc.aliases.is_empty() {
             out.push_str(" (aliases: ");
             out.push_str(&doc.aliases.join(", "));
@@ -458,12 +458,12 @@ fn render_default_help(doc: &HelpDoc<'_>, options: &HelpOptions) -> String {
     // Usage
     if !doc.usage.is_empty() {
         if doc.usage.len() == 1 {
-            out.push_str(&theme.heading("Usage:"));
+            out.push_str(&theme.heading_str("Usage:"));
             out.push(' ');
             out.push_str(&theme.usage_line(&doc.usage[0]));
             out.push_str("\n\n");
         } else {
-            out.push_str(&theme.heading("Usage:\n"));
+            out.push_str(&theme.heading_str("Usage:\n"));
             for line in &doc.usage {
                 out.push_str("  ");
                 out.push_str(&theme.usage_line(line));
@@ -474,7 +474,7 @@ fn render_default_help(doc: &HelpDoc<'_>, options: &HelpOptions) -> String {
     }
 
     for (i, section) in doc.sections.iter().enumerate() {
-        out.push_str(&theme.heading(&section.heading));
+        out.push_str(&theme.heading_str(&section.heading));
         out.push_str(":\n");
 
         render_section(&mut out, section, width, &theme);
@@ -603,7 +603,7 @@ fn render_subcommand_entry(
 ) {
     let left = sub.name;
     let left_display_width = UnicodeWidthStr::width(left);
-    let colored_left = theme.bold(left);
+    let colored_left = theme.title_str(left);
 
     let base_indent = " ".repeat(indent);
     let desc_indent = " ".repeat(indent + left_width + gap);
@@ -659,9 +659,12 @@ fn help_width(options: &HelpOptions) -> usize {
     100
 }
 
-/// Print rendered help to stdout.
+/// Print rendered help to standard output.
+///
+/// This automatically strips ANSI color codes if stdout is piped to a file
+/// or if the terminal does not support colors (powered by `anstream`).
 pub fn print_help(text: &str) -> Result<(), HelpError> {
-    let mut out = io::stdout().lock();
+    let mut out = anstream::AutoStream::auto(std::io::stdout());
     out.write_all(text.as_bytes())?;
     Ok(())
 }

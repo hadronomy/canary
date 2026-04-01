@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::builder::{ArgAction, Validator};
+use crate::builder::{ArgActionKind, Validator};
 use crate::decode::{DecodeError, DecodeErrorKind, FromRawValue};
 use crate::ids::ArgId;
 use crate::parse::{ArgMatch, CommandMatch, ParseOutput, RawValue, ValueOccurrence, ValueStore};
@@ -482,7 +482,7 @@ impl<'a> ArgMatchRef<'a> {
 
     /// Return the semantic action for this arg.
     #[must_use]
-    pub fn action(&self) -> ArgAction {
+    pub fn action(&self) -> ArgActionKind {
         self.arg.action()
     }
 }
@@ -608,18 +608,14 @@ fn apply_validator(validator: &Validator, value: &RawValue) -> Result<(), Decode
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::builder::{ArgAction, ArgBuilder, CommandBuilder, ParserKind, ValueSpecBuilder};
+    use crate::builder::{ArgAction, ArgBuilder, CommandBuilder};
     use crate::parse::{Argv, normalize_for_command, parse_command, tokenize_argv};
 
     fn parsed_fixture() -> (Command, ParseOutput) {
         let command = CommandBuilder::new("demo")
             .arg(ArgBuilder::flag("verbose").short('v').long("verbose").action(ArgAction::Count))
-            .arg(
-                ArgBuilder::option("config")
-                    .long("config")
-                    .value(ValueSpecBuilder::new(ParserKind::String)),
-            )
-            .arg(ArgBuilder::positional("input").position(0))
+            .arg(ArgBuilder::option::<String>("config").long("config"))
+            .arg(ArgBuilder::positional::<String>("input").position(0))
             .build()
             .expect("schema should build");
 

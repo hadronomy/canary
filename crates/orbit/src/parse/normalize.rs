@@ -431,7 +431,7 @@ fn non_utf8_option_like(span: Span, err: NonUtf8Value) -> NormalizeError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::builder::{ArgBuilder, CommandBuilder, ParserKind, ValueSpecBuilder};
+    use crate::builder::{ArgBuilder, CommandBuilder};
     use crate::parse::tokenize_argv;
 
     fn command() -> crate::Command {
@@ -439,17 +439,8 @@ mod tests {
             .arg(ArgBuilder::flag("verbose").short('v').long("verbose"))
             .arg(ArgBuilder::flag("all").short('a').long("all"))
             .arg(ArgBuilder::flag("beta").short('b').long("beta"))
-            .arg(
-                ArgBuilder::option("output")
-                    .short('o')
-                    .long("output")
-                    .value(ValueSpecBuilder::new(ParserKind::String)),
-            )
-            .arg(
-                ArgBuilder::option("config")
-                    .long("config")
-                    .value(ValueSpecBuilder::new(ParserKind::String)),
-            )
+            .arg(ArgBuilder::option::<String>("output").short('o').long("output"))
+            .arg(ArgBuilder::option::<String>("config").long("config"))
             .build()
             .expect("test schema should build")
     }

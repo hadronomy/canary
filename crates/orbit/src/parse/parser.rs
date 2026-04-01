@@ -8,7 +8,6 @@ use std::iter::Peekable;
 use std::slice::Iter;
 
 use crate::ids::LocalArgIndex;
-use crate::parse::ValueId;
 use crate::parse::error::{ParseError, ParseFailure};
 use crate::parse::model::{
     CommandMatch, ParseOutput, RawValue, Span, ValueOccurrence, ValueOrigin,
@@ -16,43 +15,63 @@ use crate::parse::model::{
 use crate::parse::normalize::{NormalizedArgv, NormalizedToken};
 use crate::parse::state::CommandState;
 use crate::parse::validate::validate_command;
+use crate::parse::{SpanPart, ValueId};
 use crate::schema::{ArgRef, Command, CommandRef, LookupRef};
 
 /// Parse normalized argv against a compiled command schema.
-pub fn parse_command(command: &Command, input: NormalizedArgv) -> Result<ParseOutput, ParseError> {
-    let parser = Parser::new(input.tokens(), input.values());
+///
+/// If validation fails, this returns a vector of `ParseError`s, allowing
+/// the caller to render rich, multi-label diagnostics.
+pub fn parse_command(
+    command: &Command,
+    input: NormalizedArgv,
+) -> Result<ParseOutput, Vec<ParseError>> {
+    let mut values_builder = input.values().clone().unfreeze();
+    let parser = Parser::new(input.tokens(), &mut values_builder);
     let root_match = parser.parse(command.as_ref())?;
 
     Ok(ParseOutput {
         program: input.program().cloned(),
         root: root_match,
-        values: input.values().clone(),
+        values: values_builder.freeze(),
     })
 }
 
 /// Encapsulated parser state for the token stream.
+///
+/// This struct holds the mutable context required to process tokens iteratively,
+/// dynamically inject environment variables and defaults, and accumulate all
+/// syntax and validation errors for beautiful multi-label diagnostics.
 struct Parser<'a> {
+    /// Iterator over the normalized token stream.
     iter: Peekable<Iter<'a, NormalizedToken>>,
-    values: &'a crate::parse::model::ValueStore,
+    /// A mutable builder enabling us to dynamically inject environment and default values.
+    values: &'a mut crate::parse::model::ValueStoreBuilder,
+    /// Flattened list of constructed commands.
     commands: Vec<(crate::ids::CommandId, Box<[crate::parse::model::ArgMatch]>)>,
-    first_error: Option<ParseError>,
+    /// Accumulated parse and validation errors.
+    errors: Vec<ParseError>,
+    /// Short-circuit flag when `--help` is encountered anywhere in the input.
     help_triggered: bool,
 }
 
 impl<'a> Parser<'a> {
     /// Initialize a new parser from the token stream.
-    fn new(tokens: &'a [NormalizedToken], values: &'a crate::parse::model::ValueStore) -> Self {
+    fn new(
+        tokens: &'a [NormalizedToken],
+        values: &'a mut crate::parse::model::ValueStoreBuilder,
+    ) -> Self {
         Self {
             iter: tokens.iter().peekable(),
             values,
             commands: Vec::new(),
-            first_error: None,
+            errors: Vec::new(),
             help_triggered: false,
         }
     }
 
     /// Execute the non-recursive parsing loop.
-    fn parse(mut self, root_cmd: CommandRef<'a>) -> Result<CommandMatch, ParseError> {
+    fn parse(mut self, root_cmd: CommandRef<'a>) -> Result<CommandMatch, Vec<ParseError>> {
         let mut current_cmd = root_cmd;
 
         loop {
@@ -82,12 +101,84 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            // Apply environment variables and defaults before validation!
+            // This is the magic that makes fallbacks completely seamless to the end user.
+            if !self.help_triggered {
+                for (local, arg, _) in current_cmd.local_args() {
+                    if !state.is_seen(local) {
+                        // 1. Try Environment Variables
+                        if let Some(env_name) = arg.env()
+                            && let Some(val) = std::env::var_os(env_name)
+                        {
+                            if !arg.takes_value() {
+                                let lower = val.to_string_lossy().to_lowercase();
+                                if lower == "0" || lower == "false" || lower.is_empty() {
+                                    continue;
+                                }
+                                if arg.action() == crate::builder::ArgActionKind::Count
+                                    && let Ok(count) = val.to_string_lossy().parse::<usize>()
+                                {
+                                    state.mark_seen(local);
+                                    for _ in 0..count {
+                                        state.match_builder(local).push_flag(Span {
+                                            arg_index: 0,
+                                            part: SpanPart::Environment,
+                                        });
+                                    }
+                                    continue;
+                                }
+                            }
+
+                            let value_id = self.values.push(RawValue::from(val));
+                            state.mark_seen(local);
+                            if arg.takes_value() {
+                                state.match_builder(local).push_value(
+                                    Span { arg_index: 0, part: SpanPart::Environment },
+                                    ValueOccurrence {
+                                        value: value_id,
+                                        span: Span { arg_index: 0, part: SpanPart::Environment },
+                                        origin: ValueOrigin::Environment,
+                                    },
+                                );
+                            } else {
+                                state
+                                    .match_builder(local)
+                                    .push_flag(Span { arg_index: 0, part: SpanPart::Environment });
+                            }
+                            continue;
+                        }
+
+                        // 2. Try Schema Defaults
+                        if let Some(spec) = arg.value_spec()
+                            && let Some(crate::schema::DefaultValueRef::String(def)) =
+                                spec.default()
+                        {
+                            let value_id = self.values.push(RawValue::from(def));
+                            state.mark_seen(local);
+                            state.match_builder(local).push_value(
+                                Span { arg_index: 0, part: SpanPart::Default },
+                                ValueOccurrence {
+                                    value: value_id,
+                                    span: Span { arg_index: 0, part: SpanPart::Default },
+                                    origin: ValueOrigin::Default,
+                                },
+                            );
+                        }
+                    }
+                }
+
+                // Now validate. Accumulate the error instead of crashing!
+                if let Err(failure) = validate_command(current_cmd, &state) {
+                    self.errors.push(enrich_validation_error(current_cmd, failure));
+                }
+            }
+
             // Validate the current command only if help was not triggered and no earlier error exists.
             if !self.help_triggered
-                && self.first_error.is_none()
+                && self.errors.is_empty()
                 && let Err(failure) = validate_command(current_cmd, &state)
             {
-                self.first_error = Some(enrich_validation_error(current_cmd, failure));
+                self.errors.push(enrich_validation_error(current_cmd, failure));
             }
 
             self.commands.push((current_cmd.id(), state.freeze(current_cmd)));
@@ -99,10 +190,8 @@ impl<'a> Parser<'a> {
         }
 
         // Surface deferred errors if help was not requested.
-        if !self.help_triggered
-            && let Some(err) = self.first_error
-        {
-            return Err(err);
+        if !self.help_triggered && !self.errors.is_empty() {
+            return Err(self.errors);
         }
 
         // Fold the flattened array back into the nested `CommandMatch` tree structure idiomatically.
@@ -126,7 +215,7 @@ impl<'a> Parser<'a> {
                 unreachable!("long lookup must never resolve to subcommand")
             }
             None => {
-                self.first_error.get_or_insert_with(|| unknown_long_error(cmd, name, span));
+                self.errors.push(unknown_long_error(cmd, name, span));
             }
         }
     }
@@ -144,10 +233,10 @@ impl<'a> Parser<'a> {
                 unreachable!("short lookup must never resolve to subcommand")
             }
             None => {
-                self.first_error.get_or_insert_with(|| {
+                self.errors.push(
                     ParseFailure::UnknownShort { name, span }
-                        .into_error(|a| render_arg(cmd, a), |c| render_command(cmd, c))
-                });
+                        .into_error(|a| render_arg(cmd, a), |c| render_command(cmd, c)),
+                );
             }
         }
     }
@@ -175,7 +264,7 @@ impl<'a> Parser<'a> {
                 .match_builder(local)
                 .push_value(span, ValueOccurrence { value, span, origin: ValueOrigin::Positional });
         } else {
-            self.first_error.get_or_insert_with(|| unexpected_value_error(cmd, raw, span));
+            self.errors.push(unexpected_value_error(cmd, raw, span));
         }
 
         None
@@ -188,7 +277,7 @@ impl<'a> Parser<'a> {
         arg: ArgRef<'a>,
         span: Span,
     ) {
-        if arg.action() == crate::builder::ArgAction::Help {
+        if arg.action() == crate::builder::ArgActionKind::Help {
             let local = cmd.local_arg_by_id(arg.id()).expect("effective arg must have local slot");
             state.mark_seen(local);
             state.match_builder(local).push_flag(span);
@@ -197,7 +286,7 @@ impl<'a> Parser<'a> {
         }
 
         if let Err(e) = parse_arg_occurrence(arg, cmd, state, &mut self.iter, span) {
-            self.first_error.get_or_insert(e);
+            self.errors.push(e);
         }
     }
 }

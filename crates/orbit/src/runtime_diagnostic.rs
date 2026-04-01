@@ -76,7 +76,12 @@ impl RuntimeDiagnostic {
                     )
                 }
             }
-            RuntimeError::Parse(err) => emit_parse_error(err, self.argv.as_ref(), stream),
+            RuntimeError::Parse(errors) => {
+                for err in errors {
+                    emit_parse_error(err, self.argv.as_ref(), stream)?;
+                }
+                Ok(())
+            }
             RuntimeError::Decode(err) => emit_decode_error(err, self.argv.as_ref(), stream),
             RuntimeError::HelpRequested { .. } => emit_plain("help requested", stream),
         }
@@ -268,7 +273,14 @@ fn render_synthetic_argv_source(span: Span) -> RenderedArgvSource {
         SpanPart::AttachedValue => "<attached-value>",
         SpanPart::BareValue => "<value>",
         SpanPart::Terminator => "--",
+        SpanPart::Environment => "<environment variable>",
+        SpanPart::Default => "<default value>",
     };
+
+    // Synthetically injected values are not actually in the argv array!
+    if matches!(span.part, SpanPart::Environment | SpanPart::Default) {
+        return RenderedArgvSource { text: part.to_string(), range: 0..part.len() };
+    }
 
     let prefix = format!("argv[{}] ", span.arg_index);
     let start = prefix.len();
@@ -280,7 +292,13 @@ fn render_synthetic_argv_source(span: Span) -> RenderedArgvSource {
 
 fn highlight_range(text: &str, part: SpanPart) -> Range<usize> {
     match part {
-        SpanPart::Whole | SpanPart::BareValue | SpanPart::Terminator => 0..text.len(),
+        // These parts represent entire discrete tokens or synthetic injections,
+        // so we beautifully highlight the entire text length.
+        SpanPart::Whole
+        | SpanPart::BareValue
+        | SpanPart::Terminator
+        | SpanPart::Environment
+        | SpanPart::Default => 0..text.len(),
 
         SpanPart::LongName => {
             if let Some(rest) = text.strip_prefix("--") {

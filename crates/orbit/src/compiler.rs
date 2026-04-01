@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::bitmask::{BitMask, FrozenBitMask};
 use crate::builder::{
-    ArgAction, ArgBuilder, ArgKind, CommandBuilder, DefaultValue, GroupBuilder, HelpMeta,
+    ArgActionKind, ArgDecl, ArgKind, CommandBuilder, DefaultValue, GroupBuilder, HelpMeta,
     ParserKind, Validator, ValueSpecBuilder, Visibility,
 };
 use crate::error::{BuildError, BuildErrorKind};
@@ -150,7 +150,7 @@ impl CompileCx {
             short: Some(SYNTHETIC_HELP_SHORT),
             long: Some(self.strings.intern(SYNTHETIC_HELP_LONG)),
             aliases: Box::new([]),
-            action: ArgAction::Help,
+            action: ArgActionKind::Help,
             value: None,
             env: None,
             help: CompiledHelpMeta {
@@ -178,7 +178,7 @@ impl CompileCx {
     fn lower_arg(
         &mut self,
         declared_on: CommandId,
-        arg: &ArgBuilder,
+        arg: &ArgDecl,
         path: &str,
     ) -> Result<ArgId, BuildError> {
         let value = match arg.value_ref() {
@@ -951,7 +951,7 @@ fn validate_command_builder(builder: &CommandBuilder, path: &str) -> Result<(), 
     Ok(())
 }
 
-fn validate_arg_builder(arg: &ArgBuilder, path: &str) -> Result<(), BuildError> {
+fn validate_arg_builder(arg: &crate::builder::ArgDecl, path: &str) -> Result<(), BuildError> {
     if arg.id().trim().is_empty() {
         return Err(BuildError::new(
             BuildErrorKind::InvalidRelation,

@@ -15,11 +15,9 @@ mod runtime_error;
 pub mod schema;
 pub mod string_pool;
 
-pub use help::{
-    ArgHelp, DefaultHelpRenderer, HelpDoc, HelpEntry, HelpError, HelpOptions, HelpRenderer,
-    HelpSection, SubcommandHelp,
-};
-pub use matches::Matches;
+pub use decode::*;
+pub use help::*;
+pub use matches::{FromMatches, Matches};
 pub use runtime_error::RuntimeError;
 
 pub use crate::error::*;

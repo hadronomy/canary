@@ -21,12 +21,9 @@ mod render;
 
 pub use error::HelpError;
 pub use model::{
-    format_default_value, ArgHelp, HelpDoc, HelpEntry, HelpOptions, HelpSection,
-    SubcommandHelp,
+    ArgHelp, HelpDoc, HelpEntry, HelpOptions, HelpSection, SubcommandHelp, format_default_value,
 };
-pub use render::{
-    build_help_doc, print_help, DefaultHelpRenderer, HelpRenderer,
-};
+pub use render::{DefaultHelpRenderer, HelpRenderer, build_help_doc, print_help};
 
 use crate::schema::Command;
 
@@ -51,10 +48,7 @@ impl Command {
     }
 
     /// Render beautiful default help for the root command with custom options.
-    pub fn render_help_with(
-        &self,
-        options: &HelpOptions,
-    ) -> Result<String, HelpError> {
+    pub fn render_help_with(&self, options: &HelpOptions) -> Result<String, HelpError> {
         let doc = self.help_doc_with(options);
         DefaultHelpRenderer.render_doc(&doc, options)
     }
@@ -76,10 +70,7 @@ impl Command {
     }
 
     /// Print beautiful default help to stdout with custom options.
-    pub fn print_help_with(
-        &self,
-        options: &HelpOptions,
-    ) -> Result<(), HelpError> {
+    pub fn print_help_with(&self, options: &HelpOptions) -> Result<(), HelpError> {
         let text = self.render_help_with(options)?;
         print_help(&text)
     }

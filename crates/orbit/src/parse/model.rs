@@ -182,7 +182,7 @@ pub struct ValueStore {
 impl ValueStore {
     /// Return the raw value for `id`.
     #[must_use]
-    pub fn get(&self, id: ValueId) -> &RawValue {
+    pub(crate) fn get(&self, id: ValueId) -> &RawValue {
         &self.values[id.index()]
     }
 
@@ -209,6 +209,14 @@ impl ValueStore {
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (ValueId, &RawValue)> + '_ {
         self.values.iter().enumerate().map(|(index, value)| (ValueId::from_index(index), value))
     }
+
+    /// Unfreeze this read-only value store back into a mutable builder.
+    ///
+    /// This is used internally by the parser to inject environment variables
+    /// and default values discovered during the resolution phase.
+    pub(crate) fn unfreeze(self) -> ValueStoreBuilder {
+        ValueStoreBuilder { values: self.values.into_vec() }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -223,6 +231,12 @@ impl ValueStoreBuilder {
 
     pub(crate) fn from_store(store: &ValueStore) -> Self {
         Self { values: store.values.to_vec() }
+    }
+
+    /// Return the raw value for `id`.
+    #[must_use]
+    pub(crate) fn get(&self, id: ValueId) -> &RawValue {
+        &self.values[id.index()]
     }
 
     pub(crate) fn push(&mut self, value: RawValue) -> ValueId {
@@ -273,6 +287,10 @@ pub enum SpanPart {
     BareValue,
     /// `--` terminator.
     Terminator,
+    /// Value seamlessly resolved from the process environment.
+    Environment,
+    /// Value seamlessly resolved from the schema's default specification.
+    Default,
 }
 
 /// Origin of a matched value.
@@ -291,6 +309,10 @@ pub enum ValueOrigin {
     Separate,
     /// A positional value.
     Positional,
+    /// Value seamlessly resolved from the process environment.
+    Environment,
+    /// Value seamlessly resolved from the schema's default specification.
+    Default,
 }
 
 /// A matched value occurrence in a future parse result.

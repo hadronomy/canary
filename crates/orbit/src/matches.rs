@@ -29,6 +29,35 @@ pub struct Matches {
     snapshot: ArgvSnapshot,
 }
 
+/// A delightful trait for extracting a fully typed structure directly from parsed matches.
+///
+/// This moves away from "stringly-typed" extractions sprinkled throughout your codebase
+/// and centralizes mapping the CLI arguments into your application's configuration struct.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// struct Config {
+///     verbose: u64,
+///     path: Option<PathBuf>,
+/// }
+///
+/// impl FromMatches for Config {
+///     fn from_matches(matches: &Matches) -> Result<Self, DecodeError> {
+///         Ok(Self {
+///             verbose: matches.get_count("verbose")?,
+///             path: matches.get_one("path")?,
+///         })
+///     }
+/// }
+///
+/// let config: Config = matches.extract_or_exit();
+/// ```
+pub trait FromMatches: Sized {
+    /// Construct this type from a successful parse result.
+    fn from_matches(matches: &Matches) -> Result<Self, DecodeError>;
+}
+
 impl Matches {
     /// Create a new `Matches` object from a compiled command, parse output, and argv snapshot.
     #[must_use]
@@ -159,5 +188,16 @@ impl Matches {
     #[must_use]
     pub fn subcommand(&self) -> Option<MatchRef<'_>> {
         self.root().subcommand()
+    }
+
+    /// Delightly extract a strongly-typed struct implementing [`FromMatches`].
+    pub fn extract<T: FromMatches>(&self) -> Result<T, DecodeError> {
+        T::from_matches(self)
+    }
+
+    /// Extract a strongly-typed struct implementing [`FromMatches`],
+    /// or exit gracefully with a beautiful diagnostic if decoding fails.
+    pub fn extract_or_exit<T: FromMatches>(&self) -> T {
+        self.extract().unwrap_or_else(|err| self.exit_with_error(err))
     }
 }
