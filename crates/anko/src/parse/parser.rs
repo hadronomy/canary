@@ -686,8 +686,27 @@ fn next_positional<'a>(
     state: &CommandState,
 ) -> Option<(LocalArgIndex, ArgRef<'a>)> {
     command.local_args().find_map(|(local, arg, _)| {
-        (arg.kind() == crate::builder::ArgKind::Positional && !state.is_seen(local))
-            .then_some((local, arg))
+        if arg.kind() != crate::builder::ArgKind::Positional {
+            return None;
+        }
+
+        if !state.is_seen(local) {
+            return Some((local, arg));
+        }
+
+        // If it HAS been seen, check if its Arity allows it to accept more values!
+        if let Some(spec) = arg.value_spec() {
+            let total_values: usize = state.matches[local.index()]
+                .as_ref()
+                .map(|m| m.occurrences.iter().map(|o| o.values.len()).sum())
+                .unwrap_or(0);
+
+            if spec.arity().max().map_or_else(|| true, |m| total_values < m as usize) {
+                return Some((local, arg));
+            }
+        }
+
+        None
     })
 }
 

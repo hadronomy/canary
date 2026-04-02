@@ -271,6 +271,8 @@ pub enum SpanPart {
     Program,
     /// Whole arg.
     Whole,
+    /// A contiguous range of arguments, from `arg_index` in `Span` up to `end_index`.
+    ArgRange { end_index: u32 },
     /// Long option name portion, e.g. `config` in `--config=value`.
     LongName,
     /// Short option name portion, e.g. `v` in `-v`.

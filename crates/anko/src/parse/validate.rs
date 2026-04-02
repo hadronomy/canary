@@ -28,26 +28,67 @@ fn validate_arity(
     command_span: Option<crate::parse::model::Span>,
 ) -> Result<(), ParseFailure> {
     for (local, arg, _) in command.local_args() {
-        // Arity only applies if the user ACTUALLY provided the argument!
         if !state.is_seen(local) {
             continue;
         }
 
         if let Some(spec) = arg.value_spec() {
-            let total_values: usize = state.matches[local.index()]
-                .as_ref()
-                .map(|m| m.occurrences.iter().map(|o| o.values.len()).sum())
-                .unwrap_or(0);
+            let builder = match &state.matches[local.index()] {
+                // If occurrences is empty, the parser already emitted a MissingValue error!
+                Some(b) if !b.occurrences.is_empty() => b,
+                _ => continue,
+            };
+
+            let total_values: usize = builder.occurrences.iter().map(|o| o.values.len()).sum();
 
             let min = spec.arity().min();
             let max = spec.arity().max();
 
-            if total_values < min as usize || max.is_some_and(|m| total_values > m as usize) {
-                let span = state.matches[local.index()]
-                    .as_ref()
-                    .and_then(|m| m.occurrences.first().map(|o| o.span))
-                    .or(command_span);
+            if let Some(m) = max
+                && total_values > m as usize
+            {
+                let mut current_count = 0;
+                let mut offending_span = None;
 
+                for occ in &builder.occurrences {
+                    if occ.values.is_empty() {
+                        current_count += 1;
+                        if current_count > m as usize {
+                            offending_span = Some(occ.span);
+                            break;
+                        }
+                    } else {
+                        for val in &*occ.values {
+                            current_count += 1;
+                            if current_count > m as usize {
+                                // Spans dynamically from the flag to the offending value!
+                                offending_span = Some(crate::parse::model::Span {
+                                    arg_index: occ.span.arg_index,
+                                    part: crate::parse::model::SpanPart::ArgRange {
+                                        end_index: val.span.arg_index,
+                                    },
+                                });
+                                break;
+                            }
+                        }
+                    }
+                    if offending_span.is_some() {
+                        break;
+                    }
+                }
+
+                return Err(ParseFailure::ArityMismatch {
+                    arg: arg.id(),
+                    span: offending_span.or(command_span),
+                    found: total_values,
+                    min,
+                    max,
+                });
+            }
+
+            if total_values < min as usize {
+                // If there are too few, point to the first occurrence that started the chain
+                let span = builder.occurrences.first().map(|o| o.span).or(command_span);
                 return Err(ParseFailure::ArityMismatch {
                     arg: arg.id(),
                     span,
