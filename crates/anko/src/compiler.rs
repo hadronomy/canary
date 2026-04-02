@@ -1141,13 +1141,17 @@ fn validate_value_spec(
     path: &str,
     arg_id: &str,
 ) -> Result<(), BuildError> {
-    if let Some(max) = spec.arity.max
-        && spec.arity.min > max
+    if let Some(max) = spec.arity.max()
+        && spec.arity.min() > max
     {
         return Err(BuildError::new(
             BuildErrorKind::InvalidRelation,
             path,
-            format!("arg `{arg_id}` has invalid arity: min {} exceeds max {}", spec.arity.min, max),
+            format!(
+                "arg `{arg_id}` has invalid arity: min {} exceeds max {}",
+                spec.arity.min(),
+                max
+            ),
         ));
     }
 

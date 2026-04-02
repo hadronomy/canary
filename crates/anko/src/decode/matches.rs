@@ -264,43 +264,41 @@ impl<'a> MatchRef<'a> {
         self.get_one(id).unwrap_or_else(|err| self.exit_with_error(err))
     }
 
-    /// Decode all values for `id`.
+    /// Decode all values for `id` into any standard collection.
     ///
-    /// If the arg is absent, returns an empty vector.
+    /// If the arg is absent, returns an empty collection.
     ///
     /// # Errors
-    ///
-    /// Returns [`DecodeError`] if the arg is unknown or any raw value fails to
-    /// decode as `T`.
-    pub fn get_many<T>(&self, id: &str) -> Result<Vec<T>, DecodeError>
+    /// Returns [`DecodeError`] if the arg is unknown or any raw value fails to decode.
+    pub fn get_many<C, T>(&self, id: &str) -> Result<C, DecodeError>
     where
+        C: FromIterator<T>,
         T: FromRawValue,
     {
         let arg = self.schema_arg_by_id(id)?;
 
         let Some(matched) = self.arg_match_by_arg(arg.id()) else {
-            return Ok(Vec::new());
+            // Return an empty collection seamlessly
+            return Ok(std::iter::empty().collect());
         };
 
-        let mut out = Vec::new();
-
-        for occurrence in &matched.occurrences {
-            for value in &*occurrence.values {
-                let raw = self.values.get(value.value);
-
-                let decoded = T::from_raw_value(raw)
-                    .map_err(|err| err.with_arg(id.to_owned()).with_span(value.span))?;
-
-                out.push(decoded);
-            }
-        }
-
-        Ok(out)
+        // Magically iterate, decode, and collect the Result stream straight into C!
+        matched
+            .occurrences
+            .iter()
+            .flat_map(|occ| &*occ.values)
+            .map(|val| {
+                let raw = self.values.get(val.value);
+                T::from_raw_value(raw)
+                    .map_err(|err| err.with_arg(id.to_owned()).with_span(val.span))
+            })
+            .collect::<Result<C, DecodeError>>()
     }
 
-    /// Decode all values for `id`, or exit with error.
-    pub fn get_many_or_exit<T>(&self, id: &str) -> Vec<T>
+    /// Decode all values for `id` into a collection, or exit with error.
+    pub fn get_many_or_exit<C, T>(&self, id: &str) -> C
     where
+        C: FromIterator<T>,
         T: FromRawValue,
     {
         self.get_many(id).unwrap_or_else(|err| self.exit_with_error(err))
@@ -317,7 +315,7 @@ impl<'a> MatchRef<'a> {
     ///
     /// This is a convenience over `get_many::<RawValue>()`.
     pub fn get_many_raw(&self, id: &str) -> Result<Vec<RawValue>, DecodeError> {
-        self.get_many::<RawValue>(id)
+        self.get_many::<Vec<RawValue>, RawValue>(id)
     }
 
     /// Return the matched `ArgMatchRef` for `id`, if present.

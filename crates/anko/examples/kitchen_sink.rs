@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
-use anko::builder::{ArgAction, ArgBuilder, Arity, CommandBuilder, GroupBuilder, GroupRelation};
+use anko::builder::{ArgAction, ArgBuilder, CommandBuilder, GroupBuilder, GroupRelation};
 use anko::{FromMatches, Matches};
 
 #[derive(Debug)]
@@ -88,12 +89,12 @@ fn main() {
                         .validate_directory(), // Built-in type-safe validator
                 )
                 .arg(
-                    ArgBuilder::option::<Vec<String>>("features") // Auto arity ZERO_OR_MORE!
+                    ArgBuilder::option::<String>("features") // Auto arity ZERO_OR_MORE!
                         .long("feature")
                         .short('F')
-                        .action(ArgAction::Append) // TODO: If this line is removed and the type is Vec<String>, this should error, right?
-                        .help("List of features to enable") // TODO: See how to handle vecs here, as this right now has the type of ArgBuilder<Vec<Vec<String>>>
-                        .arity(Arity::ONE_OR_MORE),
+                        .action(ArgAction::Append)
+                        .help("List of features to enable")
+                        .arity(1..),
                 )
                 .arg(ArgBuilder::flag("fast").long("fast").in_group("speed-profile"))
                 .arg(ArgBuilder::flag("slow").long("slow").in_group("speed-profile"))
@@ -153,7 +154,10 @@ fn main() {
     if let Some(build) = matches.subcommand().filter(|m| m.command().name() == "build") {
         println!("Executing 'build' pipeline...");
         println!("  Output Directory: {:?}", build.get_one_or_exit::<PathBuf>("out-dir"));
-        println!("  Enabled Features: {:?}", build.get_many_or_exit::<String>("features"));
+        println!(
+            "  Enabled Features: {:?}",
+            build.get_many_or_exit::<HashSet<String>, String>("features")
+        );
         println!(
             "  Speed Profile: Fast={}, Slow={}",
             build.get_flag_or_exit("fast"),

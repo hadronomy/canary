@@ -333,10 +333,14 @@ fn usage_piece_for_positional(arg: crate::schema::ArgRef<'_>) -> String {
     let name = positional_metavar(arg);
 
     match arg.value_spec().map(|spec| spec.arity()) {
-        Some(arity) if arity.max.is_none() || arity.max.map(|m| m > 1).unwrap_or(false) => {
-            if arity.min == 0 { format!("[<{name}>]...") } else { format!("<{name}>...") }
+        Some(arity) if arity.max().is_none() || arity.max().map(|m| m > 1).unwrap_or(false) => {
+            if arity.min() == 0 {
+                format!("[<{name}>]...")
+            } else {
+                format!("<{name}>...")
+            }
         }
-        Some(arity) if arity.min == 0 => format!("[<{name}>]"),
+        Some(arity) if arity.min() == 0 => format!("[<{name}>]"),
         _ => format!("<{name}>"),
     }
 }

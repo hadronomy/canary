@@ -40,8 +40,8 @@
 //! # Ok::<(), orbit::BuildError>(())
 //! ```
 
-use std::collections::{BTreeSet, HashSet, LinkedList, VecDeque};
 use std::fmt;
+use std::ops::{Range, RangeFrom, RangeFull, RangeInclusive};
 use std::sync::Arc;
 
 use crate::compiler::compile_command;
@@ -51,7 +51,8 @@ use crate::{BuildError, Command};
 /// A trait that automatically configures a [`ValueSpecBuilder`] based on a target Rust type.
 ///
 /// This provides a delightful, type-driven developer experience. Instead of manually
-/// specifying parser kinds and arities, the builder infers them from the generic type parameter.
+/// specifying parser kinds and arities, the builder infers them from the generic type parameter
+/// and seamlessly injects high-speed parse-time validation.
 ///
 /// # Examples
 ///
@@ -59,8 +60,8 @@ use crate::{BuildError, Command};
 /// // Automatically infers `ParserKind::PathBuf` and `ValueHint::FilePath`
 /// ArgBuilder::option::<std::path::PathBuf>("config");
 ///
-/// // Automatically sets arity to `ZERO_OR_MORE`
-/// ArgBuilder::option::<Vec<String>>("features");
+/// // Automatically sets up robust parse-time u32 validation
+/// ArgBuilder::option::<u32>("retries");
 /// ```
 pub trait ValueTarget {
     /// Configures the provided specification builder for this target type.
@@ -70,6 +71,10 @@ pub trait ValueTarget {
 impl ValueTarget for String {
     fn configure(spec: &mut ValueSpecBuilder) {
         spec.parser = ParserKind::String;
+        spec.custom_validators.push(Arc::new(ClosureValidator(|val: &RawValue| {
+            val.try_as_str().map_err(|_| "value must be valid UTF-8".to_string())?;
+            Ok(())
+        })));
     }
 }
 
@@ -86,7 +91,7 @@ macro_rules! impl_value_target_primitives {
             impl ValueTarget for $t {
                 fn configure(spec: &mut ValueSpecBuilder) {
                     spec.parser = ParserKind::String;
-                    spec.custom_validators.push(std::sync::Arc::new(ClosureValidator(|val: &crate::parse::RawValue| {
+                    spec.custom_validators.push(Arc::new(ClosureValidator(|val: &RawValue| {
                         let text = val.try_as_str().map_err(|_| "value must be valid UTF-8".to_string())?;
                         text.parse::<$t>().map_err(|e| format!("invalid {}: {}", stringify!($t), e))?;
                         Ok(())
@@ -108,26 +113,10 @@ impl<T: ValueTarget> ValueTarget for Option<T> {
     }
 }
 
-macro_rules! impl_value_target_collection {
-    ($($coll:ident),* $(,)?) => {
-        $(
-            impl<T: ValueTarget> ValueTarget for $coll<T> {
-                fn configure(spec: &mut ValueSpecBuilder) {
-                    T::configure(spec);
-                    spec.arity = Arity::ZERO_OR_MORE;
-                }
-            }
-        )*
-    };
-}
-
-// Automatically implement ValueTarget for all standard Rust collections!
-impl_value_target_collection!(Vec, VecDeque, LinkedList, BTreeSet, HashSet);
-
 /// An inline, closure-based semantic validator for parsed arguments.
 ///
 /// This allows developers to write quick, inline validation logic without needing
-/// to implement the full [`ErasedValueValidator`] trait manually.
+/// to implement the full[`ErasedValueValidator`] trait manually.
 pub struct ClosureValidator<F>(pub F);
 
 impl<F> fmt::Debug for ClosureValidator<F> {
@@ -320,7 +309,7 @@ pub trait IntoArgDecl {
     fn into_arg_decl(self) -> ArgDecl;
 }
 
-impl<T> IntoArgDecl for ArgBuilder<T> {
+impl<T, K> IntoArgDecl for ArgBuilder<T, K> {
     fn into_arg_decl(self) -> ArgDecl {
         self.decl
     }
@@ -331,6 +320,38 @@ impl IntoArgDecl for ArgDecl {
         self
     }
 }
+
+// -----------------------------------------------------------------------------
+// TYPESTATES FOR ARG BUILDERS
+// -----------------------------------------------------------------------------
+
+/// Marker trait for argument routing kinds.
+pub trait ArgRoutingKind {}
+
+/// Marker trait for arguments that can have short and long names.
+pub trait IsNamed: ArgRoutingKind {}
+
+/// Marker trait for arguments that take a value.
+pub trait TakesValue: ArgRoutingKind {}
+
+/// Typestate marker for a flag argument.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Flag;
+impl ArgRoutingKind for Flag {}
+impl IsNamed for Flag {}
+
+/// Typestate marker for a named option argument.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NamedOption;
+impl ArgRoutingKind for NamedOption {}
+impl IsNamed for NamedOption {}
+impl TakesValue for NamedOption {}
+
+/// Typestate marker for a positional argument.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Positional;
+impl ArgRoutingKind for Positional {}
+impl TakesValue for Positional {}
 
 /// Canonical, type-erased argument declaration.
 ///
@@ -449,18 +470,19 @@ impl ArgDecl {
 
 /// Strongly-typed builder for a command argument.
 ///
-/// The type parameter `T` enforces semantic correctness at compile time,
-/// allowing for delightful, context-aware method chaining and type combinators.
+/// The `T` parameter enforces semantic correctness of the parsed data type, while the
+/// `Kind` parameter leverages the Typestate pattern to make invalid state configurations
+/// (like adding `position(0)` to a flag) strictly unrepresentable at compile time.
 #[derive(Clone, Debug)]
-pub struct ArgBuilder<T = String> {
+pub struct ArgBuilder<T = String, Kind = NamedOption> {
     pub(crate) decl: ArgDecl,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<(T, Kind)>,
 }
 
 impl ArgBuilder {
     /// Create a new flag arg. Flags default to [`ArgActionKind::SetTrue`].
     #[must_use]
-    pub fn flag(id: impl Into<String>) -> ArgBuilder<bool> {
+    pub fn flag(id: impl Into<String>) -> ArgBuilder<bool, Flag> {
         ArgBuilder {
             decl: ArgDecl {
                 id: id.into(),
@@ -485,10 +507,10 @@ impl ArgBuilder {
 
     /// Create a new named option arg that parses into `T`.
     ///
-    /// The argument's metadata (parser kind, arity, hints) is inferred automatically
-    /// from `T` via the [`ValueTarget`] trait.
+    /// The argument's metadata (parser kind, arity, hints, validations) is inferred
+    /// automatically from `T` via the [`ValueTarget`] trait.
     #[must_use]
-    pub fn option<T: ValueTarget>(id: impl Into<String>) -> ArgBuilder<T> {
+    pub fn option<T: ValueTarget>(id: impl Into<String>) -> ArgBuilder<T, NamedOption> {
         let mut spec = ValueSpecBuilder::default();
         T::configure(&mut spec);
         ArgBuilder {
@@ -515,7 +537,7 @@ impl ArgBuilder {
 
     /// Create a new positional arg that parses into `T`.
     #[must_use]
-    pub fn positional<T: ValueTarget>(id: impl Into<String>) -> ArgBuilder<T> {
+    pub fn positional<T: ValueTarget>(id: impl Into<String>) -> ArgBuilder<T, Positional> {
         let mut spec = ValueSpecBuilder::default();
         T::configure(&mut spec);
         ArgBuilder {
@@ -541,64 +563,8 @@ impl ArgBuilder {
     }
 }
 
-impl<T> ArgBuilder<T> {
-    /// Set the short option character.
-    #[must_use]
-    pub fn short(mut self, short: char) -> Self {
-        self.decl.short = Some(short);
-        self
-    }
-
-    /// Set the long option name without leading `--`.
-    #[must_use]
-    pub fn long(mut self, long: impl Into<String>) -> Self {
-        self.decl.long = Some(long.into());
-        self
-    }
-
-    /// Add a visible long alias.
-    #[must_use]
-    pub fn alias(mut self, name: impl Into<String>) -> Self {
-        self.decl.aliases.push(ArgAlias { name: name.into(), hidden: false });
-        self
-    }
-
-    /// Add a hidden long alias.
-    #[must_use]
-    pub fn hidden_alias(mut self, name: impl Into<String>) -> Self {
-        self.decl.aliases.push(ArgAlias { name: name.into(), hidden: true });
-        self
-    }
-
-    /// Set the semantic action and powerfully transform the Builder's generic type.
-    ///
-    /// # Examples
-    /// ```rust,ignore
-    /// // Transforms `bool` -> `u64`
-    /// ArgBuilder::flag("verbose").action(ArgAction::Count);
-    ///
-    /// // Transforms `String` -> `Vec<String>`
-    /// ArgBuilder::option::<String>("feature").action(ArgAction::Append);
-    /// ```
-    #[must_use]
-    pub fn action<A: ActionCombinator>(mut self, _action: A) -> ArgBuilder<A::Output<T>> {
-        self.decl.action = A::kind();
-        A::apply(&mut self.decl.value);
-        ArgBuilder { decl: self.decl, _marker: std::marker::PhantomData }
-    }
-
-    /// Transform this argument to be semantically optional.
-    ///
-    /// This seamlessly changes the builder's generic type from `T` to `Option<T>`
-    /// and adjusts the arity to `OPTIONAL_ONE`.
-    #[must_use]
-    pub fn optional(mut self) -> ArgBuilder<Option<T>> {
-        if let Some(spec) = &mut self.decl.value {
-            spec.arity = Arity::OPTIONAL_ONE;
-        }
-        ArgBuilder { decl: self.decl, _marker: std::marker::PhantomData }
-    }
-
+// Common methods available across all Argument Kinds
+impl<T, K> ArgBuilder<T, K> {
     /// Mark whether this arg is declared global.
     #[must_use]
     pub fn global(mut self, yes: bool) -> Self {
@@ -648,13 +614,6 @@ impl<T> ArgBuilder<T> {
         self
     }
 
-    /// Set the explicit positional index.
-    #[must_use]
-    pub fn position(mut self, position: u16) -> Self {
-        self.decl.position = Some(position);
-        self
-    }
-
     /// Declare that this arg requires another arg or group by symbolic ID.
     #[must_use]
     pub fn requires(mut self, id: impl Into<String>) -> Self {
@@ -676,74 +635,21 @@ impl<T> ArgBuilder<T> {
         self
     }
 
-    /// Add a built-in semantic validator to this argument's value.
+    /// Set the semantic action and powerfully transform the Builder's generic type.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// // Transforms `bool` -> `u64`
+    /// ArgBuilder::flag("verbose").action(ArgAction::Count);
+    ///
+    /// // Transforms `String` -> `Vec<String>`
+    /// ArgBuilder::option::<String>("feature").action(ArgAction::Append);
+    /// ```
     #[must_use]
-    pub fn validate(mut self, validator: Validator) -> Self {
-        if let Some(spec) = &mut self.decl.value {
-            spec.validators.push(validator);
-        }
-        self
-    }
-
-    /// Set the UI/completion hint.
-    #[must_use]
-    pub fn hint(mut self, hint: ValueHint) -> Self {
-        if let Some(spec) = &mut self.decl.value {
-            spec.hint = hint;
-        }
-        self
-    }
-
-    /// Set the default string value.
-    #[must_use]
-    pub fn default_value(mut self, default: impl Into<String>) -> Self {
-        if let Some(spec) = &mut self.decl.value {
-            spec.default = Some(DefaultValue::String(default.into()));
-        }
-        self
-    }
-
-    /// Add a possible value.
-    #[must_use]
-    pub fn possible_value(mut self, value: impl Into<PossibleValue>) -> Self {
-        if let Some(spec) = &mut self.decl.value {
-            spec.possible_values.push(value.into());
-        }
-        self
-    }
-
-    /// Add multiple possible values.
-    #[must_use]
-    pub fn possible_values<I, V>(mut self, values: I) -> Self
-    where
-        I: IntoIterator<Item = V>,
-        V: Into<PossibleValue>,
-    {
-        if let Some(spec) = &mut self.decl.value {
-            spec.possible_values.extend(values.into_iter().map(Into::into));
-        }
-        self
-    }
-
-    /// Set the accepted arity.
-    #[must_use]
-    pub fn arity(mut self, arity: Arity) -> Self {
-        if let Some(spec) = &mut self.decl.value {
-            spec.arity = arity;
-        }
-        self
-    }
-
-    /// Attach an inline, custom closure validator to the argument.
-    #[must_use]
-    pub fn validate_with<F>(mut self, f: F) -> Self
-    where
-        F: Fn(&crate::parse::RawValue) -> Result<(), String> + Send + Sync + 'static,
-    {
-        if let Some(spec) = &mut self.decl.value {
-            spec.custom_validators.push(std::sync::Arc::new(ClosureValidator(f)));
-        }
-        self
+    pub fn action<A: ActionCombinator>(mut self, _action: A) -> ArgBuilder<A::Output<T>, K> {
+        self.decl.action = A::kind();
+        A::apply(&mut self.decl.value);
+        ArgBuilder { decl: self.decl, _marker: std::marker::PhantomData }
     }
 
     // --- Accessors for Introspection & Tests ---
@@ -810,7 +716,141 @@ impl<T> ArgBuilder<T> {
     }
 }
 
-impl ArgBuilder<std::path::PathBuf> {
+// Methods explicitly restricted to Named Arguments (Flags and Options)
+impl<T, K: IsNamed> ArgBuilder<T, K> {
+    /// Set the short option character.
+    #[must_use]
+    pub fn short(mut self, short: char) -> Self {
+        self.decl.short = Some(short);
+        self
+    }
+
+    /// Set the long option name without leading `--`.
+    #[must_use]
+    pub fn long(mut self, long: impl Into<String>) -> Self {
+        self.decl.long = Some(long.into());
+        self
+    }
+
+    /// Add a visible long alias.
+    #[must_use]
+    pub fn alias(mut self, name: impl Into<String>) -> Self {
+        self.decl.aliases.push(ArgAlias { name: name.into(), hidden: false });
+        self
+    }
+
+    /// Add a hidden long alias.
+    #[must_use]
+    pub fn hidden_alias(mut self, name: impl Into<String>) -> Self {
+        self.decl.aliases.push(ArgAlias { name: name.into(), hidden: true });
+        self
+    }
+}
+
+// Methods explicitly restricted to Positional Arguments
+impl<T> ArgBuilder<T, Positional> {
+    /// Set the explicit positional index.
+    #[must_use]
+    pub fn position(mut self, position: u16) -> Self {
+        self.decl.position = Some(position);
+        self
+    }
+}
+
+// Methods explicitly restricted to Arguments that receive a value
+impl<T, K: TakesValue> ArgBuilder<T, K> {
+    /// Transform this argument to be semantically optional.
+    ///
+    /// This seamlessly changes the builder's generic type from `T` to `Option<T>`
+    /// and adjusts the arity to `OPTIONAL_ONE`.
+    #[must_use]
+    pub fn optional(mut self) -> ArgBuilder<Option<T>, K> {
+        if let Some(spec) = &mut self.decl.value {
+            spec.arity = Arity::OPTIONAL_ONE;
+        }
+        ArgBuilder { decl: self.decl, _marker: std::marker::PhantomData }
+    }
+
+    /// Add a built-in semantic validator to this argument's value.
+    #[must_use]
+    pub fn validate(mut self, validator: Validator) -> Self {
+        if let Some(spec) = &mut self.decl.value {
+            spec.validators.push(validator);
+        }
+        self
+    }
+
+    /// Set the UI/completion hint.
+    #[must_use]
+    pub fn hint(mut self, hint: ValueHint) -> Self {
+        if let Some(spec) = &mut self.decl.value {
+            spec.hint = hint;
+        }
+        self
+    }
+
+    /// Set the default string value.
+    #[must_use]
+    pub fn default_value(mut self, default: impl Into<String>) -> Self {
+        if let Some(spec) = &mut self.decl.value {
+            spec.default = Some(DefaultValue::String(default.into()));
+        }
+        self
+    }
+
+    /// Add a possible value.
+    #[must_use]
+    pub fn possible_value(mut self, value: impl Into<PossibleValue>) -> Self {
+        if let Some(spec) = &mut self.decl.value {
+            spec.possible_values.push(value.into());
+        }
+        self
+    }
+
+    /// Add multiple possible values.
+    #[must_use]
+    pub fn possible_values<I, V>(mut self, values: I) -> Self
+    where
+        I: IntoIterator<Item = V>,
+        V: Into<PossibleValue>,
+    {
+        if let Some(spec) = &mut self.decl.value {
+            spec.possible_values.extend(values.into_iter().map(Into::into));
+        }
+        self
+    }
+
+    /// Set the accepted arity using a standard Rust range.
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// .arity(3)      // Exactly 3
+    /// .arity(1..=5)  // Between 1 and 5
+    /// .arity(2..)    // At least 2
+    /// ```
+    #[must_use]
+    pub fn arity(mut self, arity: impl Into<Arity>) -> Self {
+        if let Some(spec) = &mut self.decl.value {
+            spec.arity = arity.into();
+        }
+        self
+    }
+
+    /// Attach an inline, custom closure validator to the argument.
+    #[must_use]
+    pub fn validate_with<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&crate::parse::RawValue) -> Result<(), String> + Send + Sync + 'static,
+    {
+        if let Some(spec) = &mut self.decl.value {
+            spec.custom_validators.push(Arc::new(ClosureValidator(f)));
+        }
+        self
+    }
+}
+
+// Methods explicitly restricted to Arguments of type PathBuf
+impl<K: TakesValue> ArgBuilder<std::path::PathBuf, K> {
     /// Require that the parsed path exists and is a directory.
     #[must_use]
     pub fn validate_directory(mut self) -> Self {
@@ -1098,9 +1138,27 @@ pub mod ArgAction {
     pub struct Count;
     #[derive(Clone, Copy, Debug)]
     pub struct Set;
+
+    /// Collects values into a standard `Vec<T>`.
     #[derive(Clone, Copy, Debug)]
     pub struct Append;
+
+    /// Collects values into a specific generic collection `C`.
     #[derive(Clone, Copy, Debug)]
+    pub struct AppendAs<C>(std::marker::PhantomData<C>);
+
+    impl<C> AppendAs<C> {
+        pub fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl<C> Default for AppendAs<C> {
+        fn default() -> Self {
+            Self(Default::default())
+        }
+    }
+
     pub struct Help;
     #[derive(Clone, Copy, Debug)]
     pub struct Version;
@@ -1118,9 +1176,25 @@ pub trait ActionCombinator {
 
 impl ActionCombinator for ArgAction::Append {
     type Output<T> = Vec<T>;
+
     fn kind() -> ArgActionKind {
         ArgActionKind::Append
     }
+
+    fn apply(spec: &mut Option<ValueSpecBuilder>) {
+        if let Some(s) = spec {
+            s.arity = Arity::ONE_OR_MORE;
+        }
+    }
+}
+
+impl<C> ActionCombinator for ArgAction::AppendAs<C> {
+    type Output<T> = C;
+
+    fn kind() -> ArgActionKind {
+        ArgActionKind::Append
+    }
+
     fn apply(spec: &mut Option<ValueSpecBuilder>) {
         if let Some(s) = spec {
             s.arity = Arity::ONE_OR_MORE;
@@ -1130,33 +1204,41 @@ impl ActionCombinator for ArgAction::Append {
 
 impl ActionCombinator for ArgAction::Count {
     type Output<T> = u64;
+
     fn kind() -> ArgActionKind {
         ArgActionKind::Count
     }
+
     fn apply(_: &mut Option<ValueSpecBuilder>) {}
 }
 
 impl ActionCombinator for ArgAction::Set {
     type Output<T> = T;
+
     fn kind() -> ArgActionKind {
         ArgActionKind::Set
     }
+
     fn apply(_: &mut Option<ValueSpecBuilder>) {}
 }
 
 impl ActionCombinator for ArgAction::SetTrue {
     type Output<T> = bool;
+
     fn kind() -> ArgActionKind {
         ArgActionKind::SetTrue
     }
+
     fn apply(_: &mut Option<ValueSpecBuilder>) {}
 }
 
 impl ActionCombinator for ArgAction::Help {
     type Output<T> = bool;
+
     fn kind() -> ArgActionKind {
         ArgActionKind::Help
     }
+
     fn apply(_: &mut Option<ValueSpecBuilder>) {}
 }
 
@@ -1231,18 +1313,81 @@ pub trait ErasedValueParser: Send + Sync + 'static {
     fn type_name(&self) -> &'static str;
 }
 
-/// Accepted value arity.
+/// Accepted value arity representing quantity invariants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Arity {
-    pub min: u16,
-    pub max: Option<u16>,
+pub enum Arity {
+    /// Exactly N occurrences are required.
+    Exact(u16),
+    /// At least N occurrences are required, with no upper bound.
+    AtLeast(u16),
+    /// Occurrences must fall within the inclusive range [min, max].
+    Range(u16, u16),
 }
 
 impl Arity {
-    pub const ONE: Self = Self { min: 1, max: Some(1) };
-    pub const OPTIONAL_ONE: Self = Self { min: 0, max: Some(1) };
-    pub const ZERO_OR_MORE: Self = Self { min: 0, max: None };
-    pub const ONE_OR_MORE: Self = Self { min: 1, max: None };
+    /// Exactly one occurrence.
+    pub const ONE: Self = Self::Exact(1);
+    /// Zero or one occurrences.
+    pub const OPTIONAL_ONE: Self = Self::Range(0, 1);
+    /// Any number of occurrences, including zero.
+    pub const ZERO_OR_MORE: Self = Self::AtLeast(0);
+    /// One or more occurrences.
+    pub const ONE_OR_MORE: Self = Self::AtLeast(1);
+
+    /// Get the minimum boundary of the arity.
+    pub fn min(&self) -> u16 {
+        match self {
+            Self::Exact(n) => *n,
+            Self::AtLeast(n) => *n,
+            Self::Range(min, _) => *min,
+        }
+    }
+
+    /// Get the maximum boundary of the arity, if one exists.
+    pub fn max(&self) -> Option<u16> {
+        match self {
+            Self::Exact(n) => Some(*n),
+            Self::AtLeast(_) => None,
+            Self::Range(_, max) => Some(*max),
+        }
+    }
+}
+
+impl From<u16> for Arity {
+    fn from(exact: u16) -> Self {
+        Self::Exact(exact)
+    }
+}
+
+// Support inclusive ranges: `.arity(1..=5)`
+impl From<RangeInclusive<u16>> for Arity {
+    fn from(range: RangeInclusive<u16>) -> Self {
+        let (min, max) = range.into_inner();
+        assert!(min <= max, "Arity range minimum cannot exceed maximum");
+        Self::Range(min, max)
+    }
+}
+
+// Support exclusive ranges: `.arity(1..5)` -> maps to 1..=4
+impl From<Range<u16>> for Arity {
+    fn from(range: Range<u16>) -> Self {
+        assert!(range.start < range.end, "Arity range minimum must be strictly less than maximum");
+        Self::Range(range.start, range.end - 1)
+    }
+}
+
+// Support unbounded ranges: `.arity(2..)`
+impl From<RangeFrom<u16>> for Arity {
+    fn from(range: RangeFrom<u16>) -> Self {
+        Self::AtLeast(range.start)
+    }
+}
+
+// Support fully unbounded: `.arity(..)`
+impl From<RangeFull> for Arity {
+    fn from(_: RangeFull) -> Self {
+        Self::ZERO_OR_MORE
+    }
 }
 
 /// UI/completion hint for a value.

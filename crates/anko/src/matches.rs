@@ -153,17 +153,19 @@ impl Matches {
         self.root().get_one_or_exit(id)
     }
 
-    /// Decode all values for `id`.
-    pub fn get_many<T>(&self, id: &str) -> Result<Vec<T>, DecodeError>
+    /// Decode all values for `id` into any standard collection.
+    pub fn get_many<C, T>(&self, id: &str) -> Result<C, DecodeError>
     where
+        C: FromIterator<T>,
         T: FromRawValue,
     {
         self.root().get_many(id)
     }
 
-    /// Decode all values for `id`, or exit with error.
-    pub fn get_many_or_exit<T>(&self, id: &str) -> Vec<T>
+    /// Decode all values for `id` into a collection, or exit with error.
+    pub fn get_many_or_exit<C, T>(&self, id: &str) -> C
     where
+        C: FromIterator<T>,
         T: FromRawValue,
     {
         self.root().get_many_or_exit(id)
