@@ -94,7 +94,8 @@ fn main() {
                         .short('F')
                         .action(ArgAction::Append)
                         .help("List of features to enable")
-                        .arity(1..),
+                        .arity(1..=3)
+                        .required(true),
                 )
                 .arg(ArgBuilder::flag("fast").long("fast").in_group("speed-profile"))
                 .arg(ArgBuilder::flag("slow").long("slow").in_group("speed-profile"))

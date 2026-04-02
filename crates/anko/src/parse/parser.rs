@@ -259,6 +259,7 @@ impl<'a> Parser<'a> {
     /// Execute the non-recursive parsing loop.
     fn parse(mut self, root_cmd: CommandRef<'a>) -> Result<CommandMatch, Vec<ParseError>> {
         let mut current_cmd = root_cmd;
+        let mut current_cmd_span = Some(Span { arg_index: 0, part: SpanPart::Program });
 
         loop {
             let mut state = CommandState::new(current_cmd);
@@ -275,7 +276,7 @@ impl<'a> Parser<'a> {
                     }
                     NormalizedToken::Value { value, span } => {
                         if let Some(sub) = self.handle_value(current_cmd, &mut state, value, span) {
-                            next_cmd = Some(sub);
+                            next_cmd = Some((sub, span));
                             break;
                         }
                     }
@@ -353,7 +354,9 @@ impl<'a> Parser<'a> {
                 }
 
                 // Now validate. Accumulate the error instead of crashing!
-                if let Err(failure) = validate_command(current_cmd, &state, self.values) {
+                if let Err(failure) =
+                    validate_command(current_cmd, &state, self.values, current_cmd_span)
+                {
                     self.errors.push(enrich_validation_error(current_cmd, failure));
                 }
             }
@@ -361,7 +364,8 @@ impl<'a> Parser<'a> {
             // Validate the current command only if help was not triggered and no earlier error exists.
             if !self.help_triggered
                 && self.errors.is_empty()
-                && let Err(failure) = validate_command(current_cmd, &state, self.values)
+                && let Err(failure) =
+                    validate_command(current_cmd, &state, self.values, current_cmd_span)
             {
                 self.errors.push(enrich_validation_error(current_cmd, failure));
             }
@@ -369,7 +373,10 @@ impl<'a> Parser<'a> {
             self.commands.push((current_cmd.id(), state.freeze(current_cmd)));
 
             match next_cmd {
-                Some(sub) if !self.help_triggered => current_cmd = sub,
+                Some((sub, span)) if !self.help_triggered => {
+                    current_cmd = sub;
+                    current_cmd_span = Some(span);
+                }
                 _ => break,
             }
         }

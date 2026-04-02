@@ -112,6 +112,7 @@ pub enum ParseErrorKind {
     InvalidLongSyntax,
     NonUtf8OptionLike,
     ValidationFailed,
+    ArityMismatch,
 }
 
 impl ParseErrorKind {
@@ -131,6 +132,7 @@ impl ParseErrorKind {
             Self::InvalidLongSyntax => "invalid long option syntax",
             Self::NonUtf8OptionLike => "non-utf8 option-like argument",
             Self::ValidationFailed => "validation failed",
+            Self::ArityMismatch => "arity mismatch",
         }
     }
 }
@@ -149,11 +151,12 @@ pub(crate) enum ParseFailure {
     UnknownSubcommand { command: CommandId, value: Box<str>, span: Span },
     UnexpectedValue { value: Box<str>, span: Span },
     MissingValue { arg: ArgId, span: Span },
-    MissingRequired { arg: ArgId },
-    MissingGroup { group: crate::ids::GroupId },
+    MissingRequired { arg: ArgId, span: Option<Span> },
+    MissingGroup { group: crate::ids::GroupId, span: Option<Span> },
     Conflict { left: ArgId, right: ArgId, span: Option<Span> },
     Requires { arg: ArgId, required: ArgId },
     ValidationError { arg: ArgId, span: Span, message: Box<str> },
+    ArityMismatch { arg: ArgId, span: Option<Span>, found: usize, min: u16, max: Option<u16> },
 }
 
 impl ParseFailure {
@@ -189,14 +192,14 @@ impl ParseFailure {
                 Some(span),
                 format!("missing value for `{}`", render_arg(arg)),
             ),
-            Self::MissingRequired { arg } => ParseError::new(
+            Self::MissingRequired { arg, span } => ParseError::new(
                 ParseErrorKind::MissingRequired,
-                None,
+                span,
                 format!("missing required argument `{}`", render_arg(arg)),
             ),
-            Self::MissingGroup { group } => ParseError::new(
+            Self::MissingGroup { group, span } => ParseError::new(
                 ParseErrorKind::MissingGroup,
-                None,
+                span,
                 format!("missing required group `{}`", render_group(group)),
             ),
             Self::Conflict { left, right, span } => ParseError::new(
@@ -214,6 +217,21 @@ impl ParseFailure {
                 Some(span),
                 format!("invalid value for `{}`: {}", render_arg(arg), message),
             ),
+            Self::ArityMismatch { arg, span, found, min, max } => {
+                let expected = match max {
+                    Some(m) if min == m => format!("exactly {min}"),
+                    Some(m) => format!("between {min} and {m}"),
+                    None => format!("at least {min}"),
+                };
+                ParseError::new(
+                    ParseErrorKind::ArityMismatch,
+                    span,
+                    format!(
+                        "argument `{}` expects {expected} values, but found {found}",
+                        render_arg(arg)
+                    ),
+                )
+            }
         }
     }
 }

@@ -69,32 +69,31 @@ fn emit_parse_error(
     argv: Option<&ArgvSnapshot>,
     stream: Stream,
 ) -> Result<(), RuntimeEmitError> {
-    if let Some(span) = err.span() {
-        let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+    // If the error has no specific span (e.g. MissingRequired),
+    let span = err.span().unwrap_or(Span { arg_index: 0, part: SpanPart::Program });
 
-        if let Some(argv) = argv.filter(|_| !is_synthetic) {
-            emit_with_real_argv(
-                err.to_string(),
-                err.message(),
-                err.notes(),
-                err.help(),
-                argv,
-                span,
-                stream,
-            )
-        } else {
-            emit_with_synthetic_argv(
-                err.to_string(),
-                err.message(),
-                err.notes(),
-                err.help(),
-                span,
-                None,
-                stream,
-            )
-        }
+    let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+
+    if let Some(argv) = argv.filter(|_| !is_synthetic) {
+        emit_with_real_argv(
+            err.to_string(),
+            err.message(),
+            err.notes(),
+            err.help(),
+            argv,
+            span,
+            stream,
+        )
     } else {
-        emit_plain_with_extras(&err.to_string(), err.notes(), err.help(), stream)
+        emit_with_synthetic_argv(
+            err.to_string(),
+            err.message(),
+            err.notes(),
+            err.help(),
+            span,
+            None,
+            stream,
+        )
     }
 }
 
@@ -103,24 +102,23 @@ fn emit_decode_error(
     argv: Option<&ArgvSnapshot>,
     stream: Stream,
 ) -> Result<(), RuntimeEmitError> {
-    if let Some(span) = err.span() {
-        let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+    // If the error has no specific span, point to the very last argument provided!
+    let span = err.span().unwrap_or(Span { arg_index: 0, part: SpanPart::Program });
 
-        if let Some(argv) = argv.filter(|_| !is_synthetic) {
-            emit_with_real_argv(err.to_string(), err.message(), &[], None, argv, span, stream)
-        } else {
-            emit_with_synthetic_argv(
-                err.to_string(),
-                err.message(),
-                &[],
-                None,
-                span,
-                err.value(),
-                stream,
-            )
-        }
+    let is_synthetic = matches!(span.part, SpanPart::Default | SpanPart::Environment);
+
+    if let Some(argv) = argv.filter(|_| !is_synthetic) {
+        emit_with_real_argv(err.to_string(), err.message(), &[], None, argv, span, stream)
     } else {
-        emit_plain_with_extras(&err.to_string(), &[], None, stream)
+        emit_with_synthetic_argv(
+            err.to_string(),
+            err.message(),
+            &[],
+            None,
+            span,
+            err.value(),
+            stream,
+        )
     }
 }
 
@@ -204,27 +202,6 @@ fn emit_with_synthetic_argv(
     Ok(())
 }
 
-fn emit_plain_with_extras(
-    text: &str,
-    notes: &[Box<str>],
-    help: Option<&str>,
-    stream: Stream,
-) -> Result<(), RuntimeEmitError> {
-    let mut out = text.to_owned();
-
-    for note in notes {
-        out.push_str("\nnote: ");
-        out.push_str(note);
-    }
-
-    if let Some(help) = help {
-        out.push_str("\nhelp: ");
-        out.push_str(help);
-    }
-
-    emit_plain(&out, stream)
-}
-
 fn emit_plain(text: &str, stream: Stream) -> Result<(), RuntimeEmitError> {
     match stream {
         Stream::Stdout => {
@@ -238,7 +215,6 @@ fn emit_plain(text: &str, stream: Stream) -> Result<(), RuntimeEmitError> {
             writeln!(out, "{text}")?;
         }
     }
-
     Ok(())
 }
 
@@ -249,14 +225,24 @@ struct RenderedArgvSource {
 }
 
 fn render_real_argv_source(argv: &ArgvSnapshot, span: Span) -> RenderedArgvSource {
-    let raw = argv
-        .get(span.arg_index)
-        .map(|value| value.display().to_string())
-        .unwrap_or_else(|| "<missing-argv>".to_owned());
+    if span.part == SpanPart::Program {
+        if let Some(prog) = argv.program() {
+            let text = prog.display().to_string();
+            return RenderedArgvSource { text: text.clone(), range: 0..text.len() };
+        } else {
+            let text = "<command>".to_owned();
+            return RenderedArgvSource { text: text.clone(), range: 0..text.len() };
+        }
+    }
 
-    let highlight = highlight_range(&raw, span.part);
-
-    RenderedArgvSource { text: raw, range: highlight }
+    if let Some(raw) = argv.get(span.arg_index) {
+        let text = raw.display().to_string();
+        let range = highlight_range(&text, span.part);
+        RenderedArgvSource { text, range }
+    } else {
+        let text = "<missing-argv>".to_owned();
+        RenderedArgvSource { text: text.clone(), range: 0..text.len() }
+    }
 }
 
 fn render_synthetic_argv_source(span: Span, synthetic_value: Option<&str>) -> RenderedArgvSource {
@@ -267,6 +253,7 @@ fn render_synthetic_argv_source(span: Span, synthetic_value: Option<&str>) -> Re
     }
 
     let part = match span.part {
+        SpanPart::Program => "<command>",
         SpanPart::Whole => "<arg>",
         SpanPart::LongName => "<long-name>",
         SpanPart::ShortName => "<short-name>",
@@ -277,7 +264,7 @@ fn render_synthetic_argv_source(span: Span, synthetic_value: Option<&str>) -> Re
         SpanPart::Default => "<default value>",
     };
 
-    if matches!(span.part, SpanPart::Environment | SpanPart::Default) {
+    if matches!(span.part, SpanPart::Environment | SpanPart::Default | SpanPart::Program) {
         return RenderedArgvSource { text: part.to_string(), range: 0..part.len() };
     }
 
@@ -291,9 +278,8 @@ fn render_synthetic_argv_source(span: Span, synthetic_value: Option<&str>) -> Re
 
 fn highlight_range(text: &str, part: SpanPart) -> Range<usize> {
     match part {
-        // These parts represent entire discrete tokens or synthetic injections,
-        // so we beautifully highlight the entire text length.
         SpanPart::Whole
+        | SpanPart::Program
         | SpanPart::BareValue
         | SpanPart::Terminator
         | SpanPart::Environment

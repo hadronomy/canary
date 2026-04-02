@@ -303,6 +303,7 @@ pub(crate) struct CompiledArg {
     pub(crate) help: CompiledHelpMeta,
     pub(crate) visibility: CompiledVisibility,
     pub(crate) position: Option<u16>,
+    pub(crate) required: bool,
 }
 
 /// Canonical compiled group definition.
@@ -778,6 +779,12 @@ impl<'a> ArgRef<'a> {
                 VisibilityRef::Deprecated { note: note.map(|sym| self.schema.symbol(sym)) }
             }
         }
+    }
+
+    /// Return `true` if this arg is required.
+    #[must_use]
+    pub fn required(self) -> bool {
+        self.data().required
     }
 
     /// Return the command on which this arg was originally declared.

@@ -374,6 +374,7 @@ pub struct ArgDecl {
     pub(crate) requires: Vec<String>,
     pub(crate) conflicts: Vec<String>,
     pub(crate) groups: Vec<String>,
+    pub(crate) required: bool,
 }
 
 impl ArgDecl {
@@ -387,6 +388,12 @@ impl ArgDecl {
     #[must_use]
     pub fn kind(&self) -> ArgKind {
         self.kind
+    }
+
+    /// Return `true` if this arg is required.
+    #[must_use]
+    pub fn required_flag(&self) -> bool {
+        self.required
     }
 
     /// Return whether the arg was declared global.
@@ -500,6 +507,7 @@ impl ArgBuilder {
                 requires: Vec::new(),
                 conflicts: Vec::new(),
                 groups: Vec::new(),
+                required: false,
             },
             _marker: std::marker::PhantomData,
         }
@@ -530,6 +538,7 @@ impl ArgBuilder {
                 requires: Vec::new(),
                 conflicts: Vec::new(),
                 groups: Vec::new(),
+                required: false,
             },
             _marker: std::marker::PhantomData,
         }
@@ -557,6 +566,7 @@ impl ArgBuilder {
                 requires: Vec::new(),
                 conflicts: Vec::new(),
                 groups: Vec::new(),
+                required: false,
             },
             _marker: std::marker::PhantomData,
         }
@@ -650,6 +660,18 @@ impl<T, K> ArgBuilder<T, K> {
         self.decl.action = A::kind();
         A::apply(&mut self.decl.value);
         ArgBuilder { decl: self.decl, _marker: std::marker::PhantomData }
+    }
+
+    /// Mark whether this argument must be provided.
+    #[must_use]
+    pub fn required(mut self, yes: bool) -> Self {
+        self.decl.required = yes;
+        self
+    }
+
+    #[must_use]
+    pub fn required_flag(&self) -> bool {
+        self.decl.required
     }
 
     // --- Accessors for Introspection & Tests ---

@@ -161,6 +161,7 @@ impl CompileCx {
             },
             visibility: CompiledVisibility::Normal,
             position: None,
+            required: false,
         };
 
         let pending = PendingArg {
@@ -208,6 +209,7 @@ impl CompileCx {
             help: self.lower_help_meta(arg.help_ref()),
             visibility: self.lower_visibility(arg.visibility_ref()),
             position: arg.position_ref(),
+            required: arg.required_flag(),
         };
 
         let pending = PendingArg {
@@ -452,7 +454,15 @@ impl CompileCx {
         let positionals = self.build_positionals(id, &command_args)?;
         let lookup = self.build_lookup(id, &command_args, &pending.subcommands)?;
         let visible_items = self.build_help_items(&command_args, &pending.subcommands);
-        let required_mask = FrozenBitMask::empty(command_args.len());
+
+        let mut req_mask = BitMask::new(command_args.len());
+        for (index, entry) in command_args.iter().enumerate() {
+            let arg = &self.args[entry.arg.index()].compiled;
+            if arg.required {
+                req_mask.insert(LocalArgIndex::from_index(index));
+            }
+        }
+        let required_mask = req_mask.freeze();
 
         Ok(CompiledCommand {
             parent: pending.parent,

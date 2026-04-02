@@ -267,6 +267,8 @@ pub struct Span {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SpanPart {
+    /// Program executable name or subcommand invocation.
+    Program,
     /// Whole arg.
     Whole,
     /// Long option name portion, e.g. `config` in `--config=value`.
