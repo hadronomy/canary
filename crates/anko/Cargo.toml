@@ -1,5 +1,5 @@
 [package]
-name              = "orbit"
+name              = "anko"
 publish.workspace = true
 
 authors.workspace     = true

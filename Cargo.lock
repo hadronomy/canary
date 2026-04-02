@@ -21,6 +21,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "anko"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "ariadne",
+ "fixedbitset",
+ "terminal_size",
+ "textwrap",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -465,20 +479,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "orbit"
-version = "0.1.0-alpha.1"
-dependencies = [
- "anstream",
- "anstyle",
- "ariadne",
- "fixedbitset",
- "terminal_size",
- "textwrap",
- "thiserror",
- "unicode-width",
-]
 
 [[package]]
 name = "parking_lot"

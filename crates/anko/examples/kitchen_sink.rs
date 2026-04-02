@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use orbit::builder::{ArgAction, ArgBuilder, Arity, CommandBuilder, GroupBuilder, GroupRelation};
-use orbit::{FromMatches, Matches};
+use anko::builder::{ArgAction, ArgBuilder, Arity, CommandBuilder, GroupBuilder, GroupRelation};
+use anko::{FromMatches, Matches};
 
 #[derive(Debug)]
 struct GlobalConfig {
@@ -12,7 +12,7 @@ struct GlobalConfig {
 }
 
 impl FromMatches for GlobalConfig {
-    fn from_matches(matches: &Matches) -> Result<Self, orbit::DecodeError> {
+    fn from_matches(matches: &Matches) -> Result<Self, anko::DecodeError> {
         Ok(Self {
             verbose: matches.get_count("verbose")?,
             quiet: matches.get_flag("quiet")?,
