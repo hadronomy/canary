@@ -7,6 +7,7 @@
 
 use std::collections::VecDeque;
 
+use crate::builder::{ArgActionKind, ArgKind};
 use crate::ids::LocalArgIndex;
 use crate::parse::error::{ParseError, ParseErrorKind, ParseFailure};
 use crate::parse::model::{
@@ -16,7 +17,7 @@ use crate::parse::model::{
 use crate::parse::state::CommandState;
 use crate::parse::token::{RawToken, TokenizedArgv};
 use crate::parse::validate::validate_command;
-use crate::schema::{ArgRef, Command, CommandRef, LookupRef};
+use crate::schema::{ArgRef, Command, CommandRef, DefaultValueRef, LookupRef};
 
 /// Parse tokenized argv against a compiled command schema.
 ///
@@ -48,7 +49,8 @@ struct Parser<'a> {
     cursor: usize,
     /// A buffer of normalized tokens ready for parsing.
     normalized_buffer: VecDeque<NormalizedToken>,
-    /// A mutable builder enabling us to dynamically inject environment and default values.
+    /// A mutable builder enabling us to dynamically inject environment and
+    /// default values.
     values: &'a mut crate::parse::model::ValueStoreBuilder,
     /// Flattened list of constructed commands.
     commands: Vec<(crate::ids::CommandId, Box<[crate::parse::model::ArgMatch]>)>,
@@ -78,20 +80,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Peek at the next normalized token using the current subcommand's schema.
-    fn peek_token(&mut self, current_cmd: CommandRef<'a>) -> Option<NormalizedToken> {
-        self.fill_buffer(current_cmd);
-        self.normalized_buffer.front().cloned()
-    }
-
     /// Consume the next normalized token using the current subcommand's schema.
     fn next_token(&mut self, current_cmd: CommandRef<'a>) -> Option<NormalizedToken> {
         self.fill_buffer(current_cmd);
         self.normalized_buffer.pop_front()
     }
 
-    /// Read raw tokens and normalize them until the buffer has at least one token,
-    /// or we run out of input.
+    /// Consume the next normalized token only if it is a value.
+    ///
+    /// This is a hot-path helper used while parsing options that expect a value.
+    /// It avoids cloning the front token just to discover whether it is a value.
+    fn next_value_token(&mut self, current_cmd: CommandRef<'a>) -> Option<(ValueId, Span)> {
+        self.fill_buffer(current_cmd);
+
+        match self.normalized_buffer.front() {
+            Some(NormalizedToken::Value { value, span }) => {
+                let value = *value;
+                let span = *span;
+                self.normalized_buffer.pop_front();
+                Some((value, span))
+            }
+            _ => None,
+        }
+    }
+
+    /// Read raw tokens and normalize them until the buffer has at least one
+    /// token, or we run out of input.
     fn fill_buffer(&mut self, current_cmd: CommandRef<'a>) {
         while self.normalized_buffer.is_empty() && self.cursor < self.raw_tokens.len() {
             let token = self.raw_tokens[self.cursor];
@@ -111,43 +125,62 @@ impl<'a> Parser<'a> {
                             value,
                             span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
                         });
-                    } else if let Err(e) = self.normalize_option_like(current_cmd, value, span) {
-                        self.errors.push(e);
+                    } else if let Err(error) = self.normalize_option_like(current_cmd, value, span)
+                    {
+                        self.errors.push(error);
                     }
                 }
             }
         }
     }
 
-    /// Schema-aware normalization for an option-like string (e.g., `-v`, `--config=file`).
+    /// Schema-aware normalization for an option-like string
+    /// (e.g., `-v`, `--config=file`).
+    ///
+    /// To avoid borrow conflicts with `self.values` while still keeping
+    /// allocations modest, this first extracts only the needed suffix of the
+    /// token into a compact owned buffer and then performs normalization.
     fn normalize_option_like(
         &mut self,
         cmd: CommandRef<'a>,
         value_id: ValueId,
         span: Span,
     ) -> Result<(), ParseError> {
-        let text = {
+        enum OptionLikeTail {
+            Long(Box<str>),
+            Short(Box<str>),
+            Bare,
+        }
+
+        let tail = {
             let raw = self.values.get(value_id);
-            raw.try_as_str().map(ToOwned::to_owned).map_err(|err| {
+            let text = raw.try_as_str().map_err(|err| {
                 ParseError::new(
                     ParseErrorKind::NonUtf8OptionLike,
                     Some(span),
                     format!("option-like argv entry must be valid UTF-8: {err}"),
                 )
-            })?
+            })?;
+
+            if let Some(rest) = text.strip_prefix("--") {
+                OptionLikeTail::Long(rest.into())
+            } else if let Some(rest) = text.strip_prefix('-') {
+                OptionLikeTail::Short(rest.into())
+            } else {
+                OptionLikeTail::Bare
+            }
         };
 
-        // Now we can safely mutate `self` using slices of our local owned String
-        if let Some(rest) = text.strip_prefix("--") {
-            self.normalize_long(span, rest)
-        } else if let Some(rest) = text.strip_prefix('-') {
-            self.normalize_short_cluster(cmd, span, rest)
-        } else {
-            self.normalized_buffer.push_back(NormalizedToken::Value {
-                value: value_id,
-                span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
-            });
-            Ok(())
+        match tail {
+            OptionLikeTail::Long(rest) => self.normalize_long(span, &rest),
+            OptionLikeTail::Short(rest) => self.normalize_short_cluster(cmd, span, &rest),
+            OptionLikeTail::Bare => {
+                self.normalized_buffer.push_back(NormalizedToken::Value {
+                    value: value_id,
+                    span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
+                });
+                Ok(())
+            }
         }
     }
 
@@ -209,16 +242,17 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        let iter = rest.char_indices();
-
-        for (byte_offset, short) in iter {
+        for (byte_offset, short) in rest.char_indices() {
             let arg = match cmd.lookup_short(short) {
                 Some(LookupRef::Arg(arg)) => arg,
                 Some(LookupRef::Subcommand(_)) => {
                     return Err(ParseError::new(
                         ParseErrorKind::UnknownShort,
                         Some(span),
-                        format!("short option `-{short}` resolved unexpectedly to a subcommand"),
+                        format!(
+                            "short option `-{short}` resolved unexpectedly \
+                             to a subcommand"
+                        ),
                     ));
                 }
                 None => {
@@ -247,7 +281,7 @@ impl<'a> Parser<'a> {
                         span: Span { arg_index: span.arg_index, part: SpanPart::AttachedValue },
                     });
 
-                    // We consumed the rest of the cluster as an attached value.
+                    // The rest of the cluster is consumed as the attached value.
                     break;
                 }
             }
@@ -264,10 +298,11 @@ impl<'a> Parser<'a> {
         loop {
             let mut state = CommandState::new(current_cmd);
             let mut next_cmd = None;
+            let mut positionals = Positionals::new(current_cmd);
 
             while let Some(token) = self.next_token(current_cmd) {
                 match token {
-                    NormalizedToken::Terminator { .. } => continue,
+                    NormalizedToken::Terminator { .. } => {}
                     NormalizedToken::Long { name, span } => {
                         self.handle_long(current_cmd, &mut state, &name, span);
                     }
@@ -275,7 +310,13 @@ impl<'a> Parser<'a> {
                         self.handle_short(current_cmd, &mut state, name, span);
                     }
                     NormalizedToken::Value { value, span } => {
-                        if let Some(sub) = self.handle_value(current_cmd, &mut state, value, span) {
+                        if let Some(sub) = self.handle_value(
+                            current_cmd,
+                            &mut state,
+                            &mut positionals,
+                            value,
+                            span,
+                        ) {
                             next_cmd = Some((sub, span));
                             break;
                         }
@@ -287,87 +328,9 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Apply environment variables and defaults before validation!
-            // This is the magic that makes fallbacks completely seamless to the end user.
             if !self.help_triggered {
-                for (local, arg, _) in current_cmd.local_args() {
-                    if !state.is_seen(local) {
-                        // 1. Try Environment Variables
-                        if let Some(env_name) = arg.env()
-                            && let Some(val) = std::env::var_os(env_name)
-                        {
-                            if !arg.takes_value() {
-                                let lower = val.to_string_lossy().to_lowercase();
-                                if lower == "0" || lower == "false" || lower.is_empty() {
-                                    continue;
-                                }
-                                if arg.action() == crate::builder::ArgActionKind::Count
-                                    && let Ok(count) = val.to_string_lossy().parse::<usize>()
-                                {
-                                    state.mark_seen(local);
-                                    for _ in 0..count {
-                                        state.match_builder(local).push_flag(Span {
-                                            arg_index: 0,
-                                            part: SpanPart::Environment,
-                                        });
-                                    }
-                                    continue;
-                                }
-                            }
-
-                            let value_id = self.values.push(RawValue::from(val));
-                            state.mark_seen(local);
-                            if arg.takes_value() {
-                                state.match_builder(local).push_value(
-                                    Span { arg_index: 0, part: SpanPart::Environment },
-                                    ValueOccurrence {
-                                        value: value_id,
-                                        span: Span { arg_index: 0, part: SpanPart::Environment },
-                                        origin: ValueOrigin::Environment,
-                                    },
-                                );
-                            } else {
-                                state
-                                    .match_builder(local)
-                                    .push_flag(Span { arg_index: 0, part: SpanPart::Environment });
-                            }
-                            continue;
-                        }
-
-                        // 2. Try Schema Defaults
-                        if let Some(spec) = arg.value_spec()
-                            && let Some(crate::schema::DefaultValueRef::String(def)) =
-                                spec.default()
-                        {
-                            let value_id = self.values.push(RawValue::from(def));
-                            state.mark_seen(local);
-                            state.match_builder(local).push_value(
-                                Span { arg_index: 0, part: SpanPart::Default },
-                                ValueOccurrence {
-                                    value: value_id,
-                                    span: Span { arg_index: 0, part: SpanPart::Default },
-                                    origin: ValueOrigin::Default,
-                                },
-                            );
-                        }
-                    }
-                }
-
-                // Now validate. Accumulate the error instead of crashing!
-                if let Err(failure) =
-                    validate_command(current_cmd, &state, self.values, current_cmd_span)
-                {
-                    self.errors.push(enrich_validation_error(current_cmd, failure));
-                }
-            }
-
-            // Validate the current command only if help was not triggered and no earlier error exists.
-            if !self.help_triggered
-                && self.errors.is_empty()
-                && let Err(failure) =
-                    validate_command(current_cmd, &state, self.values, current_cmd_span)
-            {
-                self.errors.push(enrich_validation_error(current_cmd, failure));
+                self.apply_fallbacks(current_cmd, &mut state);
+                self.validate_current_command(current_cmd, &state, current_cmd_span);
             }
 
             self.commands.push((current_cmd.id(), state.freeze(current_cmd)));
@@ -381,17 +344,117 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Surface deferred errors if help was not requested.
         if !self.help_triggered && !self.errors.is_empty() {
             return Err(self.errors);
         }
 
-        // Fold the flattened array back into the nested `CommandMatch` tree structure idiomatically.
         let root_match = self.commands.into_iter().rfold(None, |subcommand, (command, args)| {
             Some(Box::new(CommandMatch { command, args, subcommand }))
         });
 
         Ok(*root_match.expect("parser must produce at least one command match"))
+    }
+
+    fn apply_fallbacks(&mut self, cmd: CommandRef<'a>, state: &mut CommandState) {
+        for (local, arg, _) in cmd.local_args() {
+            if state.is_seen(local) {
+                continue;
+            }
+
+            if self.apply_env_fallback(arg, local, state) {
+                continue;
+            }
+
+            self.apply_default_fallback(arg, local, state);
+        }
+    }
+
+    fn apply_env_fallback(
+        &mut self,
+        arg: ArgRef<'a>,
+        local: LocalArgIndex,
+        state: &mut CommandState,
+    ) -> bool {
+        let Some(env_name) = arg.env() else {
+            return false;
+        };
+
+        let Some(value) = std::env::var_os(env_name) else {
+            return false;
+        };
+
+        let env_span = synthetic_span(SpanPart::Environment);
+
+        if !arg.takes_value() {
+            let text = value.to_string_lossy();
+
+            if text.is_empty() || text == "0" || text.eq_ignore_ascii_case("false") {
+                return false;
+            }
+
+            if arg.action() == ArgActionKind::Count
+                && let Ok(count) = text.parse::<usize>()
+            {
+                state.mark_seen(local);
+                for _ in 0..count {
+                    state.match_builder(local).push_flag(env_span);
+                }
+                return true;
+            }
+        }
+
+        state.mark_seen(local);
+
+        if arg.takes_value() {
+            let value_id = self.values.push(RawValue::from(value));
+            state.match_builder(local).push_value(
+                env_span,
+                ValueOccurrence {
+                    value: value_id,
+                    span: env_span,
+                    origin: ValueOrigin::Environment,
+                },
+            );
+        } else {
+            state.match_builder(local).push_flag(env_span);
+        }
+
+        true
+    }
+
+    fn apply_default_fallback(
+        &mut self,
+        arg: ArgRef<'a>,
+        local: LocalArgIndex,
+        state: &mut CommandState,
+    ) {
+        let Some(spec) = arg.value_spec() else {
+            return;
+        };
+
+        let Some(DefaultValueRef::String(default)) = spec.default() else {
+            return;
+        };
+
+        let default_span = synthetic_span(SpanPart::Default);
+        let value_id = self.values.push(RawValue::from(default));
+
+        state.mark_seen(local);
+        state.match_builder(local).push_value(
+            default_span,
+            ValueOccurrence { value: value_id, span: default_span, origin: ValueOrigin::Default },
+        );
+    }
+
+    fn validate_current_command(
+        &mut self,
+        cmd: CommandRef<'a>,
+        state: &CommandState,
+        command_span: Option<Span>,
+    ) {
+        if let Err(failure) = validate_command(cmd, state, self.values, command_span) {
+            self.errors.push(enrich_validation_error(cmd, failure));
+        }
     }
 
     fn handle_long(
@@ -426,9 +489,9 @@ impl<'a> Parser<'a> {
             }
             None => {
                 self.errors.push(ParseFailure::UnknownShort { name, span }.into_error(
-                    |a| render_arg(cmd, a),
-                    |c| render_command(cmd, c),
-                    |g| render_group(cmd, g),
+                    |arg| render_arg(cmd, arg),
+                    |command| render_command(cmd, command),
+                    |group| render_group(cmd, group),
                 ));
             }
         }
@@ -438,24 +501,24 @@ impl<'a> Parser<'a> {
         &mut self,
         cmd: CommandRef<'a>,
         state: &mut CommandState,
+        positionals: &mut Positionals,
         value: ValueId,
         span: Span,
     ) -> Option<CommandRef<'a>> {
         let raw = self.values.get(value);
 
-        // Check if it's a subcommand first.
         if let Ok(text) = raw.try_as_str()
             && let Some(LookupRef::Subcommand(sub)) = cmd.lookup_subcommand(text)
         {
             return Some(sub);
         }
 
-        // Otherwise, try to bind as a positional argument.
-        if let Some((local, _arg)) = next_positional(cmd, state) {
+        if let Some(local) = positionals.next_local() {
             state.mark_seen(local);
             state
                 .match_builder(local)
                 .push_value(span, ValueOccurrence { value, span, origin: ValueOrigin::Positional });
+            positionals.record_value(local);
         } else {
             self.errors.push(unexpected_value_error(cmd, raw, span));
         }
@@ -470,16 +533,17 @@ impl<'a> Parser<'a> {
         arg: ArgRef<'a>,
         span: Span,
     ) {
-        if arg.action() == crate::builder::ArgActionKind::Help {
+        if arg.action() == ArgActionKind::Help {
             let local = cmd.local_arg_by_id(arg.id()).expect("effective arg must have local slot");
+
             state.mark_seen(local);
             state.match_builder(local).push_flag(span);
             self.help_triggered = true;
             return;
         }
 
-        if let Err(e) = self.parse_arg_occurrence(arg, cmd, state, span) {
-            self.errors.push(e);
+        if let Err(error) = self.parse_arg_occurrence(arg, cmd, state, span) {
+            self.errors.push(error);
         }
     }
 
@@ -494,45 +558,134 @@ impl<'a> Parser<'a> {
 
         state.mark_seen(local);
 
-        if arg.takes_value() {
-            if let Some(NormalizedToken::Value { value, span: value_span }) =
-                self.peek_token(command)
-            {
-                let value_copy = value;
-                let span_copy = value_span;
-
-                self.next_token(command); // Consume it!
-
-                let origin = match span_copy.part {
-                    SpanPart::AttachedValue => {
-                        if matches!(span.part, SpanPart::LongName) {
-                            ValueOrigin::AttachedLong
-                        } else {
-                            ValueOrigin::AttachedShort
-                        }
-                    }
-                    _ => ValueOrigin::Separate,
-                };
-
-                state.match_builder(local).push_value(
-                    span,
-                    ValueOccurrence { value: value_copy, span: span_copy, origin },
-                );
-            } else {
-                return Err(ParseFailure::MissingValue { arg: arg.id(), span }
-                    .into_error(
-                        |a| render_arg(command, a),
-                        |c| render_command(command, c),
-                        |g| render_group(command, g),
-                    )
-                    .with_help("pass a value after this option or use `--help`"));
-            }
-        } else {
+        if !arg.takes_value() {
             state.match_builder(local).push_flag(span);
+            return Ok(());
         }
 
-        Ok(())
+        if let Some((value, value_span)) = self.next_value_token(command) {
+            let origin = match value_span.part {
+                SpanPart::AttachedValue if matches!(span.part, SpanPart::LongName) => {
+                    ValueOrigin::AttachedLong
+                }
+                SpanPart::AttachedValue => ValueOrigin::AttachedShort,
+                _ => ValueOrigin::Separate,
+            };
+
+            state
+                .match_builder(local)
+                .push_value(span, ValueOccurrence { value, span: value_span, origin });
+
+            return Ok(());
+        }
+
+        Err(ParseFailure::MissingValue { arg: arg.id(), span }
+            .into_error(
+                |arg| render_arg(command, arg),
+                |cmd| render_command(command, cmd),
+                |group| render_group(command, group),
+            )
+            .with_help("pass a value after this option or use `--help`"))
     }
+}
+
+#[derive(Clone, Copy)]
+enum PositionalCapacity {
+    /// Accept exactly one value in practice.
+    ///
+    /// This mirrors the previous behavior for positional args without a value
+    /// spec and for specs whose effective max becomes one after the first bind.
+    Single,
+    /// Accept up to `max` values total.
+    Bounded(usize),
+    /// Accept arbitrarily many values.
+    Unbounded,
+}
+
+impl PositionalCapacity {
+    fn allows_following_values(self, seen_values: usize) -> bool {
+        match self {
+            Self::Single => false,
+            Self::Bounded(max) => seen_values < max,
+            Self::Unbounded => true,
+        }
+    }
+}
+
+struct PositionalEntry {
+    local: LocalArgIndex,
+    capacity: PositionalCapacity,
+    seen_values: usize,
+}
+
+/// Lightweight hot-path cache for positional argument dispatch.
+///
+/// The original implementation scanned all local args and recomputed value
+/// counts from match state for every bare value token. That is correct, but it
+/// does repeated work on the hottest positional path.
+///
+/// This cache preserves the same observable behavior while exploiting a key
+/// parser property: during a command parse, positional consumption is monotonic.
+/// Once a positional is full, it will never become available again.
+struct Positionals {
+    entries: Vec<PositionalEntry>,
+    cursor: usize,
+}
+
+impl Positionals {
+    fn new(command: CommandRef<'_>) -> Self {
+        let entries = command
+            .local_args()
+            .filter(|&(_local, arg, _)| arg.kind() == ArgKind::Positional)
+            .map(|(local, arg, _)| PositionalEntry {
+                local,
+                capacity: positional_capacity(arg),
+                seen_values: 0,
+            })
+            .collect();
+
+        Self { entries, cursor: 0 }
+    }
+
+    fn next_local(&mut self) -> Option<LocalArgIndex> {
+        while let Some(entry) = self.entries.get(self.cursor) {
+            if entry.seen_values == 0 || entry.capacity.allows_following_values(entry.seen_values) {
+                return Some(entry.local);
+            }
+
+            self.cursor += 1;
+        }
+
+        None
+    }
+
+    fn record_value(&mut self, local: LocalArgIndex) {
+        let Some(entry) = self.entries.get_mut(self.cursor) else {
+            return;
+        };
+
+        debug_assert_eq!(entry.local, local);
+        entry.seen_values += 1;
+
+        if !entry.capacity.allows_following_values(entry.seen_values) {
+            self.cursor += 1;
+        }
+    }
+}
+
+fn positional_capacity(arg: ArgRef<'_>) -> PositionalCapacity {
+    match arg.value_spec() {
+        None => PositionalCapacity::Single,
+        Some(spec) => match spec.arity().max() {
+            None => PositionalCapacity::Unbounded,
+            Some(1) => PositionalCapacity::Single,
+            Some(max) => PositionalCapacity::Bounded(max as usize),
+        },
+    }
+}
+
+fn synthetic_span(part: SpanPart) -> Span {
+    Span { arg_index: 0, part }
 }
 
 fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseError {
@@ -542,7 +695,7 @@ fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseE
         .into_error(
             |arg| render_arg(command, arg),
             |cmd| render_command(command, cmd),
-            |g| render_group(command, g),
+            |group| render_group(command, group),
         )
         .with_help("try `--help` to see available options");
 
@@ -555,18 +708,19 @@ fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseE
 
 fn unexpected_value_error(cmd: CommandRef<'_>, raw: &RawValue, span: Span) -> ParseError {
     let text = raw.display().to_string();
+
     let mut err = ParseFailure::UnexpectedValue { value: text.into_boxed_str(), span }
         .into_error(
             |arg| render_arg(cmd, arg),
-            |c| render_command(cmd, c),
-            |g| render_group(cmd, g),
+            |command| render_command(cmd, command),
+            |group| render_group(cmd, group),
         )
         .with_help("try `--help` to see supported arguments");
 
-    if let Ok(s) = raw.try_as_str()
-        && looks_like_subcommand_candidate(s)
+    if let Ok(candidate) = raw.try_as_str()
+        && looks_like_subcommand_candidate(candidate)
     {
-        let suggestions = suggest_subcommand(cmd, s);
+        let suggestions = suggest_subcommand(cmd, candidate);
         if !suggestions.is_empty() {
             err = err.with_note(format!("did you mean {}?", format_suggestions(&suggestions)));
         }
@@ -578,8 +732,8 @@ fn unexpected_value_error(cmd: CommandRef<'_>, raw: &RawValue, span: Span) -> Pa
 fn enrich_validation_error(cmd: CommandRef<'_>, failure: ParseFailure) -> ParseError {
     let mut err = failure.into_error(
         |arg| render_arg(cmd, arg),
-        |c| render_command(cmd, c),
-        |g| render_group(cmd, g),
+        |command| render_command(cmd, command),
+        |group| render_group(cmd, group),
     );
 
     match err.kind() {
@@ -596,54 +750,64 @@ fn enrich_validation_error(cmd: CommandRef<'_>, failure: ParseFailure) -> ParseE
 }
 
 fn suggest_long(command: CommandRef<'_>, input: &str) -> Vec<String> {
-    let mut candidates: Vec<String> = command
+    let mut candidates = command
         .args()
         .flat_map(|arg| {
-            let mut out = Vec::new();
-            if let Some(long) = arg.long() {
-                out.push(long.to_owned());
-            }
-            out.extend(arg.aliases().map(|alias| alias.name().to_owned()));
-            out
+            arg.long()
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .chain(arg.aliases().map(|alias| alias.name().to_owned()))
         })
-        .collect();
+        .collect::<Vec<_>>();
 
-    candidates.sort();
+    candidates.sort_unstable();
     candidates.dedup();
 
     nearest_candidates(input, candidates, 3)
 }
 
 fn suggest_subcommand(command: CommandRef<'_>, input: &str) -> Vec<String> {
-    let mut candidates: Vec<String> = command
+    let mut candidates = command
         .subcommands()
         .flat_map(|sub| {
-            let mut out = vec![sub.name().to_owned()];
-            out.extend(sub.aliases().map(ToOwned::to_owned));
-            out
+            std::iter::once(sub.name().to_owned()).chain(sub.aliases().map(ToOwned::to_owned))
         })
-        .collect();
+        .collect::<Vec<_>>();
 
-    candidates.sort();
+    candidates.sort_unstable();
     candidates.dedup();
 
     nearest_candidates(input, candidates, 3)
 }
 
+/// Rank candidate strings by edit distance and keep the best few.
+///
+/// This helper is intentionally used only on diagnostic paths, never during
+/// successful parsing. That means clarity matters more than squeezing out every
+/// last microsecond, but it is still written to avoid unnecessary work:
+///
+/// - candidates are scored exactly once
+/// - only candidates within `max_distance` are retained
+/// - the final sort is deterministic and stable in meaning
 fn nearest_candidates(input: &str, candidates: Vec<String>, max_distance: usize) -> Vec<String> {
-    let mut ranked: Vec<_> = candidates
+    let mut ranked = candidates
         .into_iter()
-        .map(|candidate| {
-            let score = edit_distance(input, &candidate);
-            (score, candidate)
-        })
+        .map(|candidate| (edit_distance(input, &candidate), candidate))
         .filter(|(score, _)| *score <= max_distance)
-        .collect();
+        .collect::<Vec<_>>();
 
     ranked.sort_by(|(a_score, a), (b_score, b)| a_score.cmp(b_score).then(a.cmp(b)));
+
     ranked.into_iter().take(3).map(|(_, candidate)| candidate).collect()
 }
 
+/// Render a short human-readable list of suggestions.
+///
+/// The resulting string is intended for diagnostic notes such as:
+///
+/// - ``did you mean `build`?``
+/// - ``did you mean `build` or `check`?``
+/// - ``did you mean `build`, `check`, or `test`?``
 fn format_suggestions(items: &[String]) -> String {
     match items {
         [] => String::new(),
@@ -653,61 +817,60 @@ fn format_suggestions(items: &[String]) -> String {
     }
 }
 
+/// Return whether a raw token is worth treating as a subcommand candidate.
+///
+/// Today this is intentionally simple: anything that does not start with `-` is
+/// considered plausible enough to merit a subcommand suggestion.
 fn looks_like_subcommand_candidate(text: &str) -> bool {
     !text.starts_with('-')
 }
 
+/// Compute the Levenshtein edit distance between two strings.
+///
+/// This is used for friendly diagnostics such as "did you mean ...?" when an
+/// option or subcommand is unknown.
+///
+/// A few deliberate implementation choices:
+///
+/// - It compares Unicode scalar values (`char`s), not raw bytes, so edits are
+///   measured in human-facing characters rather than UTF-8 code units.
+/// - It stores only two dynamic-programming rows at a time, which keeps memory
+///   usage modest while preserving the classic Levenshtein behavior.
+/// - It swaps the inputs so that the working row tracks the shorter side,
+///   minimizing temporary allocation size.
+///
+/// Complexity:
+///
+/// - Time: `O(a.len() * b.len())` in characters
+/// - Space: `O(min(a.len(), b.len()))` in characters
+///
+/// This function lives on a cold diagnostic path, so the goal is a pleasant
+/// balance of correctness, readability, and reasonable efficiency.
 fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<_> = a.chars().collect();
-    let b: Vec<_> = b.chars().collect();
+    let mut a = a.chars().collect::<Vec<_>>();
+    let mut b = b.chars().collect::<Vec<_>>();
 
-    let mut dp = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-
-    for (i, row) in dp.iter_mut().enumerate() {
-        row[0] = i;
+    if a.len() < b.len() {
+        std::mem::swap(&mut a, &mut b);
     }
 
-    for (j, cell) in dp[0].iter_mut().enumerate() {
-        *cell = j;
+    let mut previous = (0..=b.len()).collect::<Vec<_>>();
+    let mut current = vec![0usize; b.len() + 1];
+
+    for (i, a_ch) in a.iter().enumerate() {
+        current[0] = i + 1;
+
+        for (j, b_ch) in b.iter().enumerate() {
+            let substitution_cost = usize::from(a_ch != b_ch);
+
+            current[j + 1] =
+                (previous[j + 1] + 1).min(current[j] + 1).min(previous[j] + substitution_cost);
+        }
+
+        std::mem::swap(&mut previous, &mut current);
     }
 
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            dp[i][j] = (dp[i - 1][j] + 1).min(dp[i][j - 1] + 1).min(dp[i - 1][j - 1] + cost);
-        }
-    }
-
-    dp[a.len()][b.len()]
-}
-
-fn next_positional<'a>(
-    command: CommandRef<'a>,
-    state: &CommandState,
-) -> Option<(LocalArgIndex, ArgRef<'a>)> {
-    command.local_args().find_map(|(local, arg, _)| {
-        if arg.kind() != crate::builder::ArgKind::Positional {
-            return None;
-        }
-
-        if !state.is_seen(local) {
-            return Some((local, arg));
-        }
-
-        // If it HAS been seen, check if its Arity allows it to accept more values!
-        if let Some(spec) = arg.value_spec() {
-            let total_values: usize = state.matches[local.index()]
-                .as_ref()
-                .map(|m| m.occurrences.iter().map(|o| o.values.len()).sum())
-                .unwrap_or(0);
-
-            if spec.arity().max().map_or_else(|| true, |m| total_values < m as usize) {
-                return Some((local, arg));
-            }
-        }
-
-        None
-    })
+    previous[b.len()]
 }
 
 fn render_arg(command: CommandRef<'_>, arg: crate::ids::ArgId) -> String {
@@ -724,10 +887,12 @@ fn render_arg(command: CommandRef<'_>, arg: crate::ids::ArgId) -> String {
 
 fn render_command(command: CommandRef<'_>, id: crate::ids::CommandId) -> String {
     let cmd = crate::schema::CommandRef { schema: command.schema, id };
+
     cmd.name().to_owned()
 }
 
 fn render_group(command: CommandRef<'_>, id: crate::ids::GroupId) -> String {
     let group = crate::schema::GroupRef { schema: command.schema, id };
+
     group.id_string().to_owned()
 }
