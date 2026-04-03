@@ -129,6 +129,12 @@ pub struct RawValueDisplay<'a> {
     value: &'a RawValue,
 }
 
+impl RawValueDisplay<'_> {
+    pub fn push_to(self, buf: &mut String) {
+        buf.push_str(&self.value.as_os_str().to_string_lossy());
+    }
+}
+
 impl fmt::Display for RawValueDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value.as_os_str().to_string_lossy())
