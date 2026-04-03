@@ -9,10 +9,11 @@
 //!
 //! 1. validate direct authoring-time invariants
 //! 2. intern strings and assign dense IDs
-//! 3. lower canonical command/arg/group/value-spec records
+//! 3. lower canonical command, arg, group, and value-spec records
 //! 4. build effective per-command views
 //! 5. construct lookup tables and help ordering
-//! 6. freeze into a [`crate::schema::CompiledSchema`]
+//! 6. pack variable-length data into contiguous arrays
+//! 7. freeze into a [`crate::schema::CompiledSchema`]
 //!
 //! This module is intentionally internal.
 
@@ -27,9 +28,10 @@ use crate::builder::{
 use crate::error::{BuildError, BuildErrorKind};
 use crate::ids::{ArgId, CommandId, GroupId, LocalArgIndex, Symbol, ValueSpecId};
 use crate::schema::{
-    Command, CommandArg, CommandLookup, CompiledArg, CompiledArgAlias, CompiledCommand,
-    CompiledDefaultValue, CompiledGroup, CompiledHelpMeta, CompiledPossibleValue, CompiledSchema,
-    CompiledValueSpec, CompiledVisibility, HelpItem, LongLookup, ShortLookup, SubcommandLookup,
+    ArgLocalLookup, Command, CommandArg, CommandLookup, CompiledArg, CompiledArgAlias,
+    CompiledCommand, CompiledDefaultValue, CompiledGroup, CompiledHelpMeta, CompiledPossibleValue,
+    CompiledSchema, CompiledValueSpec, CompiledVisibility, HelpItem, LongLookup, ShortLookup,
+    SliceRange, SubcommandLookup,
 };
 use crate::string_pool::StringInterner;
 
@@ -53,8 +55,8 @@ struct CompileCx {
     strings: StringInterner,
     commands: Vec<PendingCommand>,
     args: Vec<PendingArg>,
-    groups: Vec<CompiledGroup>,
-    value_specs: Vec<CompiledValueSpec>,
+    groups: Vec<PendingGroup>,
+    value_specs: Vec<PendingValueSpec>,
 }
 
 #[derive(Debug)]
@@ -68,15 +70,85 @@ struct PendingCommand {
     declared_args: Vec<ArgId>,
     declared_groups: Vec<GroupId>,
     help_arg: ArgId,
-    compiled: Option<CompiledCommand>,
+    compiled: Option<PendingCompiledCommand>,
+}
+
+#[derive(Debug)]
+struct PendingCompiledCommand {
+    parent: Option<CommandId>,
+    name: Symbol,
+    about: Option<Symbol>,
+    long_about: Option<Symbol>,
+    aliases: Vec<Symbol>,
+    subcommands: Vec<CommandId>,
+    groups: Vec<GroupId>,
+    args: Vec<PendingCommandArg>,
+    positionals: Vec<LocalArgIndex>,
+    local_by_arg: Vec<ArgLocalLookup>,
+    lookup: PendingCommandLookup,
+    required_mask: FrozenBitMask,
+    visible_items: Vec<HelpItem>,
+}
+
+#[derive(Debug)]
+struct PendingCommandArg {
+    arg: ArgId,
+    local: LocalArgIndex,
+    inherited: bool,
+    conflicts: FrozenBitMask,
+    requires: FrozenBitMask,
+    groups: Vec<GroupId>,
+}
+
+#[derive(Debug)]
+struct PendingCommandLookup {
+    longs: Vec<LongLookup>,
+    shorts: Vec<ShortLookup>,
+    subcommands: Vec<SubcommandLookup>,
 }
 
 #[derive(Debug)]
 struct PendingArg {
-    compiled: CompiledArg,
+    declared_on: CommandId,
+    id: Symbol,
+    kind: ArgKind,
+    declared_global: bool,
+    short: Option<char>,
+    long: Option<Symbol>,
+    aliases: Vec<CompiledArgAlias>,
+    action: ArgActionKind,
+    value: Option<ValueSpecId>,
+    env: Option<Symbol>,
+    help: CompiledHelpMeta,
+    visibility: CompiledVisibility,
+    position: Option<u16>,
+    required: bool,
     requires: Box<[Box<str>]>,
     conflicts: Box<[Box<str>]>,
     groups: Box<[Box<str>]>,
+}
+
+#[derive(Debug)]
+struct PendingGroup {
+    declared_on: CommandId,
+    id: Symbol,
+    members: Vec<ArgId>,
+    required: bool,
+    multiple: bool,
+    relation: GroupRelation,
+    help: Option<Symbol>,
+}
+
+#[derive(Debug)]
+struct PendingValueSpec {
+    parser: ParserKind,
+    arity: crate::builder::Arity,
+    hint: crate::builder::ValueHint,
+    possible_values: Vec<CompiledPossibleValue>,
+    default: Option<CompiledDefaultValue>,
+    expected: &'static str,
+    validators: Vec<Validator>,
+    custom_validators: Vec<Arc<dyn crate::builder::ErasedValueValidator>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -142,14 +214,14 @@ impl CompileCx {
     }
 
     fn synthesize_help_arg(&mut self, declared_on: CommandId) -> ArgId {
-        let compiled = CompiledArg {
+        let pending = PendingArg {
             declared_on,
             id: self.strings.intern(SYNTHETIC_HELP_ID),
             kind: ArgKind::Flag,
             declared_global: false,
             short: Some(SYNTHETIC_HELP_SHORT),
             long: Some(self.strings.intern(SYNTHETIC_HELP_LONG)),
-            aliases: Box::new([]),
+            aliases: Vec::new(),
             action: ArgActionKind::Help,
             value: None,
             env: None,
@@ -162,10 +234,6 @@ impl CompileCx {
             visibility: CompiledVisibility::Normal,
             position: None,
             required: false,
-        };
-
-        let pending = PendingArg {
-            compiled,
             requires: Box::new([]),
             conflicts: Box::new([]),
             groups: Box::new([]),
@@ -187,7 +255,7 @@ impl CompileCx {
             None => None,
         };
 
-        let compiled = CompiledArg {
+        let pending = PendingArg {
             declared_on,
             id: self.strings.intern(arg.id()),
             kind: arg.kind(),
@@ -201,8 +269,7 @@ impl CompileCx {
                     name: self.strings.intern(alias.name.as_str()),
                     hidden: alias.hidden,
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect(),
             action: arg.action_ref(),
             value,
             env: arg.env_ref().map(|env| self.strings.intern(env)),
@@ -210,10 +277,6 @@ impl CompileCx {
             visibility: self.lower_visibility(arg.visibility_ref()),
             position: arg.position_ref(),
             required: arg.required_flag(),
-        };
-
-        let pending = PendingArg {
-            compiled,
             requires: boxed_strs(arg.requires_ref()),
             conflicts: boxed_strs(arg.conflicts_ref()),
             groups: boxed_strs(arg.groups_ref()),
@@ -234,7 +297,7 @@ impl CompileCx {
 
         let mut arg_by_name = HashMap::<&str, ArgId>::new();
         for &arg_id in declared_args {
-            let arg = &self.args[arg_id.index()].compiled;
+            let arg = &self.args[arg_id.index()];
             arg_by_name.insert(self.strings.get(arg.id), arg_id);
         }
 
@@ -253,10 +316,10 @@ impl CompileCx {
         }
 
         let id = GroupId::from_index(self.groups.len());
-        self.groups.push(CompiledGroup {
+        self.groups.push(PendingGroup {
             declared_on,
             id: self.strings.intern(group.id()),
-            members: members.into_boxed_slice(),
+            members,
             required: group.required_flag(),
             multiple: group.multiple_flag(),
             relation: group.relation_kind(),
@@ -277,7 +340,7 @@ impl CompileCx {
         let id = ValueSpecId::from_index(self.value_specs.len());
         let expected = parser_expected(&spec.parser);
 
-        self.value_specs.push(CompiledValueSpec {
+        self.value_specs.push(PendingValueSpec {
             parser: spec.parser.clone(),
             arity: spec.arity,
             hint: spec.hint,
@@ -289,8 +352,7 @@ impl CompileCx {
                     help: value.help.as_deref().map(|text| self.strings.intern(text)),
                     hidden: value.hidden,
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect(),
             default: spec.default.as_ref().map(|default| match default {
                 DefaultValue::String(value) => {
                     CompiledDefaultValue::String(self.strings.intern(value.as_str()))
@@ -300,8 +362,8 @@ impl CompileCx {
                 }
             }),
             expected,
-            validators: spec.validators.clone().into_boxed_slice(),
-            custom_validators: spec.custom_validators.clone().into_boxed_slice(),
+            validators: spec.validators.clone(),
+            custom_validators: spec.custom_validators.clone(),
         });
 
         Ok(id)
@@ -336,7 +398,7 @@ impl CompileCx {
         Ok(())
     }
 
-    fn build_effective_command(&self, id: CommandId) -> Result<CompiledCommand, BuildError> {
+    fn build_effective_command(&self, id: CommandId) -> Result<PendingCompiledCommand, BuildError> {
         let pending = &self.commands[id.index()];
         let path = self.command_path(id);
 
@@ -354,11 +416,12 @@ impl CompileCx {
         }
 
         let mut local_by_arg = HashMap::<ArgId, LocalArgIndex>::new();
+        let mut local_by_arg_entries = Vec::<ArgLocalLookup>::with_capacity(effective_args.len());
         let mut arg_name_to_local = HashMap::<String, LocalArgIndex>::new();
 
         for (index, entry) in effective_args.iter().enumerate() {
             let local = LocalArgIndex::from_index(index);
-            let arg = &self.args[entry.arg.index()].compiled;
+            let arg = &self.args[entry.arg.index()];
             let name = self.strings.get(arg.id).to_owned();
 
             if arg_name_to_local.insert(name.clone(), local).is_some() {
@@ -370,7 +433,10 @@ impl CompileCx {
             }
 
             local_by_arg.insert(entry.arg, local);
+            local_by_arg_entries.push(ArgLocalLookup { arg: entry.arg, local });
         }
+
+        local_by_arg_entries.sort_by_key(|entry| entry.arg.index());
 
         let effective_groups = self.effective_groups(id, &local_by_arg);
         let mut group_by_name = HashMap::<String, GroupId>::new();
@@ -384,7 +450,8 @@ impl CompileCx {
                     BuildErrorKind::DuplicateName,
                     path.as_str(),
                     format!(
-                        "relation namespace collision: `{name}` is both an arg id and a group id"
+                        "relation namespace collision: `{name}` is both an arg \
+                         id and a group id"
                     ),
                 ));
             }
@@ -418,7 +485,7 @@ impl CompileCx {
             for &group_id in &effective_groups {
                 let group = &self.groups[group_id.index()];
                 if group.relation == GroupRelation::OneOf && group.members.contains(&entry.arg) {
-                    for member in group.members.iter() {
+                    for member in &group.members {
                         if *member != entry.arg
                             && let Some(&member_local) = local_by_arg.get(member)
                         {
@@ -427,6 +494,7 @@ impl CompileCx {
                     }
                 }
             }
+
             let conflicts = conflicts_mask.freeze();
 
             let requires = self.resolve_requires_mask(
@@ -441,7 +509,7 @@ impl CompileCx {
             let groups =
                 self.resolve_group_memberships(path.as_str(), &pending_arg.groups, &group_by_name)?;
 
-            command_args.push(CommandArg {
+            command_args.push(PendingCommandArg {
                 arg: entry.arg,
                 local,
                 inherited: entry.inherited,
@@ -457,26 +525,27 @@ impl CompileCx {
 
         let mut req_mask = BitMask::new(command_args.len());
         for (index, entry) in command_args.iter().enumerate() {
-            let arg = &self.args[entry.arg.index()].compiled;
+            let arg = &self.args[entry.arg.index()];
             if arg.required {
                 req_mask.insert(LocalArgIndex::from_index(index));
             }
         }
         let required_mask = req_mask.freeze();
 
-        Ok(CompiledCommand {
+        Ok(PendingCompiledCommand {
             parent: pending.parent,
             name: pending.name,
             about: pending.about,
             long_about: pending.long_about,
-            aliases: pending.aliases.clone().into_boxed_slice(),
-            subcommands: pending.subcommands.clone().into_boxed_slice(),
-            groups: effective_groups.into_boxed_slice(),
-            args: command_args.into_boxed_slice(),
+            aliases: pending.aliases.clone(),
+            subcommands: pending.subcommands.clone(),
+            groups: effective_groups,
+            args: command_args,
             positionals,
+            local_by_arg: local_by_arg_entries,
             lookup,
             required_mask,
-            visible_items: visible_items.into_boxed_slice(),
+            visible_items,
         })
     }
 
@@ -488,7 +557,7 @@ impl CompileCx {
             let command = &self.commands[command_id.index()];
 
             for &arg_id in &command.declared_args {
-                let arg = &self.args[arg_id.index()].compiled;
+                let arg = &self.args[arg_id.index()];
                 let include = command_id == id || arg.declared_global;
 
                 if include && seen.insert(arg_id) {
@@ -601,7 +670,10 @@ impl CompileCx {
                         return Err(BuildError::new(
                             BuildErrorKind::UnknownReference,
                             path,
-                            format!("group `{target}` is not effective in this command view"),
+                            format!(
+                                "group `{target}` is not effective in this \
+                                 command view"
+                            ),
                         ));
                     }
                     _ => {
@@ -633,7 +705,7 @@ impl CompileCx {
         path: &str,
         symbolic: &[Box<str>],
         group_by_name: &HashMap<String, GroupId>,
-    ) -> Result<Box<[GroupId]>, BuildError> {
+    ) -> Result<Vec<GroupId>, BuildError> {
         let mut seen = HashSet::<GroupId>::new();
         let mut out = Vec::<GroupId>::new();
 
@@ -651,18 +723,18 @@ impl CompileCx {
             }
         }
 
-        Ok(out.into_boxed_slice())
+        Ok(out)
     }
 
     fn build_positionals(
         &self,
         id: CommandId,
-        command_args: &[CommandArg],
-    ) -> Result<Box<[LocalArgIndex]>, BuildError> {
+        command_args: &[PendingCommandArg],
+    ) -> Result<Vec<LocalArgIndex>, BuildError> {
         let mut positionals = command_args
             .iter()
             .filter_map(|entry| {
-                let arg = &self.args[entry.arg.index()].compiled;
+                let arg = &self.args[entry.arg.index()];
                 (arg.kind == ArgKind::Positional).then_some((arg.position, entry.local, entry.arg))
             })
             .collect::<Vec<_>>();
@@ -672,11 +744,7 @@ impl CompileCx {
 
         self.validate_positional_layout(id, &positionals)?;
 
-        Ok(positionals
-            .into_iter()
-            .map(|(_, local, _)| local)
-            .collect::<Vec<_>>()
-            .into_boxed_slice())
+        Ok(positionals.into_iter().map(|(_, local, _)| local).collect())
     }
 
     fn validate_positional_layout(
@@ -695,7 +763,7 @@ impl CompileCx {
             };
 
             if !seen.insert(*position) {
-                let arg = &self.args[arg_id.index()].compiled;
+                let arg = &self.args[arg_id.index()];
                 return Err(BuildError::new(
                     BuildErrorKind::InvalidPositionalLayout,
                     path.as_str(),
@@ -728,9 +796,9 @@ impl CompileCx {
     fn build_lookup(
         &self,
         id: CommandId,
-        command_args: &[CommandArg],
+        command_args: &[PendingCommandArg],
         subcommands: &[CommandId],
-    ) -> Result<CommandLookup, BuildError> {
+    ) -> Result<PendingCommandLookup, BuildError> {
         let path = self.command_path(id);
 
         let mut seen_long = HashSet::<String>::new();
@@ -742,7 +810,7 @@ impl CompileCx {
         let mut subcommand_lookups = Vec::<SubcommandLookup>::new();
 
         for entry in command_args {
-            let arg = &self.args[entry.arg.index()].compiled;
+            let arg = &self.args[entry.arg.index()];
 
             if let Some(long) = arg.long {
                 let spelling = self.strings.get(long).to_owned();
@@ -818,23 +886,19 @@ impl CompileCx {
         shorts.sort_by_key(|entry| entry.name);
         subcommand_lookups.sort_by(|a, b| self.strings.get(a.name).cmp(self.strings.get(b.name)));
 
-        Ok(CommandLookup {
-            longs: longs.into_boxed_slice(),
-            shorts: shorts.into_boxed_slice(),
-            subcommands: subcommand_lookups.into_boxed_slice(),
-        })
+        Ok(PendingCommandLookup { longs, shorts, subcommands: subcommand_lookups })
     }
 
     fn build_help_items(
         &self,
-        command_args: &[CommandArg],
+        command_args: &[PendingCommandArg],
         subcommands: &[CommandId],
     ) -> Vec<HelpItem> {
         let mut out = Vec::<HelpItem>::new();
         let mut seen_headings = HashSet::<Symbol>::new();
 
         for entry in command_args {
-            let arg = &self.args[entry.arg.index()].compiled;
+            let arg = &self.args[entry.arg.index()];
 
             if matches!(arg.visibility, CompiledVisibility::Hidden) {
                 continue;
@@ -875,22 +939,177 @@ impl CompileCx {
     }
 
     fn freeze(self) -> CompiledSchema {
+        let mut command_aliases = Vec::<Symbol>::new();
+        let mut command_subcommands = Vec::<CommandId>::new();
+        let mut command_groups = Vec::<GroupId>::new();
+        let mut command_args = Vec::<CommandArg>::new();
+        let mut command_positionals = Vec::<LocalArgIndex>::new();
+        let mut command_visible_items = Vec::<HelpItem>::new();
+        let mut command_arg_locals_by_id = Vec::<ArgLocalLookup>::new();
+
+        let mut lookup_longs = Vec::<LongLookup>::new();
+        let mut lookup_shorts = Vec::<ShortLookup>::new();
+        let mut lookup_subcommands = Vec::<SubcommandLookup>::new();
+
+        let mut arg_aliases = Vec::<CompiledArgAlias>::new();
+        let mut group_members = Vec::<ArgId>::new();
+
+        let mut value_possible_values = Vec::<CompiledPossibleValue>::new();
+        let mut value_validators = Vec::<Validator>::new();
+        let mut value_custom_validators =
+            Vec::<Arc<dyn crate::builder::ErasedValueValidator>>::new();
+
         let commands = self
             .commands
             .into_iter()
-            .map(|command| command.compiled.expect("all commands must be compiled before freeze"))
+            .map(|command| {
+                let compiled =
+                    command.compiled.expect("all commands must be compiled before freeze");
+
+                let aliases = append_range(&mut command_aliases, compiled.aliases);
+                let subcommands = append_range(&mut command_subcommands, compiled.subcommands);
+                let groups = append_range(&mut command_groups, compiled.groups);
+
+                let args_start = command_args.len();
+                for arg in compiled.args {
+                    let groups = append_range(&mut command_groups, arg.groups);
+
+                    command_args.push(CommandArg {
+                        arg: arg.arg,
+                        local: arg.local,
+                        inherited: arg.inherited,
+                        conflicts: arg.conflicts,
+                        requires: arg.requires,
+                        groups,
+                    });
+                }
+                let args = SliceRange::new(args_start, command_args.len() - args_start);
+
+                let positionals = append_range(&mut command_positionals, compiled.positionals);
+                let local_by_arg =
+                    append_range(&mut command_arg_locals_by_id, compiled.local_by_arg);
+                let visible_items =
+                    append_range(&mut command_visible_items, compiled.visible_items);
+
+                let lookup = CommandLookup {
+                    longs: append_range(&mut lookup_longs, compiled.lookup.longs),
+                    shorts: append_range(&mut lookup_shorts, compiled.lookup.shorts),
+                    subcommands: append_range(&mut lookup_subcommands, compiled.lookup.subcommands),
+                };
+
+                CompiledCommand {
+                    parent: compiled.parent,
+                    name: compiled.name,
+                    about: compiled.about,
+                    long_about: compiled.long_about,
+                    aliases,
+                    subcommands,
+                    groups,
+                    args,
+                    positionals,
+                    local_by_arg,
+                    visible_items,
+                    lookup,
+                    required_mask: compiled.required_mask,
+                }
+            })
             .collect::<Vec<_>>();
 
-        let args = self.args.into_iter().map(|pending| pending.compiled).collect::<Vec<_>>();
+        let args = self
+            .args
+            .into_iter()
+            .map(|arg| {
+                let aliases = append_range(&mut arg_aliases, arg.aliases);
+
+                CompiledArg {
+                    declared_on: arg.declared_on,
+                    id: arg.id,
+                    kind: arg.kind,
+                    action: arg.action,
+                    value: arg.value,
+                    declared_global: arg.declared_global,
+                    required: arg.required,
+                    short: arg.short,
+                    long: arg.long,
+                    env: arg.env,
+                    position: arg.position,
+                    aliases,
+                    help: arg.help,
+                    visibility: arg.visibility,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let groups = self
+            .groups
+            .into_iter()
+            .map(|group| {
+                let members = append_range(&mut group_members, group.members);
+
+                CompiledGroup {
+                    declared_on: group.declared_on,
+                    id: group.id,
+                    members,
+                    required: group.required,
+                    multiple: group.multiple,
+                    relation: group.relation,
+                    help: group.help,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let value_specs = self
+            .value_specs
+            .into_iter()
+            .map(|spec| {
+                let possible_values =
+                    append_range(&mut value_possible_values, spec.possible_values);
+                let validators = append_range(&mut value_validators, spec.validators);
+                let custom_validators =
+                    append_range(&mut value_custom_validators, spec.custom_validators);
+
+                CompiledValueSpec {
+                    parser: spec.parser,
+                    arity: spec.arity,
+                    hint: spec.hint,
+                    possible_values,
+                    default: spec.default,
+                    expected: spec.expected,
+                    validators,
+                    custom_validators,
+                }
+            })
+            .collect::<Vec<_>>();
 
         CompiledSchema {
             strings: self.strings.freeze(),
             commands: commands.into_boxed_slice(),
             args: args.into_boxed_slice(),
-            groups: self.groups.into_boxed_slice(),
-            value_specs: self.value_specs.into_boxed_slice(),
+            groups: groups.into_boxed_slice(),
+            value_specs: value_specs.into_boxed_slice(),
+            command_aliases: command_aliases.into_boxed_slice(),
+            command_subcommands: command_subcommands.into_boxed_slice(),
+            command_groups: command_groups.into_boxed_slice(),
+            command_args: command_args.into_boxed_slice(),
+            command_positionals: command_positionals.into_boxed_slice(),
+            command_visible_items: command_visible_items.into_boxed_slice(),
+            command_arg_locals_by_id: command_arg_locals_by_id.into_boxed_slice(),
+            lookup_longs: lookup_longs.into_boxed_slice(),
+            lookup_shorts: lookup_shorts.into_boxed_slice(),
+            lookup_subcommands: lookup_subcommands.into_boxed_slice(),
+            arg_aliases: arg_aliases.into_boxed_slice(),
+            group_members: group_members.into_boxed_slice(),
+            value_possible_values: value_possible_values.into_boxed_slice(),
+            value_validators: value_validators.into_boxed_slice(),
+            value_custom_validators: value_custom_validators.into_boxed_slice(),
         }
     }
+}
+
+fn append_range<T>(backing: &mut Vec<T>, mut items: Vec<T>) -> SliceRange {
+    let start = backing.len();
+    backing.append(&mut items);
+    SliceRange::new(start, backing.len() - start)
 }
 
 fn validate_command_builder(builder: &CommandBuilder, path: &str) -> Result<(), BuildError> {

@@ -1,7 +1,7 @@
 #![allow(unused)]
 //! Immutable compiled command schema and read-only introspection views.
 //!
-//! This module contains two layers:
+//! This module contains two closely related layers:
 //!
 //! - internal frozen schema data structures used by the runtime
 //! - public lightweight reference wrappers for introspection
@@ -9,8 +9,9 @@
 //! The design goals are:
 //!
 //! - immutable runtime representation
-//! - cheap `Command` cloning via `Arc`
-//! - compact storage via dense IDs and boxed slices
+//! - cheap [`Command`] cloning via [`Arc`]
+//! - compact storage via dense IDs
+//! - fewer heap allocations by packing variable-length data into global arrays
 //! - deterministic ordering for help, docs, and tests
 //! - pleasant read-only APIs for tooling and introspection
 //!
@@ -31,8 +32,19 @@
 //!    - local validation masks
 //!
 //! This module models both. Canonical definitions live in global arrays inside
-//! [`CompiledSchema`], while each compiled command stores its own effective local
-//! view via [`CommandArg`] records.
+//! [`CompiledSchema`], while each compiled command stores its own effective
+//! local view via [`CommandArg`] records.
+//!
+//! # Packed variable-length storage
+//!
+//! To reduce allocator pressure and improve locality, variable-length command,
+//! arg, group, and value-spec data is stored in large packed backing arrays
+//! inside [`CompiledSchema`]. Individual compiled records then point at their
+//! corresponding sub-slices using [`SliceRange`].
+//!
+//! This preserves the same public API while substantially reducing the number of
+//! small heap allocations compared with storing a separate `Box<[T]>` in every
+//! compiled record.
 //!
 //! # Public usage
 //!
@@ -57,18 +69,26 @@
 //! }
 //! ```
 
+use std::ffi::OsString;
 use std::fmt;
 use std::sync::Arc;
 
 use crate::HelpRenderer as _;
 use crate::bitmask::FrozenBitMask;
 use crate::builder::{
-    ArgAction, ArgActionKind, ArgKind, Arity, ErasedValueValidator, GroupRelation, ParserKind,
-    Validator, ValueHint,
+    ArgActionKind, ArgKind, Arity, ErasedValueValidator, GroupRelation, ParserKind, Validator,
+    ValueHint,
 };
 use crate::ids::{ArgId, CommandId, GroupId, LocalArgIndex, Symbol, ValueSpecId};
 use crate::runtime_error::ArgvSnapshot;
 use crate::string_pool::StringPool;
+
+/// Threshold at which tiny lookup tables switch from linear scan to binary
+/// search.
+///
+/// For very small slices, a straight linear scan is often faster in practice
+/// than the extra branching and indirection of binary search.
+const SMALL_LOOKUP_LINEAR_SCAN_LIMIT: usize = 8;
 
 /// Immutable compiled runtime command handle.
 ///
@@ -77,9 +97,10 @@ use crate::string_pool::StringPool;
 /// - immutable
 /// - cheap to clone
 /// - thread-safe if its internals are
-/// - ready for parsing/help/completions immediately
+/// - ready for parsing, help, and completions immediately
 ///
-/// Internally it points at a shared frozen schema and stores the root command ID.
+/// Internally it points at a shared frozen schema and stores the root command
+/// ID.
 ///
 /// # Examples
 ///
@@ -146,25 +167,15 @@ impl Command {
     ///
     /// # Errors
     ///
-    /// Returns[`crate::RuntimeError`] if parsing fails.
+    /// Returns [`crate::RuntimeError`] if parsing fails.
     pub fn parse_from<I, T>(&self, iter: I) -> Result<crate::Matches, crate::RuntimeError>
     where
         I: IntoIterator<Item = T>,
-        T: Into<std::ffi::OsString>,
+        T: Into<OsString>,
     {
-        let collected = iter.into_iter().map(Into::into).collect::<Vec<_>>();
-        let snapshot = ArgvSnapshot::from_argv(collected.iter().cloned());
-        let argv = crate::parse::Argv::from_argv(collected);
-
-        let tokenized = crate::parse::tokenize_argv(argv);
-        let output = crate::parse::parse_command(self, tokenized)?;
-        let matches = crate::Matches::new(self.clone(), output, snapshot);
-
-        if let Some(command) = matches.help_command() {
-            return Err(crate::RuntimeError::HelpRequested { command: command.id() });
-        }
-
-        Ok(matches)
+        let (collected, snapshot) = collect_argv(iter);
+        let output = self.parse_collected(collected)?;
+        self.finish_matches(output, snapshot)
     }
 
     /// Parse arguments from the current process environment, printing rich
@@ -180,31 +191,67 @@ impl Command {
     pub fn parse_from_or_exit<I, T>(&self, iter: I) -> crate::Matches
     where
         I: IntoIterator<Item = T>,
-        T: Into<std::ffi::OsString>,
+        T: Into<OsString>,
     {
-        let collected = iter.into_iter().map(Into::into).collect::<Vec<_>>();
-        let snapshot = ArgvSnapshot::from_argv(collected.iter().cloned());
+        let (collected, snapshot) = collect_argv(iter);
 
-        match self.parse_from(collected) {
-            Ok(matches) => matches,
-            Err(crate::RuntimeError::HelpRequested { command }) => {
-                let command_ref = find_command_by_id(self.as_ref(), command)
-                    .expect("help command id must exist in schema");
+        match self.parse_collected(collected) {
+            Ok(output) => match self.finish_matches(output, snapshot) {
+                Ok(matches) => matches,
+                Err(crate::RuntimeError::HelpRequested { command }) => {
+                    let command_ref = self
+                        .command_ref_by_id(command)
+                        .expect("help command id must exist in schema");
 
-                let options = crate::help::HelpOptions::default();
-                let doc = crate::help::build_help_doc(command_ref, &options);
-                let text = crate::help::DefaultHelpRenderer
-                    .render_doc(&doc, &options)
-                    .expect("help rendering should succeed");
+                    let options = crate::help::HelpOptions::default();
+                    let doc = crate::help::build_help_doc(command_ref, &options);
+                    let text = crate::help::DefaultHelpRenderer
+                        .render_doc(&doc, &options)
+                        .expect("help rendering should succeed");
 
-                println!("{text}");
-                std::process::exit(0);
-            }
+                    println!("{text}");
+                    std::process::exit(0);
+                }
+                Err(err) => {
+                    err.eprint().expect("failed to print runtime diagnostic");
+                    std::process::exit(2);
+                }
+            },
             Err(err) => {
                 err.eprint_with_argv(snapshot).expect("failed to print runtime diagnostic");
                 std::process::exit(2);
             }
         }
+    }
+
+    /// Parse already-collected argv into the raw parse output.
+    fn parse_collected(
+        &self,
+        collected: Vec<OsString>,
+    ) -> Result<crate::parse::ParseOutput, crate::RuntimeError> {
+        let argv = crate::parse::Argv::from_argv(collected);
+        let tokenized = crate::parse::tokenize_argv(argv);
+        crate::parse::parse_command(self, tokenized).map_err(crate::RuntimeError::from)
+    }
+
+    /// Finalize parse output into runtime matches, handling `--help` requests.
+    fn finish_matches(
+        &self,
+        output: crate::parse::ParseOutput,
+        snapshot: ArgvSnapshot,
+    ) -> Result<crate::Matches, crate::RuntimeError> {
+        let matches = crate::Matches::new(self.clone(), output, snapshot);
+
+        if let Some(command) = matches.help_command() {
+            return Err(crate::RuntimeError::HelpRequested { command: command.id() });
+        }
+
+        Ok(matches)
+    }
+
+    /// Borrow a command view directly by its compiled ID.
+    fn command_ref_by_id(&self, id: CommandId) -> Option<CommandRef<'_>> {
+        self.schema.commands.get(id.index()).map(|_| CommandRef { schema: &self.schema, id })
     }
 }
 
@@ -218,16 +265,111 @@ impl fmt::Debug for Command {
     }
 }
 
-/// Frozen compiled schema storage.
+/// Collect argv into owned storage and build the diagnostic snapshot once.
+fn collect_argv<I, T>(iter: I) -> (Vec<OsString>, ArgvSnapshot)
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    let collected = iter.into_iter().map(Into::into).collect::<Vec<_>>();
+    let snapshot = ArgvSnapshot::from_argv(collected.iter().cloned());
+    (collected, snapshot)
+}
+
+/// Compact range into a packed backing slice.
 ///
-/// This is the central immutable backing store shared by all `Command` handles.
+/// Many compiled records contain variable-length associated data such as aliases,
+/// members, possible values, or lookup tables. Rather than storing a separate
+/// allocation per record, the data is packed globally inside [`CompiledSchema`]
+/// and referenced by one of these ranges.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) struct SliceRange {
+    start: usize,
+    len: usize,
+}
+
+impl SliceRange {
+    /// Construct a range from a start offset and length.
+    #[must_use]
+    pub(crate) const fn new(start: usize, len: usize) -> Self {
+        Self { start, len }
+    }
+
+    /// Return the first index of the range.
+    #[must_use]
+    pub(crate) const fn start(self) -> usize {
+        self.start
+    }
+
+    /// Return the number of elements in the range.
+    #[must_use]
+    pub(crate) const fn len(self) -> usize {
+        self.len
+    }
+
+    /// Return whether the range is empty.
+    #[must_use]
+    pub(crate) const fn is_empty(self) -> bool {
+        self.len == 0
+    }
+
+    /// Return the exclusive end index of the range.
+    #[must_use]
+    pub(crate) const fn end(self) -> usize {
+        self.start + self.len
+    }
+
+    /// Borrow this range from a backing slice.
+    #[must_use]
+    pub(crate) fn get<T>(self, values: &[T]) -> &[T] {
+        &values[self.start..self.end()]
+    }
+}
+
+impl From<std::ops::Range<usize>> for SliceRange {
+    fn from(range: std::ops::Range<usize>) -> Self {
+        Self::new(range.start, range.end.saturating_sub(range.start))
+    }
+}
+
+/// Immutable command-local arg lookup by canonical arg ID.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ArgLocalLookup {
+    pub(crate) arg: ArgId,
+    pub(crate) local: LocalArgIndex,
+}
+
+/// Immutable compiled storage shared by all [`Command`] handles.
+///
+/// Variable-length data is stored in packed backing arrays and referenced by
+/// [`SliceRange`] from the canonical records.
 #[derive(Debug)]
 pub(crate) struct CompiledSchema {
     pub(crate) strings: StringPool,
+
     pub(crate) commands: Box<[CompiledCommand]>,
     pub(crate) args: Box<[CompiledArg]>,
     pub(crate) groups: Box<[CompiledGroup]>,
     pub(crate) value_specs: Box<[CompiledValueSpec]>,
+
+    pub(crate) command_aliases: Box<[Symbol]>,
+    pub(crate) command_subcommands: Box<[CommandId]>,
+    pub(crate) command_groups: Box<[GroupId]>,
+    pub(crate) command_args: Box<[CommandArg]>,
+    pub(crate) command_positionals: Box<[LocalArgIndex]>,
+    pub(crate) command_visible_items: Box<[HelpItem]>,
+    pub(crate) command_arg_locals_by_id: Box<[ArgLocalLookup]>,
+
+    pub(crate) lookup_longs: Box<[LongLookup]>,
+    pub(crate) lookup_shorts: Box<[ShortLookup]>,
+    pub(crate) lookup_subcommands: Box<[SubcommandLookup]>,
+
+    pub(crate) arg_aliases: Box<[CompiledArgAlias]>,
+    pub(crate) group_members: Box<[ArgId]>,
+
+    pub(crate) value_possible_values: Box<[CompiledPossibleValue]>,
+    pub(crate) value_validators: Box<[Validator]>,
+    pub(crate) value_custom_validators: Box<[Arc<dyn ErasedValueValidator>]>,
 }
 
 impl CompiledSchema {
@@ -264,14 +406,54 @@ pub(crate) struct CompiledCommand {
     pub(crate) name: Symbol,
     pub(crate) about: Option<Symbol>,
     pub(crate) long_about: Option<Symbol>,
-    pub(crate) aliases: Box<[Symbol]>,
-    pub(crate) subcommands: Box<[CommandId]>,
-    pub(crate) groups: Box<[GroupId]>,
-    pub(crate) args: Box<[CommandArg]>,
-    pub(crate) positionals: Box<[LocalArgIndex]>,
+
+    pub(crate) aliases: SliceRange,
+    pub(crate) subcommands: SliceRange,
+    pub(crate) groups: SliceRange,
+    pub(crate) args: SliceRange,
+    pub(crate) positionals: SliceRange,
+    pub(crate) local_by_arg: SliceRange,
+    pub(crate) visible_items: SliceRange,
+
     pub(crate) lookup: CommandLookup,
     pub(crate) required_mask: FrozenBitMask,
-    pub(crate) visible_items: Box<[HelpItem]>,
+}
+
+impl CompiledCommand {
+    #[inline]
+    fn aliases_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [Symbol] {
+        self.aliases.get(&schema.command_aliases)
+    }
+
+    #[inline]
+    fn subcommands_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [CommandId] {
+        self.subcommands.get(&schema.command_subcommands)
+    }
+
+    #[inline]
+    fn groups_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [GroupId] {
+        self.groups.get(&schema.command_groups)
+    }
+
+    #[inline]
+    fn args_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [CommandArg] {
+        self.args.get(&schema.command_args)
+    }
+
+    #[inline]
+    fn positionals_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [LocalArgIndex] {
+        self.positionals.get(&schema.command_positionals)
+    }
+
+    #[inline]
+    fn visible_items_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [HelpItem] {
+        self.visible_items.get(&schema.command_visible_items)
+    }
+
+    #[inline]
+    fn local_by_arg_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [ArgLocalLookup] {
+        self.local_by_arg.get(&schema.command_arg_locals_by_id)
+    }
 }
 
 /// Effective command-local arg entry.
@@ -284,7 +466,14 @@ pub(crate) struct CommandArg {
     pub(crate) inherited: bool,
     pub(crate) conflicts: FrozenBitMask,
     pub(crate) requires: FrozenBitMask,
-    pub(crate) groups: Box<[GroupId]>,
+    pub(crate) groups: SliceRange,
+}
+
+impl CommandArg {
+    #[inline]
+    fn groups_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [GroupId] {
+        self.groups.get(&schema.command_groups)
+    }
 }
 
 /// Canonical compiled arg definition.
@@ -292,18 +481,28 @@ pub(crate) struct CommandArg {
 pub(crate) struct CompiledArg {
     pub(crate) declared_on: CommandId,
     pub(crate) id: Symbol,
+
     pub(crate) kind: ArgKind,
-    pub(crate) declared_global: bool,
-    pub(crate) short: Option<char>,
-    pub(crate) long: Option<Symbol>,
-    pub(crate) aliases: Box<[CompiledArgAlias]>,
     pub(crate) action: ArgActionKind,
     pub(crate) value: Option<ValueSpecId>,
+
+    pub(crate) declared_global: bool,
+    pub(crate) required: bool,
+    pub(crate) short: Option<char>,
+    pub(crate) long: Option<Symbol>,
     pub(crate) env: Option<Symbol>,
+    pub(crate) position: Option<u16>,
+
+    pub(crate) aliases: SliceRange,
     pub(crate) help: CompiledHelpMeta,
     pub(crate) visibility: CompiledVisibility,
-    pub(crate) position: Option<u16>,
-    pub(crate) required: bool,
+}
+
+impl CompiledArg {
+    #[inline]
+    fn aliases_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [CompiledArgAlias] {
+        self.aliases.get(&schema.arg_aliases)
+    }
 }
 
 /// Canonical compiled group definition.
@@ -311,11 +510,18 @@ pub(crate) struct CompiledArg {
 pub(crate) struct CompiledGroup {
     pub(crate) declared_on: CommandId,
     pub(crate) id: Symbol,
-    pub(crate) members: Box<[ArgId]>,
+    pub(crate) members: SliceRange,
     pub(crate) required: bool,
     pub(crate) multiple: bool,
     pub(crate) relation: GroupRelation,
     pub(crate) help: Option<Symbol>,
+}
+
+impl CompiledGroup {
+    #[inline]
+    fn members_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [ArgId] {
+        self.members.get(&schema.group_members)
+    }
 }
 
 /// Frozen compiled value specification.
@@ -324,11 +530,31 @@ pub(crate) struct CompiledValueSpec {
     pub(crate) parser: ParserKind,
     pub(crate) arity: Arity,
     pub(crate) hint: ValueHint,
-    pub(crate) possible_values: Box<[CompiledPossibleValue]>,
+    pub(crate) possible_values: SliceRange,
     pub(crate) default: Option<CompiledDefaultValue>,
     pub(crate) expected: &'static str,
-    pub(crate) validators: Box<[Validator]>,
-    pub(crate) custom_validators: Box<[Arc<dyn ErasedValueValidator>]>,
+    pub(crate) validators: SliceRange,
+    pub(crate) custom_validators: SliceRange,
+}
+
+impl CompiledValueSpec {
+    #[inline]
+    fn possible_values_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [CompiledPossibleValue] {
+        self.possible_values.get(&schema.value_possible_values)
+    }
+
+    #[inline]
+    fn validators_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [Validator] {
+        self.validators.get(&schema.value_validators)
+    }
+
+    #[inline]
+    fn custom_validators_slice<'a>(
+        &self,
+        schema: &'a CompiledSchema,
+    ) -> &'a [Arc<dyn ErasedValueValidator>] {
+        self.custom_validators.get(&schema.value_custom_validators)
+    }
 }
 
 /// Compiled arg alias entry.
@@ -370,14 +596,31 @@ pub(crate) enum CompiledVisibility {
     Deprecated { note: Option<Symbol> },
 }
 
-/// Immutable per-command lookup tables.
+/// Immutable per-command lookup ranges.
 ///
 /// Long lookup includes canonical long names and long aliases.
 #[derive(Debug)]
 pub(crate) struct CommandLookup {
-    pub(crate) longs: Box<[LongLookup]>,
-    pub(crate) shorts: Box<[ShortLookup]>,
-    pub(crate) subcommands: Box<[SubcommandLookup]>,
+    pub(crate) longs: SliceRange,
+    pub(crate) shorts: SliceRange,
+    pub(crate) subcommands: SliceRange,
+}
+
+impl CommandLookup {
+    #[inline]
+    fn longs_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [LongLookup] {
+        self.longs.get(&schema.lookup_longs)
+    }
+
+    #[inline]
+    fn shorts_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [ShortLookup] {
+        self.shorts.get(&schema.lookup_shorts)
+    }
+
+    #[inline]
+    fn subcommands_slice<'a>(&self, schema: &'a CompiledSchema) -> &'a [SubcommandLookup] {
+        self.subcommands.get(&schema.lookup_subcommands)
+    }
 }
 
 /// Lookup entry for a long option or alias.
@@ -407,6 +650,16 @@ pub(crate) enum HelpItem {
     Arg(LocalArgIndex),
     Subcommand(CommandId),
     Heading(Symbol),
+}
+
+/// Internal resolved command-local arg view.
+///
+/// This private helper allows the parser and validator to carry both the local
+/// slot and the canonical arg without needing an extra reverse lookup.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LocalArgRef<'a> {
+    pub(crate) local: LocalArgIndex,
+    pub(crate) arg: ArgRef<'a>,
 }
 
 /// Read-only borrowed view over a compiled command.
@@ -462,7 +715,7 @@ impl<'a> CommandRef<'a> {
     /// Iterate over this command's aliases.
     #[must_use]
     pub fn aliases(self) -> impl ExactSizeIterator<Item = &'a str> + 'a {
-        self.data().aliases.iter().copied().map(|sym| self.schema.symbol(sym))
+        self.data().aliases_slice(self.schema).iter().copied().map(|sym| self.schema.symbol(sym))
     }
 
     /// Return the parent command, if this is a subcommand.
@@ -480,19 +733,23 @@ impl<'a> CommandRef<'a> {
     /// Return `true` if this command has no subcommands.
     #[must_use]
     pub fn is_leaf(self) -> bool {
-        self.data().subcommands.is_empty()
+        self.data().subcommands_slice(self.schema).is_empty()
     }
 
     /// Return the number of direct subcommands.
     #[must_use]
     pub fn subcommand_count(self) -> usize {
-        self.data().subcommands.len()
+        self.data().subcommands_slice(self.schema).len()
     }
 
     /// Iterate over direct subcommands.
     #[must_use]
     pub fn subcommands(self) -> impl ExactSizeIterator<Item = CommandRef<'a>> + 'a {
-        self.data().subcommands.iter().copied().map(|id| CommandRef { schema: self.schema, id })
+        self.data()
+            .subcommands_slice(self.schema)
+            .iter()
+            .copied()
+            .map(|id| CommandRef { schema: self.schema, id })
     }
 
     /// Iterate over effective groups visible in this command.
@@ -501,7 +758,11 @@ impl<'a> CommandRef<'a> {
     /// made effective for this command by compilation.
     #[must_use]
     pub fn groups(self) -> impl ExactSizeIterator<Item = GroupRef<'a>> + 'a {
-        self.data().groups.iter().copied().map(|id| GroupRef { schema: self.schema, id })
+        self.data()
+            .groups_slice(self.schema)
+            .iter()
+            .copied()
+            .map(|id| GroupRef { schema: self.schema, id })
     }
 
     /// Iterate over effective arguments visible in this command.
@@ -509,25 +770,28 @@ impl<'a> CommandRef<'a> {
     /// This includes locally declared args and inherited globals.
     #[must_use]
     pub fn args(self) -> impl ExactSizeIterator<Item = ArgRef<'a>> + 'a {
-        self.data().args.iter().map(|entry| ArgRef { schema: self.schema, id: entry.arg })
+        self.data()
+            .args_slice(self.schema)
+            .iter()
+            .map(|entry| ArgRef { schema: self.schema, id: entry.arg })
     }
 
     /// Return the number of effective arguments in this command view.
     #[must_use]
     pub fn arg_count(self) -> usize {
-        self.data().args.len()
+        self.data().args_slice(self.schema).len()
     }
 
     /// Iterate over local arg slots together with the canonical arg and whether
     /// the arg is inherited.
     ///
-    /// The `LocalArgIndex` is the command-local slot used by validation masks and
-    /// later parser state.
+    /// The [`LocalArgIndex`] is the command-local slot used by validation masks
+    /// and later parser state.
     #[must_use]
     pub fn local_args(
         self,
     ) -> impl ExactSizeIterator<Item = (LocalArgIndex, ArgRef<'a>, bool)> + 'a {
-        self.data().args.iter().map(|entry| {
+        self.data().args_slice(self.schema).iter().map(|entry| {
             (entry.local, ArgRef { schema: self.schema, id: entry.arg }, entry.inherited)
         })
     }
@@ -536,8 +800,10 @@ impl<'a> CommandRef<'a> {
     #[must_use]
     pub fn positionals(self) -> impl ExactSizeIterator<Item = ArgRef<'a>> + 'a {
         let data = self.data();
-        data.positionals.iter().map(move |local| {
-            let entry = &data.args[local.index()];
+        let args = data.args_slice(self.schema);
+
+        data.positionals_slice(self.schema).iter().map(move |local| {
+            let entry = &args[local.index()];
             ArgRef { schema: self.schema, id: entry.arg }
         })
     }
@@ -548,9 +814,11 @@ impl<'a> CommandRef<'a> {
     #[must_use]
     pub fn help_items(self) -> impl ExactSizeIterator<Item = HelpItemRef<'a>> + 'a {
         let data = self.data();
-        data.visible_items.iter().map(move |item| match *item {
+        let args = data.args_slice(self.schema);
+
+        data.visible_items_slice(self.schema).iter().map(move |item| match *item {
             HelpItem::Arg(local) => {
-                let entry = &data.args[local.index()];
+                let entry = &args[local.index()];
                 HelpItemRef::Arg(ArgRef { schema: self.schema, id: entry.arg })
             }
             HelpItem::Subcommand(id) => {
@@ -573,22 +841,7 @@ impl<'a> CommandRef<'a> {
     /// ```
     #[must_use]
     pub fn lookup_long(self, name: &str) -> Option<LookupRef<'a>> {
-        let data = self.data();
-        let longs = &data.lookup.longs;
-
-        let found = if longs.len() <= 8 {
-            longs.iter().find(|entry| self.schema.symbol(entry.name) == name)
-        } else {
-            longs
-                .binary_search_by(|entry| self.schema.symbol(entry.name).cmp(name))
-                .ok()
-                .map(|index| &longs[index])
-        };
-
-        found.map(|entry| {
-            let local = &data.args[entry.local.index()];
-            LookupRef::Arg(ArgRef { schema: self.schema, id: local.arg })
-        })
+        self.lookup_long_local(name).map(|resolved| LookupRef::Arg(resolved.arg))
     }
 
     /// Look up a short option by its character.
@@ -602,19 +855,7 @@ impl<'a> CommandRef<'a> {
     /// ```
     #[must_use]
     pub fn lookup_short(self, name: char) -> Option<LookupRef<'a>> {
-        let data = self.data();
-        let shorts = &data.lookup.shorts;
-
-        let found = if shorts.len() <= 8 {
-            shorts.iter().find(|entry| entry.name == name)
-        } else {
-            shorts.binary_search_by_key(&name, |entry| entry.name).ok().map(|index| &shorts[index])
-        };
-
-        found.map(|entry| {
-            let local = &data.args[entry.local.index()];
-            LookupRef::Arg(ArgRef { schema: self.schema, id: local.arg })
-        })
+        self.lookup_short_local(name).map(|resolved| LookupRef::Arg(resolved.arg))
     }
 
     /// Look up a subcommand name or alias.
@@ -629,9 +870,9 @@ impl<'a> CommandRef<'a> {
     #[must_use]
     pub fn lookup_subcommand(self, name: &str) -> Option<LookupRef<'a>> {
         let data = self.data();
-        let subcommands = &data.lookup.subcommands;
+        let subcommands = data.lookup.subcommands_slice(self.schema);
 
-        let found = if subcommands.len() <= 8 {
+        let found = if subcommands.len() <= SMALL_LOOKUP_LINEAR_SCAN_LIMIT {
             subcommands.iter().find(|entry| self.schema.symbol(entry.name) == name)
         } else {
             subcommands
@@ -645,9 +886,60 @@ impl<'a> CommandRef<'a> {
         })
     }
 
+    /// Look up a long option and return both the local slot and canonical arg.
+    ///
+    /// This internal helper exists for hot parser paths that need the local slot
+    /// immediately and should avoid an extra reverse lookup by arg ID.
+    #[inline]
+    pub(crate) fn lookup_long_local(self, name: &str) -> Option<LocalArgRef<'a>> {
+        let data = self.data();
+        let longs = data.lookup.longs_slice(self.schema);
+        let args = data.args_slice(self.schema);
+
+        let found = if longs.len() <= SMALL_LOOKUP_LINEAR_SCAN_LIMIT {
+            longs.iter().find(|entry| self.schema.symbol(entry.name) == name)
+        } else {
+            longs
+                .binary_search_by(|entry| self.schema.symbol(entry.name).cmp(name))
+                .ok()
+                .map(|index| &longs[index])
+        };
+
+        found.map(|entry| {
+            let local = entry.local;
+            let arg = ArgRef { schema: self.schema, id: args[local.index()].arg };
+
+            LocalArgRef { local, arg }
+        })
+    }
+
+    /// Look up a short option and return both the local slot and canonical arg.
+    ///
+    /// This internal helper exists for hot parser paths that need the local slot
+    /// immediately and should avoid an extra reverse lookup by arg ID.
+    #[inline]
+    pub(crate) fn lookup_short_local(self, name: char) -> Option<LocalArgRef<'a>> {
+        let data = self.data();
+        let shorts = data.lookup.shorts_slice(self.schema);
+        let args = data.args_slice(self.schema);
+
+        let found = if shorts.len() <= SMALL_LOOKUP_LINEAR_SCAN_LIMIT {
+            shorts.iter().find(|entry| entry.name == name)
+        } else {
+            shorts.binary_search_by_key(&name, |entry| entry.name).ok().map(|index| &shorts[index])
+        };
+
+        found.map(|entry| {
+            let local = entry.local;
+            let arg = ArgRef { schema: self.schema, id: args[local.index()].arg };
+
+            LocalArgRef { local, arg }
+        })
+    }
+
     #[inline]
     pub(crate) fn local_arg_entry(self, local: LocalArgIndex) -> &'a CommandArg {
-        &self.data().args[local.index()]
+        &self.data().args_slice(self.schema)[local.index()]
     }
 
     #[inline]
@@ -657,7 +949,19 @@ impl<'a> CommandRef<'a> {
 
     #[inline]
     pub(crate) fn local_arg_by_id(self, id: ArgId) -> Option<LocalArgIndex> {
-        self.data().args.iter().find_map(|entry| (entry.arg == id).then_some(entry.local))
+        let entries = self.data().local_by_arg_slice(self.schema);
+
+        let found = if entries.len() <= SMALL_LOOKUP_LINEAR_SCAN_LIMIT {
+            entries.iter().find(|entry| entry.arg == id)
+        } else {
+            let target = id.index();
+            entries
+                .binary_search_by_key(&target, |entry| entry.arg.index())
+                .ok()
+                .map(|index| &entries[index])
+        };
+
+        found.map(|entry| entry.local)
     }
 
     fn data(self) -> &'a CompiledCommand {
@@ -737,7 +1041,7 @@ impl<'a> ArgRef<'a> {
     /// Iterate over long aliases for this arg.
     #[must_use]
     pub fn aliases(self) -> impl ExactSizeIterator<Item = ArgAliasRef<'a>> + 'a {
-        self.data().aliases.iter().map(|alias| ArgAliasRef {
+        self.data().aliases_slice(self.schema).iter().map(|alias| ArgAliasRef {
             schema: self.schema,
             name: alias.name,
             hidden: alias.hidden,
@@ -815,7 +1119,7 @@ impl<'a> ArgRef<'a> {
     #[inline]
     pub(crate) fn validators(self) -> &'a [Validator] {
         match self.data().value {
-            Some(id) => &self.schema.value_spec(id).validators,
+            Some(id) => self.schema.value_spec(id).validators_slice(self.schema),
             None => &[],
         }
     }
@@ -823,7 +1127,7 @@ impl<'a> ArgRef<'a> {
     #[inline]
     pub(crate) fn custom_validators(self) -> &'a [Arc<dyn ErasedValueValidator>] {
         match self.data().value {
-            Some(id) => &self.schema.value_spec(id).custom_validators,
+            Some(id) => self.schema.value_spec(id).custom_validators_slice(self.schema),
             None => &[],
         }
     }
@@ -868,7 +1172,11 @@ impl<'a> GroupRef<'a> {
     /// Iterate over the group's canonical member args.
     #[must_use]
     pub fn members(self) -> impl ExactSizeIterator<Item = ArgRef<'a>> + 'a {
-        self.data().members.iter().copied().map(|id| ArgRef { schema: self.schema, id })
+        self.data()
+            .members_slice(self.schema)
+            .iter()
+            .copied()
+            .map(|id| ArgRef { schema: self.schema, id })
     }
 
     /// Return `true` if the group is required.
@@ -935,7 +1243,7 @@ impl<'a> ValueSpecRef<'a> {
         self.data().arity
     }
 
-    /// Return the UI/completion hint.
+    /// Return the UI and completion hint.
     #[must_use]
     pub fn hint(self) -> ValueHint {
         self.data().hint
@@ -950,7 +1258,7 @@ impl<'a> ValueSpecRef<'a> {
     /// Iterate over declared possible values.
     #[must_use]
     pub fn possible_values(self) -> impl ExactSizeIterator<Item = PossibleValueRef<'a>> + 'a {
-        self.data().possible_values.iter().map(|value| PossibleValueRef {
+        self.data().possible_values_slice(self.schema).iter().map(|value| PossibleValueRef {
             schema: self.schema,
             value: value.value,
             help: value.help,
@@ -972,12 +1280,13 @@ impl<'a> ValueSpecRef<'a> {
     /// Return semantic validators attached to this value spec.
     #[must_use]
     pub fn validators(self) -> &'a [Validator] {
-        &self.data().validators
+        self.data().validators_slice(self.schema)
     }
 
+    /// Return custom value validators attached to this value spec.
     #[must_use]
     pub fn custom_validators(self) -> &'a [Arc<dyn ErasedValueValidator>] {
-        &self.data().custom_validators
+        self.data().custom_validators_slice(self.schema)
     }
 
     fn data(self) -> &'a CompiledValueSpec {
@@ -1114,7 +1423,7 @@ pub enum HelpItemRef<'a> {
 
 /// Result of a command-local lookup.
 ///
-/// Long/short lookups return args. Subcommand lookups return subcommands.
+/// Long and short lookups return args. Subcommand lookups return subcommands.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum LookupRef<'a> {
@@ -1122,18 +1431,4 @@ pub enum LookupRef<'a> {
     Arg(ArgRef<'a>),
     /// Matched subcommand.
     Subcommand(CommandRef<'a>),
-}
-
-fn find_command_by_id(command: CommandRef<'_>, id: CommandId) -> Option<CommandRef<'_>> {
-    if command.id() == id {
-        return Some(command);
-    }
-
-    for sub in command.subcommands() {
-        if let Some(found) = find_command_by_id(sub, id) {
-            return Some(found);
-        }
-    }
-
-    None
 }
