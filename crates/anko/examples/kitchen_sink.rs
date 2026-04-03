@@ -92,7 +92,7 @@ fn main() {
                     ArgBuilder::option::<String>("features") // Auto arity ZERO_OR_MORE!
                         .long("feature")
                         .short('F')
-                        .action(ArgAction::Append)
+                        .action(ArgAction::Append) // TODO: You shouldnt be able to chain action twice and and then it does ArgBuilder<Vec<String>> and then ArgBuilder<Vec<Vec<String>>>
                         .help("List of features to enable")
                         .arity(1..=3)
                         .required(true),

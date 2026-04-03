@@ -6,6 +6,7 @@
 //! performance and defers errors so that `--help` can reliably bypass them.
 
 use std::collections::VecDeque;
+use std::ffi::{OsStr, OsString};
 
 use crate::builder::{ArgActionKind, ArgKind};
 use crate::ids::LocalArgIndex;
@@ -104,6 +105,53 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn push_short_token(&mut self, name: char, span: Span) {
+        self.normalized_buffer.push_back(NormalizedToken::Short {
+            name,
+            span: span_with_part(span, SpanPart::ShortName),
+        });
+    }
+
+    fn push_long_token<S>(&mut self, name: S, span: Span)
+    where
+        S: Into<Box<str>>,
+    {
+        self.normalized_buffer.push_back(NormalizedToken::Long {
+            name: name.into(),
+            span: span_with_part(span, SpanPart::LongName),
+        });
+    }
+
+    fn push_value_token(&mut self, value: ValueId, span: Span, part: SpanPart) {
+        self.normalized_buffer
+            .push_back(NormalizedToken::Value { value, span: span_with_part(span, part) });
+    }
+
+    fn resolve_short_arg(
+        &self,
+        cmd: CommandRef<'a>,
+        short: char,
+        span: Span,
+    ) -> Result<ArgRef<'a>, ParseError> {
+        match cmd.lookup_short(short) {
+            Some(LookupRef::Arg(arg)) => Ok(arg),
+            Some(LookupRef::Subcommand(_)) => Err(ParseError::new(
+                ParseErrorKind::UnknownShort,
+                Some(span),
+                format!(
+                    "short option `-{short}` resolved unexpectedly \
+                     to a subcommand"
+                ),
+            )),
+            None => Err(ParseError::new(
+                ParseErrorKind::UnknownShort,
+                Some(span),
+                format!("unknown short option `-{short}`"),
+            )
+            .with_help("try `--help` to see available options")),
+        }
+    }
+
     /// Read raw tokens and normalize them until the buffer has at least one
     /// token, or we run out of input.
     fn fill_buffer(&mut self, current_cmd: CommandRef<'a>) {
@@ -121,10 +169,7 @@ impl<'a> Parser<'a> {
                 }
                 RawToken::OptionLike { value, span } => {
                     if self.after_terminator {
-                        self.normalized_buffer.push_back(NormalizedToken::Value {
-                            value,
-                            span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
-                        });
+                        self.push_value_token(value, span, SpanPart::BareValue);
                     } else if let Err(error) = self.normalize_option_like(current_cmd, value, span)
                     {
                         self.errors.push(error);
@@ -137,56 +182,181 @@ impl<'a> Parser<'a> {
     /// Schema-aware normalization for an option-like string
     /// (e.g., `-v`, `--config=file`).
     ///
-    /// To avoid borrow conflicts with `self.values` while still keeping
-    /// allocations modest, this first extracts only the needed suffix of the
-    /// token into a compact owned buffer and then performs normalization.
+    /// On Unix and Windows this normalizes directly from `OsStr`, requiring only
+    /// the option name to be valid Unicode while preserving any attached value
+    /// as an opaque `OsString`. On other platforms we fall back to UTF-8-based
+    /// normalization.
     fn normalize_option_like(
         &mut self,
         cmd: CommandRef<'a>,
         value_id: ValueId,
         span: Span,
     ) -> Result<(), ParseError> {
-        enum OptionLikeTail {
-            Long(Box<str>),
-            Short(Box<str>),
-            Bare,
+        #[cfg(any(unix, windows))]
+        {
+            enum ParsedOptionLike {
+                Long { name: String, attached: Option<OsString> },
+                Short(OsString),
+                Bare,
+            }
+
+            let parsed = {
+                let raw = self.values.get(value_id);
+                let input = raw.as_os_str();
+
+                match option_style(input) {
+                    Some(OptionStyle::Long) => {
+                        let (name, attached) = split_long_os(input).map_err(|()| {
+                            ParseError::new(
+                                ParseErrorKind::NonUtf8OptionLike,
+                                Some(span),
+                                "option-like argv entry must have a valid UTF-8 option name",
+                            )
+                        })?;
+
+                        ParsedOptionLike::Long { name, attached }
+                    }
+                    Some(OptionStyle::Short) => ParsedOptionLike::Short(input.to_os_string()),
+                    None => ParsedOptionLike::Bare,
+                }
+            };
+
+            match parsed {
+                ParsedOptionLike::Long { name, attached } => {
+                    self.push_long_normalized(span, name, attached)
+                }
+                ParsedOptionLike::Short(input) => self.normalize_short_os(cmd, span, &input),
+                ParsedOptionLike::Bare => {
+                    self.push_value_token(value_id, span, SpanPart::BareValue);
+                    Ok(())
+                }
+            }
         }
 
-        let tail = {
-            let raw = self.values.get(value_id);
-            let text = raw.try_as_str().map_err(|err| {
-                ParseError::new(
-                    ParseErrorKind::NonUtf8OptionLike,
-                    Some(span),
-                    format!("option-like argv entry must be valid UTF-8: {err}"),
-                )
-            })?;
-
-            if let Some(rest) = text.strip_prefix("--") {
-                OptionLikeTail::Long(rest.into())
-            } else if let Some(rest) = text.strip_prefix('-') {
-                OptionLikeTail::Short(rest.into())
-            } else {
-                OptionLikeTail::Bare
+        #[cfg(not(any(unix, windows)))]
+        {
+            enum OptionLikeTail {
+                Long(Box<str>),
+                Short(Box<str>),
+                Bare,
             }
-        };
 
-        match tail {
-            OptionLikeTail::Long(rest) => self.normalize_long(span, &rest),
-            OptionLikeTail::Short(rest) => self.normalize_short_cluster(cmd, span, &rest),
-            OptionLikeTail::Bare => {
-                self.normalized_buffer.push_back(NormalizedToken::Value {
-                    value: value_id,
-                    span: Span { arg_index: span.arg_index, part: SpanPart::BareValue },
-                });
-                Ok(())
+            let tail = {
+                let raw = self.values.get(value_id);
+                let text = raw.try_as_str().map_err(|err| {
+                    ParseError::new(
+                        ParseErrorKind::NonUtf8OptionLike,
+                        Some(span),
+                        format!("option-like argv entry must be valid UTF-8: {err}"),
+                    )
+                })?;
+
+                if let Some(rest) = text.strip_prefix("--") {
+                    OptionLikeTail::Long(rest.into())
+                } else if let Some(rest) = text.strip_prefix('-') {
+                    OptionLikeTail::Short(rest.into())
+                } else {
+                    OptionLikeTail::Bare
+                }
+            };
+
+            match tail {
+                OptionLikeTail::Long(rest) => self.normalize_long_utf8(span, &rest),
+                OptionLikeTail::Short(rest) => self.normalize_short_cluster_utf8(cmd, span, &rest),
+                OptionLikeTail::Bare => {
+                    self.push_value_token(value_id, span, SpanPart::BareValue);
+                    Ok(())
+                }
             }
         }
     }
 
-    /// Normalize a long option (e.g., `verbose` or `config=file`).
-    fn normalize_long(&mut self, span: Span, rest: &str) -> Result<(), ParseError> {
-        if rest.is_empty() {
+    /// Normalize a short option cluster from an `OsStr`.
+    ///
+    /// Short names still must decode as Unicode scalar values because the
+    /// schema models them as `char`, but once a value-taking short option is
+    /// found, the remainder of the original argument is preserved as an opaque
+    /// `OsString` attached value.
+    #[cfg(any(unix, windows))]
+    fn normalize_short_os(
+        &mut self,
+        cmd: CommandRef<'a>,
+        span: Span,
+        input: &OsStr,
+    ) -> Result<(), ParseError> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+            let bytes = input.as_bytes();
+            let mut rest = bytes.get(1..).ok_or_else(|| empty_short_cluster_error(span))?;
+
+            if rest.is_empty() {
+                return Err(empty_short_cluster_error(span));
+            }
+
+            while !rest.is_empty() {
+                let (short, consumed) =
+                    decode_next_utf8_char(rest).map_err(|()| non_utf8_option_name_error(span))?;
+                let arg = self.resolve_short_arg(cmd, short, span)?;
+
+                self.push_short_token(short, span);
+                rest = &rest[consumed..];
+
+                if arg.takes_value() {
+                    if !rest.is_empty() {
+                        let value =
+                            self.values.push(RawValue::from(OsString::from_vec(rest.to_vec())));
+                        self.push_value_token(value, span, SpanPart::AttachedValue);
+                    }
+                    break;
+                }
+            }
+
+            Ok(())
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+            let units = input.encode_wide().collect::<Vec<_>>();
+            let mut offset = 1usize;
+
+            if units.len() <= offset {
+                return Err(empty_short_cluster_error(span));
+            }
+
+            while offset < units.len() {
+                let (short, consumed) = decode_next_utf16_char(&units[offset..])
+                    .map_err(|()| non_utf8_option_name_error(span))?;
+                let arg = self.resolve_short_arg(cmd, short, span)?;
+
+                self.push_short_token(short, span);
+                offset += consumed;
+
+                if arg.takes_value() {
+                    if offset < units.len() {
+                        let value =
+                            self.values.push(RawValue::from(OsString::from_wide(&units[offset..])));
+                        self.push_value_token(value, span, SpanPart::AttachedValue);
+                    }
+                    break;
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    fn push_long_normalized(
+        &mut self,
+        span: Span,
+        name: String,
+        attached: Option<OsString>,
+    ) -> Result<(), ParseError> {
+        if name.is_empty() {
             return Err(ParseError::new(
                 ParseErrorKind::InvalidLongSyntax,
                 Some(span),
@@ -194,97 +364,11 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        match rest.split_once('=') {
-            Some((name, attached)) => {
-                if name.is_empty() {
-                    return Err(ParseError::new(
-                        ParseErrorKind::InvalidLongSyntax,
-                        Some(span),
-                        "long option name must not be empty",
-                    ));
-                }
+        self.push_long_token(name, span);
 
-                self.normalized_buffer.push_back(NormalizedToken::Long {
-                    name: name.into(),
-                    span: Span { arg_index: span.arg_index, part: SpanPart::LongName },
-                });
-
-                let value = self.values.push(RawValue::from(attached));
-                self.normalized_buffer.push_back(NormalizedToken::Value {
-                    value,
-                    span: Span { arg_index: span.arg_index, part: SpanPart::AttachedValue },
-                });
-
-                Ok(())
-            }
-            None => {
-                self.normalized_buffer.push_back(NormalizedToken::Long {
-                    name: rest.into(),
-                    span: Span { arg_index: span.arg_index, part: SpanPart::LongName },
-                });
-                Ok(())
-            }
-        }
-    }
-
-    /// Normalize a cluster of short options (e.g., `-vab` or `-ofile.txt`).
-    fn normalize_short_cluster(
-        &mut self,
-        cmd: CommandRef<'a>,
-        span: Span,
-        rest: &str,
-    ) -> Result<(), ParseError> {
-        if rest.is_empty() {
-            return Err(ParseError::new(
-                ParseErrorKind::UnknownShort,
-                Some(span),
-                "short option cluster must not be empty",
-            ));
-        }
-
-        for (byte_offset, short) in rest.char_indices() {
-            let arg = match cmd.lookup_short(short) {
-                Some(LookupRef::Arg(arg)) => arg,
-                Some(LookupRef::Subcommand(_)) => {
-                    return Err(ParseError::new(
-                        ParseErrorKind::UnknownShort,
-                        Some(span),
-                        format!(
-                            "short option `-{short}` resolved unexpectedly \
-                             to a subcommand"
-                        ),
-                    ));
-                }
-                None => {
-                    return Err(ParseError::new(
-                        ParseErrorKind::UnknownShort,
-                        Some(span),
-                        format!("unknown short option `-{short}`"),
-                    )
-                    .with_help("try `--help` to see available options"));
-                }
-            };
-
-            self.normalized_buffer.push_back(NormalizedToken::Short {
-                name: short,
-                span: Span { arg_index: span.arg_index, part: SpanPart::ShortName },
-            });
-
-            if arg.takes_value() {
-                let value_start = byte_offset + short.len_utf8();
-                if value_start < rest.len() {
-                    let attached = &rest[value_start..];
-                    let value = self.values.push(RawValue::from(attached));
-
-                    self.normalized_buffer.push_back(NormalizedToken::Value {
-                        value,
-                        span: Span { arg_index: span.arg_index, part: SpanPart::AttachedValue },
-                    });
-
-                    // The rest of the cluster is consumed as the attached value.
-                    break;
-                }
-            }
+        if let Some(attached) = attached {
+            let value = self.values.push(RawValue::from(attached));
+            self.push_value_token(value, span, SpanPart::AttachedValue);
         }
 
         Ok(())
@@ -587,6 +671,83 @@ impl<'a> Parser<'a> {
             )
             .with_help("pass a value after this option or use `--help`"))
     }
+
+    /// Normalize a long option (e.g., `verbose` or `config=file`) from UTF-8.
+    ///
+    /// This is used only as a fallback on non-Unix/non-Windows targets.
+    #[cfg(not(any(unix, windows)))]
+    fn normalize_long_utf8(&mut self, span: Span, rest: &str) -> Result<(), ParseError> {
+        if rest.is_empty() {
+            return Err(ParseError::new(
+                ParseErrorKind::InvalidLongSyntax,
+                Some(span),
+                "long option name must not be empty",
+            ));
+        }
+
+        match rest.split_once('=') {
+            Some((name, attached)) => {
+                if name.is_empty() {
+                    return Err(ParseError::new(
+                        ParseErrorKind::InvalidLongSyntax,
+                        Some(span),
+                        "long option name must not be empty",
+                    ));
+                }
+
+                self.push_long_token(name, span);
+
+                let value = self.values.push(RawValue::from(attached));
+                self.push_value_token(value, span, SpanPart::AttachedValue);
+
+                Ok(())
+            }
+            None => {
+                self.push_long_token(rest, span);
+                Ok(())
+            }
+        }
+    }
+
+    /// Normalize a cluster of short options (e.g., `-vab` or `-ofile.txt`)
+    /// from UTF-8.
+    ///
+    /// This is used only as a fallback on non-Unix/non-Windows targets.
+    #[cfg(not(any(unix, windows)))]
+    fn normalize_short_cluster_utf8(
+        &mut self,
+        cmd: CommandRef<'a>,
+        span: Span,
+        rest: &str,
+    ) -> Result<(), ParseError> {
+        if rest.is_empty() {
+            return Err(ParseError::new(
+                ParseErrorKind::UnknownShort,
+                Some(span),
+                "short option cluster must not be empty",
+            ));
+        }
+
+        for (byte_offset, short) in rest.char_indices() {
+            let arg = self.resolve_short_arg(cmd, short, span)?;
+
+            self.push_short_token(short, span);
+
+            if arg.takes_value() {
+                let value_start = byte_offset + short.len_utf8();
+                if value_start < rest.len() {
+                    let attached = &rest[value_start..];
+                    let value = self.values.push(RawValue::from(attached));
+                    self.push_value_token(value, span, SpanPart::AttachedValue);
+
+                    // The rest of the cluster is consumed as the attached value.
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -603,9 +764,9 @@ enum PositionalCapacity {
 }
 
 impl PositionalCapacity {
-    fn allows_following_values(self, seen_values: usize) -> bool {
+    fn can_accept_value(self, seen_values: usize) -> bool {
         match self {
-            Self::Single => false,
+            Self::Single => seen_values == 0,
             Self::Bounded(max) => seen_values < max,
             Self::Unbounded => true,
         }
@@ -649,7 +810,7 @@ impl Positionals {
 
     fn next_local(&mut self) -> Option<LocalArgIndex> {
         while let Some(entry) = self.entries.get(self.cursor) {
-            if entry.seen_values == 0 || entry.capacity.allows_following_values(entry.seen_values) {
+            if entry.capacity.can_accept_value(entry.seen_values) {
                 return Some(entry.local);
             }
 
@@ -667,7 +828,7 @@ impl Positionals {
         debug_assert_eq!(entry.local, local);
         entry.seen_values += 1;
 
-        if !entry.capacity.allows_following_values(entry.seen_values) {
+        if !entry.capacity.can_accept_value(entry.seen_values) {
             self.cursor += 1;
         }
     }
@@ -686,6 +847,142 @@ fn positional_capacity(arg: ArgRef<'_>) -> PositionalCapacity {
 
 fn synthetic_span(part: SpanPart) -> Span {
     Span { arg_index: 0, part }
+}
+
+fn span_with_part(span: Span, part: SpanPart) -> Span {
+    Span { arg_index: span.arg_index, part }
+}
+
+#[cfg(any(unix, windows))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OptionStyle {
+    Short,
+    Long,
+}
+
+#[cfg(any(unix, windows))]
+fn option_style(input: &OsStr) -> Option<OptionStyle> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+
+        let bytes = input.as_bytes();
+        match bytes {
+            [b'-', b'-', ..] => Some(OptionStyle::Long),
+            [b'-', ..] => Some(OptionStyle::Short),
+            _ => None,
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        const DASH: u16 = b'-' as u16;
+
+        let mut it = input.encode_wide();
+        return match (it.next(), it.next()) {
+            (Some(DASH), Some(DASH)) => Some(OptionStyle::Long),
+            (Some(DASH), _) => Some(OptionStyle::Short),
+            _ => None,
+        };
+    }
+}
+
+#[cfg(any(unix, windows))]
+fn split_long_os(input: &OsStr) -> Result<(String, Option<OsString>), ()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::{OsStrExt, OsStringExt};
+
+        let bytes = input.as_bytes();
+        let body = bytes.get(2..).ok_or(())?;
+
+        let (name, attached) = match body.iter().position(|&b| b == b'=') {
+            Some(eq) => (&body[..eq], Some(OsString::from_vec(body[eq + 1..].to_vec()))),
+            None => (body, None),
+        };
+
+        let name = std::str::from_utf8(name).map_err(|_| ())?.to_owned();
+        Ok((name, attached))
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+        const EQUALS: u16 = b'=' as u16;
+
+        let units = input.encode_wide().collect::<Vec<_>>();
+        let body = units.get(2..).ok_or(())?;
+
+        let (name, attached) = match body.iter().position(|&u| u == EQUALS) {
+            Some(eq) => (&body[..eq], Some(OsString::from_wide(&body[eq + 1..]))),
+            None => (body, None),
+        };
+
+        let name = String::from_utf16(name).map_err(|_| ())?;
+        Ok((name, attached))
+    }
+}
+
+fn empty_short_cluster_error(span: Span) -> ParseError {
+    ParseError::new(
+        ParseErrorKind::UnknownShort,
+        Some(span),
+        "short option cluster must not be empty",
+    )
+}
+
+fn non_utf8_option_name_error(span: Span) -> ParseError {
+    ParseError::new(
+        ParseErrorKind::NonUtf8OptionLike,
+        Some(span),
+        "option-like argv entry must have a valid UTF-8 option name",
+    )
+}
+
+#[cfg(unix)]
+fn decode_next_utf8_char(input: &[u8]) -> Result<(char, usize), ()> {
+    for len in 1..=input.len().min(4) {
+        let slice = &input[..len];
+        if let Ok(s) = std::str::from_utf8(slice) {
+            let mut chars = s.chars();
+            if let Some(ch) = chars.next()
+                && chars.next().is_none()
+            {
+                return Ok((ch, len));
+            }
+        }
+    }
+
+    Err(())
+}
+
+#[cfg(windows)]
+fn decode_next_utf16_char(input: &[u16]) -> Result<(char, usize), ()> {
+    let Some(&first) = input.first() else {
+        return Err(());
+    };
+
+    match first {
+        0xD800..=0xDBFF => {
+            let Some(&second) = input.get(1) else {
+                return Err(());
+            };
+
+            if !(0xDC00..=0xDFFF).contains(&second) {
+                return Err(());
+            }
+
+            match std::char::decode_utf16([first, second]).next() {
+                Some(Ok(ch)) => Ok((ch, 2)),
+                _ => Err(()),
+            }
+        }
+        0xDC00..=0xDFFF => Err(()),
+        unit => char::from_u32(unit as u32).map(|ch| (ch, 1)).ok_or(()),
+    }
 }
 
 fn unknown_long_error(command: CommandRef<'_>, name: &str, span: Span) -> ParseError {
@@ -796,7 +1093,7 @@ fn nearest_candidates(input: &str, candidates: Vec<String>, max_distance: usize)
         .filter(|(score, _)| *score <= max_distance)
         .collect::<Vec<_>>();
 
-    ranked.sort_by(|(a_score, a), (b_score, b)| a_score.cmp(b_score).then(a.cmp(b)));
+    ranked.sort_unstable_by(|(a_score, a), (b_score, b)| a_score.cmp(b_score).then(a.cmp(b)));
 
     ranked.into_iter().take(3).map(|(_, candidate)| candidate).collect()
 }
@@ -836,8 +1133,8 @@ fn looks_like_subcommand_candidate(text: &str) -> bool {
 ///   measured in human-facing characters rather than UTF-8 code units.
 /// - It stores only two dynamic-programming rows at a time, which keeps memory
 ///   usage modest while preserving the classic Levenshtein behavior.
-/// - It swaps the inputs so that the working row tracks the shorter side,
-///   minimizing temporary allocation size.
+/// - It allocates the working row only for the shorter side, minimizing
+///   temporary allocation size.
 ///
 /// Complexity:
 ///
@@ -847,21 +1144,32 @@ fn looks_like_subcommand_candidate(text: &str) -> bool {
 /// This function lives on a cold diagnostic path, so the goal is a pleasant
 /// balance of correctness, readability, and reasonable efficiency.
 fn edit_distance(a: &str, b: &str) -> usize {
-    let mut a = a.chars().collect::<Vec<_>>();
-    let mut b = b.chars().collect::<Vec<_>>();
-
-    if a.len() < b.len() {
-        std::mem::swap(&mut a, &mut b);
+    if a == b {
+        return 0;
     }
 
-    let mut previous = (0..=b.len()).collect::<Vec<_>>();
-    let mut current = vec![0usize; b.len() + 1];
+    if a.is_empty() {
+        return b.chars().count();
+    }
 
-    for (i, a_ch) in a.iter().enumerate() {
+    if b.is_empty() {
+        return a.chars().count();
+    }
+
+    let a_len = a.chars().count();
+    let b_len = b.chars().count();
+
+    let (longer, shorter) = if a_len < b_len { (b, a) } else { (a, b) };
+    let shorter = shorter.chars().collect::<Vec<_>>();
+
+    let mut previous = (0..=shorter.len()).collect::<Vec<_>>();
+    let mut current = vec![0usize; shorter.len() + 1];
+
+    for (i, longer_ch) in longer.chars().enumerate() {
         current[0] = i + 1;
 
-        for (j, b_ch) in b.iter().enumerate() {
-            let substitution_cost = usize::from(a_ch != b_ch);
+        for (j, shorter_ch) in shorter.iter().enumerate() {
+            let substitution_cost = usize::from(longer_ch != *shorter_ch);
 
             current[j + 1] =
                 (previous[j + 1] + 1).min(current[j] + 1).min(previous[j] + substitution_cost);
@@ -870,7 +1178,7 @@ fn edit_distance(a: &str, b: &str) -> usize {
         std::mem::swap(&mut previous, &mut current);
     }
 
-    previous[b.len()]
+    previous[shorter.len()]
 }
 
 fn render_arg(command: CommandRef<'_>, arg: crate::ids::ArgId) -> String {
