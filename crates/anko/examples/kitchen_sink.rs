@@ -110,6 +110,7 @@ fn main() {
         .subcommand(
             CommandBuilder::new("build")
                 .about("Compile the project")
+                .long_about("The world is for being compiled")
                 .arg(
                     ArgBuilder::option::<PathBuf>("out-dir")
                         .long("out-dir")
