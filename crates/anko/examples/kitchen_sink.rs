@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anko::builder::{ArgAction, ArgBuilder, CommandBuilder, GroupBuilder, GroupRelation};
-use anko::{FromMatches, Matches};
+use anko::{FromMatch, MatchRef};
 
 #[derive(Debug)]
 struct GlobalConfig {
@@ -12,13 +12,49 @@ struct GlobalConfig {
     format: Option<String>,
 }
 
-impl FromMatches for GlobalConfig {
-    fn from_matches(matches: &Matches) -> Result<Self, anko::DecodeError> {
+impl FromMatch for GlobalConfig {
+    fn from_match(m: MatchRef<'_>) -> Result<Self, anko::DecodeError> {
         Ok(Self {
-            verbose: matches.get_count("verbose")?,
-            quiet: matches.get_flag("quiet")?,
-            config: matches.get_one("config")?,
-            format: matches.get_one("format")?,
+            verbose: m.get_count("verbose")?,
+            quiet: m.get_flag("quiet")?,
+            config: m.value_of("config")?,
+            format: m.value_of("format")?,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct BuildConfig {
+    out_dir: Option<PathBuf>,
+    features: HashSet<String>,
+    fast: bool,
+    slow: bool,
+}
+
+impl FromMatch for BuildConfig {
+    fn from_match(m: MatchRef<'_>) -> Result<Self, anko::DecodeError> {
+        Ok(Self {
+            out_dir: m.value_of("out-dir")?,
+            features: m.values_of::<String>("features")?.collect(),
+            fast: m.get_flag("fast")?,
+            slow: m.get_flag("slow")?,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct RunConfig {
+    script: PathBuf,
+    url: Option<String>,
+    token: Option<String>,
+}
+
+impl FromMatch for RunConfig {
+    fn from_match(m: MatchRef<'_>) -> Result<Self, anko::DecodeError> {
+        Ok(Self {
+            script: m.require("script")?,
+            url: m.value_of("url")?,
+            token: m.value_of("token")?,
         })
     }
 }
@@ -46,18 +82,15 @@ fn main() {
                 .conflicts_with("verbose")
                 .help("Suppress all output"),
         )
-        // --------------------------------------------------------------------
-        // AWESOME DX: Type Inference & Fluent Chaining!
-        // --------------------------------------------------------------------
         .arg(
-            ArgBuilder::option::<PathBuf>("config") // Inferred as PathBuf parser!
+            ArgBuilder::option::<PathBuf>("config")
                 .short('c')
                 .long("config")
                 .env("KS_CONFIG")
                 .help("Path to the configuration file")
                 .value_name("FILE")
-                .validate_file() // Type-safe: Only available because T = PathBuf!
-                .default_value("config.toml"), // No more ValueSpecBuilder boilerplate!
+                // .validate_file()
+                .default_value("config.toml"),
         )
         .arg(
             ArgBuilder::option::<String>("format")
@@ -66,7 +99,6 @@ fn main() {
                 .help("Output format styling")
                 .default_value("yaml")
                 .validate_with(|val| {
-                    // Fast, inline semantic closures!
                     let text = val.as_os_str().to_string_lossy();
                     if ["json", "yaml", "xml"].contains(&text.as_ref()) {
                         Ok(())
@@ -75,9 +107,6 @@ fn main() {
                     }
                 }),
         )
-        // --------------------------------------------------------------------
-        // SUBCOMMANDS
-        // --------------------------------------------------------------------
         .subcommand(
             CommandBuilder::new("build")
                 .about("Compile the project")
@@ -86,19 +115,28 @@ fn main() {
                         .long("out-dir")
                         .heading("Paths")
                         .help("Output directory for compiled artifacts")
-                        .validate_directory(), // Built-in type-safe validator
+                        .validate_directory(),
                 )
                 .arg(
-                    ArgBuilder::option::<String>("features") // Auto arity ZERO_OR_MORE!
+                    ArgBuilder::option::<String>("features")
                         .long("feature")
                         .short('F')
-                        .action(ArgAction::Append) // TODO: You shouldnt be able to chain action twice and and then it does ArgBuilder<Vec<String>> and then ArgBuilder<Vec<Vec<String>>>
+                        .action(ArgAction::Append)
                         .help("List of features to enable")
                         .arity(1..=3)
                         .required(true),
                 )
                 .arg(ArgBuilder::flag("fast").long("fast").in_group("speed-profile"))
                 .arg(ArgBuilder::flag("slow").long("slow").in_group("speed-profile"))
+                .subcommand(
+                    CommandBuilder::new("hello").about("A subcommand to demonstrate nesting").arg(
+                        ArgBuilder::option::<String>("name")
+                            .short('n')
+                            .long("name")
+                            .help("Name to greet")
+                            .default_value("world"),
+                    ),
+                )
                 .group(
                     GroupBuilder::new("speed-profile")
                         .member("fast")
@@ -116,7 +154,6 @@ fn main() {
                         .position(0)
                         .validate_file()
                         .validate_with(|val| {
-                            // Double validation!
                             let text = val.as_os_str().to_string_lossy();
                             if text.ends_with(".sh") || text.ends_with(".py") {
                                 Ok(())
@@ -135,45 +172,56 @@ fn main() {
                 ),
         )
         .build()
-        .expect("Valid schema construction");
-
-    // ========================================================================
-    // RUNTIME EXECUTION
-    // ========================================================================
+        .expect("valid schema construction");
 
     let matches = command.parse_env_or_exit();
-    let globals: GlobalConfig = matches.extract_or_exit();
+    let root = matches.root();
+
+    let globals: GlobalConfig = root.extract_or_exit();
 
     println!("=== GLOBAL SETTINGS ===");
     println!("Verbosity level: {}", globals.verbose);
     println!("Quiet mode: {}", globals.quiet);
-    println!("Config Path: {:?}", globals.config.unwrap());
-    println!("Output Format: {:?}", globals.format.unwrap());
+    println!("Config Path: {:?}", globals.config);
+    println!("Output Format: {:?}", globals.format);
 
     println!("\n=== SUBCOMMAND EXECUTION ===");
 
-    if let Some(build) = matches.subcommand().filter(|m| m.command().name() == "build") {
-        println!("Executing 'build' pipeline...");
-        println!("  Output Directory: {:?}", build.get_one_or_exit::<PathBuf>("out-dir"));
-        println!(
-            "  Enabled Features: {:?}",
-            build.get_many_or_exit::<HashSet<String>, String>("features")
-        );
-        println!(
-            "  Speed Profile: Fast={}, Slow={}",
-            build.get_flag_or_exit("fast"),
-            build.get_flag_or_exit("slow")
-        );
-    } else if let Some(run) = matches.subcommand().filter(|m| m.command().name() == "run") {
-        println!("Executing 'run' pipeline...");
-        println!("  Target Script: {:?}", run.get_one_or_exit::<PathBuf>("script").unwrap());
-        if let Some(url) = run.get_one_or_exit::<String>("url") {
-            println!("  Fetching from: {}", url);
-            if let Some(token) = run.get_one_or_exit::<String>("token") {
-                println!("  Using Auth Token: <REDACTED length={}>", token.len());
+    let subcommand = root.subcommand();
+
+
+    match subcommand {
+        Some(cmd) => match cmd.command().name() {
+            "build" => {
+                let cfg: BuildConfig = cmd.extract_or_exit();
+                if let Some(sc) = cmd.subcommand()
+                    && sc.command().name() == "hello"
+                {
+                    let name: String = sc.value_of_or_exit("name").unwrap_or(String::from("world"));
+                    println!("Hello, {name}!");
+                };
+                println!("Executing 'build' pipeline...");
+                println!("  Output Directory: {:?}", cfg.out_dir);
+                println!("  Enabled Features: {:?}", cfg.features);
+                println!("  Speed Profile: Fast={}, Slow={}", cfg.fast, cfg.slow);
             }
+            "run" => {
+                let cfg: RunConfig = cmd.extract_or_exit();
+                println!("Executing 'run' pipeline...");
+                println!("  Target Script: {:?}", cfg.script);
+                if let Some(url) = cfg.url {
+                    println!("  Fetching from: {}", url);
+                    if let Some(token) = cfg.token {
+                        println!("  Using Auth Token: <REDACTED length={}>", token.len());
+                    }
+                }
+            }
+            other => {
+                println!("Unhandled subcommand: {other}");
+            }
+        },
+        None => {
+            println!("No subcommand provided. Use `--help` to see available commands.");
         }
-    } else {
-        println!("No subcommand provided. Use `--help` to see available commands.");
     }
 }

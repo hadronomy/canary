@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use anko::builder::{
-    ArgAction, ArgBuilder, CommandBuilder, Validator, ValueHint,
-};
+use anko::builder::{ArgAction, ArgBuilder, CommandBuilder, Validator, ValueHint};
 
 fn main() {
     let command = CommandBuilder::new("demo")
@@ -23,9 +21,10 @@ fn main() {
         .expect("valid schema");
 
     let matches = command.parse_env_or_exit();
+    let root = matches.root();
 
-    let verbose = matches.get_count_or_exit("verbose");
-    let dir: Option<std::path::PathBuf> = matches.get_one_or_exit("dir");
+    let verbose = root.get_count_or_exit("verbose");
+    let dir: Option<std::path::PathBuf> = root.get_one_or_exit("dir");
 
     println!("verbose={verbose}");
     println!("dir={dir:?}");

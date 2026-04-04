@@ -17,7 +17,7 @@ pub mod string_pool;
 
 pub use decode::*;
 pub use help::*;
-pub use matches::{FromMatches, Matches};
+pub use matches::{FromMatch, Matches};
 pub use runtime_error::RuntimeError;
 
 pub use crate::error::*;
