@@ -33,7 +33,7 @@
 > [!WARNING] WIP
 > This project is currently under heavy development
 
-This project is a WIP, agentic legal assistance system. It can aid legislators, lawyers and common people on retrieving and consulting the law.
+This project is a WIP, agentic legal assistance system. It is designed to support legislators, lawyers, public sector practitioners, law and political science students, and the general public in retrieving and consulting legal information.
 
 The agent will use all of its tools that interface with the database index, to fetch with multiple hops and reasoning the relevant laws for any query.
 
