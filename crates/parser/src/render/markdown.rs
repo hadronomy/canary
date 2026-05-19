@@ -2,7 +2,7 @@ use std::fmt::{self, Write};
 
 use crate::parser::DocumentMeta;
 use crate::render::writer::{NodeContext, TreeWriter};
-use crate::tree::{ColumnAlignment, ListSpacing, ListStyle, SectionKind};
+use crate::tree::{ColumnAlignment, LinkTarget, ListSpacing, ListStyle, SectionKind};
 
 #[derive(Debug, Clone)]
 pub enum HeadingMode {
@@ -308,7 +308,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
 
     fn enter_link(
         &mut self,
-        _url: &str,
+        _target: &LinkTarget,
         _title: Option<&str>,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
@@ -318,15 +318,16 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
 
     fn leave_link(
         &mut self,
-        url: &str,
+        target: &LinkTarget,
         title: Option<&str>,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
+        let href = target.to_string();
         if let Some(title) = title {
-            write!(self.out, "]({url} \"{title}\")")?;
+            write!(self.out, "]({href} \"{title}\")")?;
             return Ok(());
         }
-        write!(self.out, "]({url})")?;
+        write!(self.out, "]({href})")?;
         Ok(())
     }
 
@@ -375,14 +376,21 @@ mod tests {
     use crate::parser::DocumentMeta;
     use crate::render;
     use crate::render::markdown::{HeadingMode, MarkdownWriter};
-    use crate::tree::{DocumentNode, DocumentTree, SectionKind};
+    use crate::tree::{DocumentNode, DocumentTree, DocumentTreeBuilder, SectionKind};
+
+    fn build(f: impl FnOnce(&mut DocumentTreeBuilder)) -> DocumentTree {
+        let mut tree = DocumentTree::builder();
+        f(&mut tree);
+        tree.freeze()
+    }
 
     #[test]
     fn renders_markdown_section_and_paragraph() {
-        let mut tree = DocumentTree::new();
-        let sec = tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
-        let para = tree.add_child(sec, DocumentNode::paragraph());
-        tree.add_child(para, DocumentNode::text("Hello world"));
+        let tree = build(|tree| {
+            let sec = tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
+            let para = tree.add_child(sec, DocumentNode::paragraph());
+            tree.add_child(para, DocumentNode::text("Hello world"));
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -394,14 +402,15 @@ mod tests {
 
     #[test]
     fn renders_markdown_inline_nodes() {
-        let mut tree = DocumentTree::new();
-        let para = tree.add_child(tree.root(), DocumentNode::paragraph());
-        let strong = tree.add_child(para, DocumentNode::strong());
-        tree.add_child(strong, DocumentNode::text("bold"));
-        let em = tree.add_child(para, DocumentNode::emphasis());
-        tree.add_child(em, DocumentNode::text("soft"));
-        let link = tree.add_child(para, DocumentNode::link("https://x.test", None));
-        tree.add_child(link, DocumentNode::text("ref"));
+        let tree = build(|tree| {
+            let para = tree.add_child(tree.root(), DocumentNode::paragraph());
+            let strong = tree.add_child(para, DocumentNode::strong());
+            tree.add_child(strong, DocumentNode::text("bold"));
+            let em = tree.add_child(para, DocumentNode::emphasis());
+            tree.add_child(em, DocumentNode::text("soft"));
+            let link = tree.add_child(para, DocumentNode::link_external("https://x.test", None));
+            tree.add_child(link, DocumentNode::text("ref"));
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -414,10 +423,11 @@ mod tests {
 
     #[test]
     fn does_not_emit_empty_quote_line_before_content() {
-        let mut tree = DocumentTree::new();
-        let quote = tree.add_child(tree.root(), DocumentNode::block_quote());
-        let para = tree.add_child(quote, DocumentNode::paragraph());
-        tree.add_child(para, DocumentNode::text("Texto nota"));
+        let tree = build(|tree| {
+            let quote = tree.add_child(tree.root(), DocumentNode::block_quote());
+            let para = tree.add_child(quote, DocumentNode::paragraph());
+            tree.add_child(para, DocumentNode::text("Texto nota"));
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -429,11 +439,12 @@ mod tests {
 
     #[test]
     fn renders_html_fallback_as_markdown() {
-        let mut tree = DocumentTree::new();
-        tree.add_child(
-            tree.root(),
-            DocumentNode::html("<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"),
-        );
+        let tree = build(|tree| {
+            tree.add_child(
+                tree.root(),
+                DocumentNode::html("<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"),
+            );
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -445,8 +456,9 @@ mod tests {
 
     #[test]
     fn renders_boe_heading_when_enabled() {
-        let mut tree = DocumentTree::new();
-        tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
+        let tree = build(|tree| {
+            tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::with_heading(
@@ -473,14 +485,20 @@ mod tests {
 
     #[test]
     fn forces_article_sections_to_h3() {
-        let mut tree = DocumentTree::new();
-        let title = tree
-            .add_child(tree.root(), DocumentNode::section_with(2, SectionKind::Titulo, "TÍTULO I"));
-        let chap = tree.add_child(
-            title,
-            DocumentNode::section_with(3, SectionKind::Capitulo, "CAPÍTULO PRIMERO"),
-        );
-        tree.add_child(chap, DocumentNode::section_with(4, SectionKind::Articulo, "Artículo 15"));
+        let tree = build(|tree| {
+            let title = tree.add_child(
+                tree.root(),
+                DocumentNode::section_with(2, SectionKind::Titulo, "TÍTULO I"),
+            );
+            let chap = tree.add_child(
+                title,
+                DocumentNode::section_with(3, SectionKind::Capitulo, "CAPÍTULO PRIMERO"),
+            );
+            tree.add_child(
+                chap,
+                DocumentNode::section_with(4, SectionKind::Articulo, "Artículo 15"),
+            );
+        });
 
         let mut out = String::new();
         let mut w = MarkdownWriter::with_heading(

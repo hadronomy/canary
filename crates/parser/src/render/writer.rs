@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::tree::{ColumnAlignment, ListSpacing, ListStyle, SectionKind, SectionPath};
+use crate::tree::{ColumnAlignment, LinkTarget, ListSpacing, ListStyle, SectionKind, SectionPath};
 
 #[derive(Debug, Clone)]
 pub struct NodeContext<'a> {
@@ -86,13 +86,13 @@ pub trait TreeWriter {
 
     fn enter_link(
         &mut self,
-        url: &str,
+        target: &LinkTarget,
         title: Option<&str>,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
     fn leave_link(
         &mut self,
-        url: &str,
+        target: &LinkTarget,
         title: Option<&str>,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;

@@ -17,7 +17,9 @@ use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::error::{DocumentError, Result};
-use crate::tree::{DocumentNode, DocumentTree, SectionKind};
+use crate::tree::{
+    Anchor, BlockId, DocumentNode, DocumentTree, DocumentTreeBuilder, LinkTarget, SectionKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
@@ -32,7 +34,7 @@ pub enum VersionPolicy {
 #[non_exhaustive]
 pub struct XmlBlock {
     /// Source block identifier (`id` attribute).
-    pub id: Option<String>,
+    pub id: Option<BlockId>,
     /// Block semantic kind parsed from `tipo`.
     pub kind: BlockKind,
     /// Optional title from `titulo`.
@@ -73,7 +75,7 @@ pub enum XmlNode {
 #[non_exhaustive]
 pub enum XmlInline {
     Text(String),
-    Link { url: String, label: String },
+    Link { target: LinkTarget, label: String },
 }
 
 /// Paragraph-like content extracted from XML.
@@ -192,23 +194,23 @@ impl Attrs {
 
 /// Anchor uniqueness tracker for generated tree anchors.
 #[derive(Debug, Default)]
-struct Anchor {
-    next_suffix: HashMap<String, usize>,
-    used: HashSet<String>,
+struct Anchors {
+    next_suffix: HashMap<Anchor, usize>,
+    used: HashSet<Anchor>,
 }
 
-impl Anchor {
+impl Anchors {
     /// Produces a deterministic unique anchor with stable suffixing.
-    fn next(&mut self, title: &str, id: Option<&str>) -> String {
-        let base = DocumentNode::slugify(title);
+    fn next(&mut self, title: &str, id: Option<&BlockId>) -> Anchor {
+        let base = Anchor::slug(title);
 
         if self.used.insert(base.clone()) {
             self.next_suffix.entry(base.clone()).or_insert(2);
             return base;
         }
 
-        if let Some(id) = id.filter(|it| !it.is_empty()) {
-            let alt = format!("{}-{}", base, DocumentNode::slugify(id));
+        if let Some(id) = id {
+            let alt = Anchor::from(format!("{}-{}", base, DocumentNode::slugify(id.as_str())));
             if self.used.insert(alt.clone()) {
                 return alt;
             }
@@ -216,7 +218,7 @@ impl Anchor {
 
         let next = self.next_suffix.entry(base.clone()).or_insert(2);
         loop {
-            let candidate = format!("{}-{}", base, *next);
+            let candidate = Anchor::from(format!("{}-{}", base, *next));
             *next += 1;
             if self.used.insert(candidate.clone()) {
                 return candidate;
@@ -311,13 +313,13 @@ impl<R: BufRead> BoeReader<R> {
                     gap = text.chars().last().is_some_and(char::is_whitespace);
                     Self::push_inline_text(&mut out, buf);
                 }
-                XmlInline::Link { url, label } => {
+                XmlInline::Link { target, label } => {
                     if let Some(XmlInline::Text(text)) = out.last_mut() {
                         while text.ends_with(' ') {
                             text.pop();
                         }
                     }
-                    out.push(XmlInline::Link { url, label });
+                    out.push(XmlInline::Link { target, label });
                     gap = false;
                 }
             }
@@ -466,14 +468,14 @@ impl<R: BufRead> BoeReader<R> {
     }
 
     /// Reads an anchor element and extracts an optional `refPost` reference.
-    fn read_anchor(&mut self, start: &BytesStart<'_>) -> Result<(String, Option<String>)> {
+    fn read_anchor(&mut self, start: &BytesStart<'_>) -> Result<(String, Option<LinkTarget>)> {
         let attrs = Attrs::from_tag(start, "a")?;
         let class = attrs.get("class").unwrap_or_default();
         let text = self.read_text_until(b"a")?;
         if class == "refPost" {
             let value = text.trim().to_string();
             if !value.is_empty() {
-                return Ok((text, Some(value)));
+                return Ok((text, Some(LinkTarget::reference(value))));
             }
         }
         Ok((text, None))
@@ -501,8 +503,8 @@ impl<R: BufRead> BoeReader<R> {
                 }
                 Event::Start(tag) if tag.name().as_ref() == b"a" => {
                     let (value, reference) = self.read_anchor(&tag)?;
-                    if let Some(reference) = reference {
-                        inline.push(XmlInline::Link { url: reference.clone(), label: reference });
+                    if let Some(target) = reference {
+                        inline.push(XmlInline::Link { target, label: value.trim().to_string() });
                     } else {
                         text.push_str(&value);
                         Self::push_inline_text(&mut inline, value);
@@ -588,7 +590,7 @@ impl<R: BufRead> BoeReader<R> {
     fn read_block(&mut self, start: &BytesStart<'_>) -> Result<XmlBlock> {
         let attrs = Attrs::from_tag(start, "bloque")?;
         let mut block = XmlBlock {
-            id: attrs.get("id").map(str::trim).filter(|it| !it.is_empty()).map(str::to_string),
+            id: attrs.get("id").and_then(BlockId::new),
             kind: BlockKind::from(attrs.get("tipo").unwrap_or_default()),
             title: attrs
                 .get("titulo")
@@ -844,7 +846,7 @@ impl TreeParser {
         None
     }
 
-    fn push_para(tree: &mut DocumentTree, parent: crate::NodeId, para: &XmlPara) {
+    fn push_para(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, para: &XmlPara) {
         if para.inline.is_empty() {
             if para.kind.divider() {
                 tree.add_child(parent, DocumentNode::thematic_break());
@@ -860,8 +862,8 @@ impl TreeParser {
                         tree.add_child(pid, DocumentNode::text(text.clone()));
                     }
                 }
-                XmlInline::Link { url, label } => {
-                    let lid = tree.add_child(pid, DocumentNode::link(url.clone(), None));
+                XmlInline::Link { target, label } => {
+                    let lid = tree.add_child(pid, DocumentNode::link(target.clone(), None));
                     tree.add_child(lid, DocumentNode::text(label.clone()));
                 }
             }
@@ -872,7 +874,7 @@ impl TreeParser {
         }
     }
 
-    fn push_html(tree: &mut DocumentTree, parent: crate::NodeId, html: &mut String) {
+    fn push_html(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, html: &mut String) {
         let value = html.trim();
         if value.is_empty() {
             html.clear();
@@ -882,7 +884,7 @@ impl TreeParser {
         html.clear();
     }
 
-    fn push_nodes(tree: &mut DocumentTree, parent: crate::NodeId, nodes: &[XmlNode]) {
+    fn push_nodes(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, nodes: &[XmlNode]) {
         let mut html = String::new();
         for node in nodes {
             match node {
@@ -908,9 +910,9 @@ impl TreeParser {
 
     /// Builds a `DocumentTree` from pre-parsed XML blocks.
     pub fn build_tree(&self, blocks: &[XmlBlock]) -> Result<DocumentTree> {
-        let mut tree = DocumentTree::new();
+        let mut tree = DocumentTree::builder();
         let mut stack = vec![(0u8, tree.root(), 1u8)];
-        let mut anchor = Anchor::default();
+        let mut anchors = Anchors::default();
 
         for block in blocks {
             let Some(version) = self.pick(&block.versions) else {
@@ -929,7 +931,7 @@ impl TreeParser {
             let level = (parent_level + 1).min(6);
 
             let section = DocumentNode::section_with(level, Self::section(head.kind), &head.title)
-                .with_anchor(anchor.next(&head.title, block.id.as_deref()));
+                .with_anchor(anchors.next(&head.title, block.id.as_ref()));
             let id = tree.add_child(parent, section);
             stack.push((rank, id, level));
 
@@ -942,11 +944,11 @@ impl TreeParser {
             }
         }
 
-        if tree.children(tree.root()).next().is_none() {
+        if tree.node_count() == 1 {
             return Err(DocumentError::xml("build: no sections extracted from XML"));
         }
 
-        Ok(tree)
+        Ok(tree.freeze())
     }
 
     #[must_use]
@@ -1060,8 +1062,7 @@ mod tests {
         let id = tree.find_by_anchor("anexo").unwrap();
         let html = tree
             .children(id)
-            .filter_map(|it| tree.get(it))
-            .filter_map(|it| match it {
+            .filter_map(|it| match it.data() {
                 DocumentNode::Html(html) => Some(html),
                 _ => None,
             })
@@ -1104,17 +1105,15 @@ mod tests {
         let para = tree
             .descendants(id)
             .find(|it| {
-                tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph))
-                    && tree.extract_text(*it).contains("Texto nota")
+                matches!(it.data(), DocumentNode::Paragraph) && it.text().contains("Texto nota")
             })
             .unwrap();
 
-        let parts = tree
-            .children(para)
-            .filter_map(|it| tree.get(it))
-            .map(|node| match node {
+        let parts = para
+            .children()
+            .map(|node| match node.data() {
                 DocumentNode::Text(text) => format!("text:{text}"),
-                DocumentNode::Link { url, .. } => format!("link:{url}"),
+                DocumentNode::Link { target, .. } => format!("link:{}", target.key()),
                 other => format!("other:{:?}", other.kind()),
             })
             .collect::<Vec<_>>();
@@ -1143,17 +1142,14 @@ mod tests {
 
         let tree = TreeParser::new().parse_xml(xml).unwrap();
         let id = tree.find_by_anchor("artículo-1").unwrap();
-        let para = tree
-            .children(id)
-            .find(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
-            .unwrap();
+        let para =
+            tree.children(id).find(|it| matches!(it.data(), DocumentNode::Paragraph)).unwrap();
 
-        let parts = tree
-            .children(para)
-            .filter_map(|it| tree.get(it))
-            .map(|node| match node {
+        let parts = para
+            .children()
+            .map(|node| match node.data() {
                 DocumentNode::Text(text) => format!("text:{text}"),
-                DocumentNode::Link { url, .. } => format!("link:{url}"),
+                DocumentNode::Link { target, .. } => format!("link:{}", target.key()),
                 other => format!("other:{:?}", other.kind()),
             })
             .collect::<Vec<_>>();
@@ -1227,9 +1223,7 @@ mod tests {
         let art = tree.find_by_anchor("artículo-1").unwrap();
         let mut found_divider = false;
         for child in tree.children(art) {
-            if let Some(node) = tree.get(child)
-                && matches!(node, DocumentNode::ThematicBreak)
-            {
+            if matches!(child.data(), DocumentNode::ThematicBreak) {
                 found_divider = true;
             }
         }
@@ -1261,18 +1255,12 @@ mod tests {
         let art = tree.find_by_anchor("artículo-1").unwrap();
         let quotes = tree
             .children(art)
-            .filter(|id| {
-                tree.get(*id).map(|node| matches!(node, DocumentNode::BlockQuote)).unwrap_or(false)
-            })
+            .filter(|id| matches!(id.data(), DocumentNode::BlockQuote))
             .collect::<Vec<_>>();
 
         assert_eq!(quotes.len(), 1);
-        let paras = tree
-            .children(quotes[0])
-            .filter(|id| {
-                tree.get(*id).map(|node| matches!(node, DocumentNode::Paragraph)).unwrap_or(false)
-            })
-            .count();
+        let paras =
+            quotes[0].children().filter(|id| matches!(id.data(), DocumentNode::Paragraph)).count();
         assert_eq!(paras, 2);
     }
 
@@ -1290,8 +1278,8 @@ mod tests {
         let id = tree.find_by_anchor("artículo-1").unwrap();
         let values = tree
             .children(id)
-            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
-            .map(|it| tree.extract_text(it))
+            .filter(|it| matches!(it.data(), DocumentNode::Paragraph))
+            .map(|it| it.text())
             .collect::<Vec<_>>();
 
         assert!(values.iter().all(|it| it != "Artículo 1"));
@@ -1319,8 +1307,7 @@ mod tests {
         let id = tree.find_by_anchor("anexo").unwrap();
         let html = tree
             .children(id)
-            .filter_map(|it| tree.get(it))
-            .filter_map(|it| match it {
+            .filter_map(|it| match it.data() {
                 DocumentNode::Html(html) => Some(html),
                 _ => None,
             })
@@ -1355,8 +1342,8 @@ mod tests {
 
         let body = tree
             .children(id)
-            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
-            .map(|it| tree.extract_text(it))
+            .filter(|it| matches!(it.data(), DocumentNode::Paragraph))
+            .map(|it| it.text())
             .collect::<Vec<_>>();
         assert_eq!(body, vec!["Balance consolidado".to_string()]);
     }
@@ -1384,8 +1371,8 @@ mod tests {
 
         let body = tree
             .children(id)
-            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
-            .map(|it| tree.extract_text(it))
+            .filter(|it| matches!(it.data(), DocumentNode::Paragraph))
+            .map(|it| it.text())
             .collect::<Vec<_>>();
         assert_eq!(body, vec!["Contenido de la memoria consolidada".to_string()]);
     }

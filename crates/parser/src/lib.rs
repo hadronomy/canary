@@ -51,10 +51,11 @@ pub use error::{DocumentError, Result};
 pub use parser::{TreeParser, VersionPolicy};
 pub use render::markdown::{HeadingMode, MarkdownWriter};
 pub use render::writer::TreeWriter;
-pub use resolve::CrossRefResolver;
+pub use resolve::{Breadcrumb, CrossRefResolver, ReferenceQuery};
 pub use tree::{
-    ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, ListSpacing, ListStyle, NodeKind,
-    SectionEntry, SectionKind, SectionPath,
+    Anchor, BlockId, ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, DocumentTreeBuilder,
+    LinkTarget, ListSpacing, ListStyle, NodeKind, NodeRef, SectionEntry, SectionIndex, SectionKind,
+    SectionPath,
 };
 
 #[cfg(feature = "parallel")]

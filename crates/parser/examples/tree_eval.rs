@@ -56,10 +56,8 @@ fn span(tree: &DocumentTree, id: NodeId) -> usize {
 
 fn print_kinds(tree: &DocumentTree) {
     let mut map = BTreeMap::<&'static str, usize>::new();
-    for id in tree.descendants(tree.root()) {
-        if let Some(node) = tree.get(id) {
-            *map.entry(kind(node.kind())).or_default() += 1;
-        }
+    for node in tree.descendants(tree.root()) {
+        *map.entry(kind(node.kind())).or_default() += 1;
     }
 
     let mut rows = map.into_iter().collect::<Vec<_>>();
@@ -105,14 +103,13 @@ fn print_sections(tree: &DocumentTree, n: usize) {
 fn print_anchors(tree: &DocumentTree, n: usize) {
     let mut rows = tree
         .descendants(tree.root())
-        .filter_map(|id| {
-            let node = tree.get(id)?;
+        .filter_map(|node| {
             let anchor = node.anchor()?.to_string();
             Some((
                 anchor,
-                tree.path(id),
+                node.path(),
                 kind(node.kind()),
-                span(tree, id),
+                span(tree, node.id()),
                 preview(node.display_text().unwrap_or("")),
             ))
         })

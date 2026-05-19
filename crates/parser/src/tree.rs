@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
+use std::num::NonZeroU16;
 use std::ops::Index;
 use std::str::FromStr;
 
@@ -68,6 +69,195 @@ pub enum ListSpacing {
     Loose,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct Anchor(SmolStr);
+
+impl Anchor {
+    #[must_use]
+    pub fn new(value: impl Into<SmolStr>) -> Self {
+        Self(value.into())
+    }
+
+    #[must_use]
+    pub fn slug(text: &str) -> Self {
+        Self(SmolStr::from(DocumentNode::slugify(text)))
+    }
+
+    #[must_use]
+    pub fn ascii_slug(text: &str) -> Self {
+        Self(SmolStr::from(DocumentNode::slugify_ascii(text)))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for Anchor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl AsRef<str> for Anchor {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<&str> for Anchor {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<String> for Anchor {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<SmolStr> for Anchor {
+    fn from(value: SmolStr) -> Self {
+        Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct BlockId(SmolStr);
+
+impl BlockId {
+    #[must_use]
+    pub fn new(value: impl AsRef<str>) -> Option<Self> {
+        let value = value.as_ref().trim();
+        (!value.is_empty()).then(|| Self(SmolStr::from(value)))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Display for BlockId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl AsRef<str> for BlockId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[repr(transparent)]
+pub struct SectionIndex(NonZeroU16);
+
+impl SectionIndex {
+    #[must_use]
+    pub fn new(value: u16) -> Option<Self> {
+        NonZeroU16::new(value).map(Self)
+    }
+
+    #[must_use]
+    pub fn from_usize(value: usize) -> Option<Self> {
+        u16::try_from(value).ok().and_then(Self::new)
+    }
+
+    #[must_use]
+    pub fn get(self) -> usize {
+        self.0.get() as usize
+    }
+}
+
+impl fmt::Display for SectionIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LinkTarget {
+    Anchor(Anchor),
+    Reference(SmolStr),
+    External(SmolStr),
+}
+
+impl LinkTarget {
+    #[must_use]
+    pub fn anchor(value: impl Into<Anchor>) -> Self {
+        Self::Anchor(value.into())
+    }
+
+    #[must_use]
+    pub fn reference(value: impl Into<String>) -> Self {
+        Self::Reference(SmolStr::from(value.into()))
+    }
+
+    #[must_use]
+    pub fn external(value: impl Into<String>) -> Self {
+        Self::External(SmolStr::from(value.into()))
+    }
+
+    #[must_use]
+    pub fn parse(value: impl AsRef<str>) -> Self {
+        let value = value.as_ref().trim();
+        if let Some(value) = value.strip_prefix('#') {
+            return Self::anchor(Anchor::from(value.to_string()));
+        }
+        if value.contains("://")
+            || value.starts_with("mailto:")
+            || value.starts_with("tel:")
+            || value.starts_with('/')
+        {
+            return Self::external(value.to_string());
+        }
+        Self::reference(value.to_string())
+    }
+
+    #[must_use]
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Anchor(anchor) => anchor.as_str(),
+            Self::Reference(value) | Self::External(value) => value.as_str(),
+        }
+    }
+
+    #[must_use]
+    pub fn anchor_ref(&self) -> Option<&Anchor> {
+        match self {
+            Self::Anchor(anchor) => Some(anchor),
+            Self::Reference(_) | Self::External(_) => None,
+        }
+    }
+}
+
+impl fmt::Display for LinkTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Anchor(anchor) => write!(f, "#{}", anchor.as_str()),
+            Self::Reference(value) | Self::External(value) => f.write_str(value),
+        }
+    }
+}
+
+impl From<&str> for LinkTarget {
+    fn from(value: &str) -> Self {
+        Self::parse(value)
+    }
+}
+
+impl From<String> for LinkTarget {
+    fn from(value: String) -> Self {
+        Self::parse(value)
+    }
+}
+
 /// A typed document node.
 ///
 /// Block containers no longer carry generic text payloads. Text lives in `Text`
@@ -75,7 +265,7 @@ pub enum ListSpacing {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DocumentNode {
     Root,
-    Section { level: u8, kind: SectionKind, anchor: SmolStr, title: String },
+    Section { level: u8, kind: SectionKind, anchor: Anchor, title: String },
     Paragraph,
     Html(String),
     List { style: ListStyle, spacing: ListSpacing },
@@ -88,8 +278,8 @@ pub enum DocumentNode {
     Text(String),
     Strong,
     Emphasis,
-    Link { url: SmolStr, title: Option<String> },
-    Image { anchor: Option<SmolStr>, url: SmolStr, alt: String },
+    Link { target: LinkTarget, title: Option<String> },
+    Image { anchor: Option<Anchor>, url: SmolStr, alt: String },
     ThematicBreak,
 }
 
@@ -155,8 +345,23 @@ impl DocumentNode {
     }
 
     #[must_use]
-    pub fn link(url: impl Into<String>, title: Option<String>) -> Self {
-        Self::Link { url: SmolStr::from(url.into()), title }
+    pub fn link(target: impl Into<LinkTarget>, title: Option<String>) -> Self {
+        Self::Link { target: target.into(), title }
+    }
+
+    #[must_use]
+    pub fn link_anchor(anchor: impl Into<Anchor>, title: Option<String>) -> Self {
+        Self::Link { target: LinkTarget::anchor(anchor), title }
+    }
+
+    #[must_use]
+    pub fn link_reference(value: impl Into<String>, title: Option<String>) -> Self {
+        Self::Link { target: LinkTarget::reference(value), title }
+    }
+
+    #[must_use]
+    pub fn link_external(url: impl Into<String>, title: Option<String>) -> Self {
+        Self::Link { target: LinkTarget::external(url), title }
     }
 
     #[must_use]
@@ -182,17 +387,12 @@ impl DocumentNode {
     #[must_use]
     pub fn section_with(level: u8, kind: SectionKind, title: impl AsRef<str>) -> Self {
         let title = title.as_ref();
-        Self::Section {
-            level,
-            kind,
-            anchor: SmolStr::from(Self::slugify(title)),
-            title: title.to_string(),
-        }
+        Self::Section { level, kind, anchor: Anchor::slug(title), title: title.to_string() }
     }
 
     #[must_use]
-    pub fn with_anchor(mut self, anchor: impl Into<String>) -> Self {
-        let anchor = SmolStr::from(anchor.into());
+    pub fn with_anchor(mut self, anchor: impl Into<Anchor>) -> Self {
+        let anchor = anchor.into();
         match &mut self {
             Self::Section { anchor: slot, .. } => *slot = anchor,
             Self::Image { anchor: slot, .. } => *slot = Some(anchor),
@@ -260,14 +460,21 @@ impl DocumentNode {
         matches!(self, Self::Section { .. })
     }
 
+    #[must_use]
     pub fn anchor(&self) -> Option<&str> {
+        self.anchor_value().map(Anchor::as_str)
+    }
+
+    #[must_use]
+    pub fn anchor_value(&self) -> Option<&Anchor> {
         match self {
-            Self::Section { anchor, .. } => Some(anchor.as_str()),
-            Self::Image { anchor, .. } => anchor.as_deref(),
+            Self::Section { anchor, .. } => Some(anchor),
+            Self::Image { anchor, .. } => anchor.as_ref(),
             _ => None,
         }
     }
 
+    #[must_use]
     pub fn section_title(&self) -> Option<&str> {
         match self {
             Self::Section { title, .. } => Some(title.as_str()),
@@ -275,6 +482,7 @@ impl DocumentNode {
         }
     }
 
+    #[must_use]
     pub fn section_level(&self) -> Option<u8> {
         match self {
             Self::Section { level, .. } => Some(*level),
@@ -282,6 +490,7 @@ impl DocumentNode {
         }
     }
 
+    #[must_use]
     pub fn section_kind(&self) -> Option<SectionKind> {
         match self {
             Self::Section { kind, .. } => Some(*kind),
@@ -289,13 +498,15 @@ impl DocumentNode {
         }
     }
 
-    pub fn link_url(&self) -> Option<&str> {
+    #[must_use]
+    pub fn link_target(&self) -> Option<&LinkTarget> {
         match self {
-            Self::Link { url, .. } => Some(url.as_str()),
+            Self::Link { target, .. } => Some(target),
             _ => None,
         }
     }
 
+    #[must_use]
     pub fn image_url(&self) -> Option<&str> {
         match self {
             Self::Image { url, .. } => Some(url.as_str()),
@@ -303,6 +514,7 @@ impl DocumentNode {
         }
     }
 
+    #[must_use]
     pub fn display_text(&self) -> Option<&str> {
         match self {
             Self::Section { title, .. } => Some(title.as_str()),
@@ -314,24 +526,21 @@ impl DocumentNode {
         }
     }
 
-    fn reference_target(&self) -> Option<&str> {
-        match self {
-            Self::Link { url, .. } => Some(url.strip_prefix('#').unwrap_or(url.as_str())),
-            _ => None,
-        }
+    fn reference_target(&self) -> Option<&Anchor> {
+        self.link_target().and_then(LinkTarget::anchor_ref)
     }
 
-    fn set_anchor(&mut self, anchor: Option<String>) -> bool {
+    fn set_anchor(&mut self, anchor: Option<Anchor>) -> bool {
         match self {
             Self::Section { anchor: slot, .. } => {
                 let Some(anchor) = anchor else {
                     return false;
                 };
-                *slot = SmolStr::from(anchor);
+                *slot = anchor;
                 true
             }
             Self::Image { anchor: slot, .. } => {
-                *slot = anchor.map(SmolStr::from);
+                *slot = anchor;
                 true
             }
             _ => false,
@@ -341,7 +550,7 @@ impl DocumentNode {
 
 /// A typed section path such as `1.2.3`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default)]
-pub struct SectionPath(SmallVec<[usize; 6]>);
+pub struct SectionPath(SmallVec<[SectionIndex; 6]>);
 
 impl SectionPath {
     #[must_use]
@@ -360,8 +569,25 @@ impl SectionPath {
     }
 
     #[must_use]
-    pub fn segments(&self) -> impl ExactSizeIterator<Item = usize> + Clone + '_ {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SectionIndex> + Clone + '_ {
         self.0.iter().copied()
+    }
+
+    #[must_use]
+    pub fn segments(&self) -> impl ExactSizeIterator<Item = usize> + Clone + '_ {
+        self.iter().map(SectionIndex::get)
+    }
+
+    #[must_use]
+    pub fn parent(&self) -> Option<Self> {
+        (!self.is_root()).then(|| Self(self.0[..self.0.len() - 1].iter().copied().collect()))
+    }
+
+    #[must_use]
+    pub fn join(&self, part: SectionIndex) -> Self {
+        let mut out = self.0.clone();
+        out.push(part);
+        Self(out)
     }
 
     #[must_use]
@@ -369,7 +595,7 @@ impl SectionPath {
         self.0.starts_with(&other.0)
     }
 
-    fn from_parts(parts: impl IntoIterator<Item = usize>) -> Self {
+    fn from_parts(parts: impl IntoIterator<Item = SectionIndex>) -> Self {
         Self(parts.into_iter().collect())
     }
 }
@@ -403,54 +629,162 @@ impl FromStr for SectionPath {
             });
         }
 
-        let mut parts = SmallVec::<[usize; 6]>::new();
+        let mut out = SmallVec::<[SectionIndex; 6]>::new();
         for part in path.split('.') {
-            let idx = part.parse::<usize>().map_err(|_| DocumentError::InvalidPath {
+            let value = part.parse::<u16>().map_err(|_| DocumentError::InvalidPath {
                 path: path.to_string(),
                 reason: format!("`{part}` is not a number"),
             })?;
-            if idx == 0 {
-                return Err(DocumentError::InvalidPath {
-                    path: path.to_string(),
-                    reason: "path indices are 1-based".to_string(),
-                });
-            }
-            parts.push(idx);
+            let idx = SectionIndex::new(value).ok_or_else(|| DocumentError::InvalidPath {
+                path: path.to_string(),
+                reason: "path indices are 1-based".to_string(),
+            })?;
+            out.push(idx);
         }
-
-        Ok(Self(parts))
+        Ok(Self(out))
     }
-}
-
-/// Hierarchical document tree with anchor and section-path navigation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DocumentTree {
-    arena: Arena<DocumentNode>,
-    root: indextree::NodeId,
-    index: HashMap<SmolStr, indextree::NodeId>,
-    alias: HashMap<SmolStr, indextree::NodeId>,
-    refs: HashMap<SmolStr, Vec<NodeId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionEntry {
     pub id: NodeId,
-    pub anchor: String,
+    pub anchor: Anchor,
     pub path: SectionPath,
     pub level: u8,
 }
 
-pub struct DescendantsIter<'a>(indextree::Descendants<'a, DocumentNode>);
+#[derive(Clone, Copy)]
+pub struct NodeRef<'a> {
+    tree: &'a DocumentTree,
+    id: NodeId,
+}
 
-impl Iterator for DescendantsIter<'_> {
-    type Item = NodeId;
+impl<'a> NodeRef<'a> {
+    #[must_use]
+    pub fn id(self) -> NodeId {
+        self.id
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(NodeId::from_raw)
+    #[must_use]
+    pub fn data(self) -> &'a DocumentNode {
+        &self.tree[self.id]
+    }
+
+    #[must_use]
+    pub fn kind(self) -> NodeKind {
+        self.data().kind()
+    }
+
+    #[must_use]
+    pub fn anchor(self) -> Option<&'a str> {
+        self.data().anchor()
+    }
+
+    #[must_use]
+    pub fn section_title(self) -> Option<&'a str> {
+        self.data().section_title()
+    }
+
+    #[must_use]
+    pub fn section_level(self) -> Option<u8> {
+        self.data().section_level()
+    }
+
+    #[must_use]
+    pub fn section_kind(self) -> Option<SectionKind> {
+        self.data().section_kind()
+    }
+
+    #[must_use]
+    pub fn link_target(self) -> Option<&'a LinkTarget> {
+        self.data().link_target()
+    }
+
+    #[must_use]
+    pub fn image_url(self) -> Option<&'a str> {
+        self.data().image_url()
+    }
+
+    #[must_use]
+    pub fn display_text(self) -> Option<&'a str> {
+        self.data().display_text()
+    }
+
+    #[must_use]
+    pub fn path(self) -> SectionPath {
+        self.tree.path(self.id)
+    }
+
+    #[must_use]
+    pub fn last(self) -> bool {
+        self.tree.arena().get(self.id.into_raw()).and_then(|node| node.next_sibling()).is_none()
+    }
+
+    pub fn children(self) -> ChildrenIter<'a> {
+        self.tree.children(self.id)
+    }
+
+    pub fn descendants(self) -> DescendantsIter<'a> {
+        self.tree.descendants(self.id)
+    }
+
+    pub fn ancestors(self) -> AncestorsIter<'a> {
+        self.tree.ancestors(self.id)
+    }
+
+    #[must_use]
+    pub fn parent_section(self) -> Option<Self> {
+        self.tree.parent_section(self.id)
+    }
+
+    #[must_use]
+    pub fn text(self) -> String {
+        self.tree.extract_text(self.id)
     }
 }
 
-impl DocumentTree {
+impl fmt::Debug for NodeRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NodeRef")
+            .field("id", &self.id)
+            .field("kind", &self.kind())
+            .field("anchor", &self.anchor())
+            .field("path", &self.path())
+            .finish()
+    }
+}
+
+macro_rules! node_iter {
+    ($name:ident, $inner:ty) => {
+        pub struct $name<'a> {
+            tree: &'a DocumentTree,
+            inner: $inner,
+        }
+
+        impl<'a> Iterator for $name<'a> {
+            type Item = NodeRef<'a>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.inner.next().map(|raw| self.tree.node(NodeId::from_raw(raw)).unwrap())
+            }
+        }
+    };
+}
+
+node_iter!(DescendantsIter, indextree::Descendants<'a, DocumentNode>);
+node_iter!(AncestorsIter, indextree::Ancestors<'a, DocumentNode>);
+node_iter!(ChildrenIter, indextree::Children<'a, DocumentNode>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentTreeBuilder {
+    arena: Arena<DocumentNode>,
+    root: indextree::NodeId,
+    index: HashMap<Anchor, indextree::NodeId>,
+    alias: HashMap<Anchor, indextree::NodeId>,
+    refs: HashMap<Anchor, Vec<NodeId>>,
+}
+
+impl DocumentTreeBuilder {
     #[must_use]
     pub fn new() -> Self {
         let mut arena = Arena::new();
@@ -463,49 +797,43 @@ impl DocumentTree {
         NodeId::from_raw(self.root)
     }
 
-    pub fn arena(&self) -> &Arena<DocumentNode> {
-        &self.arena
-    }
-
     #[inline]
     pub fn node_count(&self) -> usize {
         self.arena.count()
-    }
-
-    pub fn rebuild_index(&mut self) {
-        self.index.clear();
-        self.alias.clear();
-        self.refs.clear();
-        let ids = self.root.descendants(&self.arena).collect::<Vec<_>>();
-        for raw in ids {
-            let id = NodeId::from_raw(raw);
-            let anchor = self.get(id).and_then(DocumentNode::anchor).map(SmolStr::from);
-            let target = self.get(id).and_then(DocumentNode::reference_target).map(SmolStr::from);
-            if let Some(anchor) = anchor {
-                self.put_anchor(raw, &anchor);
-            }
-            if let Some(target) = target {
-                self.put_ref(id, &target);
-            }
-        }
     }
 
     pub fn get(&self, id: NodeId) -> Option<&DocumentNode> {
         self.arena.get(id.into_raw()).map(|node| node.get())
     }
 
+    pub fn add_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
+        let parent = parent.into_raw();
+        let anchor = node.anchor_value().cloned();
+        let target = node.reference_target().cloned();
+        let raw = self.arena.new_node(node);
+        parent.append(raw, &mut self.arena);
+        let id = NodeId::from_raw(raw);
+        if let Some(anchor) = anchor {
+            self.put_anchor(raw, anchor);
+        }
+        if let Some(target) = target {
+            self.put_ref(id, target);
+        }
+        id
+    }
+
     #[must_use]
-    pub fn set_anchor(&mut self, id: NodeId, anchor: Option<String>) -> bool {
+    pub fn set_anchor(&mut self, id: NodeId, anchor: Option<Anchor>) -> bool {
         let raw = id.into_raw();
         let (old, new) = {
             let Some(node) = self.arena.get_mut(raw).map(|node| node.get_mut()) else {
                 return false;
             };
-            let old = node.anchor().map(SmolStr::from);
+            let old = node.anchor_value().cloned();
             if !node.set_anchor(anchor) {
                 return false;
             }
-            let new = node.anchor().map(SmolStr::from);
+            let new = node.anchor_value().cloned();
             (old, new)
         };
 
@@ -516,7 +844,7 @@ impl DocumentTree {
             self.drop_anchor(raw, &old);
         }
         if let Some(new) = new {
-            self.put_anchor(raw, &new);
+            self.put_anchor(raw, new);
         }
         true
     }
@@ -531,11 +859,11 @@ impl DocumentTree {
             let Some(node) = self.arena.get_mut(raw).map(|node| node.get_mut()) else {
                 return false;
             };
-            let old_anchor = node.anchor().map(SmolStr::from);
-            let old_ref = node.reference_target().map(SmolStr::from);
+            let old_anchor = node.anchor_value().cloned();
+            let old_ref = node.reference_target().cloned();
             f(node);
-            let new_anchor = node.anchor().map(SmolStr::from);
-            let new_ref = node.reference_target().map(SmolStr::from);
+            let new_anchor = node.anchor_value().cloned();
+            let new_ref = node.reference_target().cloned();
             (old_anchor, new_anchor, old_ref, new_ref)
         };
 
@@ -544,93 +872,56 @@ impl DocumentTree {
                 self.drop_anchor(raw, &old);
             }
             if let Some(new) = new_anchor {
-                self.put_anchor(raw, &new);
+                self.put_anchor(raw, new);
             }
         }
-        if old_ref == new_ref {
-            return true;
+
+        if old_ref != new_ref {
+            if let Some(old) = old_ref {
+                self.drop_ref(id, &old);
+            }
+            if let Some(new) = new_ref {
+                self.put_ref(id, new);
+            }
         }
-        if let Some(old) = old_ref {
-            self.drop_ref(id, &old);
-        }
-        if let Some(new) = new_ref {
-            self.put_ref(id, &new);
-        }
+
         true
     }
 
-    pub fn add_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
-        let parent = parent.into_raw();
-        let anchor = node.anchor().map(SmolStr::from);
-        let target = node.reference_target().map(SmolStr::from);
-        let raw = self.arena.new_node(node);
-        parent.append(raw, &mut self.arena);
-        let id = NodeId::from_raw(raw);
-        if let Some(anchor) = anchor {
-            self.put_anchor(raw, &anchor);
-        }
-        if let Some(target) = target {
-            self.put_ref(id, &target);
-        }
-
-        id
-    }
-
     #[must_use]
-    pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
-        let lookup = |key: &str| self.index.get(key).or_else(|| self.alias.get(key)).copied();
-
-        if let Some(id) = lookup(query) {
-            return Some(NodeId::from_raw(id));
+    pub fn freeze(self) -> DocumentTree {
+        DocumentTree {
+            arena: self.arena,
+            root: self.root,
+            index: self.index,
+            alias: self.alias,
+            refs: self.refs,
         }
-
-        let slug = DocumentNode::slugify(query);
-        if slug != query
-            && let Some(id) = lookup(&slug)
-        {
-            return Some(NodeId::from_raw(id));
-        }
-
-        let ascii = DocumentNode::slugify_ascii(query);
-        if ascii != query && ascii != slug {
-            return lookup(&ascii).map(NodeId::from_raw);
-        }
-
-        None
     }
 
-    #[must_use]
-    pub fn find_references_to(&self, target: &str) -> Vec<NodeId> {
-        self.refs.get(target.strip_prefix('#').unwrap_or(target)).cloned().unwrap_or_default()
-    }
-
-    pub fn get_anchor(&self, id: NodeId) -> Option<&str> {
-        self.get(id).and_then(DocumentNode::anchor)
-    }
-
-    fn put_anchor(&mut self, id: indextree::NodeId, anchor: &str) {
-        self.index.entry(SmolStr::from(anchor)).or_insert(id);
-        let alias = DocumentNode::slugify_ascii(anchor);
+    fn put_anchor(&mut self, id: indextree::NodeId, anchor: Anchor) {
+        self.index.entry(anchor.clone()).or_insert(id);
+        let alias = Anchor::ascii_slug(anchor.as_str());
         if alias != anchor {
-            self.alias.entry(SmolStr::from(alias)).or_insert(id);
+            self.alias.entry(alias).or_insert(id);
         }
     }
 
-    fn drop_anchor(&mut self, id: indextree::NodeId, anchor: &str) {
+    fn drop_anchor(&mut self, id: indextree::NodeId, anchor: &Anchor) {
         if self.index.get(anchor) == Some(&id) {
             self.index.remove(anchor);
         }
-        let alias = DocumentNode::slugify_ascii(anchor);
-        if self.alias.get(alias.as_str()) == Some(&id) {
-            self.alias.remove(alias.as_str());
+        let alias = Anchor::ascii_slug(anchor.as_str());
+        if self.alias.get(&alias) == Some(&id) {
+            self.alias.remove(&alias);
         }
     }
 
-    fn put_ref(&mut self, id: NodeId, target: &str) {
-        self.refs.entry(SmolStr::from(target)).or_default().push(id);
+    fn put_ref(&mut self, id: NodeId, target: Anchor) {
+        self.refs.entry(target).or_default().push(id);
     }
 
-    fn drop_ref(&mut self, id: NodeId, target: &str) {
+    fn drop_ref(&mut self, id: NodeId, target: &Anchor) {
         let empty = {
             let Some(ids) = self.refs.get_mut(target) else {
                 return;
@@ -642,18 +933,123 @@ impl DocumentTree {
             self.refs.remove(target);
         }
     }
+}
 
-    fn section_child(&self, parent: indextree::NodeId, idx: usize) -> Option<indextree::NodeId> {
+impl Default for DocumentTreeBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Hierarchical document tree with anchor and section-path navigation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentTree {
+    arena: Arena<DocumentNode>,
+    root: indextree::NodeId,
+    index: HashMap<Anchor, indextree::NodeId>,
+    alias: HashMap<Anchor, indextree::NodeId>,
+    refs: HashMap<Anchor, Vec<NodeId>>,
+}
+
+impl DocumentTree {
+    #[must_use]
+    pub fn builder() -> DocumentTreeBuilder {
+        DocumentTreeBuilder::new()
+    }
+
+    #[inline]
+    pub fn root(&self) -> NodeId {
+        NodeId::from_raw(self.root)
+    }
+
+    pub fn root_node(&self) -> NodeRef<'_> {
+        self.node(self.root()).unwrap()
+    }
+
+    pub fn arena(&self) -> &Arena<DocumentNode> {
+        &self.arena
+    }
+
+    #[inline]
+    pub fn node_count(&self) -> usize {
+        self.arena.count()
+    }
+
+    pub fn get(&self, id: NodeId) -> Option<&DocumentNode> {
+        self.arena.get(id.into_raw()).map(|node| node.get())
+    }
+
+    pub fn node(&self, id: NodeId) -> Option<NodeRef<'_>> {
+        self.get(id).map(|_| NodeRef { tree: self, id })
+    }
+
+    #[must_use]
+    pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
+        let query = query.trim().strip_prefix('#').unwrap_or(query).trim();
+        let lookup = |key: &Anchor| self.index.get(key).or_else(|| self.alias.get(key)).copied();
+
+        let exact = Anchor::from(query.to_string());
+        if let Some(id) = lookup(&exact) {
+            return Some(NodeId::from_raw(id));
+        }
+
+        let slug = Anchor::slug(query);
+        if slug != exact
+            && let Some(id) = lookup(&slug)
+        {
+            return Some(NodeId::from_raw(id));
+        }
+
+        let ascii = Anchor::ascii_slug(query);
+        if ascii != exact && ascii != slug {
+            return lookup(&ascii).map(NodeId::from_raw);
+        }
+
+        None
+    }
+
+    #[must_use]
+    pub fn find_references_to(&self, query: &str) -> Vec<NodeId> {
+        let query = query.trim().strip_prefix('#').unwrap_or(query).trim();
+        let exact = Anchor::from(query.to_string());
+        if let Some(ids) = self.refs.get(&exact) {
+            return ids.clone();
+        }
+
+        let slug = Anchor::slug(query);
+        if slug != exact
+            && let Some(ids) = self.refs.get(&slug)
+        {
+            return ids.clone();
+        }
+
+        let ascii = Anchor::ascii_slug(query);
+        if ascii != exact && ascii != slug {
+            return self.refs.get(&ascii).cloned().unwrap_or_default();
+        }
+
+        Vec::new()
+    }
+
+    pub fn get_anchor(&self, id: NodeId) -> Option<&str> {
+        self.get(id).and_then(DocumentNode::anchor)
+    }
+
+    fn section_child(
+        &self,
+        parent: indextree::NodeId,
+        idx: SectionIndex,
+    ) -> Option<indextree::NodeId> {
         parent
             .children(&self.arena)
             .filter(|child| {
                 self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
             })
-            .nth(idx)
+            .nth(idx.get().saturating_sub(1))
     }
 
     fn section_path(&self, id: NodeId) -> SectionPath {
-        let mut out = SmallVec::<[usize; 6]>::new();
+        let mut out = SmallVec::<[SectionIndex; 6]>::new();
         let mut current = id.into_raw();
         while let Some(parent) = self.arena[current].parent() {
             let is_section =
@@ -665,8 +1061,9 @@ impl DocumentTree {
                         self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
                     })
                     .position(|child| child == current)
-                    .unwrap_or(0);
-                out.push(idx + 1);
+                    .and_then(|idx| SectionIndex::from_usize(idx + 1))
+                    .expect("section indices always fit in u16");
+                out.push(idx);
             }
             current = parent;
         }
@@ -684,25 +1081,25 @@ impl DocumentTree {
         self.path(id).to_string()
     }
 
-    pub fn descendants(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.into_raw().descendants(&self.arena).map(NodeId::from_raw)
+    pub fn descendants(&self, node: NodeId) -> DescendantsIter<'_> {
+        DescendantsIter { tree: self, inner: node.into_raw().descendants(&self.arena) }
     }
 
-    pub fn ancestors(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.into_raw().ancestors(&self.arena).map(NodeId::from_raw)
+    pub fn ancestors(&self, node: NodeId) -> AncestorsIter<'_> {
+        AncestorsIter { tree: self, inner: node.into_raw().ancestors(&self.arena) }
     }
 
-    pub fn children(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
-        node.into_raw().children(&self.arena).map(NodeId::from_raw)
+    pub fn children(&self, node: NodeId) -> ChildrenIter<'_> {
+        ChildrenIter { tree: self, inner: node.into_raw().children(&self.arena) }
     }
 
     pub fn sections(&self) -> impl Iterator<Item = SectionEntry> + '_ {
-        self.descendants(self.root()).filter_map(|id| {
-            let node = self.get(id)?;
-            let (Some(anchor), Some(level)) = (node.anchor(), node.section_level()) else {
+        self.descendants(self.root()).filter_map(|node| {
+            let (Some(anchor), Some(level)) = (node.data().anchor_value(), node.section_level())
+            else {
                 return None;
             };
-            Some(SectionEntry { id, anchor: anchor.to_string(), path: self.path(id), level })
+            Some(SectionEntry { id: node.id(), anchor: anchor.clone(), path: node.path(), level })
         })
     }
 
@@ -712,8 +1109,8 @@ impl DocumentTree {
         }
 
         let mut current = self.root;
-        for idx in path.segments() {
-            let Some(child) = self.section_child(current, idx - 1) else {
+        for idx in path.iter() {
+            let Some(child) = self.section_child(current, idx) else {
                 return Err(DocumentError::InvalidPath {
                     path: path.to_string(),
                     reason: format!("index {idx} is out of bounds"),
@@ -725,13 +1122,13 @@ impl DocumentTree {
         Ok(NodeId::from_raw(current))
     }
 
-    pub fn parent_section(&self, id: NodeId) -> Option<NodeId> {
-        self.ancestors(id).skip(1).find(|id| self.get(*id).is_some_and(DocumentNode::is_section))
+    pub fn parent_section(&self, id: NodeId) -> Option<NodeRef<'_>> {
+        self.ancestors(id).skip(1).find(|node| node.data().is_section())
     }
 
     pub fn extract_text(&self, id: NodeId) -> String {
         self.descendants(id)
-            .filter_map(|id| self.get(id).and_then(DocumentNode::display_text))
+            .filter_map(NodeRef::display_text)
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join(" ")
@@ -745,14 +1142,14 @@ impl DocumentTree {
 
     fn debug_node(&self, id: NodeId, depth: usize, out: &mut String) {
         let indent = "  ".repeat(depth);
-        let Some(node) = self.get(id) else {
+        let Some(node) = self.node(id) else {
             return;
         };
 
-        let path = self.path(id);
+        let path = node.path();
         let anchor = node.anchor().map(|it| format!("[#{it}]")).unwrap_or_default();
 
-        match node {
+        match node.data() {
             DocumentNode::Root => {
                 let _ = writeln!(out, "{}[{}] ROOT", indent, path);
             }
@@ -776,15 +1173,9 @@ impl DocumentTree {
             }
         }
 
-        for child in self.children(id) {
-            self.debug_node(child, depth + 1, out);
+        for child in node.children() {
+            self.debug_node(child.id(), depth + 1, out);
         }
-    }
-}
-
-impl Default for DocumentTree {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -809,17 +1200,23 @@ impl Index<NodeId> for DocumentTree {
 }
 
 impl<'a> IntoIterator for &'a DocumentTree {
-    type Item = NodeId;
+    type Item = NodeRef<'a>;
     type IntoIter = DescendantsIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        DescendantsIter(self.root.descendants(&self.arena))
+        self.descendants(self.root())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn build(f: impl FnOnce(&mut DocumentTreeBuilder)) -> DocumentTree {
+        let mut tree = DocumentTree::builder();
+        f(&mut tree);
+        tree.freeze()
+    }
 
     #[test]
     fn slugify() {
@@ -842,24 +1239,26 @@ mod tests {
 
     #[test]
     fn tree_construction() {
-        let mut tree = DocumentTree::new();
-        let root = tree.root();
+        let tree = build(|tree| {
+            let root = tree.root();
+            let _ = tree.add_child(root, DocumentNode::section(1, "Introduction"));
+            let sec2 = tree.add_child(root, DocumentNode::section(1, "Methods"));
+            let _ = tree.add_child(sec2, DocumentNode::section(2, "Participants"));
+        });
 
-        let sec1 = tree.add_child(root, DocumentNode::section(1, "Introduction"));
-        let sec2 = tree.add_child(root, DocumentNode::section(1, "Methods"));
-        let sub = tree.add_child(sec2, DocumentNode::section(2, "Participants"));
-
-        assert_eq!(tree.path(sec1).to_string(), "1");
-        assert_eq!(tree.path(sec2).to_string(), "2");
-        assert_eq!(tree.path(sub).to_string(), "2.1");
+        let sections = tree.sections().collect::<Vec<_>>();
+        assert_eq!(sections[0].path.to_string(), "1");
+        assert_eq!(sections[1].path.to_string(), "2");
+        assert_eq!(sections[2].path.to_string(), "2.1");
     }
 
     #[test]
     fn anchor_lookup() {
-        let mut tree = DocumentTree::new();
-        tree.add_child(tree.root(), DocumentNode::section(1, "Introduction"));
-        tree.add_child(tree.root(), DocumentNode::section(1, "Results"));
-        tree.add_child(tree.root(), DocumentNode::section(1, "TÍTULO PRELIMINAR"));
+        let tree = build(|tree| {
+            tree.add_child(tree.root(), DocumentNode::section(1, "Introduction"));
+            tree.add_child(tree.root(), DocumentNode::section(1, "Results"));
+            tree.add_child(tree.root(), DocumentNode::section(1, "TÍTULO PRELIMINAR"));
+        });
 
         assert!(tree.find_by_anchor("introduction").is_some());
         assert!(tree.find_by_anchor("results").is_some());
@@ -870,9 +1269,12 @@ mod tests {
 
     #[test]
     fn path_navigation() {
-        let mut tree = DocumentTree::new();
-        let sec1 = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-        let sec2 = tree.add_child(sec1, DocumentNode::section(2, "B"));
+        let tree = build(|tree| {
+            let sec1 = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
+            let _ = tree.add_child(sec1, DocumentNode::section(2, "B"));
+        });
+        let sec1 = tree.find_by_anchor("a").unwrap();
+        let sec2 = tree.find_by_anchor("b").unwrap();
         let path1 = tree.path(sec1);
         let path2 = tree.path(sec2);
 
@@ -880,6 +1282,7 @@ mod tests {
         assert_eq!(tree.find_by_path(&path2).unwrap(), sec2);
         assert!(path2.is_descendant_of(&path1));
         assert!(!path1.is_descendant_of(&path2));
+        assert_eq!(path2.parent().unwrap(), path1);
 
         let err = tree.find_by_path(&"1.2".parse().unwrap()).unwrap_err();
         assert!(err.to_string().contains("out of bounds"));
@@ -890,38 +1293,44 @@ mod tests {
 
     #[test]
     fn parent_section() {
-        let mut tree = DocumentTree::new();
-        let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
-        let para = tree.add_child(sec, DocumentNode::paragraph());
-        let text = tree.add_child(para, DocumentNode::text("text"));
+        let tree = build(|tree| {
+            let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
+            let para = tree.add_child(sec, DocumentNode::paragraph());
+            let _ = tree.add_child(para, DocumentNode::text("text"));
+        });
+        let sec = tree.find_by_anchor("parent").unwrap();
+        let text = tree.descendants(sec).find(|node| node.display_text() == Some("text")).unwrap();
 
-        assert_eq!(tree.parent_section(text), Some(sec));
+        assert_eq!(tree.parent_section(text.id()).map(NodeRef::id), Some(sec));
         assert!(tree.parent_section(sec).is_none());
     }
 
     #[test]
     fn sections_are_preordered() {
-        let mut tree = DocumentTree::new();
-        tree.add_child(tree.root(), DocumentNode::section(1, "First"));
-        let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Second"));
-        tree.add_child(sec, DocumentNode::section(2, "Nested"));
+        let tree = build(|tree| {
+            tree.add_child(tree.root(), DocumentNode::section(1, "First"));
+            let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Second"));
+            tree.add_child(sec, DocumentNode::section(2, "Nested"));
+        });
 
         let sections = tree.sections().collect::<Vec<_>>();
         assert_eq!(sections.len(), 3);
-        assert_eq!(sections[0].anchor, "first");
-        assert_eq!(sections[1].anchor, "second");
-        assert_eq!(sections[2].anchor, "nested");
+        assert_eq!(sections[0].anchor.as_str(), "first");
+        assert_eq!(sections[1].anchor.as_str(), "second");
+        assert_eq!(sections[2].anchor.as_str(), "nested");
         assert_eq!(sections[2].path.to_string(), "2.1");
     }
 
     #[test]
     fn path_ignores_non_section_siblings() {
-        let mut tree = DocumentTree::new();
-        let a = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-        let para = tree.add_child(a, DocumentNode::paragraph());
-        tree.add_child(para, DocumentNode::text("x"));
-        tree.add_child(a, DocumentNode::html("<table><tr><td>x</td></tr></table>"));
-        let b = tree.add_child(a, DocumentNode::section(2, "B"));
+        let tree = build(|tree| {
+            let a = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
+            let para = tree.add_child(a, DocumentNode::paragraph());
+            tree.add_child(para, DocumentNode::text("x"));
+            tree.add_child(a, DocumentNode::html("<table><tr><td>x</td></tr></table>"));
+            tree.add_child(a, DocumentNode::section(2, "B"));
+        });
+        let b = tree.find_by_anchor("b").unwrap();
 
         assert_eq!(tree.path(b).to_string(), "1.1");
         assert_eq!(tree.find_by_path(&"1.1".parse().unwrap()).unwrap(), b);
@@ -929,39 +1338,38 @@ mod tests {
 
     #[test]
     fn update_keeps_anchor_index_in_sync() {
-        let mut tree = DocumentTree::new();
+        let mut tree = DocumentTree::builder();
         let id = tree.add_child(tree.root(), DocumentNode::section(1, "Old"));
 
         let _ = tree.update(id, |node| {
             *node = DocumentNode::section(1, "New");
         });
 
+        let tree = tree.freeze();
         assert!(tree.find_by_anchor("old").is_none());
         assert_eq!(tree.find_by_anchor("new"), Some(id));
     }
 
     #[test]
     fn set_anchor_rejects_unanchorable_nodes() {
-        let mut tree = DocumentTree::new();
+        let mut tree = DocumentTree::builder();
         let id = tree.add_child(tree.root(), DocumentNode::paragraph());
-        assert!(!tree.set_anchor(id, Some("x".to_string())));
+        assert!(!tree.set_anchor(id, Some(Anchor::from("x"))));
     }
 
     #[test]
-    fn reference_index_tracks_hash_and_updates() {
-        let mut tree = DocumentTree::new();
+    fn reference_index_tracks_anchor_links() {
+        let mut tree = DocumentTree::builder();
         let sec = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
         let para = tree.add_child(sec, DocumentNode::paragraph());
-        let link = tree.add_child(para, DocumentNode::link("#a", None));
+        let link = tree.add_child(para, DocumentNode::link_anchor("a", None));
         tree.add_child(link, DocumentNode::text("ref"));
 
-        assert_eq!(tree.find_references_to("a"), vec![link]);
-        assert_eq!(tree.find_references_to("#a"), vec![link]);
-
         let _ = tree.update(link, |node| {
-            *node = DocumentNode::link("b", None);
+            *node = DocumentNode::link_anchor("b", None);
         });
 
+        let tree = tree.freeze();
         assert!(tree.find_references_to("a").is_empty());
         assert_eq!(tree.find_references_to("b"), vec![link]);
     }

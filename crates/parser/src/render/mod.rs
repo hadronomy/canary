@@ -16,14 +16,13 @@ fn walk<W: TreeWriter>(
     depth: usize,
     w: &mut W,
 ) -> Result<(), W::Error> {
-    let Some(node) = tree.get(id) else {
+    let Some(node) = tree.node(id) else {
         return Ok(());
     };
 
-    let last = tree.arena().get(id.into_raw()).and_then(|node| node.next_sibling()).is_none();
-    let ctx = NodeContext { depth, anchor: node.anchor(), path: tree.path(id), last };
+    let ctx = NodeContext { depth, anchor: node.anchor(), path: node.path(), last: node.last() };
 
-    match node {
+    match node.data() {
         DocumentNode::Root => kids(tree, id, depth, w)?,
         DocumentNode::Section { level, kind, title, .. } => {
             w.enter_section(*level, *kind, title, &ctx)?;
@@ -84,10 +83,10 @@ fn walk<W: TreeWriter>(
             kids(tree, id, depth + 1, w)?;
             w.leave_emphasis(&ctx)?;
         }
-        DocumentNode::Link { url, title } => {
-            w.enter_link(url, title.as_deref(), &ctx)?;
+        DocumentNode::Link { target, title } => {
+            w.enter_link(target, title.as_deref(), &ctx)?;
             kids(tree, id, depth + 1, w)?;
-            w.leave_link(url, title.as_deref(), &ctx)?;
+            w.leave_link(target, title.as_deref(), &ctx)?;
         }
         DocumentNode::Image { url, alt, .. } => {
             w.write_image(url, alt, &ctx)?;
@@ -107,7 +106,7 @@ fn kids<W: TreeWriter>(
     w: &mut W,
 ) -> Result<(), W::Error> {
     for child in tree.children(parent) {
-        walk(tree, child, depth, w)?;
+        walk(tree, child.id(), depth, w)?;
     }
     Ok(())
 }
