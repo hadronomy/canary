@@ -3,9 +3,9 @@
 use std::sync::OnceLock;
 
 use document_hierarchy::parser::{DocumentMeta, LegalDocument};
-use document_hierarchy::render;
 use document_hierarchy::{
     CrossRefResolver, DocumentTree, HeadingMode, MarkdownWriter, NodeId, SectionPath, TreeParser,
+    render,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

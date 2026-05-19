@@ -1,5 +1,6 @@
 //! Core tree data structures and navigation.
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
@@ -103,6 +104,12 @@ impl fmt::Display for Anchor {
 
 impl AsRef<str> for Anchor {
     fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Borrow<str> for Anchor {
+    fn borrow(&self) -> &str {
         self.as_str()
     }
 }
@@ -649,6 +656,11 @@ pub struct SectionEntry {
     pub level: u8,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SectionMeta {
+    path: SectionPath,
+}
+
 #[derive(Clone, Copy)]
 pub struct NodeRef<'a> {
     tree: &'a DocumentTree,
@@ -886,7 +898,7 @@ impl DocumentTreeBuilder {
 
     #[must_use]
     pub fn freeze(self) -> DocumentTree {
-        let (node_paths, section_paths, figures) =
+        let (section_meta, section_index, section_order, figures) =
             DocumentTree::build_indexes(&self.arena, self.root);
         DocumentTree {
             arena: self.arena,
@@ -894,8 +906,9 @@ impl DocumentTreeBuilder {
             index: self.index,
             alias: self.alias,
             refs: self.refs,
-            node_paths,
-            section_paths,
+            section_meta,
+            section_index,
+            section_order,
             figures,
         }
     }
@@ -950,8 +963,9 @@ pub struct DocumentTree {
     index: HashMap<Anchor, indextree::NodeId>,
     alias: HashMap<Anchor, indextree::NodeId>,
     refs: HashMap<Anchor, Vec<NodeId>>,
-    node_paths: HashMap<NodeId, SectionPath>,
-    section_paths: HashMap<SectionPath, NodeId>,
+    section_meta: HashMap<NodeId, SectionMeta>,
+    section_index: HashMap<SectionPath, NodeId>,
+    section_order: Vec<NodeId>,
     figures: Vec<NodeId>,
 }
 
@@ -990,23 +1004,21 @@ impl DocumentTree {
     #[must_use]
     pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
         let query = query.trim().strip_prefix('#').unwrap_or(query).trim();
-        let lookup = |key: &Anchor| self.index.get(key).or_else(|| self.alias.get(key)).copied();
-
-        let exact = Anchor::from(query.to_string());
-        if let Some(id) = lookup(&exact) {
+        let lookup = |key: &str| self.index.get(key).or_else(|| self.alias.get(key)).copied();
+        if let Some(id) = lookup(query) {
             return Some(NodeId::from_raw(id));
         }
 
         let slug = Anchor::slug(query);
-        if slug != exact
-            && let Some(id) = lookup(&slug)
+        if slug.as_str() != query
+            && let Some(id) = lookup(slug.as_str())
         {
             return Some(NodeId::from_raw(id));
         }
 
         let ascii = Anchor::ascii_slug(query);
-        if ascii != exact && ascii != slug {
-            return lookup(&ascii).map(NodeId::from_raw);
+        if ascii.as_str() != query && ascii != slug {
+            return lookup(ascii.as_str()).map(NodeId::from_raw);
         }
 
         None
@@ -1015,21 +1027,20 @@ impl DocumentTree {
     #[must_use]
     pub fn find_references_to(&self, query: &str) -> Vec<NodeId> {
         let query = query.trim().strip_prefix('#').unwrap_or(query).trim();
-        let exact = Anchor::from(query.to_string());
-        if let Some(ids) = self.refs.get(&exact) {
+        if let Some(ids) = self.refs.get(query) {
             return ids.clone();
         }
 
         let slug = Anchor::slug(query);
-        if slug != exact
-            && let Some(ids) = self.refs.get(&slug)
+        if slug.as_str() != query
+            && let Some(ids) = self.refs.get(slug.as_str())
         {
             return ids.clone();
         }
 
         let ascii = Anchor::ascii_slug(query);
-        if ascii != exact && ascii != slug {
-            return self.refs.get(&ascii).cloned().unwrap_or_default();
+        if ascii.as_str() != query && ascii != slug {
+            return self.refs.get(ascii.as_str()).cloned().unwrap_or_default();
         }
 
         Vec::new()
@@ -1042,17 +1053,18 @@ impl DocumentTree {
     fn build_indexes(
         arena: &Arena<DocumentNode>,
         root: indextree::NodeId,
-    ) -> (HashMap<NodeId, SectionPath>, HashMap<SectionPath, NodeId>, Vec<NodeId>) {
+    ) -> (HashMap<NodeId, SectionMeta>, HashMap<SectionPath, NodeId>, Vec<NodeId>, Vec<NodeId>)
+    {
         fn walk(
             arena: &Arena<DocumentNode>,
             raw: indextree::NodeId,
             path: &SectionPath,
-            node_paths: &mut HashMap<NodeId, SectionPath>,
-            section_paths: &mut HashMap<SectionPath, NodeId>,
+            section_meta: &mut HashMap<NodeId, SectionMeta>,
+            section_index: &mut HashMap<SectionPath, NodeId>,
+            section_order: &mut Vec<NodeId>,
             figures: &mut Vec<NodeId>,
         ) {
             let id = NodeId::from_raw(raw);
-            node_paths.insert(id, path.clone());
             if matches!(arena[raw].get(), DocumentNode::Image { .. }) {
                 figures.push(id);
             }
@@ -1061,23 +1073,43 @@ impl DocumentTree {
             for child in raw.children(arena) {
                 let child_path = if arena[child].get().is_section() {
                     idx += 1;
+                    let child_id = NodeId::from_raw(child);
                     let child_path = path.join(
                         SectionIndex::from_usize(idx).expect("section indices always fit in u16"),
                     );
-                    section_paths.insert(child_path.clone(), NodeId::from_raw(child));
+                    section_meta.insert(child_id, SectionMeta { path: child_path.clone() });
+                    section_index.insert(child_path.clone(), child_id);
+                    section_order.push(child_id);
                     child_path
                 } else {
                     path.clone()
                 };
-                walk(arena, child, &child_path, node_paths, section_paths, figures);
+                walk(
+                    arena,
+                    child,
+                    &child_path,
+                    section_meta,
+                    section_index,
+                    section_order,
+                    figures,
+                );
             }
         }
 
-        let mut node_paths = HashMap::new();
-        let mut section_paths = HashMap::new();
+        let mut section_meta = HashMap::new();
+        let mut section_index = HashMap::new();
+        let mut section_order = Vec::new();
         let mut figures = Vec::new();
-        walk(arena, root, &SectionPath::root(), &mut node_paths, &mut section_paths, &mut figures);
-        (node_paths, section_paths, figures)
+        walk(
+            arena,
+            root,
+            &SectionPath::root(),
+            &mut section_meta,
+            &mut section_index,
+            &mut section_order,
+            &mut figures,
+        );
+        (section_meta, section_index, section_order, figures)
     }
 
     pub(crate) fn figure(&self, idx: SectionIndex) -> Option<NodeId> {
@@ -1086,7 +1118,19 @@ impl DocumentTree {
 
     #[must_use]
     pub fn path(&self, id: NodeId) -> SectionPath {
-        self.node_paths.get(&id).cloned().expect("node path index must contain every tree node")
+        if let Some(meta) = self.section_meta.get(&id) {
+            return meta.path.clone();
+        }
+
+        let mut raw = id.into_raw();
+        while let Some(parent) = self.arena[raw].parent() {
+            raw = parent;
+            let id = NodeId::from_raw(raw);
+            if let Some(meta) = self.section_meta.get(&id) {
+                return meta.path.clone();
+            }
+        }
+        SectionPath::root()
     }
 
     #[must_use]
@@ -1107,12 +1151,18 @@ impl DocumentTree {
     }
 
     pub fn sections(&self) -> impl Iterator<Item = SectionEntry> + '_ {
-        self.descendants(self.root()).filter_map(|node| {
+        self.section_order.iter().filter_map(|id| {
+            let node = self.node(*id)?;
             let (Some(anchor), Some(level)) = (node.data().anchor_value(), node.section_level())
             else {
                 return None;
             };
-            Some(SectionEntry { id: node.id(), anchor: anchor.clone(), path: node.path(), level })
+            Some(SectionEntry {
+                id: *id,
+                anchor: anchor.clone(),
+                path: self.section_meta.get(id)?.path.clone(),
+                level,
+            })
         })
     }
 
@@ -1120,7 +1170,8 @@ impl DocumentTree {
         if path.is_root() {
             return Ok(self.root());
         }
-        self.section_paths.get(path).copied().ok_or_else(|| DocumentError::InvalidPath {
+
+        self.section_index.get(path).copied().ok_or_else(|| DocumentError::InvalidPath {
             path: path.to_string(),
             reason: "path is out of bounds".to_string(),
         })
@@ -1131,11 +1182,18 @@ impl DocumentTree {
     }
 
     pub fn extract_text(&self, id: NodeId) -> String {
-        self.descendants(id)
-            .filter_map(NodeRef::display_text)
-            .filter(|text| !text.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ")
+        let mut out = String::new();
+        for raw in id.into_raw().descendants(&self.arena) {
+            let Some(text) = self.arena[raw].get().display_text().filter(|it| !it.is_empty())
+            else {
+                continue;
+            };
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(text);
+        }
+        out
     }
 
     pub fn debug_tree(&self) -> String {

@@ -69,7 +69,20 @@ pub struct XmlVersion {
 pub enum XmlNode {
     Paragraph(XmlPara),
     BlockQuote(Vec<XmlNode>),
+    Table(XmlTable),
     Html(String),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct XmlTable {
+    pub rows: Vec<XmlRow>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct XmlRow {
+    pub cells: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -401,6 +414,94 @@ trait BoeStream {
         Ok(out)
     }
 
+    fn read_table_cell(&mut self, closing: &[u8], phase: &str) -> Result<String> {
+        let mut depth = 0usize;
+        let mut out = String::new();
+        loop {
+            match self.next_event()? {
+                Event::Text(value) => out.push_str(&Self::decode_text(value.xml_content(), phase)?),
+                Event::CData(value) => {
+                    out.push_str(&Self::decode_text(value.xml_content(), phase)?)
+                }
+                Event::Empty(tag) if tag.name().as_ref() == b"br" => out.push(' '),
+                Event::Start(_) => depth += 1,
+                Event::End(tag) if tag.name().as_ref() == closing && depth == 0 => break,
+                Event::End(_) => {
+                    if depth == 0 {
+                        return Err(DocumentError::xml(format!("{phase}: unbalanced close tag")));
+                    }
+                    depth -= 1;
+                }
+                Event::Eof => {
+                    return Err(DocumentError::xml(format!(
+                        "{phase}: unexpected EOF before closing {}",
+                        String::from_utf8_lossy(closing)
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(Self::normalize(&out))
+    }
+
+    fn read_table_row(&mut self) -> Result<XmlRow> {
+        let mut cells = Vec::new();
+        loop {
+            match self.next_event()? {
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    if matches!(tag.name().as_ref(), b"td" | b"th") {
+                        cells.push(self.read_table_cell(tag.name().as_ref(), "table/cell")?);
+                        continue;
+                    }
+                    self.skip_element(&tag)?;
+                }
+                Event::Empty(tag) if matches!(tag.name().as_ref(), b"td" | b"th") => {
+                    cells.push(String::new());
+                }
+                Event::End(tag) if tag.name().as_ref() == b"tr" => break,
+                Event::Eof => return Err(DocumentError::xml("table/row: unexpected EOF")),
+                _ => {}
+            }
+        }
+        Ok(XmlRow { cells })
+    }
+
+    fn read_table_rows(&mut self, closing: &[u8], rows: &mut Vec<XmlRow>) -> Result<()> {
+        loop {
+            match self.next_event()? {
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    if tag.name().as_ref() == b"tr" {
+                        rows.push(self.read_table_row()?);
+                        continue;
+                    }
+                    if matches!(tag.name().as_ref(), b"thead" | b"tbody" | b"tfoot") {
+                        let name = tag.name().as_ref().to_vec();
+                        self.read_table_rows(&name, rows)?;
+                        continue;
+                    }
+                    self.skip_element(&tag)?;
+                }
+                Event::End(tag) if tag.name().as_ref() == closing => break,
+                Event::Eof => {
+                    return Err(DocumentError::xml(format!(
+                        "table/body: unexpected EOF before closing {}",
+                        String::from_utf8_lossy(closing)
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn read_table(&mut self) -> Result<XmlNode> {
+        let mut rows = Vec::new();
+        self.read_table_rows(b"table", &mut rows)?;
+        Ok(XmlNode::Table(XmlTable { rows }))
+    }
+
     fn raw(&mut self, start: &BytesStart<'_>) -> Result<String> {
         let mut w = quick_xml::Writer::new(Vec::new());
         w.write_event(Event::Start(start.clone()))
@@ -565,7 +666,11 @@ trait BoeStream {
                 }
                 Event::Empty(tag) => {
                     let tag = tag.into_owned();
-                    nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                    if tag.name().as_ref() == b"table" {
+                        nodes.push(XmlNode::Table(XmlTable::default()));
+                    } else {
+                        nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                    }
                 }
                 Event::End(tag) if tag.name().as_ref() == b"blockquote" => break,
                 Event::Eof => return Err(DocumentError::xml("blockquote: unexpected EOF")),
@@ -582,6 +687,9 @@ trait BoeStream {
         if start.name().as_ref() == b"blockquote" {
             return self.read_blockquote();
         }
+        if start.name().as_ref() == b"table" {
+            return self.read_table();
+        }
         self.raw(start).map(XmlNode::Html)
     }
 
@@ -597,7 +705,11 @@ trait BoeStream {
                 }
                 Event::Empty(tag) => {
                     let tag = tag.into_owned();
-                    version.nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                    if tag.name().as_ref() == b"table" {
+                        version.nodes.push(XmlNode::Table(XmlTable::default()));
+                    } else {
+                        version.nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                    }
                 }
                 Event::End(tag) if tag.name().as_ref() == b"version" => break,
                 Event::Eof => return Err(DocumentError::xml("version: unexpected EOF")),
@@ -947,6 +1059,20 @@ impl TreeParser {
         html.clear();
     }
 
+    fn push_table(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, table: &XmlTable) {
+        let cols = table.rows.iter().map(|it| it.cells.len()).max().unwrap_or(0);
+        let tid = tree.add_child(parent, DocumentNode::table(vec![None; cols]));
+        for row in &table.rows {
+            let rid = tree.add_child(tid, DocumentNode::table_row());
+            for cell in &row.cells {
+                let cid = tree.add_child(rid, DocumentNode::table_cell());
+                if !cell.is_empty() {
+                    tree.add_child(cid, DocumentNode::text(cell.clone()));
+                }
+            }
+        }
+    }
+
     fn push_nodes(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, nodes: &[XmlNode]) {
         let mut html = String::new();
         for node in nodes {
@@ -954,6 +1080,10 @@ impl TreeParser {
                 XmlNode::Paragraph(para) => {
                     Self::push_html(tree, parent, &mut html);
                     Self::push_para(tree, parent, para);
+                }
+                XmlNode::Table(table) => {
+                    Self::push_html(tree, parent, &mut html);
+                    Self::push_table(tree, parent, table);
                 }
                 XmlNode::Html(raw) => {
                     if !html.is_empty() {
@@ -1114,7 +1244,7 @@ mod tests {
       <bloque id="an" tipo="encabezado" titulo="ANEXO">
         <version fecha_vigencia="20210906">
           <p class="titulo_tit">ANEXO</p>
-          <table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>
+          <foo><bar>z</bar></foo>
         </version>
       </bloque>
     </texto>
@@ -1131,7 +1261,39 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(html.len(), 1);
-        assert!(html[0].contains("<table>"));
+        assert!(html[0].contains("<foo>"));
+    }
+
+    #[test]
+    fn parses_table_nodes_into_typed_tree() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="an" tipo="encabezado" titulo="ANEXO">
+        <version fecha_vigencia="20210906">
+          <p class="titulo_tit">ANEXO</p>
+          <table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let tree = TreeParser::new().parse_xml(xml).unwrap();
+        let id = tree.find_by_anchor("anexo").unwrap();
+        let table =
+            tree.children(id).find(|it| matches!(it.data(), DocumentNode::Table { .. })).unwrap();
+        let rows = table
+            .children()
+            .filter(|it| matches!(it.data(), DocumentNode::TableRow))
+            .collect::<Vec<_>>();
+        assert_eq!(rows.len(), 2);
+        let cells =
+            rows[0].children().filter(|it| matches!(it.data(), DocumentNode::TableCell)).count();
+        assert_eq!(cells, 2);
+        assert!(tree.extract_text(table.id()).contains("A"));
+        assert!(tree.extract_text(table.id()).contains("2"));
     }
 
     #[test]
@@ -1350,7 +1512,7 @@ mod tests {
     }
 
     #[test]
-    fn merges_adjacent_html_fragments() {
+    fn keeps_adjacent_unsupported_html_fragments_together() {
         let xml = r#"<?xml version="1.0" encoding="utf-8"?>
 <response>
   <data>
@@ -1358,8 +1520,8 @@ mod tests {
       <bloque id="an" tipo="encabezado" titulo="ANEXO">
         <version fecha_vigencia="20210906">
           <p class="titulo_tit">ANEXO</p>
-          <table><tr><th>A</th></tr><tr><td>1</td></tr></table>
           <foo><bar>z</bar></foo>
+          <baz><qux>y</qux></baz>
         </version>
       </bloque>
     </texto>
@@ -1377,8 +1539,8 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(html.len(), 1);
-        assert!(html[0].contains("<table>"));
         assert!(html[0].contains("<foo>"));
+        assert!(html[0].contains("<baz>"));
     }
 
     #[test]

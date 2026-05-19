@@ -1,7 +1,7 @@
 use std::fmt::{self, Write};
 
 use crate::parser::DocumentMeta;
-use crate::render::writer::{NodeContext, TreeWriter};
+use crate::render::writer::TreeWriter;
 use crate::tree::{ColumnAlignment, LinkTarget, ListSpacing, ListStyle, SectionKind};
 
 #[derive(Debug, Clone)]
@@ -109,7 +109,6 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         level: u8,
         kind: SectionKind,
         title: &str,
-        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         let boe = matches!(&self.mode, HeadingMode::Boe { .. });
         if boe && Self::marker(kind) {
@@ -140,7 +139,6 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         _level: u8,
         _kind: SectionKind,
         _title: &str,
-        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         if matches!(&self.mode, HeadingMode::Boe { .. })
             && let Some(counted) = self.sections.pop()
@@ -151,37 +149,32 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn enter_paragraph(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_paragraph(&mut self) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
         Ok(())
     }
 
-    fn leave_paragraph(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_paragraph(&mut self) -> Result<(), Self::Error> {
         writeln!(self.out)?;
         self.brk = true;
         Ok(())
     }
 
-    fn enter_blockquote(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_blockquote(&mut self) -> Result<(), Self::Error> {
         self.line()?;
         self.quote += 1;
         self.brk = false;
         Ok(())
     }
 
-    fn leave_blockquote(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_blockquote(&mut self) -> Result<(), Self::Error> {
         self.quote = self.quote.saturating_sub(1);
         self.brk = true;
         Ok(())
     }
 
-    fn enter_list(
-        &mut self,
-        style: ListStyle,
-        _spacing: ListSpacing,
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn enter_list(&mut self, style: ListStyle, _spacing: ListSpacing) -> Result<(), Self::Error> {
         if self.lists.is_empty() {
             self.line()?;
         }
@@ -192,12 +185,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn leave_list(
-        &mut self,
-        _style: ListStyle,
-        _spacing: ListSpacing,
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn leave_list(&mut self, _style: ListStyle, _spacing: ListSpacing) -> Result<(), Self::Error> {
         self.lists.pop();
         if self.lists.is_empty() {
             self.brk = true;
@@ -205,7 +193,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn enter_list_item(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_list_item(&mut self) -> Result<(), Self::Error> {
         self.pref()?;
         write!(self.out, "{:n$}", "", n = self.indent())?;
         match self.lists.last_mut() {
@@ -218,56 +206,43 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn leave_list_item(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_list_item(&mut self) -> Result<(), Self::Error> {
         writeln!(self.out)?;
         Ok(())
     }
 
-    fn enter_table(
-        &mut self,
-        _aligns: &[ColumnAlignment],
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn enter_table(&mut self, _aligns: &[ColumnAlignment]) -> Result<(), Self::Error> {
         self.line()?;
         Ok(())
     }
 
-    fn leave_table(
-        &mut self,
-        _aligns: &[ColumnAlignment],
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn leave_table(&mut self, _aligns: &[ColumnAlignment]) -> Result<(), Self::Error> {
         self.brk = true;
         Ok(())
     }
 
-    fn enter_table_row(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_table_row(&mut self) -> Result<(), Self::Error> {
         self.pref()?;
         write!(self.out, "|")?;
         Ok(())
     }
 
-    fn leave_table_row(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_table_row(&mut self) -> Result<(), Self::Error> {
         writeln!(self.out)?;
         Ok(())
     }
 
-    fn enter_table_cell(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_table_cell(&mut self) -> Result<(), Self::Error> {
         write!(self.out, " ")?;
         Ok(())
     }
 
-    fn leave_table_cell(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_table_cell(&mut self) -> Result<(), Self::Error> {
         write!(self.out, " |")?;
         Ok(())
     }
 
-    fn write_code_block(
-        &mut self,
-        lang: Option<&str>,
-        code: &str,
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn write_code_block(&mut self, lang: Option<&str>, code: &str) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
         writeln!(self.out, "```{}", lang.unwrap_or(""))?;
@@ -281,27 +256,27 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn enter_strong(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_strong(&mut self) -> Result<(), Self::Error> {
         write!(self.out, "**")?;
         Ok(())
     }
 
-    fn leave_strong(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_strong(&mut self) -> Result<(), Self::Error> {
         write!(self.out, "**")?;
         Ok(())
     }
 
-    fn enter_emphasis(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn enter_emphasis(&mut self) -> Result<(), Self::Error> {
         write!(self.out, "*")?;
         Ok(())
     }
 
-    fn leave_emphasis(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn leave_emphasis(&mut self) -> Result<(), Self::Error> {
         write!(self.out, "*")?;
         Ok(())
     }
 
-    fn write_text(&mut self, text: &str, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn write_text(&mut self, text: &str) -> Result<(), Self::Error> {
         write!(self.out, "{text}")?;
         Ok(())
     }
@@ -310,18 +285,12 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         &mut self,
         _target: &LinkTarget,
         _title: Option<&str>,
-        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         write!(self.out, "[")?;
         Ok(())
     }
 
-    fn leave_link(
-        &mut self,
-        target: &LinkTarget,
-        title: Option<&str>,
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn leave_link(&mut self, target: &LinkTarget, title: Option<&str>) -> Result<(), Self::Error> {
         let href = target.to_string();
         if let Some(title) = title {
             write!(self.out, "]({href} \"{title}\")")?;
@@ -331,17 +300,12 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn write_image(
-        &mut self,
-        url: &str,
-        alt: &str,
-        _ctx: &NodeContext<'_>,
-    ) -> Result<(), Self::Error> {
+    fn write_image(&mut self, url: &str, alt: &str) -> Result<(), Self::Error> {
         write!(self.out, "![{alt}]({url})")?;
         Ok(())
     }
 
-    fn write_html(&mut self, html: &str, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn write_html(&mut self, html: &str) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
         if let Ok(md) = htmd::convert(html) {
@@ -452,6 +416,30 @@ mod tests {
 
         assert!(out.contains("| A |"));
         assert!(out.contains("| 1 |"));
+    }
+
+    #[test]
+    fn renders_typed_table_nodes() {
+        let tree = build(|tree| {
+            let table = tree.add_child(tree.root(), DocumentNode::table(vec![None, None]));
+            let head = tree.add_child(table, DocumentNode::table_row());
+            let a = tree.add_child(head, DocumentNode::table_cell());
+            let b = tree.add_child(head, DocumentNode::table_cell());
+            tree.add_child(a, DocumentNode::text("A"));
+            tree.add_child(b, DocumentNode::text("B"));
+            let body = tree.add_child(table, DocumentNode::table_row());
+            let one = tree.add_child(body, DocumentNode::table_cell());
+            let two = tree.add_child(body, DocumentNode::table_cell());
+            tree.add_child(one, DocumentNode::text("1"));
+            tree.add_child(two, DocumentNode::text("2"));
+        });
+
+        let mut out = String::new();
+        let mut w = MarkdownWriter::new(&mut out);
+        render::render(&tree, tree.root(), &mut w).unwrap();
+
+        assert!(out.contains("| A | B |"));
+        assert!(out.contains("| 1 | 2 |"));
     }
 
     #[test]

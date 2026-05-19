@@ -2,8 +2,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use document_hierarchy::render;
-use document_hierarchy::{HeadingMode, MarkdownWriter, TreeParser};
+use document_hierarchy::{HeadingMode, MarkdownWriter, TreeParser, render};
 
 fn xml() -> PathBuf {
     if let Some(path) = std::env::args_os().nth(1) {
