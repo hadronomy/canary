@@ -1,0 +1,218 @@
+name: Parser Benchmarks Main
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - crates/parser/**
+      - .github/benchmarks/**
+      - .github/scripts/bench/**
+      - .github/workflows/bench-*.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: parser-bench-main
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-24.04
+    env:
+      BENCH_DATA_DIR: parser
+      BENCH_DIR: artifacts/bench
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            .github/benchmarks/thresholds.json
+            .github/scripts/bench/*.py
+
+      - name: Install benchmark tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+          cargo install cargo-criterion --locked --version 1.1.0
+          cargo install gungraun-runner --locked --version 0.19.0
+
+      - name: Export benchmark config
+        id: cfg
+        run: |
+          uv run .github/scripts/bench/config.py \
+            --input .github/benchmarks/thresholds.json \
+            --format github-output >> "$GITHUB_OUTPUT"
+
+      - name: Restore previous main baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BENCH_DIR"
+          git fetch origin benchmarks:refs/remotes/origin/benchmarks || true
+          source_kind=none
+          source_sha=
+          if git show-ref --verify --quiet refs/remotes/origin/benchmarks; then
+            if git cat-file -e "origin/benchmarks:${BENCH_DATA_DIR}/latest-main.json" 2>/dev/null; then
+              git show "origin/benchmarks:${BENCH_DATA_DIR}/latest-main.json" > "$BENCH_DIR/latest-main.json"
+              source_sha="$(python3 -c 'import json, pathlib; print(json.loads(pathlib.Path("artifacts/bench/latest-main.json").read_text())["sha"])')"
+              source_kind=latest-main
+              git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/criterion.json" > "$BENCH_DIR/baseline-criterion.json"
+              git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/gungraun.json" > "$BENCH_DIR/baseline-gungraun.json"
+              git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/gungraun.tar.gz" > "$BENCH_DIR/baseline-gungraun.tar.gz"
+              tar -xzf "$BENCH_DIR/baseline-gungraun.tar.gz"
+            fi
+          fi
+          echo "source_kind=$source_kind" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Run criterion
+        run: |
+          mkdir -p "$BENCH_DIR"
+          cargo criterion -p document-hierarchy --bench parser_criterion --message-format=json \
+            > "$BENCH_DIR/criterion-messages.jsonl"
+
+      - name: Normalize criterion
+        run: |
+          uv run .github/scripts/bench/normalize_criterion.py \
+            --input "$BENCH_DIR/criterion-messages.jsonl" \
+            --output "$BENCH_DIR/criterion.json"
+
+      - name: Run gungraun
+        run: |
+          cargo bench -p document-hierarchy --bench parser_gungraun -- \
+            --save-baseline="${{ steps.cfg.outputs.gungraun_baseline }}" \
+            --callgrind-limits="${{ steps.cfg.outputs.gungraun_callgrind_limits }}" \
+            --dhat-limits="${{ steps.cfg.outputs.gungraun_dhat_limits }}" \
+            --save-summary=pretty-json
+
+      - name: Normalize gungraun
+        run: |
+          uv run .github/scripts/bench/normalize_gungraun.py \
+            --input-dir target/gungraun \
+            --output "$BENCH_DIR/gungraun.json"
+
+      - name: Compare against previous main
+        run: |
+          uv run .github/scripts/bench/compare.py \
+            --thresholds .github/benchmarks/thresholds.json \
+            --current-criterion "$BENCH_DIR/criterion.json" \
+            --baseline-criterion "$BENCH_DIR/baseline-criterion.json" \
+            --current-gungraun "$BENCH_DIR/gungraun.json" \
+            --baseline-gungraun "$BENCH_DIR/baseline-gungraun.json" \
+            --criterion-exit-code 0 \
+            --gungraun-exit-code 0 \
+            --repo "${{ github.repository }}" \
+            --head-sha "${{ github.sha }}" \
+            --baseline-sha "${{ steps.baseline.outputs.source_sha }}" \
+            --baseline-source "${{ steps.baseline.outputs.source_kind }}" \
+            --output "$BENCH_DIR/compare.json"
+
+      - name: Pack raw outputs
+        run: |
+          tar -czf "$BENCH_DIR/criterion.tar.gz" target/criterion
+          tar -czf "$BENCH_DIR/gungraun.tar.gz" target/gungraun
+          python3 -c 'import json, pathlib; path = pathlib.Path("artifacts/bench/meta.json"); path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps({"sha": "${{ github.sha }}", "run_id": "${{ github.run_id }}", "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}, indent=2) + "\n", encoding="utf-8")'
+
+      - name: Upload criterion artifact
+        id: criterion_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-main-criterion
+          path: |
+            artifacts/bench/criterion.json
+            artifacts/bench/criterion-messages.jsonl
+            artifacts/bench/criterion.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload gungraun artifact
+        id: gungraun_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-main-gungraun
+          path: |
+            artifacts/bench/gungraun.json
+            artifacts/bench/gungraun.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Render summary
+        run: |
+          uv run .github/scripts/bench/render_comment.py \
+            --input "$BENCH_DIR/compare.json" \
+            --output "$BENCH_DIR/summary.md" \
+            --title "Parser benchmarks on main" \
+            --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --criterion-url "${{ steps.criterion_artifact.outputs.artifact-url }}" \
+            --gungraun-url "${{ steps.gungraun_artifact.outputs.artifact-url }}"
+          cat "$BENCH_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-main-report
+          path: |
+            artifacts/bench/compare.json
+            artifacts/bench/meta.json
+            artifacts/bench/summary.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish durable baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/benchmarks-branch"
+          git fetch origin benchmarks:refs/remotes/origin/benchmarks || true
+          if git show-ref --verify --quiet refs/remotes/origin/benchmarks; then
+            git worktree add "$dir" origin/benchmarks
+          else
+            git worktree add --detach "$dir"
+            (
+              cd "$dir"
+              git checkout --orphan benchmarks
+              git rm -rf . >/dev/null 2>&1 || true
+            )
+          fi
+          mkdir -p "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}"
+          cp "$BENCH_DIR/criterion.json" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/criterion.json"
+          cp "$BENCH_DIR/gungraun.json" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/gungraun.json"
+          cp "$BENCH_DIR/criterion.tar.gz" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/criterion.tar.gz"
+          cp "$BENCH_DIR/gungraun.tar.gz" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/gungraun.tar.gz"
+          cp "$BENCH_DIR/meta.json" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/meta.json"
+          cp "$BENCH_DIR/compare.json" "$dir/${BENCH_DATA_DIR}/${GITHUB_SHA}/compare.json"
+          cp "$BENCH_DIR/meta.json" "$dir/${BENCH_DATA_DIR}/latest-main.json"
+          (
+            cd "$dir"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "${BENCH_DATA_DIR}"
+            if git diff --cached --quiet; then
+              exit 0
+            fi
+            git commit -m "bench(parser): refresh main baseline for ${GITHUB_SHA}"
+            git push origin HEAD:benchmarks
+          )

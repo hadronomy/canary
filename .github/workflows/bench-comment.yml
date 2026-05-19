@@ -1,0 +1,61 @@
+name: Parser Benchmarks Comment
+
+on:
+  workflow_run:
+    workflows:
+      - Parser Benchmarks PR
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: parser-bench-comment-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout trusted scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            .github/scripts/bench/*.py
+
+      - name: Download report artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run .github/scripts/bench/download_artifact.py \
+            --repo "${{ github.repository }}" \
+            --run-id "${{ github.event.workflow_run.id }}" \
+            --name parser-bench-pr-report \
+            --dest artifacts/downloaded
+
+      - name: Publish sticky comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          meta="$(find artifacts/downloaded -name meta.json -print -quit)"
+          body="$(find artifacts/downloaded -name comment.md -print -quit)"
+          pr="$(META="$meta" python3 -c 'import json, os, pathlib; print(json.loads(pathlib.Path(os.environ["META"]).read_text())["pr"])')"
+          uv run .github/scripts/bench/upsert_comment.py \
+            --repo "${{ github.repository }}" \
+            --pr "$pr" \
+            --body-file "$body"

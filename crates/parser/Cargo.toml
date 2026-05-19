@@ -1,12 +1,16 @@
 [package]
 name              = "document-hierarchy"
 publish.workspace = true
+autobenches       = false
 
 authors.workspace    = true
 edition.workspace    = true
 license.workspace    = true
 repository.workspace = true
 version.workspace    = true
+
+[lib]
+bench = false
 
 [dependencies]
 chrono.workspace                = true
@@ -23,8 +27,18 @@ unicode-normalization.workspace = true
 htmd                            = "0.5"
 
 [dev-dependencies]
-insta    = { version = "1.40", features = ["yaml"] }
-tempfile = "3"
+criterion.workspace = true
+gungraun.workspace  = true
+insta               = { version = "1.40", features = ["yaml"] }
+tempfile            = "3"
+
+[[bench]]
+name    = "parser_criterion"
+harness = false
+
+[[bench]]
+name    = "parser_gungraun"
+harness = false
 
 [features]
 default  = []

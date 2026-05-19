@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "criterion": {
+    "warn_pct": 8.0
+  },
+  "gungraun": {
+    "baseline_name": "main",
+    "callgrind_limits": "@default=5%,Ir=3%,EstimatedCycles=5%",
+    "dhat_limits": "@default=10%,TotalBytes=8%,WritesBytes=8%",
+    "tracked_metrics": {
+      "Callgrind": {
+        "Ir": {
+          "warn_pct": 2.0
+        },
+        "EstimatedCycles": {
+          "warn_pct": 3.0
+        }
+      },
+      "DHAT": {
+        "TotalBytes": {
+          "warn_pct": 5.0
+        },
+        "WritesBytes": {
+          "warn_pct": 5.0
+        }
+      }
+    }
+  }
+}

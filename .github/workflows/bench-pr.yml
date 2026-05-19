@@ -1,0 +1,224 @@
+name: Parser Benchmarks PR
+
+on:
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - crates/parser/**
+      - .github/benchmarks/**
+      - .github/scripts/bench/**
+      - .github/workflows/bench-*.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parser-bench-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-24.04
+    env:
+      BENCH_DATA_DIR: parser
+      BENCH_DIR: artifacts/bench
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            .github/benchmarks/thresholds.json
+            .github/scripts/bench/*.py
+
+      - name: Install benchmark tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+          cargo install cargo-criterion --locked --version 1.1.0
+          cargo install gungraun-runner --locked --version 0.19.0
+
+      - name: Export benchmark config
+        id: cfg
+        run: |
+          uv run .github/scripts/bench/config.py \
+            --input .github/benchmarks/thresholds.json \
+            --format github-output >> "$GITHUB_OUTPUT"
+
+      - name: Restore main baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BENCH_DIR"
+          git fetch origin benchmarks:refs/remotes/origin/benchmarks || true
+          source_kind=none
+          source_sha=
+          if git show-ref --verify --quiet refs/remotes/origin/benchmarks; then
+            if git cat-file -e "origin/benchmarks:${BENCH_DATA_DIR}/${{ github.event.pull_request.base.sha }}/meta.json" 2>/dev/null; then
+              source_sha="${{ github.event.pull_request.base.sha }}"
+              source_kind=exact
+            elif git cat-file -e "origin/benchmarks:${BENCH_DATA_DIR}/latest-main.json" 2>/dev/null; then
+              git show "origin/benchmarks:${BENCH_DATA_DIR}/latest-main.json" > "$BENCH_DIR/latest-main.json"
+              source_sha="$(python3 -c 'import json, pathlib; print(json.loads(pathlib.Path("artifacts/bench/latest-main.json").read_text())["sha"])')"
+              source_kind=latest-main
+            fi
+          fi
+          if [[ -n "$source_sha" ]]; then
+            git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/criterion.json" > "$BENCH_DIR/baseline-criterion.json"
+            git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/gungraun.json" > "$BENCH_DIR/baseline-gungraun.json"
+            git show "origin/benchmarks:${BENCH_DATA_DIR}/${source_sha}/gungraun.tar.gz" > "$BENCH_DIR/baseline-gungraun.tar.gz"
+            tar -xzf "$BENCH_DIR/baseline-gungraun.tar.gz"
+          fi
+          echo "source_kind=$source_kind" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Run criterion
+        id: criterion_run
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          mkdir -p "$BENCH_DIR"
+          cargo criterion -p document-hierarchy --bench parser_criterion --message-format=json \
+            > "$BENCH_DIR/criterion-messages.jsonl"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Normalize criterion
+        if: always() && hashFiles('artifacts/bench/criterion-messages.jsonl') != ''
+        run: |
+          uv run .github/scripts/bench/normalize_criterion.py \
+            --input "$BENCH_DIR/criterion-messages.jsonl" \
+            --output "$BENCH_DIR/criterion.json"
+
+      - name: Run gungraun
+        id: gungraun_run
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          cargo bench -p document-hierarchy --bench parser_gungraun -- \
+            --baseline="${{ steps.cfg.outputs.gungraun_baseline }}" \
+            --callgrind-limits="${{ steps.cfg.outputs.gungraun_callgrind_limits }}" \
+            --dhat-limits="${{ steps.cfg.outputs.gungraun_dhat_limits }}" \
+            --save-summary=pretty-json
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Normalize gungraun
+        if: always() && hashFiles('target/gungraun/**/summary.json') != ''
+        run: |
+          uv run .github/scripts/bench/normalize_gungraun.py \
+            --input-dir target/gungraun \
+            --output "$BENCH_DIR/gungraun.json"
+
+      - name: Compare against baseline
+        if: always()
+        run: |
+          uv run .github/scripts/bench/compare.py \
+            --thresholds .github/benchmarks/thresholds.json \
+            --current-criterion "$BENCH_DIR/criterion.json" \
+            --baseline-criterion "$BENCH_DIR/baseline-criterion.json" \
+            --criterion-exit-code "${{ steps.criterion_run.outputs.exit_code || 1 }}" \
+            --current-gungraun "$BENCH_DIR/gungraun.json" \
+            --baseline-gungraun "$BENCH_DIR/baseline-gungraun.json" \
+            --gungraun-exit-code "${{ steps.gungraun_run.outputs.exit_code || 1 }}" \
+            --repo "${{ github.repository }}" \
+            --head-sha "${{ github.event.pull_request.head.sha }}" \
+            --base-sha "${{ github.event.pull_request.base.sha }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --baseline-sha "${{ steps.baseline.outputs.source_sha }}" \
+            --baseline-source "${{ steps.baseline.outputs.source_kind }}" \
+            --output "$BENCH_DIR/compare.json"
+
+      - name: Pack raw outputs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BENCH_DIR"
+          if [[ -d target/criterion ]]; then
+            tar -czf "$BENCH_DIR/criterion.tar.gz" target/criterion
+          fi
+          if [[ -d target/gungraun ]]; then
+            tar -czf "$BENCH_DIR/gungraun.tar.gz" target/gungraun
+          fi
+
+      - name: Upload criterion artifact
+        if: always()
+        id: criterion_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-pr-criterion
+          path: |
+            artifacts/bench/criterion.json
+            artifacts/bench/criterion-messages.jsonl
+            artifacts/bench/criterion.tar.gz
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload gungraun artifact
+        if: always()
+        id: gungraun_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-pr-gungraun
+          path: |
+            artifacts/bench/gungraun.json
+            artifacts/bench/gungraun.tar.gz
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Render report
+        if: always()
+        run: |
+          uv run .github/scripts/bench/render_comment.py \
+            --input "$BENCH_DIR/compare.json" \
+            --output "$BENCH_DIR/comment.md" \
+            --title "Parser benchmarks" \
+            --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --criterion-url "${{ steps.criterion_artifact.outputs.artifact-url }}" \
+            --gungraun-url "${{ steps.gungraun_artifact.outputs.artifact-url }}"
+          cp "$BENCH_DIR/comment.md" "$BENCH_DIR/summary.md"
+          cat "$BENCH_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          python3 -c 'import json, pathlib; path = pathlib.Path("artifacts/bench/meta.json"); path.write_text(json.dumps({"pr": "${{ github.event.pull_request.number }}", "repo": "${{ github.repository }}", "head_sha": "${{ github.event.pull_request.head.sha }}", "base_sha": "${{ github.event.pull_request.base.sha }}", "baseline_sha": "${{ steps.baseline.outputs.source_sha }}", "baseline_source": "${{ steps.baseline.outputs.source_kind }}", "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}, indent=2) + "\n", encoding="utf-8")'
+
+      - name: Upload report artifact
+        if: always()
+        id: report_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: parser-bench-pr-report
+          path: |
+            artifacts/bench/comment.md
+            artifacts/bench/compare.json
+            artifacts/bench/meta.json
+            artifacts/bench/summary.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce benchmark verdict
+        if: always()
+        shell: bash
+        run: |
+          python3 -c 'import json, pathlib; data = json.loads(pathlib.Path("artifacts/bench/compare.json").read_text()); raise SystemExit(1 if data["verdict"] == "fail" else 0)'
