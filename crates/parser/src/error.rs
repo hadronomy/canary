@@ -8,19 +8,19 @@ pub type Result<T> = std::result::Result<T, DocumentError>;
 
 impl DocumentError {
     pub fn xml(msg: impl Into<String>) -> Self {
-        Self::Xml { message: msg.into(), offset: 0 }
+        Self::Xml { message: msg.into(), offset: None }
     }
 
     pub fn xml_at(offset: usize, msg: impl Into<String>) -> Self {
-        Self::Xml { message: msg.into(), offset }
+        Self::Xml { message: msg.into(), offset: Some(offset) }
     }
 }
 
 /// Errors that can occur during document processing
 #[derive(Error, Debug)]
 pub enum DocumentError {
-    #[error("XML parsing failed at byte {offset}: {message}")]
-    Xml { message: String, offset: usize },
+    #[error("XML parsing failed: {message}")]
+    Xml { message: String, offset: Option<usize> },
 
     /// Missing required XML element
     #[error("Missing required XML element: {path}")]
@@ -35,8 +35,8 @@ pub enum DocumentError {
     NodeNotFound,
 
     /// Invalid path format
-    #[error("Invalid hierarchical path: {0}")]
-    InvalidPath(String),
+    #[error("Invalid section path `{path}`: {reason}")]
+    InvalidPath { path: String, reason: String },
 
     /// IO error
     #[error("IO error: {0}")]

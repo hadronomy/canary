@@ -1,13 +1,12 @@
 use std::fmt;
 
-use crate::tree::{ColumnAlignment, SectionKind};
+use crate::tree::{ColumnAlignment, ListSpacing, ListStyle, SectionKind, SectionPath};
 
 #[derive(Debug, Clone)]
 pub struct NodeContext<'a> {
     pub depth: usize,
     pub anchor: Option<&'a str>,
-    pub content: &'a str,
-    pub path: String,
+    pub path: SectionPath,
     pub last: bool,
 }
 
@@ -18,12 +17,14 @@ pub trait TreeWriter {
         &mut self,
         level: u8,
         kind: SectionKind,
+        title: &str,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
     fn leave_section(
         &mut self,
         _level: u8,
         _kind: SectionKind,
+        _title: &str,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -37,14 +38,14 @@ pub trait TreeWriter {
 
     fn enter_list(
         &mut self,
-        ordered: bool,
-        tight: bool,
+        style: ListStyle,
+        spacing: ListSpacing,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
     fn leave_list(
         &mut self,
-        ordered: bool,
-        tight: bool,
+        style: ListStyle,
+        spacing: ListSpacing,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
 
@@ -71,6 +72,7 @@ pub trait TreeWriter {
     fn write_code_block(
         &mut self,
         lang: Option<&str>,
+        code: &str,
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
 
@@ -80,9 +82,15 @@ pub trait TreeWriter {
     fn enter_emphasis(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
     fn leave_emphasis(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
 
-    fn write_text(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
+    fn write_text(&mut self, text: &str, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
 
-    fn write_link(
+    fn enter_link(
+        &mut self,
+        url: &str,
+        title: Option<&str>,
+        ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error>;
+    fn leave_link(
         &mut self,
         url: &str,
         title: Option<&str>,
@@ -96,7 +104,7 @@ pub trait TreeWriter {
         ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error>;
 
-    fn write_html(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
+    fn write_html(&mut self, html: &str, ctx: &NodeContext<'_>) -> Result<(), Self::Error>;
 
     fn write_thematic_break(&mut self) -> Result<(), Self::Error>;
 }

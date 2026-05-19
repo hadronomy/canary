@@ -1,9 +1,10 @@
-//! Core tree data structures and navigation
+//! Core tree data structures and navigation.
 
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Write;
 use std::ops::Index;
+use std::str::FromStr;
 
 use deunicode::deunicode;
 use indextree::Arena;
@@ -13,14 +14,11 @@ use unicode_normalization::UnicodeNormalization;
 use crate::NodeId;
 use crate::error::{DocumentError, Result};
 
-/// Alignment for table columns
+/// Alignment for table columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum ColumnAlign {
-    /// Left-aligned
     Left,
-    /// Center-aligned
     Center,
-    /// Right-aligned
     Right,
 }
 
@@ -35,149 +33,145 @@ pub enum SectionKind {
     Other,
 }
 
-/// Semantic types for document nodes
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum NodeKind {
-    /// Root document container
     Root,
-    /// Section heading with level (1-6)
-    Section {
-        /// Heading level (H1 = 1, H6 = 6)
-        level: u8,
-        kind: SectionKind,
-    },
-    /// Paragraph block
+    Section,
     Paragraph,
     Html,
-    // TODO: These rich-structure variants are not currently emitted by TreeParser
-    // for BOE XML, but are kept for future parser extensions.
-    /// List container
-    List {
-        /// true for numbered, false for bulleted
-        ordered: bool,
-        /// true if compact (no blank lines between items)
-        tight: bool,
-    },
-    /// List item
+    List,
     ListItem,
-    /// Code block
-    CodeBlock {
-        /// Programming language identifier
-        language: Option<String>,
-    },
-    /// Block quotation
+    CodeBlock,
     BlockQuote,
-    /// Table container
-    Table {
-        /// Column alignments
-        alignments: Vec<ColumnAlignment>,
-    },
-    /// Table row
+    Table,
     TableRow,
-    /// Table cell
     TableCell,
-    /// Inline text
     Text,
-    /// Strong emphasis (bold)
     Strong,
-    /// Emphasis (italic)
     Emphasis,
-    /// Hyperlink
-    Link {
-        /// URL destination
-        url: String,
-        /// Optional title attribute
-        title: Option<String>,
-    },
-    /// Image
-    Image {
-        /// Source URL
-        url: String,
-        /// Alt text
-        alt: String,
-    },
-    /// Horizontal rule
+    Link,
+    Image,
     ThematicBreak,
 }
 
-/// A node in the document tree
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ListStyle {
+    Ordered,
+    Unordered,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub enum ListSpacing {
+    Tight,
+    Loose,
+}
+
+/// A typed document node.
 ///
-/// # Examples
-///
-/// ```
-/// use document_hierarchy::{DocumentNode, NodeKind};
-///
-/// let section = DocumentNode::section(1, "Introduction");
-/// assert!(section.is_section());
-/// assert_eq!(section.anchor, Some("introduction".to_string()));
-/// ```
+/// Block containers no longer carry generic text payloads. Text lives in `Text`
+/// leaves, and inline structure is preserved by child order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DocumentNode {
-    /// Semantic type of this node
-    pub kind: NodeKind,
-    /// Stable anchor ID for linking (e.g., "introduction")
-    pub anchor: Option<String>,
-    /// Text content of this node
-    pub content: String,
+pub enum DocumentNode {
+    Root,
+    Section { level: u8, kind: SectionKind, anchor: String, title: String },
+    Paragraph,
+    Html(String),
+    List { style: ListStyle, spacing: ListSpacing },
+    ListItem,
+    CodeBlock { language: Option<String>, code: String },
+    BlockQuote,
+    Table { alignments: Vec<ColumnAlignment> },
+    TableRow,
+    TableCell,
+    Text(String),
+    Strong,
+    Emphasis,
+    Link { url: String, title: Option<String> },
+    Image { anchor: Option<String>, url: String, alt: String },
+    ThematicBreak,
 }
 
 impl DocumentNode {
-    /// Create a new node with given kind and content
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentNode, NodeKind};
-    ///
-    /// let node = DocumentNode::new(NodeKind::Paragraph, "Hello world");
-    /// assert_eq!(node.content, "Hello world");
-    /// assert!(node.anchor.is_none());
-    /// ```
     #[must_use]
-    pub fn new(kind: NodeKind, content: impl Into<String>) -> Self {
-        Self { kind, anchor: None, content: content.into() }
+    pub fn root() -> Self {
+        Self::Root
     }
 
-    /// Create a link node with URL/title metadata and visible content.
     #[must_use]
-    pub fn link(url: impl Into<String>, title: Option<String>, content: impl Into<String>) -> Self {
-        Self {
-            kind: NodeKind::Link { url: url.into(), title },
-            anchor: None,
-            content: content.into(),
-        }
+    pub fn paragraph() -> Self {
+        Self::Paragraph
     }
 
-    /// Create an image node from source URL and alt text.
+    #[must_use]
+    pub fn list(style: ListStyle, spacing: ListSpacing) -> Self {
+        Self::List { style, spacing }
+    }
+
+    #[must_use]
+    pub fn list_item() -> Self {
+        Self::ListItem
+    }
+
+    #[must_use]
+    pub fn code_block(language: Option<String>, code: impl Into<String>) -> Self {
+        Self::CodeBlock { language, code: code.into() }
+    }
+
+    #[must_use]
+    pub fn block_quote() -> Self {
+        Self::BlockQuote
+    }
+
+    #[must_use]
+    pub fn table(alignments: Vec<ColumnAlignment>) -> Self {
+        Self::Table { alignments }
+    }
+
+    #[must_use]
+    pub fn table_row() -> Self {
+        Self::TableRow
+    }
+
+    #[must_use]
+    pub fn table_cell() -> Self {
+        Self::TableCell
+    }
+
+    #[must_use]
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::Text(text.into())
+    }
+
+    #[must_use]
+    pub fn strong() -> Self {
+        Self::Strong
+    }
+
+    #[must_use]
+    pub fn emphasis() -> Self {
+        Self::Emphasis
+    }
+
+    #[must_use]
+    pub fn link(url: impl Into<String>, title: Option<String>) -> Self {
+        Self::Link { url: url.into(), title }
+    }
+
     #[must_use]
     pub fn image(url: impl Into<String>, alt: impl Into<String>) -> Self {
-        let alt = alt.into();
-        Self {
-            kind: NodeKind::Image { url: url.into(), alt: alt.clone() },
-            anchor: None,
-            content: alt.clone(),
-        }
+        Self::Image { anchor: None, url: url.into(), alt: alt.into() }
     }
 
     #[must_use]
     pub fn html(content: impl Into<String>) -> Self {
-        Self { kind: NodeKind::Html, anchor: None, content: content.into() }
+        Self::Html(content.into())
     }
 
-    /// Create a section node with auto-generated anchor
-    ///
-    /// The anchor is generated by slugifying the title (lowercase,
-    /// non-alphanumeric to hyphens).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::DocumentNode;
-    ///
-    /// let sec = DocumentNode::section(2, "Getting Started");
-    /// assert_eq!(sec.anchor, Some("getting-started".to_string()));
-    /// assert!(matches!(sec.kind, document_hierarchy::NodeKind::Section { level: 2, .. }));
-    /// ```
+    #[must_use]
+    pub fn thematic_break() -> Self {
+        Self::ThematicBreak
+    }
+
     #[must_use]
     pub fn section(level: u8, title: impl AsRef<str>) -> Self {
         Self::section_with(level, SectionKind::Other, title)
@@ -186,30 +180,25 @@ impl DocumentNode {
     #[must_use]
     pub fn section_with(level: u8, kind: SectionKind, title: impl AsRef<str>) -> Self {
         let title = title.as_ref();
-        Self {
-            kind: NodeKind::Section { level, kind },
-            anchor: Some(Self::slugify(title)),
-            content: title.to_string(),
-        }
+        Self::Section { level, kind, anchor: Self::slugify(title), title: title.to_string() }
     }
 
-    /// Generate URL-safe slug from text
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::DocumentNode;
-    ///
-    /// assert_eq!(DocumentNode::slugify("Hello World!"), "hello-world");
-    /// assert_eq!(DocumentNode::slugify("Section 1.2.3"), "section-1-2-3");
-    /// assert_eq!(DocumentNode::slugify("--trim--me--"), "trim-me");
-    /// ```
+    #[must_use]
+    pub fn with_anchor(mut self, anchor: impl Into<String>) -> Self {
+        let anchor = anchor.into();
+        match &mut self {
+            Self::Section { anchor: slot, .. } => *slot = anchor,
+            Self::Image { anchor: slot, .. } => *slot = Some(anchor),
+            _ => {}
+        }
+        self
+    }
+
     #[must_use]
     pub fn slugify(text: &str) -> String {
         Self::slug(text.nfkc().flat_map(char::to_lowercase))
     }
 
-    /// Generate an ASCII-transliterated URL-safe slug from text.
     #[must_use]
     pub fn slugify_ascii(text: &str) -> String {
         Self::slug(deunicode(text).chars().flat_map(char::to_lowercase))
@@ -236,84 +225,185 @@ impl DocumentNode {
         out
     }
 
-    /// Check if this node is a section (heading)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentNode, NodeKind};
-    ///
-    /// assert!(DocumentNode::section(1, "Title").is_section());
-    /// assert!(!DocumentNode::new(NodeKind::Paragraph, "text").is_section());
-    /// ```
-    #[inline]
+    #[must_use]
+    pub fn kind(&self) -> NodeKind {
+        match self {
+            Self::Root => NodeKind::Root,
+            Self::Section { .. } => NodeKind::Section,
+            Self::Paragraph => NodeKind::Paragraph,
+            Self::Html(_) => NodeKind::Html,
+            Self::List { .. } => NodeKind::List,
+            Self::ListItem => NodeKind::ListItem,
+            Self::CodeBlock { .. } => NodeKind::CodeBlock,
+            Self::BlockQuote => NodeKind::BlockQuote,
+            Self::Table { .. } => NodeKind::Table,
+            Self::TableRow => NodeKind::TableRow,
+            Self::TableCell => NodeKind::TableCell,
+            Self::Text(_) => NodeKind::Text,
+            Self::Strong => NodeKind::Strong,
+            Self::Emphasis => NodeKind::Emphasis,
+            Self::Link { .. } => NodeKind::Link,
+            Self::Image { .. } => NodeKind::Image,
+            Self::ThematicBreak => NodeKind::ThematicBreak,
+        }
+    }
+
+    #[must_use]
     pub fn is_section(&self) -> bool {
-        matches!(&self.kind, NodeKind::Section { .. })
+        matches!(self, Self::Section { .. })
     }
 
-    /// Return section title when this node is a section.
-    #[inline]
+    pub fn anchor(&self) -> Option<&str> {
+        match self {
+            Self::Section { anchor, .. } => Some(anchor.as_str()),
+            Self::Image { anchor, .. } => anchor.as_deref(),
+            _ => None,
+        }
+    }
+
     pub fn section_title(&self) -> Option<&str> {
-        self.is_section().then_some(self.content.as_str())
+        match self {
+            Self::Section { title, .. } => Some(title.as_str()),
+            _ => None,
+        }
     }
 
-    /// Get section level if this is a section, None otherwise
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::DocumentNode;
-    ///
-    /// let h1 = DocumentNode::section(1, "Title");
-    /// assert_eq!(h1.section_level(), Some(1));
-    ///
-    /// let h3 = DocumentNode::section(3, "Deep");
-    /// assert_eq!(h3.section_level(), Some(3));
-    /// ```
-    #[inline]
     pub fn section_level(&self) -> Option<u8> {
-        match &self.kind {
-            NodeKind::Section { level, .. } => Some(*level),
+        match self {
+            Self::Section { level, .. } => Some(*level),
             _ => None,
         }
     }
 
-    #[inline]
     pub fn section_kind(&self) -> Option<SectionKind> {
-        match &self.kind {
-            NodeKind::Section { kind, .. } => Some(*kind),
+        match self {
+            Self::Section { kind, .. } => Some(*kind),
             _ => None,
         }
     }
 
-    /// Return link URL when this node is a link.
-    #[inline]
     pub fn link_url(&self) -> Option<&str> {
-        match &self.kind {
-            NodeKind::Link { url, .. } => Some(url.as_str()),
+        match self {
+            Self::Link { url, .. } => Some(url.as_str()),
             _ => None,
         }
     }
 
-    /// Return image URL when this node is an image.
-    #[inline]
     pub fn image_url(&self) -> Option<&str> {
-        match &self.kind {
-            NodeKind::Image { url, .. } => Some(url.as_str()),
+        match self {
+            Self::Image { url, .. } => Some(url.as_str()),
             _ => None,
+        }
+    }
+
+    pub fn display_text(&self) -> Option<&str> {
+        match self {
+            Self::Section { title, .. } => Some(title.as_str()),
+            Self::Html(html) => Some(html.as_str()),
+            Self::CodeBlock { code, .. } => Some(code.as_str()),
+            Self::Text(text) => Some(text.as_str()),
+            Self::Image { alt, .. } => Some(alt.as_str()),
+            _ => None,
+        }
+    }
+
+    fn set_anchor(&mut self, anchor: Option<String>) -> bool {
+        match self {
+            Self::Section { anchor: slot, .. } => {
+                let Some(anchor) = anchor else {
+                    return false;
+                };
+                *slot = anchor;
+                true
+            }
+            Self::Image { anchor: slot, .. } => {
+                *slot = anchor;
+                true
+            }
+            _ => false,
         }
     }
 }
 
-/// Hierarchical document tree with dual indexing
-///
-/// Stores nodes in an arena for cache efficiency and maintains
-/// both hierarchical paths and named anchors for navigation.
-///
-/// # Type Parameters
-///
-/// Uses `indextree::Arena` internally, so NodeIds are valid for the
-/// lifetime of the DocumentTree.
+/// A typed section path such as `1.2.3`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default)]
+pub struct SectionPath(Vec<usize>);
+
+impl SectionPath {
+    #[must_use]
+    pub fn root() -> Self {
+        Self(Vec::new())
+    }
+
+    #[must_use]
+    pub fn is_root(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.0.len()
+    }
+
+    #[must_use]
+    pub fn segments(&self) -> &[usize] {
+        &self.0
+    }
+
+    fn from_parts(parts: Vec<usize>) -> Self {
+        Self(parts)
+    }
+}
+
+impl fmt::Display for SectionPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_root() {
+            return f.write_str("root");
+        }
+        for (idx, part) in self.0.iter().enumerate() {
+            if idx > 0 {
+                f.write_str(".")?;
+            }
+            write!(f, "{part}")?;
+        }
+        Ok(())
+    }
+}
+
+impl FromStr for SectionPath {
+    type Err = DocumentError;
+
+    fn from_str(path: &str) -> Result<Self> {
+        if path == "root" {
+            return Ok(Self::root());
+        }
+        if path.is_empty() {
+            return Err(DocumentError::InvalidPath {
+                path: path.to_string(),
+                reason: "path is empty".to_string(),
+            });
+        }
+
+        let mut parts = Vec::new();
+        for part in path.split('.') {
+            let idx = part.parse::<usize>().map_err(|_| DocumentError::InvalidPath {
+                path: path.to_string(),
+                reason: format!("`{part}` is not a number"),
+            })?;
+            if idx == 0 {
+                return Err(DocumentError::InvalidPath {
+                    path: path.to_string(),
+                    reason: "path indices are 1-based".to_string(),
+                });
+            }
+            parts.push(idx);
+        }
+
+        Ok(Self(parts))
+    }
+}
+
+/// Hierarchical document tree with anchor and section-path navigation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentTree {
     arena: Arena<DocumentNode>,
@@ -326,130 +416,71 @@ pub struct DocumentTree {
 pub struct SectionEntry {
     pub id: NodeId,
     pub anchor: String,
-    pub path: String,
+    pub path: SectionPath,
     pub level: u8,
 }
 
+pub struct DescendantsIter<'a>(indextree::Descendants<'a, DocumentNode>);
+
+impl Iterator for DescendantsIter<'_> {
+    type Item = NodeId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(NodeId::from_raw)
+    }
+}
+
 impl DocumentTree {
-    /// Create a new empty document tree with a root node
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::DocumentTree;
-    ///
-    /// let tree = DocumentTree::new();
-    /// assert_eq!(tree.hierarchical_path(tree.root()), "root");
-    /// ```
     #[must_use]
     pub fn new() -> Self {
         let mut arena = Arena::new();
-        let root = arena.new_node(DocumentNode {
-            kind: NodeKind::Root,
-            anchor: Some("root".to_string()),
-            content: String::new(),
-        });
-
+        let root = arena.new_node(DocumentNode::root());
         Self { arena, root, index: HashMap::new(), alias: HashMap::new() }
     }
 
-    /// Get the root node ID
     #[inline]
     pub fn root(&self) -> NodeId {
         NodeId::from_raw(self.root)
     }
 
-    /// Access the underlying arena (advanced usage)
     pub fn arena(&self) -> &Arena<DocumentNode> {
         &self.arena
     }
 
-    /// Return total nodes currently stored in the arena.
     #[inline]
     pub fn node_count(&self) -> usize {
         self.arena.count()
     }
 
-    /// Mutable arena access for advanced operations.
-    ///
-    /// Caller is responsible for calling `rebuild_index` if anchors change.
-    pub fn arena_mut_unchecked(&mut self) -> &mut Arena<DocumentNode> {
-        &mut self.arena
-    }
-
-    /// Rebuild anchor indexes from current arena contents.
     pub fn rebuild_index(&mut self) {
         self.index.clear();
         self.alias.clear();
         let ids = self.root.descendants(&self.arena).collect::<Vec<_>>();
-        for id in ids {
-            let id = NodeId::from_raw(id);
-            let anchor = self.get(id).and_then(|n| n.anchor.clone());
+        for raw in ids {
+            let id = NodeId::from_raw(raw);
+            let anchor = self.get(id).and_then(DocumentNode::anchor).map(str::to_string);
             if let Some(anchor) = anchor {
-                self.put_anchor(id.into_raw(), &anchor);
+                self.put_anchor(raw, &anchor);
             }
         }
     }
 
-    /// Get reference to node data by ID
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let child = tree.add_child(tree.root(), DocumentNode::new(NodeKind::Paragraph, "test"));
-    /// assert_eq!(tree.get(child).unwrap().content, "test");
-    /// ```
     pub fn get(&self, id: NodeId) -> Option<&DocumentNode> {
-        self.arena.get(id.into_raw()).map(|n| n.get())
+        self.arena.get(id.into_raw()).map(|node| node.get())
     }
 
-    /// Set node anchor while keeping indexes consistent.
-    ///
-    /// Returns `false` when `id` is not present in this tree.
     #[must_use]
     pub fn set_anchor(&mut self, id: NodeId, anchor: Option<String>) -> bool {
-        let id = id.into_raw();
+        let raw = id.into_raw();
         let (old, new) = {
-            let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
+            let Some(node) = self.arena.get_mut(raw).map(|node| node.get_mut()) else {
                 return false;
             };
-            let old = node.anchor.take();
-            node.anchor = anchor;
-            let new = node.anchor.clone();
-            (old, new)
-        };
-
-        if let Some(old) = old {
-            self.drop_anchor(id, &old);
-        }
-        if let Some(new) = new {
-            self.put_anchor(id, &new);
-        }
-        true
-    }
-
-    /// Mutate a node and re-sync anchor indexes when anchor changes.
-    ///
-    /// Returns `false` when `id` is not present in this tree.
-    #[must_use]
-    pub fn update<F>(&mut self, id: NodeId, f: F) -> bool
-    where
-        F: FnOnce(&mut DocumentNode),
-    {
-        let id = id.into_raw();
-        let (old, new) = {
-            let Some(node) = self.arena.get_mut(id).map(|n| n.get_mut()) else {
+            let old = node.anchor().map(str::to_string);
+            if !node.set_anchor(anchor) {
                 return false;
-            };
-            let old = node.anchor.clone();
-            f(node);
-            if old.as_ref() == node.anchor.as_ref() {
-                return true;
             }
-            let new = node.anchor.clone();
+            let new = node.anchor().map(str::to_string);
             (old, new)
         };
 
@@ -457,30 +488,45 @@ impl DocumentTree {
             return true;
         }
         if let Some(old) = old {
-            self.drop_anchor(id, &old);
+            self.drop_anchor(raw, &old);
         }
         if let Some(new) = new {
-            self.put_anchor(id, &new);
+            self.put_anchor(raw, &new);
         }
         true
     }
 
-    /// Add a child node to a parent, updating anchor index
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let section = DocumentNode::section(1, "Intro");
-    /// let id = tree.add_child(tree.root(), section);
-    ///
-    /// assert!(tree.find_by_anchor("intro").is_some());
-    /// ```
+    #[must_use]
+    pub fn update<F>(&mut self, id: NodeId, f: F) -> bool
+    where
+        F: FnOnce(&mut DocumentNode),
+    {
+        let raw = id.into_raw();
+        let (old, new) = {
+            let Some(node) = self.arena.get_mut(raw).map(|node| node.get_mut()) else {
+                return false;
+            };
+            let old = node.anchor().map(str::to_string);
+            f(node);
+            let new = node.anchor().map(str::to_string);
+            (old, new)
+        };
+
+        if old == new {
+            return true;
+        }
+        if let Some(old) = old {
+            self.drop_anchor(raw, &old);
+        }
+        if let Some(new) = new {
+            self.put_anchor(raw, &new);
+        }
+        true
+    }
+
     pub fn add_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
         let parent = parent.into_raw();
-        let anchor = node.anchor.clone();
+        let anchor = node.anchor().map(str::to_string);
         let id = self.arena.new_node(node);
         parent.append(id, &mut self.arena);
 
@@ -491,24 +537,6 @@ impl DocumentTree {
         NodeId::from_raw(id)
     }
 
-    /// Find node by anchor.
-    ///
-    /// Tries exact match, then Unicode-normalized slug, then
-    /// ASCII-transliterated slug. Each form is checked against
-    /// both the primary index and the alias map.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let node = DocumentNode::section(1, "Methodology");
-    /// tree.add_child(tree.root(), node);
-    ///
-    /// let found = tree.find_by_anchor("methodology");
-    /// assert!(found.is_some());
-    /// ```
     #[must_use]
     pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
         let lookup = |key: &str| self.index.get(key).or_else(|| self.alias.get(key)).copied();
@@ -532,9 +560,8 @@ impl DocumentTree {
         None
     }
 
-    /// Get anchor string for a node if it has one
     pub fn get_anchor(&self, id: NodeId) -> Option<&str> {
-        self.get(id).and_then(|n| n.anchor.as_deref())
+        self.get(id).and_then(DocumentNode::anchor)
     }
 
     fn put_anchor(&mut self, id: indextree::NodeId, anchor: &str) {
@@ -555,253 +582,141 @@ impl DocumentTree {
         }
     }
 
-    fn section_indices(&self, id: NodeId) -> Vec<usize> {
+    fn section_child(&self, parent: indextree::NodeId, idx: usize) -> Option<indextree::NodeId> {
+        parent
+            .children(&self.arena)
+            .filter(|child| {
+                self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
+            })
+            .nth(idx)
+    }
+
+    fn section_path(&self, id: NodeId) -> SectionPath {
         let mut out = Vec::new();
         let mut current = id.into_raw();
         while let Some(parent) = self.arena[current].parent() {
-            let section = self
-                .arena
-                .get(current)
-                .map(|node| matches!(&node.get().kind, NodeKind::Section { .. }))
-                .unwrap_or(false);
-            if section {
+            let is_section =
+                self.arena.get(current).map(|node| node.get().is_section()).unwrap_or(false);
+            if is_section {
                 let idx = parent
                     .children(&self.arena)
                     .filter(|child| {
-                        self.arena
-                            .get(*child)
-                            .map(|node| matches!(&node.get().kind, NodeKind::Section { .. }))
-                            .unwrap_or(false)
+                        self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
                     })
                     .position(|child| child == current)
                     .unwrap_or(0);
-                out.push(idx);
+                out.push(idx + 1);
             }
             current = parent;
         }
         out.reverse();
-        out
+        SectionPath::from_parts(out)
     }
 
-    /// Generate hierarchical path string (e.g., "1.2.3")
-    ///
-    /// Returns "root" for the root node.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let sec1 = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-    /// let sec2 = tree.add_child(sec1, DocumentNode::section(2, "B"));
-    ///
-    /// assert_eq!(tree.hierarchical_path(sec1), "1");
-    /// assert_eq!(tree.hierarchical_path(sec2), "1.1");
-    /// ```
+    #[must_use]
+    pub fn path(&self, id: NodeId) -> SectionPath {
+        self.section_path(id)
+    }
+
     #[must_use]
     pub fn hierarchical_path(&self, id: NodeId) -> String {
-        let indices = self.section_indices(id);
-        if indices.is_empty() {
-            "root".to_string()
-        } else {
-            indices.iter().map(|n| (n + 1).to_string()).collect::<Vec<_>>().join(".")
-        }
+        self.path(id).to_string()
     }
 
-    /// Get path as zero-indexed vector (useful for sorting)
-    #[must_use]
-    pub fn path_vec(&self, id: NodeId) -> Vec<usize> {
-        self.section_indices(id)
-    }
-
-    /// Iterate all descendants of a node (pre-order)
     pub fn descendants(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         node.into_raw().descendants(&self.arena).map(NodeId::from_raw)
     }
 
-    /// Iterate ancestors from immediate parent to root
     pub fn ancestors(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         node.into_raw().ancestors(&self.arena).map(NodeId::from_raw)
     }
 
-    /// Iterate immediate children
     pub fn children(&self, node: NodeId) -> impl Iterator<Item = NodeId> + '_ {
         node.into_raw().children(&self.arena).map(NodeId::from_raw)
     }
 
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// tree.add_child(tree.root(), DocumentNode::section(1, "First"));
-    /// let sec = tree.add_child(tree.root(), DocumentNode::section(2, "Second"));
-    /// tree.add_child(sec, DocumentNode::section(3, "Nested"));
-    ///
-    /// let sections = tree.sections().collect::<Vec<_>>();
-    /// assert_eq!(sections.len(), 3);
-    /// ```
     pub fn sections(&self) -> impl Iterator<Item = SectionEntry> + '_ {
-        self.descendants(NodeId::from_raw(self.root)).filter_map(|id| {
+        self.descendants(self.root()).filter_map(|id| {
             let node = self.get(id)?;
-            if !matches!(&node.kind, NodeKind::Section { .. }) {
+            let (Some(anchor), Some(level)) = (node.anchor(), node.section_level()) else {
                 return None;
-            }
-            Some(SectionEntry {
-                id,
-                anchor: node.anchor.clone().unwrap_or_default(),
-                path: self.hierarchical_path(id),
-                level: node.section_level().unwrap_or(0),
-            })
+            };
+            Some(SectionEntry { id, anchor: anchor.to_string(), path: self.path(id), level })
         })
     }
 
-    /// Find node by hierarchical path "1.2.3"
-    ///
-    /// # Errors
-    ///
-    /// Returns Err if path format is invalid
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let sec = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-    ///
-    /// assert_eq!(tree.find_by_path("1").unwrap(), sec);
-    /// assert!(tree.find_by_path("invalid").is_err());
-    /// ```
-    pub fn find_by_path(&self, path: &str) -> Result<NodeId> {
-        if path == "root" {
-            return Ok(NodeId::from_raw(self.root));
-        }
-
-        let parts: Vec<usize> = path
-            .split('.')
-            .map(|s| s.parse::<usize>())
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|_| DocumentError::InvalidPath(path.to_string()))?;
-
-        if parts.is_empty() {
-            return Ok(NodeId::from_raw(self.root));
+    pub fn find_by_path(&self, path: &SectionPath) -> Result<NodeId> {
+        if path.is_root() {
+            return Ok(self.root());
         }
 
         let mut current = self.root;
-        for idx in parts {
-            if idx == 0 {
-                return Err(DocumentError::InvalidPath("path indices are 1-based".to_string()));
-            }
-            if let Some(child) = current
-                .children(&self.arena)
-                .filter(|child| {
-                    self.arena
-                        .get(*child)
-                        .map(|node| matches!(&node.get().kind, NodeKind::Section { .. }))
-                        .unwrap_or(false)
-                })
-                .nth(idx - 1)
-            {
-                current = child;
-                continue;
-            }
-            return Err(DocumentError::InvalidPath(format!("index {} out of bounds", idx)));
+        for idx in path.segments() {
+            let Some(child) = self.section_child(current, idx - 1) else {
+                return Err(DocumentError::InvalidPath {
+                    path: path.to_string(),
+                    reason: format!("index {idx} is out of bounds"),
+                });
+            };
+            current = child;
         }
+
         Ok(NodeId::from_raw(current))
     }
 
-    /// Get nearest parent that is a section
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use document_hierarchy::{DocumentTree, DocumentNode, NodeKind};
-    ///
-    /// let mut tree = DocumentTree::new();
-    /// let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
-    /// let para = tree.add_child(sec, DocumentNode::new(NodeKind::Paragraph, "text"));
-    ///
-    /// assert_eq!(tree.parent_section(para).unwrap(), sec);
-    /// ```
     pub fn parent_section(&self, id: NodeId) -> Option<NodeId> {
-        self.ancestors(id)
-            .skip(1)
-            .find(|&aid| self.get(aid).map(|n| n.is_section()).unwrap_or(false))
+        self.ancestors(id).skip(1).find(|id| self.get(*id).is_some_and(DocumentNode::is_section))
     }
 
-    /// Extract all text content from a subtree
     pub fn extract_text(&self, id: NodeId) -> String {
-        let mut parts = Vec::new();
-        for node_id in id.into_raw().descendants(&self.arena) {
-            if let Some(node) = self.get(NodeId::from_raw(node_id))
-                && !node.content.is_empty()
-            {
-                parts.push(node.content.as_str());
+        self.descendants(id)
+            .filter_map(|id| self.get(id).and_then(DocumentNode::display_text))
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    pub fn debug_tree(&self) -> String {
+        let mut out = String::new();
+        self.debug_node(self.root(), 0, &mut out);
+        out
+    }
+
+    fn debug_node(&self, id: NodeId, depth: usize, out: &mut String) {
+        let indent = "  ".repeat(depth);
+        let Some(node) = self.get(id) else {
+            return;
+        };
+
+        let path = self.path(id);
+        let anchor = node.anchor().map(|it| format!("[#{it}]")).unwrap_or_default();
+
+        match node {
+            DocumentNode::Root => {
+                let _ = writeln!(out, "{}[{}] ROOT", indent, path);
+            }
+            DocumentNode::Section { level, title, .. } => {
+                let _ = writeln!(out, "{}[{}]{} H{}: {}", indent, path, anchor, level, title);
+            }
+            DocumentNode::Text(text) => {
+                let _ = writeln!(out, "{}[{}]{} TEXT: {}", indent, path, anchor, text);
+            }
+            DocumentNode::Html(html) => {
+                let _ = writeln!(out, "{}[{}]{} HTML: {}", indent, path, anchor, html);
+            }
+            DocumentNode::CodeBlock { code, .. } => {
+                let _ = writeln!(out, "{}[{}]{} CODE: {}", indent, path, anchor, code);
+            }
+            DocumentNode::Image { alt, .. } => {
+                let _ = writeln!(out, "{}[{}]{} IMG: {}", indent, path, anchor, alt);
+            }
+            _ => {
+                let _ = writeln!(out, "{}[{}]{} {:?}", indent, path, anchor, node.kind());
             }
         }
-        parts.join(" ")
-    }
 
-    /// Debug representation of tree structure
-    pub fn debug_tree(&self) -> String {
-        let mut output = String::new();
-        self.debug_node(NodeId::from_raw(self.root), 0, &mut output);
-        output
-    }
-
-    fn debug_node(&self, id: NodeId, depth: usize, output: &mut String) {
-        let indent = "  ".repeat(depth);
-        if let Some(node) = self.get(id) {
-            let path = self.hierarchical_path(id);
-            let anchor_display =
-                node.anchor.as_ref().map(|a| format!("[#{}]", a)).unwrap_or_default();
-
-            match &node.kind {
-                NodeKind::Section { level, .. } => {
-                    let _ = writeln!(
-                        output,
-                        "{}[{}]{} H{}: {}",
-                        indent, path, anchor_display, level, node.content
-                    );
-                }
-                NodeKind::Paragraph if !node.content.is_empty() => {
-                    let _ = writeln!(
-                        output,
-                        "{}[{}]{} P: {}",
-                        indent, path, anchor_display, node.content
-                    );
-                }
-                _ => {
-                    let kind = match &node.kind {
-                        NodeKind::Root => "ROOT",
-                        NodeKind::Section { .. } => "SECTION",
-                        NodeKind::Paragraph => "P",
-                        NodeKind::Html => "HTML",
-                        NodeKind::List { .. } => "LIST",
-                        NodeKind::ListItem => "LI",
-                        NodeKind::CodeBlock { .. } => "CODE",
-                        NodeKind::BlockQuote => "BQ",
-                        NodeKind::Table { .. } => "TABLE",
-                        NodeKind::TableRow => "TR",
-                        NodeKind::TableCell => "TD",
-                        NodeKind::Text => "TEXT",
-                        NodeKind::Strong => "STRONG",
-                        NodeKind::Emphasis => "EM",
-                        NodeKind::Link { .. } => "LINK",
-                        NodeKind::Image { .. } => "IMG",
-                        NodeKind::ThematicBreak => "HR",
-                    };
-                    let _ = writeln!(output, "{}[{}]{} {}", indent, path, anchor_display, kind);
-                }
-            }
-
-            for child in id.into_raw().children(&self.arena) {
-                self.debug_node(NodeId::from_raw(child), depth + 1, output);
-            }
+        for child in self.children(id) {
+            self.debug_node(child, depth + 1, out);
         }
     }
 }
@@ -832,17 +747,12 @@ impl Index<NodeId> for DocumentTree {
     }
 }
 
-fn wrap_id(id: indextree::NodeId) -> NodeId {
-    NodeId::from_raw(id)
-}
-
 impl<'a> IntoIterator for &'a DocumentTree {
     type Item = NodeId;
-    type IntoIter =
-        std::iter::Map<indextree::Descendants<'a, DocumentNode>, fn(indextree::NodeId) -> NodeId>;
+    type IntoIter = DescendantsIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.root.descendants(&self.arena).map(wrap_id as fn(indextree::NodeId) -> NodeId)
+        DescendantsIter(self.root.descendants(&self.arena))
     }
 }
 
@@ -851,7 +761,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_slugify() {
+    fn slugify() {
         assert_eq!(DocumentNode::slugify("Hello World"), "hello-world");
         assert_eq!(DocumentNode::slugify("Section 1.2.3"), "section-1-2-3");
         assert_eq!(DocumentNode::slugify("  Trim  Me  "), "trim-me");
@@ -861,30 +771,30 @@ mod tests {
     }
 
     #[test]
-    fn test_section_creation() {
+    fn section_creation() {
         let sec = DocumentNode::section(2, "Getting Started");
         assert!(sec.is_section());
         assert_eq!(sec.section_level(), Some(2));
-        assert_eq!(sec.anchor, Some("getting-started".to_string()));
-        assert_eq!(sec.content, "Getting Started");
+        assert_eq!(sec.anchor(), Some("getting-started"));
+        assert_eq!(sec.section_title(), Some("Getting Started"));
     }
 
     #[test]
-    fn test_tree_construction() {
+    fn tree_construction() {
         let mut tree = DocumentTree::new();
         let root = tree.root();
 
         let sec1 = tree.add_child(root, DocumentNode::section(1, "Introduction"));
         let sec2 = tree.add_child(root, DocumentNode::section(1, "Methods"));
-        let subsec = tree.add_child(sec2, DocumentNode::section(2, "Participants"));
+        let sub = tree.add_child(sec2, DocumentNode::section(2, "Participants"));
 
-        assert_eq!(tree.hierarchical_path(sec1), "1");
-        assert_eq!(tree.hierarchical_path(sec2), "2");
-        assert_eq!(tree.hierarchical_path(subsec), "2.1");
+        assert_eq!(tree.path(sec1).to_string(), "1");
+        assert_eq!(tree.path(sec2).to_string(), "2");
+        assert_eq!(tree.path(sub).to_string(), "2.1");
     }
 
     #[test]
-    fn test_anchor_lookup() {
+    fn anchor_lookup() {
         let mut tree = DocumentTree::new();
         tree.add_child(tree.root(), DocumentNode::section(1, "Introduction"));
         tree.add_child(tree.root(), DocumentNode::section(1, "Results"));
@@ -898,29 +808,34 @@ mod tests {
     }
 
     #[test]
-    fn test_path_navigation() {
+    fn path_navigation() {
         let mut tree = DocumentTree::new();
         let sec1 = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
         let sec2 = tree.add_child(sec1, DocumentNode::section(2, "B"));
 
-        assert_eq!(tree.find_by_path("1").unwrap(), sec1);
-        assert_eq!(tree.find_by_path("1.1").unwrap(), sec2);
-        assert!(tree.find_by_path("1.2").is_err());
-        assert!(tree.find_by_path("invalid").is_err());
+        assert_eq!(tree.find_by_path(&"1".parse().unwrap()).unwrap(), sec1);
+        assert_eq!(tree.find_by_path(&"1.1".parse().unwrap()).unwrap(), sec2);
+
+        let err = tree.find_by_path(&"1.2".parse().unwrap()).unwrap_err();
+        assert!(err.to_string().contains("out of bounds"));
+
+        let err = "invalid".parse::<SectionPath>().unwrap_err();
+        assert!(err.to_string().contains("not a number"));
     }
 
     #[test]
-    fn test_parent_section() {
+    fn parent_section() {
         let mut tree = DocumentTree::new();
-        let section = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
-        let paragraph = tree.add_child(section, DocumentNode::new(NodeKind::Paragraph, "text"));
+        let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Parent"));
+        let para = tree.add_child(sec, DocumentNode::paragraph());
+        let text = tree.add_child(para, DocumentNode::text("text"));
 
-        assert_eq!(tree.parent_section(paragraph).unwrap(), section);
-        assert!(tree.parent_section(section).is_none()); // Parent is root, not a section
+        assert_eq!(tree.parent_section(text), Some(sec));
+        assert!(tree.parent_section(sec).is_none());
     }
 
     #[test]
-    fn test_sections_list() {
+    fn sections_are_preordered() {
         let mut tree = DocumentTree::new();
         tree.add_child(tree.root(), DocumentNode::section(1, "First"));
         let sec = tree.add_child(tree.root(), DocumentNode::section(1, "Second"));
@@ -928,22 +843,42 @@ mod tests {
 
         let sections = tree.sections().collect::<Vec<_>>();
         assert_eq!(sections.len(), 3);
-
-        // Check ordering (pre-order)
         assert_eq!(sections[0].anchor, "first");
         assert_eq!(sections[1].anchor, "second");
         assert_eq!(sections[2].anchor, "nested");
+        assert_eq!(sections[2].path.to_string(), "2.1");
     }
 
     #[test]
-    fn hierarchical_path_ignores_non_section_siblings() {
+    fn path_ignores_non_section_siblings() {
         let mut tree = DocumentTree::new();
         let a = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-        tree.add_child(a, DocumentNode::new(NodeKind::Paragraph, "x"));
+        let para = tree.add_child(a, DocumentNode::paragraph());
+        tree.add_child(para, DocumentNode::text("x"));
         tree.add_child(a, DocumentNode::html("<table><tr><td>x</td></tr></table>"));
         let b = tree.add_child(a, DocumentNode::section(2, "B"));
 
-        assert_eq!(tree.hierarchical_path(b), "1.1");
-        assert_eq!(tree.find_by_path("1.1").unwrap(), b);
+        assert_eq!(tree.path(b).to_string(), "1.1");
+        assert_eq!(tree.find_by_path(&"1.1".parse().unwrap()).unwrap(), b);
+    }
+
+    #[test]
+    fn update_keeps_anchor_index_in_sync() {
+        let mut tree = DocumentTree::new();
+        let id = tree.add_child(tree.root(), DocumentNode::section(1, "Old"));
+
+        let _ = tree.update(id, |node| {
+            *node = DocumentNode::section(1, "New");
+        });
+
+        assert!(tree.find_by_anchor("old").is_none());
+        assert_eq!(tree.find_by_anchor("new"), Some(id));
+    }
+
+    #[test]
+    fn set_anchor_rejects_unanchorable_nodes() {
+        let mut tree = DocumentTree::new();
+        let id = tree.add_child(tree.root(), DocumentNode::paragraph());
+        assert!(!tree.set_anchor(id, Some("x".to_string())));
     }
 }

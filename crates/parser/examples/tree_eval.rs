@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use document_hierarchy::{DocumentTree, NodeId, NodeKind, TreeParser};
+use document_hierarchy::{DocumentNode, DocumentTree, NodeId, NodeKind, TreeParser};
 
 fn xml() -> PathBuf {
     if let Some(path) = std::env::args_os().nth(1) {
@@ -20,24 +20,24 @@ fn limit() -> usize {
     value.and_then(|it| it.parse::<usize>().ok()).unwrap_or(10)
 }
 
-fn kind(kind: &NodeKind) -> &'static str {
+fn kind(kind: NodeKind) -> &'static str {
     match kind {
         NodeKind::Root => "root",
-        NodeKind::Section { .. } => "section",
+        NodeKind::Section => "section",
         NodeKind::Paragraph => "paragraph",
         NodeKind::Html => "html",
-        NodeKind::List { .. } => "list",
+        NodeKind::List => "list",
         NodeKind::ListItem => "list_item",
-        NodeKind::CodeBlock { .. } => "code_block",
+        NodeKind::CodeBlock => "code_block",
         NodeKind::BlockQuote => "blockquote",
-        NodeKind::Table { .. } => "table",
+        NodeKind::Table => "table",
         NodeKind::TableRow => "table_row",
         NodeKind::TableCell => "table_cell",
         NodeKind::Text => "text",
         NodeKind::Strong => "strong",
         NodeKind::Emphasis => "emphasis",
-        NodeKind::Link { .. } => "link",
-        NodeKind::Image { .. } => "image",
+        NodeKind::Link => "link",
+        NodeKind::Image => "image",
         NodeKind::ThematicBreak => "thematic_break",
     }
 }
@@ -58,7 +58,7 @@ fn print_kinds(tree: &DocumentTree) {
     let mut map = BTreeMap::<&'static str, usize>::new();
     for id in tree.descendants(tree.root()) {
         if let Some(node) = tree.get(id) {
-            *map.entry(kind(&node.kind)).or_default() += 1;
+            *map.entry(kind(node.kind())).or_default() += 1;
         }
     }
 
@@ -76,7 +76,7 @@ fn print_sections(tree: &DocumentTree, n: usize) {
         .sections()
         .filter_map(|it| {
             let node = tree.get(it.id)?;
-            Some((it.id, node.content.clone(), it.path, it.level, span(tree, it.id)))
+            Some((it.id, node.section_title()?.to_string(), it.path, it.level, span(tree, it.id)))
         })
         .collect::<Vec<_>>();
 
@@ -87,11 +87,7 @@ fn print_sections(tree: &DocumentTree, n: usize) {
     } else {
         rows.iter().map(|it| usize::from(it.3)).sum::<usize>() as f64 / count as f64
     };
-    let max_depth = rows
-        .iter()
-        .map(|it| if it.2 == "root" { 0 } else { it.2.split('.').count() })
-        .max()
-        .unwrap_or(0);
+    let max_depth = rows.iter().map(|it| it.2.depth()).max().unwrap_or(0);
 
     println!("\n== Section Stats ==");
     println!("count           : {}", count);
@@ -111,9 +107,14 @@ fn print_anchors(tree: &DocumentTree, n: usize) {
         .descendants(tree.root())
         .filter_map(|id| {
             let node = tree.get(id)?;
-            let anchor = node.anchor.clone()?;
-            let path = tree.hierarchical_path(id);
-            Some((anchor, path, kind(&node.kind), span(tree, id), preview(&node.content)))
+            let anchor = node.anchor()?.to_string();
+            Some((
+                anchor,
+                tree.path(id),
+                kind(node.kind()),
+                span(tree, id),
+                preview(node.display_text().unwrap_or("")),
+            ))
         })
         .collect::<Vec<_>>();
 
@@ -124,6 +125,9 @@ fn print_anchors(tree: &DocumentTree, n: usize) {
         println!("{:>2}. [{}] {} nodes={}  #{}  {}", idx + 1, path, kind, size, anchor, text);
     }
 }
+
+#[allow(dead_code)]
+fn _keep_document_node_visible(_: &DocumentNode) {}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = xml();

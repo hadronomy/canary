@@ -23,7 +23,7 @@
 //!
 //! - **Arena-based storage**: Uses `indextree` for cache-friendly tree layout
 //! - **Stable anchors**: Every section gets a URL-safe slug for linking
-//! - **Dual indexing**: Hierarchical paths ("1.2.3") and named anchors ("#intro")
+//! - **Dual indexing**: Typed section paths and named anchors
 //! - **Zero-copy IDs**: `NodeId` is a lightweight copyable handle
 
 pub mod error;
@@ -53,7 +53,8 @@ pub use render::markdown::{HeadingMode, MarkdownWriter};
 pub use render::writer::TreeWriter;
 pub use resolve::CrossRefResolver;
 pub use tree::{
-    ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, NodeKind, SectionEntry, SectionKind,
+    ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, ListSpacing, ListStyle, NodeKind,
+    SectionEntry, SectionKind, SectionPath,
 };
 
 #[cfg(feature = "parallel")]

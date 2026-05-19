@@ -2,7 +2,7 @@ use std::fmt::{self, Write};
 
 use crate::parser::DocumentMeta;
 use crate::render::writer::{NodeContext, TreeWriter};
-use crate::tree::{ColumnAlignment, SectionKind};
+use crate::tree::{ColumnAlignment, ListSpacing, ListStyle, SectionKind};
 
 #[derive(Debug, Clone)]
 pub enum HeadingMode {
@@ -108,14 +108,15 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         &mut self,
         level: u8,
         kind: SectionKind,
-        ctx: &NodeContext<'_>,
+        title: &str,
+        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         let boe = matches!(&self.mode, HeadingMode::Boe { .. });
         if boe && Self::marker(kind) {
             self.sections.push(false);
             self.line()?;
             self.pref()?;
-            writeln!(self.out, "{}", ctx.content)?;
+            writeln!(self.out, "{title}")?;
             self.pref()?;
             writeln!(self.out, "---")?;
             self.brk = true;
@@ -129,8 +130,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         self.line()?;
         self.pref()?;
         let level = if boe { (self.heads + 1).min(6) as u8 } else { level.min(6) };
-        let h = "#".repeat(level as usize);
-        writeln!(self.out, "{h} {}", ctx.content)?;
+        writeln!(self.out, "{} {title}", "#".repeat(level as usize))?;
         self.brk = true;
         Ok(())
     }
@@ -139,6 +139,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         &mut self,
         _level: u8,
         _kind: SectionKind,
+        _title: &str,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         if matches!(&self.mode, HeadingMode::Boe { .. })
@@ -177,21 +178,24 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
 
     fn enter_list(
         &mut self,
-        ordered: bool,
-        _tight: bool,
+        style: ListStyle,
+        _spacing: ListSpacing,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         if self.lists.is_empty() {
             self.line()?;
         }
-        self.lists.push(if ordered { 1 } else { 0 });
+        self.lists.push(match style {
+            ListStyle::Ordered => 1,
+            ListStyle::Unordered => 0,
+        });
         Ok(())
     }
 
     fn leave_list(
         &mut self,
-        _ordered: bool,
-        _tight: bool,
+        _style: ListStyle,
+        _spacing: ListSpacing,
         _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         self.lists.pop();
@@ -203,16 +207,13 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
 
     fn enter_list_item(&mut self, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
         self.pref()?;
-        let n = self.indent();
-        write!(self.out, "{:n$}", "", n = n)?;
+        write!(self.out, "{:n$}", "", n = self.indent())?;
         match self.lists.last_mut() {
             Some(it) if *it > 0 => {
                 write!(self.out, "{}. ", it)?;
                 *it += 1;
             }
-            _ => {
-                write!(self.out, "- ")?;
-            }
+            _ => write!(self.out, "- ")?,
         }
         Ok(())
     }
@@ -264,12 +265,13 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
     fn write_code_block(
         &mut self,
         lang: Option<&str>,
-        ctx: &NodeContext<'_>,
+        code: &str,
+        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
         writeln!(self.out, "```{}", lang.unwrap_or(""))?;
-        for line in ctx.content.lines() {
+        for line in code.lines() {
             self.pref()?;
             writeln!(self.out, "{line}")?;
         }
@@ -299,22 +301,32 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn write_text(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
-        write!(self.out, "{}", ctx.content)?;
+    fn write_text(&mut self, text: &str, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+        write!(self.out, "{text}")?;
         Ok(())
     }
 
-    fn write_link(
+    fn enter_link(
+        &mut self,
+        _url: &str,
+        _title: Option<&str>,
+        _ctx: &NodeContext<'_>,
+    ) -> Result<(), Self::Error> {
+        write!(self.out, "[")?;
+        Ok(())
+    }
+
+    fn leave_link(
         &mut self,
         url: &str,
         title: Option<&str>,
-        ctx: &NodeContext<'_>,
+        _ctx: &NodeContext<'_>,
     ) -> Result<(), Self::Error> {
         if let Some(title) = title {
-            write!(self.out, "[{}]({url} \"{title}\")", ctx.content)?;
+            write!(self.out, "]({url} \"{title}\")")?;
             return Ok(());
         }
-        write!(self.out, "[{}]({url})", ctx.content)?;
+        write!(self.out, "]({url})")?;
         Ok(())
     }
 
@@ -328,13 +340,13 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
         Ok(())
     }
 
-    fn write_html(&mut self, ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
+    fn write_html(&mut self, html: &str, _ctx: &NodeContext<'_>) -> Result<(), Self::Error> {
         self.line()?;
         self.pref()?;
-        if let Ok(md) = htmd::convert(ctx.content) {
-            let txt = md.trim();
-            if !txt.is_empty() {
-                for (idx, line) in txt.lines().enumerate() {
+        if let Ok(md) = htmd::convert(html) {
+            let text = md.trim();
+            if !text.is_empty() {
+                for (idx, line) in text.lines().enumerate() {
                     if idx > 0 {
                         self.pref()?;
                     }
@@ -344,7 +356,7 @@ impl<W: Write> TreeWriter for MarkdownWriter<W> {
                 return Ok(());
             }
         }
-        writeln!(self.out, "{}", ctx.content)?;
+        writeln!(self.out, "{html}")?;
         self.brk = true;
         Ok(())
     }
@@ -363,13 +375,14 @@ mod tests {
     use crate::parser::DocumentMeta;
     use crate::render;
     use crate::render::markdown::{HeadingMode, MarkdownWriter};
-    use crate::tree::{DocumentNode, DocumentTree, NodeKind, SectionKind};
+    use crate::tree::{DocumentNode, DocumentTree, SectionKind};
 
     #[test]
     fn renders_markdown_section_and_paragraph() {
         let mut tree = DocumentTree::new();
         let sec = tree.add_child(tree.root(), DocumentNode::section(2, "Intro"));
-        tree.add_child(sec, DocumentNode::new(NodeKind::Paragraph, "Hello world"));
+        let para = tree.add_child(sec, DocumentNode::paragraph());
+        tree.add_child(para, DocumentNode::text("Hello world"));
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -382,10 +395,13 @@ mod tests {
     #[test]
     fn renders_markdown_inline_nodes() {
         let mut tree = DocumentTree::new();
-        let para = tree.add_child(tree.root(), DocumentNode::new(NodeKind::Paragraph, ""));
-        tree.add_child(para, DocumentNode::new(NodeKind::Strong, "bold"));
-        tree.add_child(para, DocumentNode::new(NodeKind::Emphasis, "soft"));
-        tree.add_child(para, DocumentNode::link("https://x.test", None, "ref"));
+        let para = tree.add_child(tree.root(), DocumentNode::paragraph());
+        let strong = tree.add_child(para, DocumentNode::strong());
+        tree.add_child(strong, DocumentNode::text("bold"));
+        let em = tree.add_child(para, DocumentNode::emphasis());
+        tree.add_child(em, DocumentNode::text("soft"));
+        let link = tree.add_child(para, DocumentNode::link("https://x.test", None));
+        tree.add_child(link, DocumentNode::text("ref"));
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -399,8 +415,9 @@ mod tests {
     #[test]
     fn does_not_emit_empty_quote_line_before_content() {
         let mut tree = DocumentTree::new();
-        let quote = tree.add_child(tree.root(), DocumentNode::new(NodeKind::BlockQuote, ""));
-        tree.add_child(quote, DocumentNode::new(NodeKind::Paragraph, "Texto nota"));
+        let quote = tree.add_child(tree.root(), DocumentNode::block_quote());
+        let para = tree.add_child(quote, DocumentNode::paragraph());
+        tree.add_child(para, DocumentNode::text("Texto nota"));
 
         let mut out = String::new();
         let mut w = MarkdownWriter::new(&mut out);
@@ -415,10 +432,7 @@ mod tests {
         let mut tree = DocumentTree::new();
         tree.add_child(
             tree.root(),
-            DocumentNode::new(
-                NodeKind::Html,
-                "<table><tr><th>A</th></tr><tr><td>1</td></tr></table>",
-            ),
+            DocumentNode::html("<table><tr><th>A</th></tr><tr><td>1</td></tr></table>"),
         );
 
         let mut out = String::new();

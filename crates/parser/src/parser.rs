@@ -17,7 +17,7 @@ use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::error::{DocumentError, Result};
-use crate::tree::{DocumentNode, DocumentTree, NodeKind, SectionKind};
+use crate::tree::{DocumentNode, DocumentTree, SectionKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
@@ -69,6 +69,13 @@ pub enum XmlNode {
     Html(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum XmlInline {
+    Text(String),
+    Link { url: String, label: String },
+}
+
 /// Paragraph-like content extracted from XML.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -76,7 +83,7 @@ pub struct XmlPara {
     pub class: String,
     pub kind: ParaKind,
     pub text: String,
-    pub refs: Vec<String>,
+    pub inline: Vec<XmlInline>,
 }
 
 /// Paragraph classification used by XML extraction and tree projection.
@@ -270,6 +277,74 @@ impl<R: BufRead> BoeReader<R> {
         out
     }
 
+    fn push_inline_text(inline: &mut Vec<XmlInline>, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        if let Some(XmlInline::Text(prev)) = inline.last_mut() {
+            prev.push_str(&text);
+            return;
+        }
+        inline.push(XmlInline::Text(text));
+    }
+
+    fn normalize_inline(inline: Vec<XmlInline>) -> Vec<XmlInline> {
+        let mut out = Vec::new();
+        let mut gap = false;
+
+        for part in inline {
+            match part {
+                XmlInline::Text(text) => {
+                    let mut buf = String::new();
+                    let lead = text.chars().next().is_some_and(char::is_whitespace);
+                    for word in text.split_whitespace() {
+                        if !buf.is_empty() || gap || (lead && !out.is_empty()) {
+                            buf.push(' ');
+                        }
+                        buf.push_str(word);
+                        gap = false;
+                    }
+                    if buf.is_empty() {
+                        gap |= text.chars().any(char::is_whitespace);
+                        continue;
+                    }
+                    gap = text.chars().last().is_some_and(char::is_whitespace);
+                    Self::push_inline_text(&mut out, buf);
+                }
+                XmlInline::Link { url, label } => {
+                    if let Some(XmlInline::Text(text)) = out.last_mut() {
+                        while text.ends_with(' ') {
+                            text.pop();
+                        }
+                    }
+                    out.push(XmlInline::Link { url, label });
+                    gap = false;
+                }
+            }
+        }
+
+        out.retain(|part| !matches!(part, XmlInline::Text(text) if text.is_empty()));
+        out
+    }
+
+    fn trim_trailing_link_dot(inline: &mut Vec<XmlInline>) {
+        let mut idx = inline.len();
+        while idx > 0 {
+            idx -= 1;
+            let XmlInline::Text(text) = &mut inline[idx] else {
+                continue;
+            };
+            if text.ends_with('.') {
+                text.pop();
+                while text.ends_with(' ') {
+                    text.pop();
+                }
+            }
+            break;
+        }
+        inline.retain(|part| !matches!(part, XmlInline::Text(text) if text.is_empty()));
+    }
+
     /// Skips a full element subtree until its matching closing tag.
     fn skip_element(&mut self, closing: &[u8]) -> Result<()> {
         let mut depth = 0usize;
@@ -409,19 +484,28 @@ impl<R: BufRead> BoeReader<R> {
         let attrs = Attrs::from_tag(start, "p")?;
         let class = attrs.get("class").unwrap_or_default().to_string();
         let mut text = String::new();
-        let mut refs = Vec::new();
+        let mut inline = Vec::new();
         let mut depth = 0usize;
 
         loop {
             match self.next()? {
-                Event::Text(value) => text.push_str(&Self::text(value.xml_content(), "text")?),
-                Event::CData(value) => text.push_str(&Self::text(value.xml_content(), "cdata")?),
+                Event::Text(value) => {
+                    let value = Self::text(value.xml_content(), "text")?;
+                    text.push_str(&value);
+                    Self::push_inline_text(&mut inline, value);
+                }
+                Event::CData(value) => {
+                    let value = Self::text(value.xml_content(), "cdata")?;
+                    text.push_str(&value);
+                    Self::push_inline_text(&mut inline, value);
+                }
                 Event::Start(tag) if tag.name().as_ref() == b"a" => {
                     let (value, reference) = self.read_anchor(&tag)?;
                     if let Some(reference) = reference {
-                        refs.push(reference);
+                        inline.push(XmlInline::Link { url: reference.clone(), label: reference });
                     } else {
                         text.push_str(&value);
+                        Self::push_inline_text(&mut inline, value);
                     }
                 }
                 Event::Start(_) => {
@@ -440,13 +524,15 @@ impl<R: BufRead> BoeReader<R> {
         }
 
         let mut text = Self::normalize(&text);
-        if !refs.is_empty() {
+        let mut inline = Self::normalize_inline(inline);
+        if inline.iter().any(|part| matches!(part, XmlInline::Link { .. })) {
             while text.ends_with("..") {
                 text.pop();
+                Self::trim_trailing_link_dot(&mut inline);
             }
         }
 
-        Ok(XmlPara { class: class.clone(), kind: ParaKind::from(class.as_str()), text, refs })
+        Ok(XmlPara { class: class.clone(), kind: ParaKind::from(class.as_str()), text, inline })
     }
 
     fn raw_empty(start: &BytesStart<'_>) -> Result<String> {
@@ -654,6 +740,14 @@ pub struct TreeParser {
     policy: VersionPolicy,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HeadingMatch {
+    kind: ParaKind,
+    title: String,
+    start: usize,
+    span: usize,
+}
+
 impl TreeParser {
     fn head(para: &XmlPara) -> Option<ParaKind> {
         if para.class == "anexo" || para.class.starts_with("anexo_") {
@@ -694,13 +788,14 @@ impl TreeParser {
     }
 
     /// Determines the heading title for a block/version pair.
-    fn heading<'a>(
-        &self,
-        block: &'a XmlBlock,
-        version: &'a XmlVersion,
-    ) -> Option<(ParaKind, String, usize, usize)> {
+    fn heading<'a>(&self, block: &'a XmlBlock, version: &'a XmlVersion) -> Option<HeadingMatch> {
         if block.kind == BlockKind::Preambulo {
-            return Some((ParaKind::Titulo, "Preámbulo".to_string(), 0, 0));
+            return Some(HeadingMatch {
+                kind: ParaKind::Titulo,
+                title: "Preámbulo".to_string(),
+                start: 0,
+                span: 0,
+            });
         }
         for (idx, node) in version.nodes.iter().enumerate() {
             let XmlNode::Paragraph(para) = node else {
@@ -733,33 +828,47 @@ impl TreeParser {
                 parts.push(text.to_string());
                 span += 1;
             }
-            return Some((kind, parts.join(" "), idx, span));
+            return Some(HeadingMatch { kind, title: parts.join(" "), start: idx, span });
         }
         if let Some(title) = &block.title {
             let value = title.trim();
             if !value.is_empty() {
-                return Some((ParaKind::Titulo, value.to_string(), 0, 0));
+                return Some(HeadingMatch {
+                    kind: ParaKind::Titulo,
+                    title: value.to_string(),
+                    start: 0,
+                    span: 0,
+                });
             }
         }
         None
     }
 
     fn push_para(tree: &mut DocumentTree, parent: crate::NodeId, para: &XmlPara) {
-        let value = para.text.trim();
-        if value.is_empty() {
+        if para.inline.is_empty() {
             if para.kind.divider() {
-                tree.add_child(parent, DocumentNode::new(NodeKind::ThematicBreak, String::new()));
+                tree.add_child(parent, DocumentNode::thematic_break());
             }
             return;
         }
 
-        let pid = tree.add_child(parent, DocumentNode::new(NodeKind::Paragraph, value.to_string()));
-        for reference in &para.refs {
-            tree.add_child(pid, DocumentNode::link(reference.clone(), None, reference));
+        let pid = tree.add_child(parent, DocumentNode::paragraph());
+        for part in &para.inline {
+            match part {
+                XmlInline::Text(text) => {
+                    if !text.is_empty() {
+                        tree.add_child(pid, DocumentNode::text(text.clone()));
+                    }
+                }
+                XmlInline::Link { url, label } => {
+                    let lid = tree.add_child(pid, DocumentNode::link(url.clone(), None));
+                    tree.add_child(lid, DocumentNode::text(label.clone()));
+                }
+            }
         }
 
         if para.kind.divider() {
-            tree.add_child(parent, DocumentNode::new(NodeKind::ThematicBreak, String::new()));
+            tree.add_child(parent, DocumentNode::thematic_break());
         }
     }
 
@@ -789,8 +898,7 @@ impl TreeParser {
                 }
                 XmlNode::BlockQuote(items) => {
                     Self::push_html(tree, parent, &mut html);
-                    let bid = tree
-                        .add_child(parent, DocumentNode::new(NodeKind::BlockQuote, String::new()));
+                    let bid = tree.add_child(parent, DocumentNode::block_quote());
                     Self::push_nodes(tree, bid, items);
                 }
             }
@@ -808,11 +916,11 @@ impl TreeParser {
             let Some(version) = self.pick(&block.versions) else {
                 continue;
             };
-            let Some((heading, title, start, span)) = self.heading(block, version) else {
+            let Some(head) = self.heading(block, version) else {
                 continue;
             };
 
-            let rank = Self::rank(heading);
+            let rank = Self::rank(head.kind);
             while stack.last().map(|it| it.0 >= rank).unwrap_or(false) {
                 stack.pop();
             }
@@ -820,25 +928,17 @@ impl TreeParser {
             let parent_level = stack.last().map(|it| it.2).unwrap_or(1);
             let level = (parent_level + 1).min(6);
 
-            let mut section = DocumentNode::section_with(level, Self::section(heading), &title);
-            section.anchor = Some(anchor.next(&title, block.id.as_deref()));
+            let section = DocumentNode::section_with(level, Self::section(head.kind), &head.title)
+                .with_anchor(anchor.next(&head.title, block.id.as_deref()));
             let id = tree.add_child(parent, section);
             stack.push((rank, id, level));
 
-            let nodes = version
-                .nodes
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, node)| {
-                    if span > 0 && idx >= start && idx < start + span {
-                        return None;
-                    }
-                    Some(node.clone())
-                })
-                .collect::<Vec<_>>();
-
-            if !nodes.is_empty() {
-                Self::push_nodes(&mut tree, id, &nodes);
+            if head.start > 0 {
+                Self::push_nodes(&mut tree, id, &version.nodes[..head.start]);
+            }
+            let end = head.start + head.span;
+            if end < version.nodes.len() {
+                Self::push_nodes(&mut tree, id, &version.nodes[end..]);
             }
         }
 
@@ -961,10 +1061,13 @@ mod tests {
         let html = tree
             .children(id)
             .filter_map(|it| tree.get(it))
-            .filter(|it| matches!(it.kind, NodeKind::Html))
+            .filter_map(|it| match it {
+                DocumentNode::Html(html) => Some(html),
+                _ => None,
+            })
             .collect::<Vec<_>>();
         assert_eq!(html.len(), 1);
-        assert!(html[0].content.contains("<table>"));
+        assert!(html[0].contains("<table>"));
     }
 
     #[test]
@@ -998,23 +1101,71 @@ mod tests {
     fn does_not_duplicate_refpost_text() {
         let tree = TreeParser::new().parse_xml(sample()).unwrap();
         let id = tree.find_by_anchor("artículo-1").unwrap();
+        let para = tree
+            .descendants(id)
+            .find(|it| {
+                tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph))
+                    && tree.extract_text(*it).contains("Texto nota")
+            })
+            .unwrap();
 
-        let mut found = false;
-        for desc in tree.descendants(id).skip(1) {
-            let Some(node) = tree.get(desc) else {
-                continue;
-            };
-            if !matches!(node.kind, NodeKind::Paragraph) {
-                continue;
-            }
-            if !node.content.contains("Texto nota") {
-                continue;
-            }
-            found = true;
-            assert!(!node.content.contains("Ref. BOE-A-1992-20403"));
-        }
+        let parts = tree
+            .children(para)
+            .filter_map(|it| tree.get(it))
+            .map(|node| match node {
+                DocumentNode::Text(text) => format!("text:{text}"),
+                DocumentNode::Link { url, .. } => format!("link:{url}"),
+                other => format!("other:{:?}", other.kind()),
+            })
+            .collect::<Vec<_>>();
 
-        assert!(found);
+        assert_eq!(
+            parts,
+            vec!["text:Texto nota".to_string(), "link:Ref. BOE-A-1992-20403".to_string()]
+        );
+    }
+
+    #[test]
+    fn preserves_inline_reference_order_inside_paragraphs() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <data>
+    <texto>
+      <bloque id="a1" tipo="precepto" titulo="Artículo 1">
+        <version fecha_vigencia="20110927">
+          <p class="articulo">Artículo 1</p>
+          <p class="parrafo">Antes <a class="refPost">Ref. BOE-A-2011-15210</a> después</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>"#;
+
+        let tree = TreeParser::new().parse_xml(xml).unwrap();
+        let id = tree.find_by_anchor("artículo-1").unwrap();
+        let para = tree
+            .children(id)
+            .find(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
+            .unwrap();
+
+        let parts = tree
+            .children(para)
+            .filter_map(|it| tree.get(it))
+            .map(|node| match node {
+                DocumentNode::Text(text) => format!("text:{text}"),
+                DocumentNode::Link { url, .. } => format!("link:{url}"),
+                other => format!("other:{:?}", other.kind()),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            parts,
+            vec![
+                "text:Antes".to_string(),
+                "link:Ref. BOE-A-2011-15210".to_string(),
+                "text:después".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -1077,7 +1228,7 @@ mod tests {
         let mut found_divider = false;
         for child in tree.children(art) {
             if let Some(node) = tree.get(child)
-                && matches!(node.kind, NodeKind::ThematicBreak)
+                && matches!(node, DocumentNode::ThematicBreak)
             {
                 found_divider = true;
             }
@@ -1111,7 +1262,7 @@ mod tests {
         let quotes = tree
             .children(art)
             .filter(|id| {
-                tree.get(*id).map(|node| matches!(node.kind, NodeKind::BlockQuote)).unwrap_or(false)
+                tree.get(*id).map(|node| matches!(node, DocumentNode::BlockQuote)).unwrap_or(false)
             })
             .collect::<Vec<_>>();
 
@@ -1119,7 +1270,7 @@ mod tests {
         let paras = tree
             .children(quotes[0])
             .filter(|id| {
-                tree.get(*id).map(|node| matches!(node.kind, NodeKind::Paragraph)).unwrap_or(false)
+                tree.get(*id).map(|node| matches!(node, DocumentNode::Paragraph)).unwrap_or(false)
             })
             .count();
         assert_eq!(paras, 2);
@@ -1130,7 +1281,7 @@ mod tests {
         let tree = TreeParser::new().parse_xml(sample()).unwrap();
         let id = tree.find_by_anchor("título-i-derechos").unwrap();
         let section = tree.get(id).unwrap();
-        assert_eq!(section.content, "TÍTULO I Derechos");
+        assert_eq!(section.section_title(), Some("TÍTULO I Derechos"));
     }
 
     #[test]
@@ -1139,13 +1290,12 @@ mod tests {
         let id = tree.find_by_anchor("artículo-1").unwrap();
         let values = tree
             .children(id)
-            .filter_map(|it| tree.get(it))
-            .filter(|it| matches!(it.kind, NodeKind::Paragraph))
-            .map(|it| it.content.as_str())
+            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
+            .map(|it| tree.extract_text(it))
             .collect::<Vec<_>>();
 
-        assert!(values.iter().all(|it| *it != "Artículo 1"));
-        assert!(values.contains(&"Uno actualizado."));
+        assert!(values.iter().all(|it| it != "Artículo 1"));
+        assert!(values.contains(&"Uno actualizado.".to_string()));
     }
 
     #[test]
@@ -1170,12 +1320,15 @@ mod tests {
         let html = tree
             .children(id)
             .filter_map(|it| tree.get(it))
-            .filter(|it| matches!(it.kind, NodeKind::Html))
+            .filter_map(|it| match it {
+                DocumentNode::Html(html) => Some(html),
+                _ => None,
+            })
             .collect::<Vec<_>>();
 
         assert_eq!(html.len(), 1);
-        assert!(html[0].content.contains("<table>"));
-        assert!(html[0].content.contains("<foo>"));
+        assert!(html[0].contains("<table>"));
+        assert!(html[0].contains("<foo>"));
     }
 
     #[test]
@@ -1198,13 +1351,12 @@ mod tests {
         let tree = TreeParser::new().parse_xml(xml).unwrap();
         let id = tree.find_by_anchor("anexo-modelos-de-cuentas-anuales-consolidadas").unwrap();
         let section = tree.get(id).unwrap();
-        assert_eq!(section.content, "ANEXO Modelos de cuentas anuales consolidadas");
+        assert_eq!(section.section_title(), Some("ANEXO Modelos de cuentas anuales consolidadas"));
 
         let body = tree
             .children(id)
-            .filter_map(|it| tree.get(it))
-            .filter(|it| matches!(it.kind, NodeKind::Paragraph))
-            .map(|it| it.content.clone())
+            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
+            .map(|it| tree.extract_text(it))
             .collect::<Vec<_>>();
         assert_eq!(body, vec!["Balance consolidado".to_string()]);
     }
@@ -1228,13 +1380,12 @@ mod tests {
         let tree = TreeParser::new().parse_xml(xml).unwrap();
         let id = tree.find_by_anchor("memoria-consolidada").unwrap();
         let section = tree.get(id).unwrap();
-        assert_eq!(section.content, "MEMORIA CONSOLIDADA");
+        assert_eq!(section.section_title(), Some("MEMORIA CONSOLIDADA"));
 
         let body = tree
             .children(id)
-            .filter_map(|it| tree.get(it))
-            .filter(|it| matches!(it.kind, NodeKind::Paragraph))
-            .map(|it| it.content.clone())
+            .filter(|it| tree.get(*it).is_some_and(|node| matches!(node, DocumentNode::Paragraph)))
+            .map(|it| tree.extract_text(it))
             .collect::<Vec<_>>();
         assert_eq!(body, vec!["Contenido de la memoria consolidada".to_string()]);
     }
