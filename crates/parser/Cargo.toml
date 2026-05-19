@@ -16,6 +16,8 @@ quick-xml.workspace             = true
 rayon                           = { workspace = true, optional = true }
 regex                           = "1"
 serde.workspace                 = true
+smallvec.workspace              = true
+smol_str.workspace              = true
 thiserror.workspace             = true
 unicode-normalization.workspace = true
 htmd                            = "0.5"

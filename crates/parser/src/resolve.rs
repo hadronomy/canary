@@ -1,5 +1,6 @@
 //! Cross-reference resolution.
 
+use std::fmt::Write;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -29,7 +30,11 @@ impl<'a> CrossRefResolver<'a> {
     }
 
     fn figure_anchor(path: &SectionPath) -> String {
-        format!("fig-{}", path.to_string().replace('.', "-"))
+        let mut out = String::from("fig");
+        for idx in path.segments() {
+            let _ = write!(&mut out, "-{idx}");
+        }
+        out
     }
 
     /// Create a resolver for a tree.
@@ -67,7 +72,7 @@ impl<'a> CrossRefResolver<'a> {
                 return Some(id);
             }
             if path.depth() == 1 {
-                return self.figure(path.segments()[0]);
+                return path.segments().next().and_then(|idx| self.figure(idx));
             }
         }
 
@@ -93,16 +98,7 @@ impl<'a> CrossRefResolver<'a> {
 
     /// Find all links pointing at the given anchor.
     pub fn find_references_to(&self, target_anchor: &str) -> Vec<NodeId> {
-        let hash = format!("#{target_anchor}");
-        self.tree
-            .descendants(self.tree.root())
-            .filter(|id| {
-                self.tree
-                    .get(*id)
-                    .and_then(DocumentNode::link_url)
-                    .is_some_and(|url| url == target_anchor || url == hash.as_str())
-            })
-            .collect()
+        self.tree.find_references_to(target_anchor)
     }
 }
 

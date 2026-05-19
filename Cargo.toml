@@ -18,6 +18,8 @@ indextree             = { version = "4.7", features = ["par_iter", "deser"] }
 quick-xml             = "0.39.2"
 rayon                 = "1.10"
 serde                 = { version = "1", features = ["derive"] }
+smallvec              = { version = "1", features = ["serde"] }
+smol_str              = { version = "0.3", features = ["serde"] }
 thiserror             = "2"
 unicode-normalization = "0.1.24"
 
