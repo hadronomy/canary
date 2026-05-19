@@ -376,7 +376,6 @@ dependencies = [
  "insta",
  "quick-xml",
  "rayon",
- "regex",
  "serde",
  "smallvec",
  "smol_str",

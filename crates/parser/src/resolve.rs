@@ -1,17 +1,9 @@
 //! Cross-reference resolution.
 
-use std::sync::LazyLock;
-
-use regex::Regex;
+use std::fmt::Write;
 
 use crate::NodeId;
 use crate::tree::{DocumentNode, DocumentTree, SectionPath};
-
-static ANCHOR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#(.+)$").unwrap());
-static SECTION_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[Ss]ection\s+(\d+(?:\.\d+)*)$").unwrap());
-static FIGURE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[Ff]ig(?:ure)?\.?\s+(\d+(?:\.\d+)*)$").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceQuery<'a> {
@@ -22,30 +14,41 @@ pub enum ReferenceQuery<'a> {
 }
 
 impl<'a> ReferenceQuery<'a> {
+    fn strip_prefix(value: &'a str, prefix: &str) -> Option<&'a str> {
+        (value.len() >= prefix.len())
+            .then(|| value.split_at(prefix.len()))
+            .and_then(|(head, tail)| head.eq_ignore_ascii_case(prefix).then_some(tail))
+    }
+
+    fn parse_section(value: &'a str) -> Option<SectionPath> {
+        let rest = Self::strip_prefix(value, "section")?;
+        let rest = rest.strip_prefix(char::is_whitespace)?.trim();
+        (!rest.is_empty()).then_some(rest)?.parse().ok()
+    }
+
+    fn parse_figure(value: &'a str) -> Option<SectionPath> {
+        let rest = Self::strip_prefix(value, "fig")
+            .filter(|rest| !rest.starts_with("ure"))
+            .or_else(|| Self::strip_prefix(value, "figure"))?;
+        let rest = rest.strip_prefix('.').unwrap_or(rest);
+        let rest = rest.strip_prefix(char::is_whitespace)?.trim();
+        (!rest.is_empty()).then_some(rest)?.parse().ok()
+    }
+
     #[must_use]
     pub fn parse(reference: &'a str) -> Self {
         let trimmed = reference.trim();
-
-        if let Some(caps) = ANCHOR_RE.captures(trimmed)
-            && let Some(value) = caps.get(1)
+        if let Some(value) = trimmed.strip_prefix('#').map(str::trim)
+            && !value.is_empty()
         {
-            return Self::Anchor(value.as_str());
+            return Self::Anchor(value);
         }
-
-        if let Some(caps) = SECTION_RE.captures(trimmed)
-            && let Some(value) = caps.get(1)
-            && let Ok(path) = value.as_str().parse::<SectionPath>()
-        {
+        if let Some(path) = Self::parse_section(trimmed) {
             return Self::Section(path);
         }
-
-        if let Some(caps) = FIGURE_RE.captures(trimmed)
-            && let Some(value) = caps.get(1)
-            && let Ok(path) = value.as_str().parse::<SectionPath>()
-        {
+        if let Some(path) = Self::parse_figure(trimmed) {
             return Self::Figure(path);
         }
-
         Self::Fuzzy(trimmed)
     }
 }
@@ -63,16 +66,12 @@ pub struct CrossRefResolver<'a> {
 }
 
 impl<'a> CrossRefResolver<'a> {
-    fn figure(&self, idx: usize) -> Option<NodeId> {
-        self.tree
-            .descendants(self.tree.root())
-            .filter(|node| matches!(node.data(), DocumentNode::Image { .. }))
-            .nth(idx.saturating_sub(1))
-            .map(|node| node.id())
-    }
-
     fn figure_anchor(path: &SectionPath) -> String {
-        format!("fig-{}", path.segments().map(|idx| idx.to_string()).collect::<Vec<_>>().join("-"))
+        let mut out = String::from("fig");
+        for idx in path.iter() {
+            let _ = write!(out, "-{}", idx.get());
+        }
+        out
     }
 
     /// Create a resolver for a tree.
@@ -95,7 +94,7 @@ impl<'a> CrossRefResolver<'a> {
                     return Some(id);
                 }
                 if path.depth() == 1 {
-                    return path.segments().next().and_then(|idx| self.figure(idx));
+                    return path.iter().next().and_then(|idx| self.tree.figure(idx));
                 }
                 None
             }
@@ -185,6 +184,21 @@ mod tests {
         assert!(fig.is_some());
         assert_eq!(resolver.resolve("Figure 1"), fig);
         assert_eq!(resolver.resolve("Fig. 1"), fig);
+    }
+
+    #[test]
+    fn parse_queries() {
+        assert_eq!(ReferenceQuery::parse(" #intro "), ReferenceQuery::Anchor("intro"));
+        assert_eq!(
+            ReferenceQuery::parse("Section 1.2"),
+            ReferenceQuery::Section("1.2".parse().unwrap())
+        );
+        assert_eq!(ReferenceQuery::parse("fig. 2"), ReferenceQuery::Figure("2".parse().unwrap()));
+        assert_eq!(
+            ReferenceQuery::parse("Figure 3.1"),
+            ReferenceQuery::Figure("3.1".parse().unwrap())
+        );
+        assert_eq!(ReferenceQuery::parse("figure1"), ReferenceQuery::Fuzzy("figure1"));
     }
 
     #[test]

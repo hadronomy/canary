@@ -18,7 +18,6 @@ deunicode.workspace             = true
 indextree.workspace             = true
 quick-xml.workspace             = true
 rayon                           = { workspace = true, optional = true }
-regex                           = "1"
 serde.workspace                 = true
 smallvec.workspace              = true
 smol_str.workspace              = true

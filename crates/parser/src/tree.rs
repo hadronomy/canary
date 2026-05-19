@@ -594,10 +594,6 @@ impl SectionPath {
     pub fn is_descendant_of(&self, other: &Self) -> bool {
         self.0.starts_with(&other.0)
     }
-
-    fn from_parts(parts: impl IntoIterator<Item = SectionIndex>) -> Self {
-        Self(parts.into_iter().collect())
-    }
 }
 
 impl fmt::Display for SectionPath {
@@ -890,12 +886,17 @@ impl DocumentTreeBuilder {
 
     #[must_use]
     pub fn freeze(self) -> DocumentTree {
+        let (node_paths, section_paths, figures) =
+            DocumentTree::build_indexes(&self.arena, self.root);
         DocumentTree {
             arena: self.arena,
             root: self.root,
             index: self.index,
             alias: self.alias,
             refs: self.refs,
+            node_paths,
+            section_paths,
+            figures,
         }
     }
 
@@ -949,6 +950,9 @@ pub struct DocumentTree {
     index: HashMap<Anchor, indextree::NodeId>,
     alias: HashMap<Anchor, indextree::NodeId>,
     refs: HashMap<Anchor, Vec<NodeId>>,
+    node_paths: HashMap<NodeId, SectionPath>,
+    section_paths: HashMap<SectionPath, NodeId>,
+    figures: Vec<NodeId>,
 }
 
 impl DocumentTree {
@@ -1035,45 +1039,54 @@ impl DocumentTree {
         self.get(id).and_then(DocumentNode::anchor)
     }
 
-    fn section_child(
-        &self,
-        parent: indextree::NodeId,
-        idx: SectionIndex,
-    ) -> Option<indextree::NodeId> {
-        parent
-            .children(&self.arena)
-            .filter(|child| {
-                self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
-            })
-            .nth(idx.get().saturating_sub(1))
+    fn build_indexes(
+        arena: &Arena<DocumentNode>,
+        root: indextree::NodeId,
+    ) -> (HashMap<NodeId, SectionPath>, HashMap<SectionPath, NodeId>, Vec<NodeId>) {
+        fn walk(
+            arena: &Arena<DocumentNode>,
+            raw: indextree::NodeId,
+            path: &SectionPath,
+            node_paths: &mut HashMap<NodeId, SectionPath>,
+            section_paths: &mut HashMap<SectionPath, NodeId>,
+            figures: &mut Vec<NodeId>,
+        ) {
+            let id = NodeId::from_raw(raw);
+            node_paths.insert(id, path.clone());
+            if matches!(arena[raw].get(), DocumentNode::Image { .. }) {
+                figures.push(id);
+            }
+
+            let mut idx = 0usize;
+            for child in raw.children(arena) {
+                let child_path = if arena[child].get().is_section() {
+                    idx += 1;
+                    let child_path = path.join(
+                        SectionIndex::from_usize(idx).expect("section indices always fit in u16"),
+                    );
+                    section_paths.insert(child_path.clone(), NodeId::from_raw(child));
+                    child_path
+                } else {
+                    path.clone()
+                };
+                walk(arena, child, &child_path, node_paths, section_paths, figures);
+            }
+        }
+
+        let mut node_paths = HashMap::new();
+        let mut section_paths = HashMap::new();
+        let mut figures = Vec::new();
+        walk(arena, root, &SectionPath::root(), &mut node_paths, &mut section_paths, &mut figures);
+        (node_paths, section_paths, figures)
     }
 
-    fn section_path(&self, id: NodeId) -> SectionPath {
-        let mut out = SmallVec::<[SectionIndex; 6]>::new();
-        let mut current = id.into_raw();
-        while let Some(parent) = self.arena[current].parent() {
-            let is_section =
-                self.arena.get(current).map(|node| node.get().is_section()).unwrap_or(false);
-            if is_section {
-                let idx = parent
-                    .children(&self.arena)
-                    .filter(|child| {
-                        self.arena.get(*child).map(|node| node.get().is_section()).unwrap_or(false)
-                    })
-                    .position(|child| child == current)
-                    .and_then(|idx| SectionIndex::from_usize(idx + 1))
-                    .expect("section indices always fit in u16");
-                out.push(idx);
-            }
-            current = parent;
-        }
-        out.reverse();
-        SectionPath::from_parts(out)
+    pub(crate) fn figure(&self, idx: SectionIndex) -> Option<NodeId> {
+        self.figures.get(idx.get().saturating_sub(1)).copied()
     }
 
     #[must_use]
     pub fn path(&self, id: NodeId) -> SectionPath {
-        self.section_path(id)
+        self.node_paths.get(&id).cloned().expect("node path index must contain every tree node")
     }
 
     #[must_use]
@@ -1107,19 +1120,10 @@ impl DocumentTree {
         if path.is_root() {
             return Ok(self.root());
         }
-
-        let mut current = self.root;
-        for idx in path.iter() {
-            let Some(child) = self.section_child(current, idx) else {
-                return Err(DocumentError::InvalidPath {
-                    path: path.to_string(),
-                    reason: format!("index {idx} is out of bounds"),
-                });
-            };
-            current = child;
-        }
-
-        Ok(NodeId::from_raw(current))
+        self.section_paths.get(path).copied().ok_or_else(|| DocumentError::InvalidPath {
+            path: path.to_string(),
+            reason: "path is out of bounds".to_string(),
+        })
     }
 
     pub fn parent_section(&self, id: NodeId) -> Option<NodeRef<'_>> {

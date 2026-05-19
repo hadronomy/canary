@@ -7,14 +7,15 @@
 //! The split keeps XML parsing reusable and makes policy-driven tree construction
 //! explicit.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader, Cursor};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use chrono::NaiveDate;
 use quick_xml::Reader;
-use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::QName;
 
 use crate::error::{DocumentError, Result};
 use crate::tree::{
@@ -84,8 +85,31 @@ pub enum XmlInline {
 pub struct XmlPara {
     pub class: String,
     pub kind: ParaKind,
-    pub text: String,
-    pub inline: Vec<XmlInline>,
+    pub body: XmlParaBody,
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum XmlParaBody {
+    Plain(String),
+    Rich { text: String, inline: Vec<XmlInline> },
+}
+
+impl XmlPara {
+    #[must_use]
+    pub fn text(&self) -> &str {
+        match &self.body {
+            XmlParaBody::Plain(text) | XmlParaBody::Rich { text, .. } => text,
+        }
+    }
+
+    #[must_use]
+    pub fn inline(&self) -> Option<&[XmlInline]> {
+        match &self.body {
+            XmlParaBody::Plain(_) => None,
+            XmlParaBody::Rich { inline, .. } => Some(inline),
+        }
+    }
 }
 
 /// Paragraph classification used by XML extraction and tree projection.
@@ -158,38 +182,30 @@ enum ChildAction {
     Skip,
 }
 
-/// Lightweight decoded attribute container for one XML start tag.
-struct Attrs(Vec<(String, String)>);
-
-impl Attrs {
-    fn decode_attr(attr: &Attribute<'_>, tag: &BytesStart<'_>, phase: &str) -> Result<String> {
-        attr.decode_and_unescape_value(tag.decoder())
-            .map(|it| it.into_owned())
-            .map_err(|e| DocumentError::xml(format!("{phase}: invalid attribute: {e}")))
-    }
-
-    /// Decodes and collects all attributes from a start tag.
-    fn from_tag(tag: &BytesStart<'_>, phase: &str) -> Result<Self> {
-        let mut values = Vec::new();
-        for attr in tag.attributes().with_checks(false).flatten() {
-            values.push((
-                String::from_utf8_lossy(attr.key.as_ref()).to_string(),
-                Self::decode_attr(&attr, tag, phase)?,
-            ));
+fn attr_value<'a>(
+    tag: &'a BytesStart<'a>,
+    key: &[u8],
+    phase: &str,
+) -> Result<Option<Cow<'a, str>>> {
+    for attr in tag.attributes().with_checks(false).flatten() {
+        if attr.key.as_ref() == key {
+            return attr
+                .decode_and_unescape_value(tag.decoder())
+                .map(Some)
+                .map_err(|e| DocumentError::xml(format!("{phase}: invalid attribute: {e}")));
         }
-        Ok(Self(values))
     }
+    Ok(None)
+}
 
-    /// Returns the optional value for a byte key.
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.iter().find_map(|(k, v)| if k == key { Some(v.as_str()) } else { None })
-    }
+fn attr_string(tag: &BytesStart<'_>, key: &[u8], phase: &str) -> Result<Option<String>> {
+    attr_value(tag, key, phase).map(|it| it.map(|it| it.into_owned()))
+}
 
-    /// Returns a required attribute or a phase-tagged error.
-    fn require(&self, key: &str, phase: &str) -> Result<&str> {
-        self.get(key)
-            .ok_or_else(|| DocumentError::xml(format!("{phase}: missing `{key}` attribute")))
-    }
+fn require_attr<'a>(tag: &'a BytesStart<'a>, key: &[u8], phase: &str) -> Result<Cow<'a, str>> {
+    attr_value(tag, key, phase)?.ok_or_else(|| {
+        DocumentError::xml(format!("{phase}: missing `{}` attribute", String::from_utf8_lossy(key)))
+    })
 }
 
 /// Anchor uniqueness tracker for generated tree anchors.
@@ -227,32 +243,37 @@ impl Anchors {
     }
 }
 
-/// Thin XML reader wrapper with centralized error mapping and traversal helpers.
-struct BoeReader<R> {
+struct BoeBufReader<R> {
     inner: Reader<R>,
     buf: Vec<u8>,
 }
 
-impl<R: BufRead> BoeReader<R> {
+impl<R: BufRead> BoeBufReader<R> {
     fn new(reader: R) -> Self {
         let mut inner = Reader::from_reader(reader);
         inner.config_mut().trim_text(true);
         Self { inner, buf: Vec::new() }
     }
+}
 
-    /// Reads the next XML event, mapping errors once.
-    fn next(&mut self) -> Result<Event<'static>> {
-        self.buf.clear();
-        self.inner.read_event_into(&mut self.buf).map(|it| it.into_owned()).map_err(|e| {
-            DocumentError::xml_at(
-                self.inner.buffer_position() as usize,
-                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
-            )
-        })
+struct BoeSliceReader<'a> {
+    inner: Reader<&'a [u8]>,
+}
+
+impl<'a> BoeSliceReader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        let mut inner = Reader::from_reader(bytes);
+        inner.config_mut().trim_text(true);
+        Self { inner }
     }
+}
 
-    /// Decodes text-like nodes with phase context.
-    fn text<E: std::fmt::Display>(
+trait BoeStream {
+    fn next_event<'a>(&'a mut self) -> Result<Event<'a>>;
+
+    fn skip_to_end(&mut self, end: QName<'_>) -> Result<()>;
+
+    fn decode_text<E: std::fmt::Display>(
         raw: std::result::Result<std::borrow::Cow<'_, str>, E>,
         phase: &str,
     ) -> Result<String> {
@@ -260,14 +281,12 @@ impl<R: BufRead> BoeReader<R> {
             .map_err(|e| DocumentError::xml(format!("{phase}: invalid node: {e}")))
     }
 
-    /// Parses dates in `YYYYMMDD` BOE format.
     fn parse_date(value: &str, phase: &str) -> Result<NaiveDate> {
         NaiveDate::parse_from_str(value, "%Y%m%d").map_err(|e| {
             DocumentError::xml(format!("{phase}: invalid fecha_vigencia '{value}': {e}"))
         })
     }
 
-    /// Collapses all whitespace runs into single spaces.
     fn normalize(text: &str) -> String {
         let mut out = String::with_capacity(text.len());
         for word in text.split_whitespace() {
@@ -347,42 +366,21 @@ impl<R: BufRead> BoeReader<R> {
         inline.retain(|part| !matches!(part, XmlInline::Text(text) if text.is_empty()));
     }
 
-    /// Skips a full element subtree until its matching closing tag.
-    fn skip_element(&mut self, closing: &[u8]) -> Result<()> {
-        let mut depth = 0usize;
-        loop {
-            match self.next()? {
-                Event::Start(_) => depth += 1,
-                Event::End(tag) if tag.name().as_ref() == closing && depth == 0 => break,
-                Event::End(_) => {
-                    if depth == 0 {
-                        return Err(DocumentError::xml("skip: unbalanced close tag"));
-                    }
-                    depth -= 1;
-                }
-                Event::Eof => {
-                    return Err(DocumentError::xml(format!(
-                        "skip: unexpected EOF before closing {}",
-                        String::from_utf8_lossy(closing)
-                    )));
-                }
-                _ => {}
-            }
-        }
-        Ok(())
+    fn skip_element(&mut self, start: &BytesStart<'_>) -> Result<()> {
+        self.skip_to_end(start.to_end().name())
     }
 
-    /// Reads plain text content until a matching closing tag.
-    ///
-    /// Nested elements are traversed depth-safely; their textual content is
-    /// flattened into the resulting string.
     fn read_text_until(&mut self, closing: &[u8]) -> Result<String> {
         let mut depth = 0usize;
         let mut out = String::new();
         loop {
-            match self.next()? {
-                Event::Text(value) => out.push_str(&Self::text(value.xml_content(), "text")?),
-                Event::CData(value) => out.push_str(&Self::text(value.xml_content(), "cdata")?),
+            match self.next_event()? {
+                Event::Text(value) => {
+                    out.push_str(&Self::decode_text(value.xml_content(), "text")?)
+                }
+                Event::CData(value) => {
+                    out.push_str(&Self::decode_text(value.xml_content(), "cdata")?)
+                }
                 Event::Start(_) => depth += 1,
                 Event::End(tag) if tag.name().as_ref() == closing && depth == 0 => break,
                 Event::End(_) => {
@@ -411,17 +409,17 @@ impl<R: BufRead> BoeReader<R> {
         let closing = start.name().as_ref().to_vec();
         let mut depth = 0usize;
         loop {
-            let ev = self.next()?;
-            match &ev {
-                Event::Start(_) => {
+            match self.next_event()? {
+                Event::Start(tag) => {
                     depth += 1;
-                    w.write_event(ev.clone())
+                    w.write_event(Event::Start(tag.into_owned()))
                         .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
                 }
                 Event::End(tag) => {
-                    w.write_event(ev.clone())
+                    let close = tag.name().as_ref() == closing.as_slice();
+                    w.write_event(Event::End(tag.into_owned()))
                         .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
-                    if tag.name().as_ref() == closing && depth == 0 {
+                    if close && depth == 0 {
                         break;
                     }
                     if depth == 0 {
@@ -429,8 +427,20 @@ impl<R: BufRead> BoeReader<R> {
                     }
                     depth -= 1;
                 }
-                Event::Text(_) | Event::CData(_) | Event::Comment(_) | Event::Empty(_) => {
-                    w.write_event(ev.clone())
+                Event::Text(value) => {
+                    w.write_event(Event::Text(value.into_owned()))
+                        .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
+                }
+                Event::CData(value) => {
+                    w.write_event(Event::CData(value.into_owned()))
+                        .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
+                }
+                Event::Comment(value) => {
+                    w.write_event(Event::Comment(value.into_owned()))
+                        .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
+                }
+                Event::Empty(tag) => {
+                    w.write_event(Event::Empty(tag.into_owned()))
                         .map_err(|e| DocumentError::xml(format!("raw: {e}")))?;
                 }
                 Event::Eof => return Err(DocumentError::xml("raw: unexpected EOF")),
@@ -440,20 +450,19 @@ impl<R: BufRead> BoeReader<R> {
         Ok(String::from_utf8_lossy(&w.into_inner()).into_owned())
     }
 
-    /// Iterates direct children for a parent closing tag.
-    ///
-    /// The callback returns `ChildAction::Consumed` when it fully consumed the child
-    /// element. Returning `ChildAction::Skip` delegates traversal to `skip_element`.
     fn each_child<F>(&mut self, closing: &[u8], phase: &str, mut f: F) -> Result<()>
     where
-        F: FnMut(&BytesStart<'_>, &mut Self) -> Result<ChildAction>,
+        F: FnMut(&BytesStart<'static>, &mut Self) -> Result<ChildAction>,
     {
         loop {
-            match self.next()? {
-                Event::Start(tag) => match f(&tag, self)? {
-                    ChildAction::Skip => self.skip_element(tag.name().as_ref())?,
-                    ChildAction::Consumed => {}
-                },
+            match self.next_event()? {
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    match f(&tag, self)? {
+                        ChildAction::Skip => self.skip_element(&tag)?,
+                        ChildAction::Consumed => {}
+                    }
+                }
                 Event::End(tag) if tag.name().as_ref() == closing => break,
                 Event::Eof => {
                     return Err(DocumentError::xml(format!(
@@ -467,12 +476,10 @@ impl<R: BufRead> BoeReader<R> {
         Ok(())
     }
 
-    /// Reads an anchor element and extracts an optional `refPost` reference.
-    fn read_anchor(&mut self, start: &BytesStart<'_>) -> Result<(String, Option<LinkTarget>)> {
-        let attrs = Attrs::from_tag(start, "a")?;
-        let class = attrs.get("class").unwrap_or_default();
+    fn read_anchor(&mut self, start: &BytesStart<'static>) -> Result<(String, Option<LinkTarget>)> {
+        let class = attr_value(start, b"class", "a")?;
         let text = self.read_text_until(b"a")?;
-        if class == "refPost" {
+        if class.as_deref() == Some("refPost") {
             let value = text.trim().to_string();
             if !value.is_empty() {
                 return Ok((text, Some(LinkTarget::reference(value))));
@@ -481,27 +488,28 @@ impl<R: BufRead> BoeReader<R> {
         Ok((text, None))
     }
 
-    /// Reads one paragraph element and captures inline reference anchors.
-    fn read_paragraph(&mut self, start: &BytesStart<'_>) -> Result<XmlPara> {
-        let attrs = Attrs::from_tag(start, "p")?;
-        let class = attrs.get("class").unwrap_or_default().to_string();
+    fn read_paragraph(&mut self, start: &BytesStart<'static>) -> Result<XmlPara> {
+        let class = attr_string(start, b"class", "p")?.unwrap_or_default();
         let mut text = String::new();
         let mut inline = Vec::new();
+        let mut rich = false;
         let mut depth = 0usize;
 
         loop {
-            match self.next()? {
+            match self.next_event()? {
                 Event::Text(value) => {
-                    let value = Self::text(value.xml_content(), "text")?;
+                    let value = Self::decode_text(value.xml_content(), "text")?;
                     text.push_str(&value);
                     Self::push_inline_text(&mut inline, value);
                 }
                 Event::CData(value) => {
-                    let value = Self::text(value.xml_content(), "cdata")?;
+                    let value = Self::decode_text(value.xml_content(), "cdata")?;
                     text.push_str(&value);
                     Self::push_inline_text(&mut inline, value);
                 }
                 Event::Start(tag) if tag.name().as_ref() == b"a" => {
+                    rich = true;
+                    let tag = tag.into_owned();
                     let (value, reference) = self.read_anchor(&tag)?;
                     if let Some(target) = reference {
                         inline.push(XmlInline::Link { target, label: value.trim().to_string() });
@@ -526,15 +534,18 @@ impl<R: BufRead> BoeReader<R> {
         }
 
         let mut text = Self::normalize(&text);
-        let mut inline = Self::normalize_inline(inline);
-        if inline.iter().any(|part| matches!(part, XmlInline::Link { .. })) {
+        let body = if rich {
+            let mut inline = Self::normalize_inline(inline);
             while text.ends_with("..") {
                 text.pop();
                 Self::trim_trailing_link_dot(&mut inline);
             }
-        }
+            XmlParaBody::Rich { text, inline }
+        } else {
+            XmlParaBody::Plain(text)
+        };
 
-        Ok(XmlPara { class: class.clone(), kind: ParaKind::from(class.as_str()), text, inline })
+        Ok(XmlPara { kind: ParaKind::from(class.as_str()), class, body })
     }
 
     fn raw_empty(start: &BytesStart<'_>) -> Result<String> {
@@ -544,12 +555,18 @@ impl<R: BufRead> BoeReader<R> {
         Ok(String::from_utf8_lossy(&w.into_inner()).into_owned())
     }
 
-    fn read_blockquote(&mut self, _start: &BytesStart<'_>) -> Result<XmlNode> {
+    fn read_blockquote(&mut self) -> Result<XmlNode> {
         let mut nodes = Vec::new();
         loop {
-            match self.next()? {
-                Event::Start(tag) => nodes.push(self.read_version_child(&tag)?),
-                Event::Empty(tag) => nodes.push(XmlNode::Html(Self::raw_empty(&tag)?)),
+            match self.next_event()? {
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    nodes.push(self.read_version_child(&tag)?);
+                }
+                Event::Empty(tag) => {
+                    let tag = tag.into_owned();
+                    nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                }
                 Event::End(tag) if tag.name().as_ref() == b"blockquote" => break,
                 Event::Eof => return Err(DocumentError::xml("blockquote: unexpected EOF")),
                 _ => {}
@@ -558,25 +575,30 @@ impl<R: BufRead> BoeReader<R> {
         Ok(XmlNode::BlockQuote(nodes))
     }
 
-    fn read_version_child(&mut self, start: &BytesStart<'_>) -> Result<XmlNode> {
+    fn read_version_child(&mut self, start: &BytesStart<'static>) -> Result<XmlNode> {
         if start.name().as_ref() == b"p" {
             return self.read_paragraph(start).map(XmlNode::Paragraph);
         }
         if start.name().as_ref() == b"blockquote" {
-            return self.read_blockquote(start);
+            return self.read_blockquote();
         }
         self.raw(start).map(XmlNode::Html)
     }
 
-    /// Reads a `<version>` node and all paragraph content under it.
-    fn read_version(&mut self, start: &BytesStart<'_>) -> Result<XmlVersion> {
-        let attrs = Attrs::from_tag(start, "version")?;
-        let date = Self::parse_date(attrs.require("fecha_vigencia", "version")?, "version")?;
+    fn read_version(&mut self, start: &BytesStart<'static>) -> Result<XmlVersion> {
+        let date =
+            Self::parse_date(&require_attr(start, b"fecha_vigencia", "version")?, "version")?;
         let mut version = XmlVersion { date, nodes: Vec::new() };
         loop {
-            match self.next()? {
-                Event::Start(tag) => version.nodes.push(self.read_version_child(&tag)?),
-                Event::Empty(tag) => version.nodes.push(XmlNode::Html(Self::raw_empty(&tag)?)),
+            match self.next_event()? {
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    version.nodes.push(self.read_version_child(&tag)?);
+                }
+                Event::Empty(tag) => {
+                    let tag = tag.into_owned();
+                    version.nodes.push(XmlNode::Html(Self::raw_empty(&tag)?));
+                }
                 Event::End(tag) if tag.name().as_ref() == b"version" => break,
                 Event::Eof => return Err(DocumentError::xml("version: unexpected EOF")),
                 _ => {}
@@ -586,14 +608,14 @@ impl<R: BufRead> BoeReader<R> {
         Ok(version)
     }
 
-    /// Reads a `<bloque>` node and all enclosed versions.
-    fn read_block(&mut self, start: &BytesStart<'_>) -> Result<XmlBlock> {
-        let attrs = Attrs::from_tag(start, "bloque")?;
+    fn read_block(&mut self, start: &BytesStart<'static>) -> Result<XmlBlock> {
         let mut block = XmlBlock {
-            id: attrs.get("id").and_then(BlockId::new),
-            kind: BlockKind::from(attrs.get("tipo").unwrap_or_default()),
-            title: attrs
-                .get("titulo")
+            id: attr_value(start, b"id", "bloque")?.as_deref().and_then(BlockId::new),
+            kind: BlockKind::from(
+                attr_value(start, b"tipo", "bloque")?.as_deref().unwrap_or_default(),
+            ),
+            title: attr_value(start, b"titulo", "bloque")?
+                .as_deref()
                 .map(str::trim)
                 .filter(|it| !it.is_empty())
                 .map(str::to_string),
@@ -614,42 +636,24 @@ impl<R: BufRead> BoeReader<R> {
     fn read_metadatos(&mut self) -> Result<DocumentMeta> {
         let mut meta = DocumentMeta::default();
         self.each_child(b"metadatos", "metadatos", |tag, reader| {
-            let key = String::from_utf8_lossy(tag.name().as_ref()).to_string();
-            let value = reader.read_text_until(tag.name().as_ref())?;
-            let value = Self::normalize(&value);
+            let value = Self::normalize(&reader.read_text_until(tag.name().as_ref())?);
             if value.is_empty() {
                 return Ok(ChildAction::Consumed);
             }
-            if key == "identificador" {
-                meta.identifier = Some(value);
-                return Ok(ChildAction::Consumed);
-            }
-            if key == "titulo" {
-                meta.title = Some(value);
-                return Ok(ChildAction::Consumed);
-            }
-            if key == "departamento" {
-                meta.department = Some(value);
-                return Ok(ChildAction::Consumed);
-            }
-            if key == "rango" {
-                meta.rango = Some(value);
-                return Ok(ChildAction::Consumed);
-            }
-            if key == "fecha_publicacion" {
-                meta.publication = Some(value);
-                return Ok(ChildAction::Consumed);
-            }
-            if key == "url_eli" {
-                meta.eli = Some(value);
-                return Ok(ChildAction::Consumed);
+            match tag.name().as_ref() {
+                b"identificador" => meta.identifier = Some(value),
+                b"titulo" => meta.title = Some(value),
+                b"departamento" => meta.department = Some(value),
+                b"rango" => meta.rango = Some(value),
+                b"fecha_publicacion" => meta.publication = Some(value),
+                b"url_eli" => meta.eli = Some(value),
+                _ => {}
             }
             Ok(ChildAction::Consumed)
         })?;
         Ok(meta)
     }
 
-    /// Reads the legal text section (`<texto>`).
     fn read_texto(&mut self) -> Result<Vec<XmlBlock>> {
         let mut blocks = Vec::new();
         self.each_child(b"texto", "texto", |tag, reader| {
@@ -667,7 +671,6 @@ impl<R: BufRead> BoeReader<R> {
         Err(DocumentError::MissingElement { path: "response/data/texto/bloque" })
     }
 
-    /// Reads `<data>` and returns the first parsed `<texto>` payload.
     fn read_data(&mut self) -> Result<Option<LegalDocument>> {
         let mut meta = DocumentMeta::default();
         let mut out = None;
@@ -685,7 +688,6 @@ impl<R: BufRead> BoeReader<R> {
         Ok(out)
     }
 
-    /// Reads `<response>` and resolves its `<data>` payload.
     fn read_response(&mut self) -> Result<Option<LegalDocument>> {
         let mut out = None;
         self.each_child(b"response", "response", |tag, reader| {
@@ -699,6 +701,68 @@ impl<R: BufRead> BoeReader<R> {
         })?;
         Ok(out)
     }
+
+    fn read_document(&mut self) -> Result<LegalDocument> {
+        loop {
+            match self.next_event()? {
+                Event::Start(tag) if tag.name().as_ref() == b"response" => {
+                    if let Some(doc) = self.read_response()? {
+                        return Ok(doc);
+                    }
+                    break;
+                }
+                Event::Start(tag) => {
+                    let tag = tag.into_owned();
+                    self.skip_element(&tag)?;
+                }
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+        Err(DocumentError::MissingElement { path: "response/data/texto" })
+    }
+}
+
+impl<R: BufRead> BoeStream for BoeBufReader<R> {
+    fn next_event<'a>(&'a mut self) -> Result<Event<'a>> {
+        self.buf.clear();
+        self.inner.read_event_into(&mut self.buf).map_err(|e| {
+            DocumentError::xml_at(
+                self.inner.buffer_position() as usize,
+                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+            )
+        })
+    }
+
+    fn skip_to_end(&mut self, end: QName<'_>) -> Result<()> {
+        self.buf.clear();
+        self.inner.read_to_end_into(end, &mut self.buf).map(|_| ()).map_err(|e| {
+            DocumentError::xml_at(
+                self.inner.buffer_position() as usize,
+                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+            )
+        })
+    }
+}
+
+impl<'a> BoeStream for BoeSliceReader<'a> {
+    fn next_event<'b>(&'b mut self) -> Result<Event<'b>> {
+        self.inner.read_event().map_err(|e| {
+            DocumentError::xml_at(
+                self.inner.buffer_position() as usize,
+                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+            )
+        })
+    }
+
+    fn skip_to_end(&mut self, end: QName<'_>) -> Result<()> {
+        self.inner.read_to_end(end).map(|_| ()).map_err(|e| {
+            DocumentError::xml_at(
+                self.inner.buffer_position() as usize,
+                format!("parse: XML error at byte {}: {e}", self.inner.buffer_position()),
+            )
+        })
+    }
 }
 
 /// Parsed legal XML intermediate representation.
@@ -710,21 +774,13 @@ pub struct LegalDocument {
 
 impl LegalDocument {
     pub fn from_reader<R: BufRead>(reader: R) -> Result<Self> {
-        let mut reader = BoeReader::new(reader);
-        loop {
-            match reader.next()? {
-                Event::Start(tag) if tag.name().as_ref() == b"response" => {
-                    if let Some(doc) = reader.read_response()? {
-                        return Ok(doc);
-                    }
-                    break;
-                }
-                Event::Start(tag) => reader.skip_element(tag.name().as_ref())?,
-                Event::Eof => break,
-                _ => {}
-            }
-        }
-        Err(DocumentError::MissingElement { path: "response/data/texto" })
+        let mut reader = BoeBufReader::new(reader);
+        reader.read_document()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let mut reader = BoeSliceReader::new(bytes);
+        reader.read_document()
     }
 
     /// Parses XML into a `LegalDocument` IR.
@@ -732,7 +788,7 @@ impl LegalDocument {
     /// This function is intentionally stateless and independent of
     /// `TreeParser` policy.
     pub fn from_xml(xml: &str) -> Result<Self> {
-        Self::from_reader(Cursor::new(xml.as_bytes()))
+        Self::from_bytes(xml.as_bytes())
     }
 }
 
@@ -806,7 +862,7 @@ impl TreeParser {
             let Some(kind) = Self::head(para) else {
                 continue;
             };
-            let text = para.text.trim();
+            let text = para.text().trim();
             if text.is_empty() {
                 continue;
             }
@@ -823,7 +879,7 @@ impl TreeParser {
                 if next_kind != kind {
                     break;
                 }
-                let text = next.text.trim();
+                let text = next.text().trim();
                 if text.is_empty() {
                     continue;
                 }
@@ -847,24 +903,31 @@ impl TreeParser {
     }
 
     fn push_para(tree: &mut DocumentTreeBuilder, parent: crate::NodeId, para: &XmlPara) {
-        if para.inline.is_empty() {
-            if para.kind.divider() {
-                tree.add_child(parent, DocumentNode::thematic_break());
-            }
-            return;
-        }
-
-        let pid = tree.add_child(parent, DocumentNode::paragraph());
-        for part in &para.inline {
-            match part {
-                XmlInline::Text(text) => {
-                    if !text.is_empty() {
-                        tree.add_child(pid, DocumentNode::text(text.clone()));
-                    }
+        match &para.body {
+            XmlParaBody::Plain(text) => {
+                let text = text.trim();
+                if !text.is_empty() {
+                    let pid = tree.add_child(parent, DocumentNode::paragraph());
+                    tree.add_child(pid, DocumentNode::text(text.to_string()));
                 }
-                XmlInline::Link { target, label } => {
-                    let lid = tree.add_child(pid, DocumentNode::link(target.clone(), None));
-                    tree.add_child(lid, DocumentNode::text(label.clone()));
+            }
+            XmlParaBody::Rich { inline, .. } => {
+                if !inline.is_empty() {
+                    let pid = tree.add_child(parent, DocumentNode::paragraph());
+                    for part in inline {
+                        match part {
+                            XmlInline::Text(text) => {
+                                if !text.is_empty() {
+                                    tree.add_child(pid, DocumentNode::text(text.clone()));
+                                }
+                            }
+                            XmlInline::Link { target, label } => {
+                                let lid =
+                                    tree.add_child(pid, DocumentNode::link(target.clone(), None));
+                                tree.add_child(lid, DocumentNode::text(label.clone()));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -977,7 +1040,7 @@ impl TreeParser {
 
     /// Parses XML bytes into the intermediate representation.
     pub fn parse_bytes_document(&self, bytes: &[u8]) -> Result<LegalDocument> {
-        LegalDocument::from_reader(Cursor::new(bytes))
+        LegalDocument::from_bytes(bytes)
     }
 
     pub fn parse_reader<R: BufRead>(&self, reader: R) -> Result<DocumentTree> {
