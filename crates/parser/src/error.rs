@@ -1,7 +1,11 @@
 //! Error types for document parsing and navigation
 
+use indextree::NodeError;
 use quick_xml::Error as QuickXmlError;
 use thiserror::Error;
+
+use crate::NodeId;
+use crate::tree::NodeKind;
 
 /// Result type alias for this crate
 pub type Result<T> = std::result::Result<T, DocumentError>;
@@ -34,6 +38,22 @@ pub enum DocumentError {
     #[error("Node not found in tree")]
     NodeNotFound,
 
+    /// Tree mutation failure
+    #[error(transparent)]
+    TreeMutation(#[from] TreeMutationError),
+
+    /// Anchor validation failure
+    #[error(transparent)]
+    Anchor(#[from] AnchorError),
+
+    /// Tree build failure
+    #[error(transparent)]
+    TreeBuild(#[from] TreeBuildError),
+
+    /// Tree lookup failure
+    #[error(transparent)]
+    NodeLookup(#[from] NodeLookupError),
+
     /// Invalid path format
     #[error("Invalid section path `{path}`: {reason}")]
     InvalidPath { path: String, reason: String },
@@ -45,4 +65,50 @@ pub enum DocumentError {
     /// quick-xml parse error
     #[error("XML decode error: {0}")]
     QuickXml(#[from] QuickXmlError),
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum AnchorError {
+    #[error("node of kind {kind:?} cannot carry an anchor")]
+    NotAnchorable { kind: NodeKind },
+
+    #[error("section anchors cannot be removed")]
+    RequiredAnchor,
+}
+
+#[derive(Error, Debug)]
+pub enum TreeMutationError {
+    #[error("node {id:?} does not exist in this tree")]
+    UnknownNode { id: NodeId },
+
+    #[error("parent node {parent:?} does not exist in this tree")]
+    UnknownParent { parent: NodeId },
+
+    #[error("node {id:?} of kind {kind:?} cannot carry an anchor")]
+    NotAnchorable { id: NodeId, kind: NodeKind },
+
+    #[error("section node {id:?} must keep an anchor")]
+    RequiredAnchor { id: NodeId },
+
+    #[error("failed to attach child {child:?} under parent {parent:?}: {source}")]
+    Structural {
+        parent: NodeId,
+        child: NodeId,
+        #[source]
+        source: NodeError,
+    },
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum TreeBuildError {
+    #[error(
+        "section parent {parent:?} has too many child sections: sibling index {index} exceeds u16"
+    )]
+    TooManySectionSiblings { parent: NodeId, index: usize },
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum NodeLookupError {
+    #[error("node {id:?} does not exist in this tree")]
+    UnknownNode { id: NodeId },
 }

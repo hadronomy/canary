@@ -79,11 +79,11 @@ fn print_sections(tree: &DocumentTree, n: usize) {
         .collect::<Vec<_>>();
 
     let count = rows.len();
-    let max_level = rows.iter().map(|it| it.3).max().unwrap_or(0);
+    let max_level = rows.iter().map(|it| it.3.get()).max().unwrap_or(0);
     let avg_level = if count == 0 {
         0.0
     } else {
-        rows.iter().map(|it| usize::from(it.3)).sum::<usize>() as f64 / count as f64
+        rows.iter().map(|it| usize::from(it.3.get())).sum::<usize>() as f64 / count as f64
     };
     let max_depth = rows.iter().map(|it| it.2.depth()).max().unwrap_or(0);
 

@@ -125,25 +125,34 @@ impl<'a> CrossRefResolver<'a> {
     }
 
     /// Find all links pointing at the given anchor.
+    pub fn references_to(&self, target_anchor: &str) -> impl Iterator<Item = NodeId> + '_ {
+        self.tree.references_to(target_anchor)
+    }
+
+    /// Find all links pointing at the given anchor.
     pub fn find_references_to(&self, target_anchor: &str) -> Vec<NodeId> {
-        self.tree.find_references_to(target_anchor)
+        self.references_to(target_anchor).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tree::{Anchor, DocumentTree};
+    use crate::tree::{Anchor, DocumentTree, HeadingLevel};
+
+    fn lvl(value: u8) -> HeadingLevel {
+        HeadingLevel::new(value).expect("test heading level must be valid")
+    }
 
     fn tree() -> DocumentTree {
         let mut tree = DocumentTree::builder();
-        let a = tree.add_child(tree.root(), DocumentNode::section(1, "A"));
-        let b = tree.add_child(a, DocumentNode::section(2, "B"));
-        let c = tree.add_child(b, DocumentNode::section(3, "C"));
+        let a = tree.add_child(tree.root(), DocumentNode::section(lvl(1), "A"));
+        let b = tree.add_child(a, DocumentNode::section(lvl(2), "B"));
+        let c = tree.add_child(b, DocumentNode::section(lvl(3), "C"));
         let para = tree.add_child(c, DocumentNode::paragraph());
         tree.add_child(para, DocumentNode::text("Text"));
         let fig = tree.add_child(a, DocumentNode::image("image.png", "Caption"));
-        let _ = tree.set_anchor(fig, Some(Anchor::from("fig-caption")));
+        tree.set_anchor(fig, Some(Anchor::from("fig-caption"))).unwrap();
         let link = tree.add_child(b, DocumentNode::link_anchor("fig-caption", None));
         tree.add_child(link, DocumentNode::text("ref"));
         tree.freeze()

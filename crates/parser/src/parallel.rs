@@ -41,14 +41,18 @@ impl DocumentTree {
 
 #[cfg(test)]
 mod tests {
-    use crate::{DocumentNode, DocumentTree};
+    use crate::{DocumentNode, DocumentTree, HeadingLevel};
+
+    fn lvl(value: u8) -> HeadingLevel {
+        HeadingLevel::new(value).expect("test heading level must be valid")
+    }
 
     #[test]
     #[cfg(feature = "parallel")]
     fn par_sections() {
         let mut tree = DocumentTree::builder();
         for i in 1..=100 {
-            tree.add_child(tree.root(), DocumentNode::section(1, format!("Section {i}")));
+            tree.add_child(tree.root(), DocumentNode::section(lvl(1), format!("Section {i}")));
         }
 
         let tree = tree.freeze();

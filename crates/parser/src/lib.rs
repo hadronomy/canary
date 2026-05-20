@@ -47,15 +47,19 @@ impl NodeId {
     }
 }
 
-pub use error::{DocumentError, Result};
+pub use error::{
+    AnchorError, DocumentError, NodeLookupError, Result, TreeBuildError, TreeMutationError,
+};
 pub use parser::{TreeParser, VersionPolicy};
 pub use render::markdown::{HeadingMode, MarkdownWriter};
-pub use render::writer::TreeWriter;
+pub use render::writer::{RenderEvent, TreeWriter};
 pub use resolve::{Breadcrumb, CrossRefResolver, ReferenceQuery};
 pub use tree::{
-    Anchor, BlockId, ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree, DocumentTreeBuilder,
-    LinkTarget, ListSpacing, ListStyle, NodeKind, NodeRef, SectionEntry, SectionIndex, SectionKind,
-    SectionPath,
+    Anchor, Atom, BlockId, ColumnAlign, ColumnAlignment, DocumentNode, DocumentTree,
+    DocumentTreeBuilder, ExternalLink, HeadingLevel, Language, LinkTarget, ListSpacing, ListStyle,
+    NodeKind, NodeRef, NodeView, ReferenceId, SectionEntry, SectionIndex, SectionKind, SectionPath,
+    SeparatorPolicy, Tag, TagEnd, TextExtractOptions, TextSpan, TextSpanKind, Visit, VisitFlow,
+    visit_children,
 };
 
 #[cfg(feature = "parallel")]
