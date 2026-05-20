@@ -58,7 +58,7 @@ fn preserves_unsupported_html_as_html_node() {
     let html = tree
         .children(id)
         .filter_map(|it| match it.data() {
-            DocumentNode::Html { html } => Some(html),
+            DocumentNode::Html(html) => Some(html.html()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -84,8 +84,7 @@ fn parses_table_nodes_into_typed_tree() {
 
     let tree = TreeParser::new().parse_xml(xml).unwrap();
     let id = tree.find_by_anchor("anexo").unwrap();
-    let table =
-        tree.children(id).find(|it| matches!(it.data(), DocumentNode::Table { .. })).unwrap();
+    let table = tree.children(id).find(|it| matches!(it.data(), DocumentNode::Table(_))).unwrap();
     let rows = table
         .children()
         .filter(|it| matches!(it.data(), DocumentNode::TableRow))
@@ -137,8 +136,8 @@ fn does_not_duplicate_refpost_text() {
     let parts = para
         .children()
         .map(|node| match node.data() {
-            DocumentNode::Text { text } => format!("text:{text}"),
-            DocumentNode::Link { target, .. } => format!("link:{}", target.key()),
+            DocumentNode::Text(text) => format!("text:{}", text.text()),
+            DocumentNode::Link(link) => format!("link:{}", link.target().key()),
             other => format!("other:{:?}", other.kind()),
         })
         .collect::<Vec<_>>();
@@ -172,8 +171,8 @@ fn preserves_inline_reference_order_inside_paragraphs() {
     let parts = para
         .children()
         .map(|node| match node.data() {
-            DocumentNode::Text { text } => format!("text:{text}"),
-            DocumentNode::Link { target, .. } => format!("link:{}", target.key()),
+            DocumentNode::Text(text) => format!("text:{}", text.text()),
+            DocumentNode::Link(link) => format!("link:{}", link.target().key()),
             other => format!("other:{:?}", other.kind()),
         })
         .collect::<Vec<_>>();
@@ -332,7 +331,7 @@ fn keeps_adjacent_unsupported_html_fragments_together() {
     let html = tree
         .children(id)
         .filter_map(|it| match it.data() {
-            DocumentNode::Html { html } => Some(html),
+            DocumentNode::Html(html) => Some(html.html()),
             _ => None,
         })
         .collect::<Vec<_>>();

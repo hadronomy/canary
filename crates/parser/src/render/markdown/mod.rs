@@ -111,13 +111,13 @@ impl<W: Write> MarkdownWriter<W> {
     fn start_tag(&mut self, tag: Tag<'_>) -> fmt::Result {
         match tag {
             Tag::Root => Ok(()),
-            Tag::Section { level, kind, title, .. } => {
+            Tag::Section(section) => {
                 let boe = matches!(&self.mode, HeadingMode::Boe { .. });
-                if boe && Self::marker(kind) {
+                if boe && Self::marker(section.kind()) {
                     self.sections.push(false);
                     self.line()?;
                     self.pref()?;
-                    writeln!(self.out, "{title}")?;
+                    writeln!(self.out, "{}", section.title())?;
                     self.pref()?;
                     writeln!(self.out, "---")?;
                     self.brk = true;
@@ -134,9 +134,9 @@ impl<W: Write> MarkdownWriter<W> {
                     HeadingLevel::new((self.heads + 1).min(6) as u8)
                         .expect("markdown headings stay within range")
                 } else {
-                    level
+                    section.level()
                 };
-                writeln!(self.out, "{} {title}", "#".repeat(level.get() as usize))?;
+                writeln!(self.out, "{} {}", "#".repeat(level.get() as usize), section.title())?;
                 self.brk = true;
                 Ok(())
             }
@@ -145,11 +145,11 @@ impl<W: Write> MarkdownWriter<W> {
                 self.pref()?;
                 Ok(())
             }
-            Tag::List { style, .. } => {
+            Tag::List(list) => {
                 if self.lists.is_empty() {
                     self.line()?;
                 }
-                self.lists.push(match style {
+                self.lists.push(match list.style() {
                     crate::tree::ListStyle::Ordered => 1,
                     crate::tree::ListStyle::Unordered => 0,
                 });
@@ -173,7 +173,7 @@ impl<W: Write> MarkdownWriter<W> {
                 self.brk = false;
                 Ok(())
             }
-            Tag::Table { .. } => {
+            Tag::Table(_) => {
                 self.line()?;
                 Ok(())
             }
@@ -194,9 +194,11 @@ impl<W: Write> MarkdownWriter<W> {
                 write!(self.out, "*")?;
                 Ok(())
             }
-            Tag::Link { target, title } => {
-                self.links
-                    .push(LinkState { href: target.to_string(), title: title.map(str::to_owned) });
+            Tag::Link(link) => {
+                self.links.push(LinkState {
+                    href: link.target().to_string(),
+                    title: link.title().map(str::to_owned),
+                });
                 write!(self.out, "[")?;
                 Ok(())
             }
@@ -272,10 +274,10 @@ impl<W: Write> MarkdownWriter<W> {
 
     fn atom(&mut self, leaf: Atom<'_>) -> fmt::Result {
         match leaf {
-            Atom::Html { html } => {
+            Atom::Html(html) => {
                 self.line()?;
                 self.pref()?;
-                if let Ok(md) = htmd::convert(html) {
+                if let Ok(md) = htmd::convert(html.html()) {
                     let text = md.trim();
                     if !text.is_empty() {
                         for (idx, line) in text.lines().enumerate() {
@@ -288,15 +290,15 @@ impl<W: Write> MarkdownWriter<W> {
                         return Ok(());
                     }
                 }
-                writeln!(self.out, "{html}")?;
+                writeln!(self.out, "{}", html.html())?;
                 self.brk = true;
                 Ok(())
             }
-            Atom::CodeBlock { language, code } => {
+            Atom::CodeBlock(code) => {
                 self.line()?;
                 self.pref()?;
-                writeln!(self.out, "```{}", language.unwrap_or(""))?;
-                for line in code.lines() {
+                writeln!(self.out, "```{}", code.language().unwrap_or(""))?;
+                for line in code.code().lines() {
                     self.pref()?;
                     writeln!(self.out, "{line}")?;
                 }
@@ -305,12 +307,12 @@ impl<W: Write> MarkdownWriter<W> {
                 self.brk = true;
                 Ok(())
             }
-            Atom::Text { text } => {
-                write!(self.out, "{text}")?;
+            Atom::Text(text) => {
+                write!(self.out, "{}", text.text())?;
                 Ok(())
             }
-            Atom::Image { url, alt, .. } => {
-                write!(self.out, "![{alt}]({url})")?;
+            Atom::Image(image) => {
+                write!(self.out, "![{}]({})", image.alt(), image.url())?;
                 Ok(())
             }
             Atom::ThematicBreak => {

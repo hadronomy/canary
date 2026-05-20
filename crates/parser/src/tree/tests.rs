@@ -328,7 +328,7 @@ fn visitor_can_skip_children() {
         ) -> std::result::Result<VisitFlow, Self::Error> {
             self.0.push(format!("enter:{:?}", tag.kind()));
             Ok(match tag {
-                Tag::Section { .. } => VisitFlow::SkipChildren,
+                Tag::Section(_) => VisitFlow::SkipChildren,
                 _ => VisitFlow::Continue,
             })
         }

@@ -1,0 +1,5 @@
+error: document node variants must be marked with #[tag] or #[atom]
+ --> tests/ui/fail_missing_marker.rs:5:5
+  |
+5 |     Root,
+  |     ^^^^

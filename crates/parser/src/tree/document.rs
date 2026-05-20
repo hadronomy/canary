@@ -130,7 +130,7 @@ impl DocumentTree {
             figures: &mut Vec<NodeId>,
         ) -> std::result::Result<(), TreeBuildError> {
             let id = NodeId::from_raw(raw);
-            if matches!(arena[raw].get(), DocumentNode::Image { .. }) {
+            if matches!(arena[raw].get(), DocumentNode::Image(_)) {
                 figures.push(id);
             }
 
@@ -387,7 +387,7 @@ impl Visit for DebugTreeVisitor<'_> {
     ) -> std::result::Result<VisitFlow, Self::Error> {
         let text = match tag {
             Tag::Root => "ROOT".to_string(),
-            Tag::Section { level, title, .. } => format!("H{level}: {title}"),
+            Tag::Section(section) => format!("H{}: {}", section.level(), section.title()),
             _ => format!("{:?}", tag.kind()),
         };
         let indent = "  ".repeat(self.depth);
@@ -413,10 +413,10 @@ impl Visit for DebugTreeVisitor<'_> {
         atom: Atom<'_>,
     ) -> std::result::Result<VisitFlow, Self::Error> {
         let text = match atom {
-            Atom::Text { text } => format!("TEXT: {text}"),
-            Atom::Html { html } => format!("HTML: {html}"),
-            Atom::CodeBlock { code, .. } => format!("CODE: {code}"),
-            Atom::Image { alt, .. } => format!("IMG: {alt}"),
+            Atom::Text(text) => format!("TEXT: {}", text.text()),
+            Atom::Html(html) => format!("HTML: {}", html.html()),
+            Atom::CodeBlock(code) => format!("CODE: {}", code.code()),
+            Atom::Image(image) => format!("IMG: {}", image.alt()),
             _ => format!("{:?}", atom.kind()),
         };
         let indent = "  ".repeat(self.depth);

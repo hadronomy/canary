@@ -68,28 +68,31 @@ impl<'a> Iterator for TextSpans<'a> {
         let inner = self.inner.as_mut()?;
         for raw in inner.by_ref() {
             match self.tree.arena[raw].get().view() {
-                NodeView::Tag(Tag::Section { title, .. })
-                    if self.opts.include_section_titles && !title.is_empty() =>
+                NodeView::Tag(Tag::Section(section))
+                    if self.opts.include_section_titles && !section.title().is_empty() =>
                 {
-                    return Some(TextSpan { kind: TextSpanKind::SectionTitle, text: title });
+                    return Some(TextSpan {
+                        kind: TextSpanKind::SectionTitle,
+                        text: section.title(),
+                    });
                 }
-                NodeView::Atom(Atom::Html { html })
-                    if self.opts.include_html && !html.is_empty() =>
+                NodeView::Atom(Atom::Html(html))
+                    if self.opts.include_html && !html.html().is_empty() =>
                 {
-                    return Some(TextSpan { kind: TextSpanKind::Html, text: html });
+                    return Some(TextSpan { kind: TextSpanKind::Html, text: html.html() });
                 }
-                NodeView::Atom(Atom::CodeBlock { code, .. })
-                    if self.opts.include_code_blocks && !code.is_empty() =>
+                NodeView::Atom(Atom::CodeBlock(code))
+                    if self.opts.include_code_blocks && !code.code().is_empty() =>
                 {
-                    return Some(TextSpan { kind: TextSpanKind::CodeBlock, text: code });
+                    return Some(TextSpan { kind: TextSpanKind::CodeBlock, text: code.code() });
                 }
-                NodeView::Atom(Atom::Text { text }) if !text.is_empty() => {
-                    return Some(TextSpan { kind: TextSpanKind::Text, text });
+                NodeView::Atom(Atom::Text(text)) if !text.text().is_empty() => {
+                    return Some(TextSpan { kind: TextSpanKind::Text, text: text.text() });
                 }
-                NodeView::Atom(Atom::Image { alt, .. })
-                    if self.opts.include_image_alt && !alt.is_empty() =>
+                NodeView::Atom(Atom::Image(image))
+                    if self.opts.include_image_alt && !image.alt().is_empty() =>
                 {
-                    return Some(TextSpan { kind: TextSpanKind::ImageAlt, text: alt });
+                    return Some(TextSpan { kind: TextSpanKind::ImageAlt, text: image.alt() });
                 }
                 _ => {}
             }
