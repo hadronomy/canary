@@ -118,12 +118,12 @@ fn renders_boe_heading_when_enabled() {
         &mut out,
         HeadingMode::Boe {
             meta: DocumentMeta {
-                identifier: Some("BOE-A-1978-31229".to_string()),
-                title: Some("Constitución Española.".to_string()),
-                department: Some("Cortes Generales".to_string()),
-                rango: Some("Constitución".to_string()),
-                publication: Some("19781229".to_string()),
-                eli: Some("https://www.boe.es/eli/es/c/1978/12/27/(1)".to_string()),
+                identifier: Some("BOE-A-1978-31229".into()),
+                title: Some("Constitución Española.".into()),
+                department: Some("Cortes Generales".into()),
+                rango: Some("Constitución".into()),
+                publication: Some("19781229".into()),
+                eli: Some("https://www.boe.es/eli/es/c/1978/12/27/(1)".into()),
             },
             fragments: 800,
         },

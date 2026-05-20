@@ -461,6 +461,36 @@ fn trims_blank_block_title_to_none() {
 }
 
 #[test]
+fn rich_ir_text_excludes_reference_labels() {
+    let doc = TreeParser::new().parse_bytes_document(sample().as_bytes()).unwrap();
+    let para = doc
+        .blocks
+        .iter()
+        .flat_map(|block| &block.versions)
+        .flat_map(|version| &version.nodes)
+        .find_map(|node| match node {
+            XmlNode::BlockQuote(items) => items.iter().find_map(|item| match item {
+                XmlNode::Paragraph(para) if para.inline().is_some() => Some(para),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .unwrap();
+
+    assert_eq!(para.text(), "Texto nota");
+}
+
+#[test]
+fn consuming_build_matches_borrowed_build() {
+    let parser = TreeParser::new();
+    let doc = parser.parse_bytes_document(sample().as_bytes()).unwrap();
+    let expect = parser.build_tree(&doc.blocks).unwrap();
+    let tree = parser.build_document(doc).unwrap();
+
+    assert_eq!(tree.debug_tree(), expect.debug_tree());
+}
+
+#[test]
 fn parses_from_streaming_reader() {
     let reader = std::io::BufReader::with_capacity(1, std::io::Cursor::new(sample().as_bytes()));
 

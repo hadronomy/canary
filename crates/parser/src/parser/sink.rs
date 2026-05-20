@@ -106,6 +106,16 @@ impl TreeProjector {
         versions.first()
     }
 
+    fn pick_owned(&self, versions: Vec<XmlVersion>) -> Option<XmlVersion> {
+        if versions.is_empty() {
+            return None;
+        }
+        if self.policy == VersionPolicy::Latest {
+            return versions.into_iter().max_by_key(|it| it.date);
+        }
+        versions.into_iter().next()
+    }
+
     pub(super) fn push(&mut self, block: &XmlBlock) -> Result<()> {
         let Some(version) = self.pick(&block.versions) else {
             return Ok(());
@@ -143,6 +153,50 @@ impl TreeProjector {
         Ok(())
     }
 
+    pub(super) fn push_owned(&mut self, block: XmlBlock) -> Result<()> {
+        let Some(version) = self.pick(&block.versions) else {
+            return Ok(());
+        };
+        let Some(head) = TreeParser::heading(&block, version) else {
+            return Ok(());
+        };
+
+        let rank = TreeParser::rank(head.kind);
+        while self.stack.last().map(|it| it.0 >= rank).unwrap_or(false) {
+            self.stack.pop();
+        }
+        let parent = self.stack.last().map(|it| it.1).unwrap_or(self.tree.root());
+        let parent_level = self
+            .stack
+            .last()
+            .map(|it| it.2)
+            .unwrap_or_else(|| HeadingLevel::new(1).expect("heading level one is valid"));
+        let level = parent_level.child();
+
+        let section =
+            DocumentNode::section_with(level, TreeParser::section(head.kind), &head.title)
+                .try_with_anchor(self.anchors.next(&head.title, block.id.as_ref()))
+                .map_err(DocumentError::from)?;
+        let id = self.tree.try_add_child(parent, section)?;
+        self.stack.push((rank, id, level));
+
+        let XmlBlock { versions, .. } = block;
+        let version = self
+            .pick_owned(versions)
+            .expect("selected XML block version must still exist when consuming the block");
+        let mut nodes = version.nodes;
+        let mut tail = nodes.split_off(head.start);
+        let body = tail.split_off(head.span.min(tail.len()));
+
+        if !nodes.is_empty() {
+            TreeParser::push_nodes_owned(&mut self.tree, id, nodes)?;
+        }
+        if !body.is_empty() {
+            TreeParser::push_nodes_owned(&mut self.tree, id, body)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn finish(self) -> Result<DocumentTree> {
         if self.tree.node_count() == 1 {
             return Err(DocumentError::xml("build: no sections extracted from XML"));
@@ -168,7 +222,7 @@ impl XmlSink for TreeSink {
     fn meta(&mut self, _meta: DocumentMeta) {}
 
     fn block(&mut self, block: XmlBlock) -> Result<()> {
-        self.projector.push(&block)
+        self.projector.push_owned(block)
     }
 
     fn finish(self) -> Result<Self::Output> {

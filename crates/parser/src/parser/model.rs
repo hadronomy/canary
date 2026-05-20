@@ -1,6 +1,7 @@
 use std::io::BufRead;
 
 use chrono::NaiveDate;
+use smol_str::SmolStr;
 
 use super::reader::{BoeBufReader, BoeSliceReader, BoeStream};
 use super::sink::{IrSink, XmlSink};
@@ -24,7 +25,7 @@ pub struct XmlBlock {
     /// Block semantic kind parsed from `tipo`.
     pub kind: BlockKind,
     /// Optional title from `titulo`.
-    pub title: Option<String>,
+    pub title: Option<SmolStr>,
     /// All temporal versions found in the block.
     pub versions: Vec<XmlVersion>,
 }
@@ -32,12 +33,12 @@ pub struct XmlBlock {
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub struct DocumentMeta {
-    pub identifier: Option<String>,
-    pub title: Option<String>,
-    pub department: Option<String>,
-    pub rango: Option<String>,
-    pub publication: Option<String>,
-    pub eli: Option<String>,
+    pub identifier: Option<SmolStr>,
+    pub title: Option<SmolStr>,
+    pub department: Option<SmolStr>,
+    pub rango: Option<SmolStr>,
+    pub publication: Option<SmolStr>,
+    pub eli: Option<SmolStr>,
 }
 
 /// A single temporal version of a block.
@@ -81,7 +82,7 @@ pub enum XmlInline {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct XmlPara {
-    pub class: String,
+    pub class: SmolStr,
     pub kind: ParaKind,
     pub body: XmlParaBody,
 }
@@ -90,14 +91,19 @@ pub struct XmlPara {
 #[non_exhaustive]
 pub enum XmlParaBody {
     Plain(String),
-    Rich { text: String, inline: Vec<XmlInline> },
+    Rich { inline: Vec<XmlInline> },
 }
 
 impl XmlPara {
     #[must_use]
-    pub fn text(&self) -> &str {
+    pub fn text(&self) -> std::borrow::Cow<'_, str> {
         match &self.body {
-            XmlParaBody::Plain(text) | XmlParaBody::Rich { text, .. } => text,
+            XmlParaBody::Plain(text) => std::borrow::Cow::Borrowed(text),
+            XmlParaBody::Rich { inline: _ } => {
+                let mut out = String::new();
+                self.write_text(&mut out);
+                std::borrow::Cow::Owned(out)
+            }
         }
     }
 
@@ -105,7 +111,20 @@ impl XmlPara {
     pub fn inline(&self) -> Option<&[XmlInline]> {
         match &self.body {
             XmlParaBody::Plain(_) => None,
-            XmlParaBody::Rich { inline, .. } => Some(inline),
+            XmlParaBody::Rich { inline } => Some(inline),
+        }
+    }
+
+    pub fn write_text(&self, out: &mut String) {
+        match &self.body {
+            XmlParaBody::Plain(text) => out.push_str(text),
+            XmlParaBody::Rich { inline } => {
+                for part in inline {
+                    if let XmlInline::Text(text) = part {
+                        out.push_str(text);
+                    }
+                }
+            }
         }
     }
 }

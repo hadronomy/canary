@@ -19,14 +19,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = xml();
     let parser = TreeParser::new();
     let doc = parser.parse_reader_document(BufReader::new(File::open(&path)?))?;
-    let tree = parser.build_tree(&doc.blocks)?;
+    let meta = doc.meta.clone();
+    let tree = parser.build_document(doc)?;
     let fragmentos = tree.descendants(tree.root()).count();
 
     let mut md_buf = String::new();
-    let mut md = MarkdownWriter::with_heading(
-        &mut md_buf,
-        HeadingMode::Boe { meta: doc.meta.clone(), fragments: fragmentos },
-    );
+    let mut md =
+        MarkdownWriter::with_heading(&mut md_buf, HeadingMode::Boe { meta, fragments: fragmentos });
     render::render(&tree, tree.root(), &mut md)?;
 
     println!("XML: {}", path.display());

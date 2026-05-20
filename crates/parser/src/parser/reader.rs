@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
+use smol_str::SmolStr;
 
 use super::attrs::{ChildAction, attr_string, attr_value, require_attr};
 use super::model::{
@@ -348,7 +349,7 @@ pub(super) trait BoeStream {
     }
 
     fn read_paragraph(&mut self, start: &BytesStart<'static>) -> Result<XmlPara> {
-        let class = attr_string(start, b"class", "p")?.unwrap_or_default();
+        let class = attr_string(start, b"class", "p")?.map(SmolStr::from).unwrap_or_default();
         let mut text = String::new();
         let mut inline = Vec::new();
         let mut rich = false;
@@ -392,16 +393,21 @@ pub(super) trait BoeStream {
             }
         }
 
-        let mut text = Self::normalize(&text);
         let body = if rich {
             let mut inline = Self::normalize_inline(inline);
+            let mut text = String::new();
+            for part in &inline {
+                if let XmlInline::Text(value) = part {
+                    text.push_str(value);
+                }
+            }
             while text.ends_with("..") {
                 text.pop();
                 Self::trim_trailing_link_dot(&mut inline);
             }
-            XmlParaBody::Rich { text, inline }
+            XmlParaBody::Rich { inline }
         } else {
-            XmlParaBody::Plain(text)
+            XmlParaBody::Plain(Self::normalize(&text))
         };
 
         Ok(XmlPara { kind: ParaKind::from(class.as_str()), class, body })
@@ -488,7 +494,7 @@ pub(super) trait BoeStream {
                 .as_deref()
                 .map(str::trim)
                 .filter(|it| !it.is_empty())
-                .map(str::to_string),
+                .map(SmolStr::from),
             versions: Vec::new(),
         };
 
@@ -511,12 +517,12 @@ pub(super) trait BoeStream {
                 return Ok(ChildAction::Consumed);
             }
             match tag.name().as_ref() {
-                b"identificador" => meta.identifier = Some(value),
-                b"titulo" => meta.title = Some(value),
-                b"departamento" => meta.department = Some(value),
-                b"rango" => meta.rango = Some(value),
-                b"fecha_publicacion" => meta.publication = Some(value),
-                b"url_eli" => meta.eli = Some(value),
+                b"identificador" => meta.identifier = Some(value.into()),
+                b"titulo" => meta.title = Some(value.into()),
+                b"departamento" => meta.department = Some(value.into()),
+                b"rango" => meta.rango = Some(value.into()),
+                b"fecha_publicacion" => meta.publication = Some(value.into()),
+                b"url_eli" => meta.eli = Some(value.into()),
                 _ => {}
             }
             Ok(ChildAction::Consumed)

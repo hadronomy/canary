@@ -43,6 +43,22 @@ struct HeadingMatch {
 }
 
 impl TreeParser {
+    fn trimmed(text: String) -> Option<String> {
+        if text.trim().is_empty() {
+            return None;
+        }
+        if text.trim().len() == text.len() {
+            return Some(text);
+        }
+        Some(text.trim().to_string())
+    }
+
+    fn heading_text(para: &XmlPara) -> Option<String> {
+        let text = para.text();
+        let text = text.trim();
+        (!text.is_empty()).then(|| text.to_string())
+    }
+
     fn head(para: &XmlPara) -> Option<ParaKind> {
         if para.class == "anexo" || para.class.starts_with("anexo_") {
             return Some(ParaKind::Titulo);
@@ -87,12 +103,9 @@ impl TreeParser {
             let Some(kind) = Self::head(para) else {
                 continue;
             };
-            let text = para.text().trim();
-            if text.is_empty() {
+            let Some(mut title) = Self::heading_text(para) else {
                 continue;
-            }
-
-            let mut parts = vec![text.to_string()];
+            };
             let mut span = 1usize;
             for next in &version.nodes[idx + 1..] {
                 let XmlNode::Paragraph(next) = next else {
@@ -104,14 +117,14 @@ impl TreeParser {
                 if next_kind != kind {
                     break;
                 }
-                let text = next.text().trim();
-                if text.is_empty() {
+                let Some(text) = Self::heading_text(next) else {
                     continue;
-                }
-                parts.push(text.to_string());
+                };
+                title.push(' ');
+                title.push_str(&text);
                 span += 1;
             }
-            return Some(HeadingMatch { kind, title: parts.join(" "), start: idx, span });
+            return Some(HeadingMatch { kind, title, start: idx, span });
         }
         if let Some(title) = &block.title {
             let value = title.trim();
@@ -140,7 +153,7 @@ impl TreeParser {
                     tree.try_add_child(pid, DocumentNode::text(text.to_string()))?;
                 }
             }
-            XmlParaBody::Rich { inline, .. } => {
+            XmlParaBody::Rich { inline } => {
                 if !inline.is_empty() {
                     let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
                     for part in inline {
@@ -167,18 +180,63 @@ impl TreeParser {
         Ok(())
     }
 
+    fn push_para_owned(
+        tree: &mut DocumentTreeBuilder,
+        parent: crate::NodeId,
+        para: XmlPara,
+    ) -> Result<()> {
+        let XmlPara { kind, body, .. } = para;
+        match body {
+            XmlParaBody::Plain(text) => {
+                if let Some(text) = Self::trimmed(text) {
+                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
+                    tree.try_add_child(pid, DocumentNode::text(text))?;
+                }
+            }
+            XmlParaBody::Rich { inline } => {
+                if !inline.is_empty() {
+                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
+                    for part in inline {
+                        match part {
+                            XmlInline::Text(text) => {
+                                if !text.is_empty() {
+                                    tree.try_add_child(pid, DocumentNode::text(text))?;
+                                }
+                            }
+                            XmlInline::Link { target, label } => {
+                                let lid =
+                                    tree.try_add_child(pid, DocumentNode::link(target, None))?;
+                                tree.try_add_child(lid, DocumentNode::text(label))?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if kind.divider() {
+            tree.try_add_child(parent, DocumentNode::thematic_break())?;
+        }
+        Ok(())
+    }
+
     fn push_html(
         tree: &mut DocumentTreeBuilder,
         parent: crate::NodeId,
         html: &mut String,
     ) -> Result<()> {
-        let value = html.trim();
-        if value.is_empty() {
-            html.clear();
+        Self::push_html_owned(tree, parent, std::mem::take(html))
+    }
+
+    fn push_html_owned(
+        tree: &mut DocumentTreeBuilder,
+        parent: crate::NodeId,
+        html: String,
+    ) -> Result<()> {
+        let Some(html) = Self::trimmed(html) else {
             return Ok(());
-        }
-        tree.try_add_child(parent, DocumentNode::html(value.to_string()))?;
-        html.clear();
+        };
+        tree.try_add_child(parent, DocumentNode::html(html))?;
         Ok(())
     }
 
@@ -195,6 +253,25 @@ impl TreeParser {
                 let cid = tree.try_add_child(rid, DocumentNode::table_cell())?;
                 if !cell.is_empty() {
                     tree.try_add_child(cid, DocumentNode::text(cell.clone()))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn push_table_owned(
+        tree: &mut DocumentTreeBuilder,
+        parent: crate::NodeId,
+        table: XmlTable,
+    ) -> Result<()> {
+        let cols = table.rows.iter().map(|it| it.cells.len()).max().unwrap_or(0);
+        let tid = tree.try_add_child(parent, DocumentNode::table(vec![None; cols]))?;
+        for row in table.rows {
+            let rid = tree.try_add_child(tid, DocumentNode::table_row())?;
+            for cell in row.cells {
+                let cid = tree.try_add_child(rid, DocumentNode::table_cell())?;
+                if !cell.is_empty() {
+                    tree.try_add_child(cid, DocumentNode::text(cell))?;
                 }
             }
         }
@@ -234,6 +311,41 @@ impl TreeParser {
         Ok(())
     }
 
+    fn push_nodes_owned(
+        tree: &mut DocumentTreeBuilder,
+        parent: crate::NodeId,
+        nodes: Vec<XmlNode>,
+    ) -> Result<()> {
+        let mut html = String::new();
+        for node in nodes {
+            match node {
+                XmlNode::Paragraph(para) => {
+                    Self::push_html(tree, parent, &mut html)?;
+                    Self::push_para_owned(tree, parent, para)?;
+                }
+                XmlNode::Table(table) => {
+                    Self::push_html(tree, parent, &mut html)?;
+                    Self::push_table_owned(tree, parent, table)?;
+                }
+                XmlNode::Html(raw) => {
+                    if html.is_empty() {
+                        html = raw;
+                    } else {
+                        html.push('\n');
+                        html.push_str(&raw);
+                    }
+                }
+                XmlNode::BlockQuote(items) => {
+                    Self::push_html(tree, parent, &mut html)?;
+                    let bid = tree.try_add_child(parent, DocumentNode::block_quote())?;
+                    Self::push_nodes_owned(tree, bid, items)?;
+                }
+            }
+        }
+        Self::push_html(tree, parent, &mut html)?;
+        Ok(())
+    }
+
     /// Builds a `DocumentTree` from pre-parsed XML blocks.
     pub fn build_tree(&self, blocks: &[XmlBlock]) -> Result<DocumentTree> {
         let mut out = TreeProjector::new(self.policy);
@@ -241,6 +353,20 @@ impl TreeParser {
             out.push(block)?;
         }
         out.finish()
+    }
+
+    /// Builds a `DocumentTree` by consuming pre-parsed XML blocks.
+    pub fn build_tree_owned(&self, blocks: Vec<XmlBlock>) -> Result<DocumentTree> {
+        let mut out = TreeProjector::new(self.policy);
+        for block in blocks {
+            out.push_owned(block)?;
+        }
+        out.finish()
+    }
+
+    /// Builds a `DocumentTree` by consuming a parsed document.
+    pub fn build_document(&self, document: LegalDocument) -> Result<DocumentTree> {
+        self.build_tree_owned(document.blocks)
     }
 
     #[must_use]
