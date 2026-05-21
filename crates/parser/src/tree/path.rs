@@ -50,6 +50,10 @@ impl SectionPath {
         Self(out)
     }
 
+    pub(super) fn from_parts(parts: &[SectionIndex]) -> Self {
+        Self(parts.iter().copied().collect())
+    }
+
     #[must_use]
     pub fn is_descendant_or_self_of(&self, other: &Self) -> bool {
         self.0.starts_with(&other.0)

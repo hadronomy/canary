@@ -22,6 +22,15 @@ impl Section {
         Self { level, kind, anchor, title }
     }
 
+    pub(crate) fn anchored(
+        level: HeadingLevel,
+        kind: SectionKind,
+        anchor: Anchor,
+        title: impl Into<SmolStr>,
+    ) -> Self {
+        Self { level, kind, anchor, title: title.into() }
+    }
+
     #[must_use]
     pub fn with_anchor(mut self, anchor: Anchor) -> Self {
         self.anchor = anchor;

@@ -136,11 +136,15 @@ impl TreeProjector {
             .unwrap_or_else(|| HeadingLevel::new(1).expect("heading level one is valid"));
         let level = parent_level.child();
 
-        let section =
-            DocumentNode::section_with(level, TreeParser::section(head.kind), &head.title)
-                .try_with_anchor(self.anchors.next(&head.title, block.id.as_ref()))
-                .map_err(DocumentError::from)?;
-        let id = self.tree.try_add_child(parent, section)?;
+        let id = self.tree.push_child(
+            parent,
+            DocumentNode::section_anchored(
+                level,
+                TreeParser::section(head.kind),
+                self.anchors.next(&head.title, block.id.as_ref()),
+                &head.title,
+            ),
+        );
         self.stack.push((rank, id, level));
 
         if head.start > 0 {
@@ -173,11 +177,15 @@ impl TreeProjector {
             .unwrap_or_else(|| HeadingLevel::new(1).expect("heading level one is valid"));
         let level = parent_level.child();
 
-        let section =
-            DocumentNode::section_with(level, TreeParser::section(head.kind), &head.title)
-                .try_with_anchor(self.anchors.next(&head.title, block.id.as_ref()))
-                .map_err(DocumentError::from)?;
-        let id = self.tree.try_add_child(parent, section)?;
+        let id = self.tree.push_child(
+            parent,
+            DocumentNode::section_anchored(
+                level,
+                TreeParser::section(head.kind),
+                self.anchors.next(&head.title, block.id.as_ref()),
+                &head.title,
+            ),
+        );
         self.stack.push((rank, id, level));
 
         let XmlBlock { versions, .. } = block;

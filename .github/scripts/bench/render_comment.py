@@ -90,8 +90,8 @@ def main() -> None:
         [
             "| Bucket | Count |",
             "| --- | ---: |",
-            f"| Blocking regressions | {data['totals']['blocking']} |",
-            f"| Warnings | {data['totals']['warnings']} |",
+            f"| Blocking failures | {data['totals']['blocking']} |",
+            f"| Warnings (including regressions) | {data['totals']['warnings']} |",
             f"| Improvements | {data['totals']['improvements']} |",
             "",
         ]
@@ -106,7 +106,7 @@ def main() -> None:
             lines.append(f"- `{item['suite']}`: {item['error']}")
         lines.append("")
 
-    lines.extend(section("Blocking regressions", data["blocking"]))
+    lines.extend(section("Blocking failures", data["blocking"]))
     lines.extend(section("Warnings", data["warnings"]))
 
     lines.extend(["<details>", "<summary>Full benchmark table</summary>", ""])

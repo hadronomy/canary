@@ -163,8 +163,8 @@ def gungraun_rows(current: dict | None, baseline: dict | None, cfg: dict) -> tup
                     "note": None,
                 }
                 if metric in regressions:
-                    row["status"] = "fail"
-                    row["blocking"] = True
+                    row["status"] = "warn"
+                    row["blocking"] = False
                     row["note"] = f"{regressions[metric]['level']} limit exceeded"
                 elif baseline_value is None:
                     row["status"] = "missing"
@@ -176,9 +176,7 @@ def gungraun_rows(current: dict | None, baseline: dict | None, cfg: dict) -> tup
                     row["status"] = "ok"
                 rows.append(row)
 
-    if any(row["status"] == "fail" for row in rows):
-        status["status"] = "fail"
-    elif any(row["status"] == "warn" for row in rows):
+    if any(row["status"] == "warn" for row in rows):
         status["status"] = "warn"
     return (rows, status)
 

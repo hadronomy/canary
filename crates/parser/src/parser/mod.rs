@@ -149,24 +149,24 @@ impl TreeParser {
             XmlParaBody::Plain(text) => {
                 let text = text.trim();
                 if !text.is_empty() {
-                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
-                    tree.try_add_child(pid, DocumentNode::text(text.to_string()))?;
+                    let pid = tree.push_child(parent, DocumentNode::paragraph());
+                    tree.push_child(pid, DocumentNode::text(text.to_string()));
                 }
             }
             XmlParaBody::Rich { inline } => {
                 if !inline.is_empty() {
-                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
+                    let pid = tree.push_child(parent, DocumentNode::paragraph());
                     for part in inline {
                         match part {
                             XmlInline::Text(text) => {
                                 if !text.is_empty() {
-                                    tree.try_add_child(pid, DocumentNode::text(text.clone()))?;
+                                    tree.push_child(pid, DocumentNode::text(text.clone()));
                                 }
                             }
                             XmlInline::Link { target, label } => {
-                                let lid = tree
-                                    .try_add_child(pid, DocumentNode::link(target.clone(), None))?;
-                                tree.try_add_child(lid, DocumentNode::text(label.clone()))?;
+                                let lid =
+                                    tree.push_child(pid, DocumentNode::link(target.clone(), None));
+                                tree.push_child(lid, DocumentNode::text(label.clone()));
                             }
                         }
                     }
@@ -175,7 +175,7 @@ impl TreeParser {
         }
 
         if para.kind.divider() {
-            tree.try_add_child(parent, DocumentNode::thematic_break())?;
+            tree.push_child(parent, DocumentNode::thematic_break());
         }
         Ok(())
     }
@@ -189,24 +189,23 @@ impl TreeParser {
         match body {
             XmlParaBody::Plain(text) => {
                 if let Some(text) = Self::trimmed(text) {
-                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
-                    tree.try_add_child(pid, DocumentNode::text(text))?;
+                    let pid = tree.push_child(parent, DocumentNode::paragraph());
+                    tree.push_child(pid, DocumentNode::text(text));
                 }
             }
             XmlParaBody::Rich { inline } => {
                 if !inline.is_empty() {
-                    let pid = tree.try_add_child(parent, DocumentNode::paragraph())?;
+                    let pid = tree.push_child(parent, DocumentNode::paragraph());
                     for part in inline {
                         match part {
                             XmlInline::Text(text) => {
                                 if !text.is_empty() {
-                                    tree.try_add_child(pid, DocumentNode::text(text))?;
+                                    tree.push_child(pid, DocumentNode::text(text));
                                 }
                             }
                             XmlInline::Link { target, label } => {
-                                let lid =
-                                    tree.try_add_child(pid, DocumentNode::link(target, None))?;
-                                tree.try_add_child(lid, DocumentNode::text(label))?;
+                                let lid = tree.push_child(pid, DocumentNode::link(target, None));
+                                tree.push_child(lid, DocumentNode::text(label));
                             }
                         }
                     }
@@ -215,7 +214,7 @@ impl TreeParser {
         }
 
         if kind.divider() {
-            tree.try_add_child(parent, DocumentNode::thematic_break())?;
+            tree.push_child(parent, DocumentNode::thematic_break());
         }
         Ok(())
     }
@@ -236,7 +235,7 @@ impl TreeParser {
         let Some(html) = Self::trimmed(html) else {
             return Ok(());
         };
-        tree.try_add_child(parent, DocumentNode::html(html))?;
+        tree.push_child(parent, DocumentNode::html(html));
         Ok(())
     }
 
@@ -246,13 +245,13 @@ impl TreeParser {
         table: &XmlTable,
     ) -> Result<()> {
         let cols = table.rows.iter().map(|it| it.cells.len()).max().unwrap_or(0);
-        let tid = tree.try_add_child(parent, DocumentNode::table(vec![None; cols]))?;
+        let tid = tree.push_child(parent, DocumentNode::table(vec![None; cols]));
         for row in &table.rows {
-            let rid = tree.try_add_child(tid, DocumentNode::table_row())?;
+            let rid = tree.push_child(tid, DocumentNode::table_row());
             for cell in &row.cells {
-                let cid = tree.try_add_child(rid, DocumentNode::table_cell())?;
+                let cid = tree.push_child(rid, DocumentNode::table_cell());
                 if !cell.is_empty() {
-                    tree.try_add_child(cid, DocumentNode::text(cell.clone()))?;
+                    tree.push_child(cid, DocumentNode::text(cell.clone()));
                 }
             }
         }
@@ -265,13 +264,13 @@ impl TreeParser {
         table: XmlTable,
     ) -> Result<()> {
         let cols = table.rows.iter().map(|it| it.cells.len()).max().unwrap_or(0);
-        let tid = tree.try_add_child(parent, DocumentNode::table(vec![None; cols]))?;
+        let tid = tree.push_child(parent, DocumentNode::table(vec![None; cols]));
         for row in table.rows {
-            let rid = tree.try_add_child(tid, DocumentNode::table_row())?;
+            let rid = tree.push_child(tid, DocumentNode::table_row());
             for cell in row.cells {
-                let cid = tree.try_add_child(rid, DocumentNode::table_cell())?;
+                let cid = tree.push_child(rid, DocumentNode::table_cell());
                 if !cell.is_empty() {
-                    tree.try_add_child(cid, DocumentNode::text(cell))?;
+                    tree.push_child(cid, DocumentNode::text(cell));
                 }
             }
         }
@@ -302,7 +301,7 @@ impl TreeParser {
                 }
                 XmlNode::BlockQuote(items) => {
                     Self::push_html(tree, parent, &mut html)?;
-                    let bid = tree.try_add_child(parent, DocumentNode::block_quote())?;
+                    let bid = tree.push_child(parent, DocumentNode::block_quote());
                     Self::push_nodes(tree, bid, items)?;
                 }
             }
@@ -337,7 +336,7 @@ impl TreeParser {
                 }
                 XmlNode::BlockQuote(items) => {
                     Self::push_html(tree, parent, &mut html)?;
-                    let bid = tree.try_add_child(parent, DocumentNode::block_quote())?;
+                    let bid = tree.push_child(parent, DocumentNode::block_quote());
                     Self::push_nodes_owned(tree, bid, items)?;
                 }
             }

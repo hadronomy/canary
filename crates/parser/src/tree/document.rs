@@ -3,9 +3,11 @@ use std::fmt;
 use std::fmt::Write;
 use std::ops::Index;
 
-use indextree::Arena;
+use indextree::{Arena, NodeEdge};
+use smallvec::SmallVec;
 
 use super::path::SectionMeta;
+use super::text::{default_span, span};
 use super::{
     AncestorsIter, Anchor, Atom, ChildrenIter, DescendantsIter, DocumentNode, DocumentTreeBuilder,
     NodeRef, NodeSet, SectionEntry, SectionIndex, SectionPath, Tag, TagEnd, TextExtractOptions,
@@ -14,8 +16,7 @@ use super::{
 use crate::NodeId;
 use crate::error::{DocumentError, NodeLookupError, Result, TreeBuildError};
 
-type Indexes =
-    (HashMap<NodeId, SectionMeta>, HashMap<SectionPath, NodeId>, Vec<NodeId>, Vec<NodeId>);
+type Indexes = (Vec<Option<SectionMeta>>, Vec<Option<Box<[NodeId]>>>, Vec<NodeId>, Vec<NodeId>);
 
 /// Hierarchical document tree with anchor and section-path navigation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,14 +25,20 @@ pub struct DocumentTree {
     pub(super) root: indextree::NodeId,
     pub(super) index: HashMap<Anchor, NodeSet>,
     pub(super) alias: HashMap<Anchor, NodeSet>,
+    pub(super) primary_index: HashMap<Anchor, NodeId>,
+    pub(super) primary_alias: HashMap<Anchor, NodeId>,
     pub(super) refs: HashMap<Anchor, NodeSet>,
-    pub(super) section_meta: HashMap<NodeId, SectionMeta>,
-    pub(super) section_index: HashMap<SectionPath, NodeId>,
+    pub(super) section_meta: Vec<Option<SectionMeta>>,
+    pub(super) section_children: Vec<Option<Box<[NodeId]>>>,
     pub(super) section_order: Vec<NodeId>,
     pub(super) figures: Vec<NodeId>,
 }
 
 impl DocumentTree {
+    fn lookup_primary(&self, key: &str) -> Option<NodeId> {
+        self.primary_index.get(key).copied().or_else(|| self.primary_alias.get(key).copied())
+    }
+
     #[must_use]
     pub fn builder() -> DocumentTreeBuilder {
         DocumentTreeBuilder::new()
@@ -69,27 +76,25 @@ impl DocumentTree {
 
     #[must_use]
     pub fn find_by_anchor(&self, query: &str) -> Option<NodeId> {
+        if let Some(id) = self.lookup_primary(query) {
+            return Some(id);
+        }
+
         let query = query.trim().strip_prefix('#').unwrap_or(query).trim();
-        let lookup = |key: &str| {
-            self.index
-                .get(key)
-                .and_then(|ids| ids.first().copied())
-                .or_else(|| self.alias.get(key).and_then(|ids| ids.first().copied()))
-        };
-        if let Some(id) = lookup(query) {
+        if let Some(id) = self.lookup_primary(query) {
             return Some(id);
         }
 
         let slug = Anchor::slug(query);
         if slug.as_str() != query
-            && let Some(id) = lookup(slug.as_str())
+            && let Some(id) = self.lookup_primary(slug.as_str())
         {
             return Some(id);
         }
 
         let ascii = Anchor::ascii_slug(query);
         if ascii.as_str() != query && ascii != slug {
-            return lookup(ascii.as_str());
+            return self.lookup_primary(ascii.as_str());
         }
 
         None
@@ -120,62 +125,59 @@ impl DocumentTree {
         arena: &Arena<DocumentNode>,
         root: indextree::NodeId,
     ) -> std::result::Result<Indexes, TreeBuildError> {
-        fn walk(
-            arena: &Arena<DocumentNode>,
-            raw: indextree::NodeId,
-            path: &SectionPath,
-            section_meta: &mut HashMap<NodeId, SectionMeta>,
-            section_index: &mut HashMap<SectionPath, NodeId>,
-            section_order: &mut Vec<NodeId>,
-            figures: &mut Vec<NodeId>,
-        ) -> std::result::Result<(), TreeBuildError> {
-            let id = NodeId::from_raw(raw);
-            if matches!(arena[raw].get(), DocumentNode::Image(_)) {
-                figures.push(id);
-            }
-
-            let mut idx = 0usize;
-            for child in raw.children(arena) {
-                let child_path = if arena[child].get().is_section() {
-                    idx += 1;
-                    let child_id = NodeId::from_raw(child);
-                    let part = SectionIndex::from_usize(idx)
-                        .ok_or(TreeBuildError::TooManySectionSiblings { parent: id, index: idx })?;
-                    let child_path = path.join(part);
-                    section_meta.insert(child_id, SectionMeta { path: child_path.clone() });
-                    section_index.insert(child_path.clone(), child_id);
-                    section_order.push(child_id);
-                    child_path
-                } else {
-                    path.clone()
-                };
-                walk(
-                    arena,
-                    child,
-                    &child_path,
-                    section_meta,
-                    section_index,
-                    section_order,
-                    figures,
-                )?;
-            }
-            Ok(())
+        fn slot(id: NodeId) -> usize {
+            usize::from(id.into_raw())
         }
 
-        let mut section_meta = HashMap::new();
-        let mut section_index = HashMap::new();
-        let mut section_order = Vec::new();
+        let mut path = SmallVec::<[SectionIndex; 6]>::new();
+        let mut section_meta = vec![None; arena.capacity() + 1];
+        let mut section_children = vec![Vec::new(); arena.capacity() + 1];
+        let mut section_order = Vec::with_capacity(arena.count() / 4);
         let mut figures = Vec::new();
-        walk(
-            arena,
-            root,
-            &SectionPath::root(),
-            &mut section_meta,
-            &mut section_index,
-            &mut section_order,
-            &mut figures,
-        )?;
-        Ok((section_meta, section_index, section_order, figures))
+        let root = NodeId::from_raw(root);
+        let mut stack = SmallVec::<[NodeId; 8]>::new();
+        stack.push(root);
+
+        for edge in root.into_raw().traverse(arena) {
+            match edge {
+                NodeEdge::Start(raw) => {
+                    let id = NodeId::from_raw(raw);
+                    let node = arena[raw].get();
+                    if matches!(node, DocumentNode::Image(_)) {
+                        figures.push(id);
+                    }
+                    if !node.is_section() {
+                        continue;
+                    }
+
+                    let parent = *stack.last().expect("section traversal stack always has root");
+                    let idx = section_children[slot(parent)].len() + 1;
+                    let part = SectionIndex::from_usize(idx)
+                        .ok_or(TreeBuildError::TooManySectionSiblings { parent, index: idx })?;
+                    path.push(part);
+                    section_meta[slot(id)] =
+                        Some(SectionMeta { path: SectionPath::from_parts(path.as_slice()) });
+                    section_children[slot(parent)].push(id);
+                    section_order.push(id);
+                    stack.push(id);
+                }
+                NodeEdge::End(raw) => {
+                    if arena[raw].get().is_section() {
+                        path.pop();
+                        stack.pop();
+                    }
+                }
+            }
+        }
+        Ok((
+            section_meta,
+            section_children
+                .into_iter()
+                .map(|kids| (!kids.is_empty()).then(|| kids.into_boxed_slice()))
+                .collect(),
+            section_order,
+            figures,
+        ))
     }
 
     pub(crate) fn figure(&self, idx: SectionIndex) -> Option<NodeId> {
@@ -193,7 +195,9 @@ impl DocumentTree {
     }
 
     pub(super) fn path_of(&self, id: NodeId) -> SectionPath {
-        if let Some(meta) = self.section_meta.get(&id) {
+        if let Some(meta) =
+            self.section_meta.get(usize::from(id.into_raw())).and_then(Option::as_ref)
+        {
             return meta.path.clone();
         }
 
@@ -201,7 +205,9 @@ impl DocumentTree {
         while let Some(parent) = self.arena[raw].parent() {
             raw = parent;
             let id = NodeId::from_raw(raw);
-            if let Some(meta) = self.section_meta.get(&id) {
+            if let Some(meta) =
+                self.section_meta.get(usize::from(id.into_raw())).and_then(Option::as_ref)
+            {
                 return meta.path.clone();
             }
         }
@@ -242,7 +248,12 @@ impl DocumentTree {
             Some(SectionEntry {
                 id: *id,
                 anchor: anchor.clone(),
-                path: self.section_meta.get(id)?.path.clone(),
+                path: self
+                    .section_meta
+                    .get(usize::from(id.into_raw()))
+                    .and_then(Option::as_ref)?
+                    .path
+                    .clone(),
                 level,
             })
         })
@@ -253,10 +264,23 @@ impl DocumentTree {
             return Ok(self.root());
         }
 
-        self.section_index.get(path).copied().ok_or_else(|| DocumentError::InvalidPath {
-            path: path.to_string(),
-            reason: "path is out of bounds".to_string(),
-        })
+        let mut id = self.root();
+        for part in path.iter() {
+            let idx = part.get().saturating_sub(1);
+            let Some(child) = self
+                .section_children
+                .get(usize::from(id.into_raw()))
+                .and_then(Option::as_deref)
+                .and_then(|kids| kids.get(idx).copied())
+            else {
+                return Err(DocumentError::InvalidPath {
+                    path: path.to_string(),
+                    reason: "path is out of bounds".to_string(),
+                });
+            };
+            id = child;
+        }
+        Ok(id)
     }
 
     pub fn parent_section(&self, id: NodeId) -> Option<NodeRef<'_>> {
@@ -276,16 +300,50 @@ impl DocumentTree {
     }
 
     pub fn extract_text(&self, id: NodeId) -> String {
-        self.extract_text_with(id, TextExtractOptions::default())
+        self.extract_text_default(id)
     }
 
     pub fn extract_text_with(&self, id: NodeId, opts: TextExtractOptions) -> String {
-        let mut out = String::new();
-        for span in self.text_spans_with(id, opts) {
-            if !out.is_empty() {
-                out.push_str(opts.separator.as_str());
+        if opts == TextExtractOptions::default() {
+            return self.extract_text_default(id);
+        }
+        self.extract_text_impl(id, opts.separator.as_str(), |node| {
+            span(opts, node).map(|it| it.text)
+        })
+    }
+
+    fn extract_text_default(&self, id: NodeId) -> String {
+        self.extract_text_impl(id, TextExtractOptions::default().separator.as_str(), default_span)
+    }
+
+    fn extract_text_impl<'a, F>(&'a self, id: NodeId, sep: &str, pick: F) -> String
+    where
+        F: Fn(&'a DocumentNode) -> Option<&'a str>,
+    {
+        let Some(_) = self.arena.get(id.into_raw()) else {
+            return String::new();
+        };
+
+        let mut spans = SmallVec::<[&str; 16]>::new();
+        let mut len = 0usize;
+        for raw in id.into_raw().descendants(&self.arena) {
+            let Some(text) = pick(self.arena[raw].get()) else {
+                continue;
+            };
+            len += text.len();
+            spans.push(text);
+        }
+        if spans.is_empty() {
+            return String::new();
+        }
+
+        let mut out =
+            String::with_capacity(len + sep.len().saturating_mul(spans.len().saturating_sub(1)));
+        for (idx, text) in spans.into_iter().enumerate() {
+            if idx > 0 {
+                out.push_str(sep);
             }
-            out.push_str(span.text);
+            out.push_str(text);
         }
         out
     }

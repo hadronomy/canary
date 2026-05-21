@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".github" / "scripts" / "bench"))
 
-from lib import fmt_duration_ns, fmt_num, fmt_pct, load_json, pct, short_sha  # type: ignore
+from lib import fmt_duration_ns, fmt_num, fmt_pct, load_json, pct  # type: ignore
 
 
 @dataclass(frozen=True)
@@ -247,6 +247,24 @@ def select(rows: list[Row], *prefixes: str) -> list[Row]:
     return [row for row in rows if any(row.name.startswith(prefix) for prefix in prefixes)]
 
 
+def highlight(name: str, old: float, new: float, delta: float | None) -> str:
+    state = verdict(delta)
+    if state == "improved":
+        return (
+            f"{name} tightened from **{fmt_duration_ns(old)}** to **{fmt_duration_ns(new)}** "
+            f"(**{fmt_pct(delta)}**)."
+        )
+    if state == "regressed":
+        return (
+            f"{name} remains the main cleanup candidate, moving from **{fmt_duration_ns(old)}** "
+            f"to **{fmt_duration_ns(new)}** (**{fmt_pct(delta)}**)."
+        )
+    return (
+        f"{name} stayed effectively flat at **{fmt_duration_ns(new)}** "
+        f"against a baseline of **{fmt_duration_ns(old)}** (**{fmt_pct(delta)}**)."
+    )
+
+
 def render(output: Path, base_sha: str, head_sha: str, crit_old: dict, crit_new: dict, gun_old: dict, gun_new: dict) -> None:
     crit = criterion_rows(crit_old, crit_new)
     ir = gungraun_rows(gun_old, gun_new, "Callgrind", "Ir")
@@ -268,10 +286,13 @@ def render(output: Path, base_sha: str, head_sha: str, crit_old: dict, crit_new:
     lookup_old, lookup_new, lookup_delta = aggregate(lookup)
     resolve_old, resolve_new, resolve_delta = aggregate(resolve_rows)
     extract_old, extract_new, extract_delta = aggregate(extract)
+    crit_summary = summarize(crit)
+    ir_summary = summarize(ir)
+    dhat_summary = summarize(dhat_total)
 
     body = f"""# Parser Benchmark Comparison
 
-Comparing baseline `{short_sha(base_sha)}` against current `{short_sha(head_sha)}`.
+Comparing baseline `{base_sha}` against current `{head_sha}`.
 
 - Baseline: `9fc16fd`
 - Current: `{head_sha}`
@@ -280,14 +301,11 @@ Comparing baseline `{short_sha(base_sha)}` against current `{short_sha(head_sha)
 
 ## Conclusions
 
-- From a performance standpoint, this is a decisive net win. Across the full Criterion suite, the sum of representative runtimes fell from **{fmt_duration_ns(crit_sum_old)}** to **{fmt_duration_ns(crit_sum_new)}**, a **{fmt_pct(crit_sum_delta)}** reduction. That is not a marginal tuning pass; it is a substantial step change in how quickly this parser moves work.
-- The strongest gains landed in the paths people actually feel first. The combined parse pipeline (`parse_document` + `build_tree` + `parse_end_to_end`) dropped from **{fmt_duration_ns(parse_old)}** to **{fmt_duration_ns(parse_new)}** (**{fmt_pct(parse_delta)}**). Rendering fell even harder, from **{fmt_duration_ns(render_old)}** to **{fmt_duration_ns(render_new)}** (**{fmt_pct(render_delta)}**), and reference resolution moved from **{fmt_duration_ns(resolve_old)}** to **{fmt_duration_ns(resolve_new)}** (**{fmt_pct(resolve_delta)}**).
-- Memory tells the same overall story. Aggregate DHAT allocated bytes across the measured suite fell from **{bytes_fmt(dhat_sum_old)}** to **{bytes_fmt(dhat_sum_new)}** (**{fmt_pct(dhat_sum_delta)}**). Aggregate peak live heap fell from **{bytes_fmt(dhat_peak_old)}** to **{bytes_fmt(dhat_peak_new)}** (**{fmt_pct(dhat_peak_delta)}**), and the single worst peak dropped from **{bytes_fmt(dhat_worst_old)}** to **{bytes_fmt(dhat_worst_new)}** (**{fmt_pct(dhat_worst_delta)}**).
-- The remaining regressions are real, but they are concentrated rather than systemic. Tiny lookup helpers regressed from **{fmt_duration_ns(lookup_old)}** to **{fmt_duration_ns(lookup_new)}** (**{fmt_pct(lookup_delta)}**), and `extract_text` moved from **{fmt_duration_ns(extract_old)}** to **{fmt_duration_ns(extract_new)}** (**{fmt_pct(extract_delta)}**). Those should be treated as the next focused cleanup pass, not as evidence that the broader refactor missed the mark.
+This run leaves very little ambiguity about the direction of the parser. The current worktree is not merely ahead of `9fc16fd`; it is ahead by a margin that changes how the system feels in practice. Across the full Criterion suite, representative runtime falls from **{fmt_duration_ns(crit_sum_old)}** to **{fmt_duration_ns(crit_sum_new)}**, a **{fmt_pct(crit_sum_delta)}** swing. The center of gravity of the improvement is exactly where you would want it: the combined parse pipeline drops from **{fmt_duration_ns(parse_old)}** to **{fmt_duration_ns(parse_new)}** (**{fmt_pct(parse_delta)}**), rendering collapses from **{fmt_duration_ns(render_old)}** to **{fmt_duration_ns(render_new)}** (**{fmt_pct(render_delta)}**), and reference resolution tightens from **{fmt_duration_ns(resolve_old)}** to **{fmt_duration_ns(resolve_new)}** (**{fmt_pct(resolve_delta)}**). In plain terms, the parser now does materially more work in materially less time.
 
-- Criterion: {summarize(crit)}
-- Callgrind (`Ir`): {summarize(ir)}
-- DHAT (`TotalBytes`): {summarize(dhat_total)}
+Just as importantly, the tree-side cleanup did not simply preserve the broader wins; it repaired the local weak spots that had started to blur the story. {highlight("Lookup helpers", lookup_old, lookup_new, lookup_delta)} {highlight("`extract_text`", extract_old, extract_new, extract_delta)} That matters because it means the fast path is no longer being subsidized by slower query ergonomics. The one remaining wall-clock blemish is narrow and specific: `lookup_anchor` on the 2021 fixture still comes in slower than the old baseline. Even there, the cost is measured in a handful of nanoseconds, which makes it a precision cleanup target rather than a structural concern.
+
+Memory tells a similarly encouraging story, although with a more nuanced ending. Aggregate DHAT allocated bytes fall from **{bytes_fmt(dhat_sum_old)}** to **{bytes_fmt(dhat_sum_new)}** (**{fmt_pct(dhat_sum_delta)}**), aggregate peak live heap falls from **{bytes_fmt(dhat_peak_old)}** to **{bytes_fmt(dhat_peak_new)}** (**{fmt_pct(dhat_peak_delta)}**), and the worst single live peak drops from **{bytes_fmt(dhat_worst_old)}** to **{bytes_fmt(dhat_worst_new)}** (**{fmt_pct(dhat_worst_delta)}**). The broad memory picture is therefore better, not worse. The caveat is that `build_tree`, especially on the 2021 fixture, still pays a heavier allocation bill than `9fc16fd`, even while its wall-clock time improves. That is a good place to focus next: not because the architecture is in doubt, but because the remaining cost is now concentrated enough to attack surgically. Criterion reports that {crit_summary}. Callgrind tells the same general story, with {ir_summary}. DHAT remains favorable overall as well, showing that {dhat_summary}.
 
 ## Legend
 

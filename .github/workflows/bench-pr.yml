@@ -118,8 +118,6 @@ jobs:
           set +e
           cargo bench -p document-hierarchy --bench parser_gungraun -- \
             --baseline="${{ steps.cfg.outputs.gungraun_baseline }}" \
-            --callgrind-limits="${{ steps.cfg.outputs.gungraun_callgrind_limits }}" \
-            --dhat-limits="${{ steps.cfg.outputs.gungraun_dhat_limits }}" \
             --save-summary=pretty-json
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"

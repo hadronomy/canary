@@ -330,6 +330,15 @@ impl DocumentNode {
         Self::Section(Section::new(level, kind, title))
     }
 
+    pub(crate) fn section_anchored(
+        level: HeadingLevel,
+        kind: SectionKind,
+        anchor: Anchor,
+        title: impl Into<SmolStr>,
+    ) -> Self {
+        Self::Section(Section::anchored(level, kind, anchor, title))
+    }
+
     pub fn try_with_anchor(
         mut self,
         anchor: impl Into<Anchor>,

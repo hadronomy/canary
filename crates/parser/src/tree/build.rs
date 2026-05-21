@@ -12,6 +12,8 @@ pub struct DocumentTreeBuilder {
     root: indextree::NodeId,
     index: HashMap<Anchor, NodeSet>,
     alias: HashMap<Anchor, NodeSet>,
+    primary_index: HashMap<Anchor, NodeId>,
+    primary_alias: HashMap<Anchor, NodeId>,
     refs: HashMap<Anchor, NodeSet>,
 }
 
@@ -20,7 +22,15 @@ impl DocumentTreeBuilder {
     pub fn new() -> Self {
         let mut arena = Arena::new();
         let root = arena.new_node(DocumentNode::root());
-        Self { arena, root, index: HashMap::new(), alias: HashMap::new(), refs: HashMap::new() }
+        Self {
+            arena,
+            root,
+            index: HashMap::new(),
+            alias: HashMap::new(),
+            primary_index: HashMap::new(),
+            primary_alias: HashMap::new(),
+            refs: HashMap::new(),
+        }
     }
 
     #[inline]
@@ -40,6 +50,23 @@ impl DocumentTreeBuilder {
     pub fn add_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
         self.try_add_child(parent, node)
             .expect("parent NodeId must belong to this DocumentTreeBuilder")
+    }
+
+    pub(crate) fn push_child(&mut self, parent: NodeId, node: DocumentNode) -> NodeId {
+        let parent = parent.into_raw();
+        debug_assert!(self.arena.get(parent).is_some());
+        let anchor = node.anchor_value().cloned();
+        let target = node.reference_target().cloned();
+        let raw = self.arena.new_node(node);
+        parent.append(raw, &mut self.arena);
+        let id = NodeId::from_raw(raw);
+        if let Some(anchor) = anchor {
+            self.put_anchor(id, anchor);
+        }
+        if let Some(target) = target {
+            self.put_ref(id, target);
+        }
+        id
     }
 
     pub fn try_add_child(
@@ -143,33 +170,37 @@ impl DocumentTreeBuilder {
     }
 
     pub fn try_freeze(self) -> std::result::Result<DocumentTree, TreeBuildError> {
-        let (section_meta, section_index, section_order, figures) =
+        let (section_meta, section_children, section_order, figures) =
             DocumentTree::build_indexes(&self.arena, self.root)?;
         Ok(DocumentTree {
             arena: self.arena,
             root: self.root,
             index: self.index,
             alias: self.alias,
+            primary_index: self.primary_index,
+            primary_alias: self.primary_alias,
             refs: self.refs,
             section_meta,
-            section_index,
+            section_children,
             section_order,
             figures,
         })
     }
 
     fn put_anchor(&mut self, id: NodeId, anchor: Anchor) {
+        self.primary_index.entry(anchor.clone()).or_insert(id);
         Self::push_id(self.index.entry(anchor.clone()).or_default(), id);
         let alias = Anchor::ascii_slug(anchor.as_str());
         if alias != anchor {
+            self.primary_alias.entry(alias.clone()).or_insert(id);
             Self::push_id(self.alias.entry(alias).or_default(), id);
         }
     }
 
     fn drop_anchor(&mut self, id: NodeId, anchor: &Anchor) {
-        Self::drop_id(&mut self.index, anchor, id);
+        Self::drop_id(&mut self.index, &mut self.primary_index, anchor, id);
         let alias = Anchor::ascii_slug(anchor.as_str());
-        Self::drop_id(&mut self.alias, &alias, id);
+        Self::drop_id(&mut self.alias, &mut self.primary_alias, &alias, id);
     }
 
     fn put_ref(&mut self, id: NodeId, target: Anchor) {
@@ -177,7 +208,7 @@ impl DocumentTreeBuilder {
     }
 
     fn drop_ref(&mut self, id: NodeId, target: &Anchor) {
-        Self::drop_id(&mut self.refs, target, id);
+        Self::drop_ids(&mut self.refs, target, id);
     }
 
     fn push_id(ids: &mut NodeSet, id: NodeId) {
@@ -186,7 +217,31 @@ impl DocumentTreeBuilder {
         }
     }
 
-    fn drop_id(map: &mut HashMap<Anchor, NodeSet>, key: &Anchor, id: NodeId) {
+    fn drop_id(
+        map: &mut HashMap<Anchor, NodeSet>,
+        primary: &mut HashMap<Anchor, NodeId>,
+        key: &Anchor,
+        id: NodeId,
+    ) {
+        let next = {
+            let Some(ids) = map.get_mut(key) else {
+                primary.remove(key);
+                return;
+            };
+            ids.retain(|it| *it != id);
+            ids.first().copied()
+        };
+        if let Some(next) = next {
+            primary.insert(key.clone(), next);
+            return;
+        }
+        primary.remove(key);
+        if map.get(key).is_some_and(NodeSet::is_empty) {
+            map.remove(key);
+        }
+    }
+
+    fn drop_ids(map: &mut HashMap<Anchor, NodeSet>, key: &Anchor, id: NodeId) {
         let empty = {
             let Some(ids) = map.get_mut(key) else {
                 return;

@@ -1,6 +1,6 @@
 use std::iter::FusedIterator;
 
-use super::{Atom, DocumentNode, DocumentTree, NodeView, Tag};
+use super::{DocumentNode, DocumentTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SeparatorPolicy {
@@ -67,34 +67,8 @@ impl<'a> Iterator for TextSpans<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let inner = self.inner.as_mut()?;
         for raw in inner.by_ref() {
-            match self.tree.arena[raw].get().view() {
-                NodeView::Tag(Tag::Section(section))
-                    if self.opts.include_section_titles && !section.title().is_empty() =>
-                {
-                    return Some(TextSpan {
-                        kind: TextSpanKind::SectionTitle,
-                        text: section.title(),
-                    });
-                }
-                NodeView::Atom(Atom::Html(html))
-                    if self.opts.include_html && !html.html().is_empty() =>
-                {
-                    return Some(TextSpan { kind: TextSpanKind::Html, text: html.html() });
-                }
-                NodeView::Atom(Atom::CodeBlock(code))
-                    if self.opts.include_code_blocks && !code.code().is_empty() =>
-                {
-                    return Some(TextSpan { kind: TextSpanKind::CodeBlock, text: code.code() });
-                }
-                NodeView::Atom(Atom::Text(text)) if !text.text().is_empty() => {
-                    return Some(TextSpan { kind: TextSpanKind::Text, text: text.text() });
-                }
-                NodeView::Atom(Atom::Image(image))
-                    if self.opts.include_image_alt && !image.alt().is_empty() =>
-                {
-                    return Some(TextSpan { kind: TextSpanKind::ImageAlt, text: image.alt() });
-                }
-                _ => {}
+            if let Some(span) = span(self.opts, self.tree.arena[raw].get()) {
+                return Some(span);
             }
         }
         None
@@ -102,3 +76,37 @@ impl<'a> Iterator for TextSpans<'a> {
 }
 
 impl FusedIterator for TextSpans<'_> {}
+
+pub(super) fn span<'a>(opts: TextExtractOptions, node: &'a DocumentNode) -> Option<TextSpan<'a>> {
+    match node {
+        DocumentNode::Section(section)
+            if opts.include_section_titles && !section.title().is_empty() =>
+        {
+            Some(TextSpan { kind: TextSpanKind::SectionTitle, text: section.title() })
+        }
+        DocumentNode::Html(html) if opts.include_html && !html.html().is_empty() => {
+            Some(TextSpan { kind: TextSpanKind::Html, text: html.html() })
+        }
+        DocumentNode::CodeBlock(code) if opts.include_code_blocks && !code.code().is_empty() => {
+            Some(TextSpan { kind: TextSpanKind::CodeBlock, text: code.code() })
+        }
+        DocumentNode::Text(text) if !text.text().is_empty() => {
+            Some(TextSpan { kind: TextSpanKind::Text, text: text.text() })
+        }
+        DocumentNode::Image(image) if opts.include_image_alt && !image.alt().is_empty() => {
+            Some(TextSpan { kind: TextSpanKind::ImageAlt, text: image.alt() })
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn default_span(node: &DocumentNode) -> Option<&str> {
+    match node {
+        DocumentNode::Section(section) if !section.title().is_empty() => Some(section.title()),
+        DocumentNode::Html(html) if !html.html().is_empty() => Some(html.html()),
+        DocumentNode::CodeBlock(code) if !code.code().is_empty() => Some(code.code()),
+        DocumentNode::Text(text) if !text.text().is_empty() => Some(text.text()),
+        DocumentNode::Image(image) if !image.alt().is_empty() => Some(image.alt()),
+        _ => None,
+    }
+}
