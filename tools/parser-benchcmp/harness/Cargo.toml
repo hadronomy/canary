@@ -1,0 +1,26 @@
+[package]
+name = "parser-benchcmp-harness"
+version = "0.1.0"
+edition = "2024"
+autobenches = false
+publish = false
+
+[workspace]
+
+[lib]
+bench = false
+
+[dependencies]
+document-hierarchy = { path = "/state/crates/parser" }
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["html_reports"] }
+gungraun = "0.19.0"
+
+[[bench]]
+name = "criterion_compare"
+harness = false
+
+[[bench]]
+name = "gungraun_compare"
+harness = false
