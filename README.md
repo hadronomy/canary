@@ -30,7 +30,7 @@
 
 </div>
 
-> [!WARNING] WIP
+> [!WARNING]
 > This project is currently under heavy development
 
 This project is a WIP, agentic legal assistance system. It is designed to support legislators, lawyers, public sector practitioners, law and political science students, and the general public in retrieving and consulting legal information.
