@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rustdoc API Docs"
+  short_description: "Write delightful Rust docs"
+  default_prompt: "Use $rustdoc-api-docs to write or improve rustdoc for a Rust API and keep it accurate."

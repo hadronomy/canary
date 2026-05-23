@@ -7,6 +7,7 @@ pub mod error;
 pub mod files;
 pub mod http;
 pub mod observability;
+pub mod pagination;
 pub mod runtime;
 pub mod services;
 pub mod shutdown;
@@ -24,6 +25,7 @@ pub use files::meta::{
 };
 pub use files::service::FileService;
 pub use observability::init as init_observability;
+pub use pagination::{Limit, Page, PageRequest, PageWindow, Paginated, PaginationError};
 pub use runtime::build_runtime;
 pub use services::parser::{ParseSummary, ParserService};
 pub use shutdown::{ShutdownCoordinator, ShutdownReason};

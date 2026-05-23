@@ -7,10 +7,12 @@ use tokio::fs::File;
 
 use crate::config::FilesConfig;
 use crate::error::FileError;
+use crate::files::list::ListBlobs;
 use crate::files::local::LocalBlobStore;
 use crate::files::meta::{BlobId, BlobName, BlobRecord, StoredBlob};
 use crate::files::stage::{stage_body, stage_multipart};
 use crate::files::store::BlobStore;
+use crate::pagination::{Limit, Page, PageWindow};
 
 #[derive(Clone)]
 pub struct FileService {
@@ -55,8 +57,16 @@ impl FileService {
         self.store.head(id).await
     }
 
-    pub async fn list(&self) -> Result<Vec<BlobRecord>, FileError> {
-        self.store.list().await
+    #[must_use]
+    pub fn list(&self, limit: Limit) -> ListBlobs {
+        ListBlobs::new(self.clone(), limit)
+    }
+
+    pub async fn list_page(
+        &self,
+        window: PageWindow<BlobId>,
+    ) -> Result<Page<BlobRecord, BlobId>, FileError> {
+        self.store.list_page(window).await
     }
 
     #[must_use]

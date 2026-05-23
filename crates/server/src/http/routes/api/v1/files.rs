@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Path, Request, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::header::CONTENT_LENGTH;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -9,6 +9,7 @@ use axum::routing::{get, put};
 use axum::{Json, Router};
 use axum_extra::response::Attachment;
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
+use serde::Deserialize;
 use tempfile::NamedTempFile;
 use tokio_util::io::ReaderStream;
 
@@ -16,7 +17,10 @@ use crate::error::{AppError, AppResult};
 use crate::files::meta::{BlobId, BlobName, BlobRecord};
 use crate::http::extract::optional_mime;
 use crate::http::response::created;
+use crate::pagination::{Page, PageWindow, PaginationError};
 use crate::state::{AppState, FileState};
+
+const DEFAULT_LIMIT: usize = 100;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -32,8 +36,20 @@ struct UploadForm {
     file: FieldData<NamedTempFile>,
 }
 
-async fn list(State(state): State<FileState>) -> AppResult<Json<Vec<BlobRecord>>> {
-    Ok(Json(state.files.list().await?))
+#[derive(Debug, Deserialize)]
+struct ListQuery {
+    limit: Option<usize>,
+    after: Option<String>,
+}
+
+async fn list(
+    State(state): State<FileState>,
+    Query(query): Query<ListQuery>,
+) -> AppResult<Json<Page<BlobRecord, BlobId>>> {
+    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).try_into().map_err(invalid_limit)?;
+    let after = query.after.as_deref().map(BlobId::from_str).transpose()?;
+    let page = state.files.list_page(PageWindow::from_parts(after, limit)).await?;
+    Ok(Json(page))
 }
 
 async fn meta(
@@ -104,4 +120,8 @@ fn parse_filename(value: &str) -> Option<String> {
 
 fn trim_quotes(value: &str) -> &str {
     value.trim_matches('"')
+}
+
+fn invalid_limit(error: PaginationError) -> AppError {
+    AppError::bad_request(error.to_string())
 }

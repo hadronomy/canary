@@ -38,3 +38,9 @@
 
 - The server boxes the heaviest database-facing error variants at the outer error boundary.
 - This keeps `AppError` and `DbError` expressive without letting SurrealDB's large concrete error types leak into every `Result` signature as a layout cost.
+
+### Pagination
+
+- The first pagination slice is cursor-based and uses `BlobId` as the cursor for file listings.
+- `BlobId` already exists as the semantic identity type, so introducing a second generic cursor wrapper here would have added ceremony without removing mistakes.
+- The default walker is sequential and streaming; there is intentionally no concurrent paginator yet because the current codebase has no bounded page-range use case that would justify it.
