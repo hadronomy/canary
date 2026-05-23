@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use mime::Mime;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use uuid::Uuid;
 
 use crate::error::FileError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct BlobId(Uuid);
 
 impl BlobId {
@@ -151,7 +152,7 @@ pub struct StoredBlob {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobRecord {
     pub id: String,
     pub name: Option<String>,

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use axum::body::Body;
-use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
+use axum::extract::{DefaultBodyLimit, Path, Request, State};
 use axum::http::header::CONTENT_LENGTH;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -9,18 +9,15 @@ use axum::routing::{get, put};
 use axum::{Json, Router};
 use axum_extra::response::Attachment;
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
-use serde::Deserialize;
 use tempfile::NamedTempFile;
 use tokio_util::io::ReaderStream;
 
 use crate::error::{AppError, AppResult};
 use crate::files::meta::{BlobId, BlobName, BlobRecord};
-use crate::http::extract::optional_mime;
+use crate::http::extract::{Pagination, optional_mime};
 use crate::http::response::created;
-use crate::pagination::{Page, PageWindow, PaginationError};
+use crate::pagination::{Limit, Page, PagePolicy, PagePolicySource};
 use crate::state::{AppState, FileState};
-
-const DEFAULT_LIMIT: usize = 100;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -36,19 +33,26 @@ struct UploadForm {
     file: FieldData<NamedTempFile>,
 }
 
-#[derive(Debug, Deserialize)]
-struct ListQuery {
-    limit: Option<usize>,
-    after: Option<String>,
+type FilePage = Pagination<BlobId, FilesPagePolicy>;
+
+struct FilesPagePolicy;
+
+impl PagePolicySource<AppState> for FilesPagePolicy {
+    fn policy(_state: &AppState) -> PagePolicy {
+        PagePolicy::bounded(
+            Limit::new(100).expect("file page default is valid"),
+            Limit::new(1_000).expect("file page max is valid"),
+        )
+        .expect("file page policy is valid")
+    }
 }
 
 async fn list(
     State(state): State<FileState>,
-    Query(query): Query<ListQuery>,
+    page: FilePage,
 ) -> AppResult<Json<Page<BlobRecord, BlobId>>> {
-    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).try_into().map_err(invalid_limit)?;
-    let after = query.after.as_deref().map(BlobId::from_str).transpose()?;
-    let page = state.files.list_page(PageWindow::from_parts(after, limit)).await?;
+    let req = state.files.list(page.limit()).after_opt(page.after().copied());
+    let page = req.page().await?;
     Ok(Json(page))
 }
 
@@ -120,8 +124,4 @@ fn parse_filename(value: &str) -> Option<String> {
 
 fn trim_quotes(value: &str) -> &str {
     value.trim_matches('"')
-}
-
-fn invalid_limit(error: PaginationError) -> AppError {
-    AppError::bad_request(error.to_string())
 }

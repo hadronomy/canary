@@ -5,6 +5,13 @@ use crate::files::meta::{BlobId, BlobRecord};
 use crate::files::service::FileService;
 use crate::pagination::{Limit, Page, PageRequest, PageWindow};
 
+/// One-page file listing request.
+///
+/// Build it from [`FileService::list`](crate::files::service::FileService::list),
+/// refine it with cursor methods like [`after`](Self::after), then either fetch
+/// one page with [`page`](Self::page) or walk all pages with
+/// [`paginated`](crate::pagination::PageRequest::paginated).
+#[must_use = "page requests do nothing unless you fetch a page or walk them"]
 #[derive(Clone)]
 pub struct ListBlobs {
     files: FileService,
@@ -12,20 +19,42 @@ pub struct ListBlobs {
 }
 
 impl ListBlobs {
-    #[must_use]
-    pub fn new(files: FileService, limit: Limit) -> Self {
+    pub(crate) fn new(files: FileService, limit: Limit) -> Self {
         Self { files, window: PageWindow::new(limit) }
     }
 
-    #[must_use]
+    /// Returns a new request that starts after the provided blob id.
     pub fn after(mut self, after: BlobId) -> Self {
         self.window = self.window.with_after(Some(after));
         self
     }
 
+    /// Returns a new request with an optional cursor applied.
+    pub fn after_opt(self, after: Option<BlobId>) -> Self {
+        match after {
+            Some(after) => self.after(after),
+            None => self,
+        }
+    }
+
+    /// Fetches one page for the current cursor window.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FileError`] if the underlying store cannot produce the page.
+    pub async fn page(&self) -> Result<Page<BlobRecord, BlobId>, FileError> {
+        self.files.list_page(self.window.clone()).await
+    }
+
     #[must_use]
-    pub fn window(&self) -> &PageWindow<BlobId> {
+    pub(crate) fn window(&self) -> &PageWindow<BlobId> {
         &self.window
+    }
+
+    /// Returns the current page window for this request.
+    #[must_use]
+    pub fn page_window(&self) -> &PageWindow<BlobId> {
+        self.window()
     }
 }
 

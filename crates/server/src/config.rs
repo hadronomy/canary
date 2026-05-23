@@ -13,6 +13,7 @@ use smol_str::SmolStr;
 use url::Url;
 
 use crate::error::ConfigError;
+use crate::pagination::{Limit, PagePolicy};
 
 const CONFIG_PATH_ENV: &str = "CANARY_SERVER_CONFIG";
 const ENV_PREFIX: &str = "CANARY_SERVER";
@@ -26,6 +27,7 @@ const DEFAULT_RAW_UPLOAD_LIMIT: u64 = 64 * 1024 * 1024;
 const DEFAULT_MULTIPART_LIMIT: usize = 64 * 1024 * 1024;
 const DEFAULT_CHUNK_SIZE: usize = 64 * 1024;
 const DEFAULT_SNIFF_BYTES: usize = 8 * 1024;
+const DEFAULT_PAGE_LIMIT: usize = 100;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LoadedConfig {
@@ -193,12 +195,12 @@ pub enum LogFormat {
     Json,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpConfig {
     pub parser_max_bytes: usize,
     pub raw_upload_max_bytes: u64,
     pub multipart_max_bytes: usize,
+    pub pagination: PagePolicy,
 }
 
 impl Default for HttpConfig {
@@ -207,6 +209,9 @@ impl Default for HttpConfig {
             parser_max_bytes: DEFAULT_BODY_LIMIT,
             raw_upload_max_bytes: DEFAULT_RAW_UPLOAD_LIMIT,
             multipart_max_bytes: DEFAULT_MULTIPART_LIMIT,
+            pagination: PagePolicy::unbounded(
+                Limit::new(DEFAULT_PAGE_LIMIT).expect("default page limit is valid"),
+            ),
         }
     }
 }
@@ -388,7 +393,7 @@ struct RawAppConfig {
     server: ServerConfig,
     runtime: RuntimeConfig,
     observability: ObservabilityConfig,
-    http: HttpConfig,
+    http: RawHttpConfig,
     db: RawSurrealConfig,
     files: RawFilesConfig,
 }
@@ -403,6 +408,39 @@ struct RawFilesConfig {
 impl Default for RawFilesConfig {
     fn default() -> Self {
         Self { root: PathBuf::from("data/blobs"), uploads: BlobConfig::default() }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct RawHttpConfig {
+    parser_max_bytes: usize,
+    raw_upload_max_bytes: u64,
+    multipart_max_bytes: usize,
+    pagination: RawPaginationConfig,
+}
+
+impl Default for RawHttpConfig {
+    fn default() -> Self {
+        Self {
+            parser_max_bytes: DEFAULT_BODY_LIMIT,
+            raw_upload_max_bytes: DEFAULT_RAW_UPLOAD_LIMIT,
+            multipart_max_bytes: DEFAULT_MULTIPART_LIMIT,
+            pagination: RawPaginationConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct RawPaginationConfig {
+    default_limit: usize,
+    max_limit: Option<usize>,
+}
+
+impl Default for RawPaginationConfig {
+    fn default() -> Self {
+        Self { default_limit: DEFAULT_PAGE_LIMIT, max_limit: None }
     }
 }
 
@@ -523,12 +561,42 @@ impl TryFrom<RawAppConfig> for AppConfig {
             server: value.server,
             runtime: value.runtime,
             observability: value.observability,
-            http: value.http,
+            http: HttpConfig::try_from(value.http)?,
             db: SurrealConfig::try_from(value.db)?,
             files: FilesConfig {
                 root: StoragePath::new(value.files.root)?,
                 uploads: value.files.uploads,
             },
+        })
+    }
+}
+
+impl TryFrom<RawHttpConfig> for HttpConfig {
+    type Error = ConfigError;
+
+    fn try_from(value: RawHttpConfig) -> Result<Self, Self::Error> {
+        let default = Limit::new(value.pagination.default_limit).map_err(|source| {
+            ConfigError::invalid("http.pagination.default_limit must be greater than zero")
+                .with_source(source)
+        })?;
+        let max = value
+            .pagination
+            .max_limit
+            .map(|value| {
+                Limit::new(value).map_err(|source| {
+                    ConfigError::invalid("http.pagination.max_limit must be greater than zero")
+                        .with_source(source)
+                })
+            })
+            .transpose()?;
+
+        Ok(Self {
+            parser_max_bytes: value.parser_max_bytes,
+            raw_upload_max_bytes: value.raw_upload_max_bytes,
+            multipart_max_bytes: value.multipart_max_bytes,
+            pagination: PagePolicy::new(default, max).map_err(|source| {
+                ConfigError::invalid("invalid http.pagination configuration").with_source(source)
+            })?,
         })
     }
 }

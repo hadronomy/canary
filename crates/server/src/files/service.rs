@@ -57,12 +57,41 @@ impl FileService {
         self.store.head(id).await
     }
 
-    #[must_use]
+    /// Creates a one-page file listing request.
+    ///
+    /// Fetch one page with [`ListBlobs::page`](crate::files::list::ListBlobs::page)
+    /// or walk all pages with
+    /// [`PageRequest::paginated`](crate::pagination::PageRequest::paginated).
+    /// In Axum handlers, pair this with
+    /// [`Pagination`](crate::http::extract::Pagination) to receive a validated
+    /// cursor window from query parameters.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use futures_util::TryStreamExt;
+    /// # use canary_server::{FileService, Limit, PageRequest};
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let files: FileService = todo!();
+    /// let page = files.list(Limit::new(100)?).page().await?;
+    ///
+    /// let all = files
+    ///     .list(Limit::new(100)?)
+    ///     .paginated()
+    ///     .into_stream()
+    ///     .try_collect::<Vec<_>>()
+    ///     .await?;
+    /// #
+    /// # let _ = page;
+    /// # let _ = all;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn list(&self, limit: Limit) -> ListBlobs {
         ListBlobs::new(self.clone(), limit)
     }
 
-    pub async fn list_page(
+    pub(crate) async fn list_page(
         &self,
         window: PageWindow<BlobId>,
     ) -> Result<Page<BlobRecord, BlobId>, FileError> {
