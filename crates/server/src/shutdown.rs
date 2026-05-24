@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tokio::sync::watch;
 
-use crate::error::AppError;
+use crate::error::{ServerError, ServerResult};
 
 #[derive(Debug, Clone)]
 pub struct ShutdownCoordinator {
@@ -91,21 +91,21 @@ impl fmt::Display for SignalKind {
     }
 }
 
-pub async fn wait_for_shutdown_signal() -> Result<ShutdownReason, AppError> {
+pub async fn wait_for_shutdown_signal() -> ServerResult<ShutdownReason> {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind as UnixSignalKind, signal};
 
         let mut interrupt =
-            signal(UnixSignalKind::interrupt()).map_err(|source| AppError::Signal { source })?;
+            signal(UnixSignalKind::interrupt()).map_err(|source| ServerError::Signal { source })?;
         let mut terminate =
-            signal(UnixSignalKind::terminate()).map_err(|source| AppError::Signal { source })?;
+            signal(UnixSignalKind::terminate()).map_err(|source| ServerError::Signal { source })?;
         let mut quit =
-            signal(UnixSignalKind::quit()).map_err(|source| AppError::Signal { source })?;
+            signal(UnixSignalKind::quit()).map_err(|source| ServerError::Signal { source })?;
 
         tokio::select! {
             result = tokio::signal::ctrl_c() => {
-                result.map_err(|source| AppError::Signal { source })?;
+                result.map_err(|source| ServerError::Signal { source })?;
                 Ok(ShutdownReason::Signal(SignalKind::CtrlC))
             }
             _ = interrupt.recv() => Ok(ShutdownReason::Signal(SignalKind::Interrupt)),
@@ -116,7 +116,7 @@ pub async fn wait_for_shutdown_signal() -> Result<ShutdownReason, AppError> {
 
     #[cfg(not(unix))]
     {
-        tokio::signal::ctrl_c().await.map_err(|source| AppError::Signal { source })?;
+        tokio::signal::ctrl_c().await.map_err(|source| ServerError::Signal { source })?;
 
         Ok(ShutdownReason::Signal(SignalKind::CtrlC))
     }

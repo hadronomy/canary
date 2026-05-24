@@ -60,17 +60,19 @@ pub async fn stage_multipart(
 ) -> Result<StagedBlob, FileError> {
     fs::create_dir_all(dir).await.map_err(|source| FileError::CreateDir { source })?;
 
+    let id = BlobId::new();
     let name = field.metadata.file_name.map(BlobName::new).transpose()?;
     let declared = field.metadata.content_type.and_then(|value| value.parse::<mime::Mime>().ok());
     let src = field.contents.into_temp_path();
-    let path = src.to_path_buf();
+    let path = dir.join(format!("{id}.part"));
+    src.persist(&path).map_err(|source| FileError::Persist { source: source.error })?;
     let data = fs::read(&path).await.map_err(|source| FileError::ReadFile { source })?;
     let sniff_len = cfg.sniff_bytes.min(data.len());
     let mut hasher = Sha256::new();
     hasher.update(&data);
 
     Ok(StagedBlob {
-        id: BlobId::new(),
+        id,
         name,
         size: BlobSize::new(data.len() as u64),
         hash: BlobHash::new(hasher.finalize().into()),

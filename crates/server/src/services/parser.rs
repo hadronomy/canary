@@ -26,12 +26,17 @@ impl ParserService {
     pub async fn summarize(&self, bytes: Vec<u8>) -> Result<ParseSummary, AppError> {
         let parser = self.parser.clone();
         tokio::task::spawn_blocking(move || {
-            let doc = parser.parse_bytes_document(&bytes).map_err(|source| {
-                AppError::internal("parse_error", "failed to parse XML").with_source(source)
+            let doc = parser.parse_bytes_document(&bytes).map_err(|_| {
+                AppError::validation_code(
+                    "invalid_document",
+                    "The document payload could not be parsed.",
+                )
             })?;
-            let tree = parser.build_document(doc.clone()).map_err(|source| {
-                AppError::internal("tree_build_error", "failed to build document tree")
-                    .with_source(source)
+            let tree = parser.build_document(doc.clone()).map_err(|_| {
+                AppError::validation_code(
+                    "invalid_document",
+                    "The document payload is not a valid document.",
+                )
             })?;
             Ok(ParseSummary {
                 title: doc.meta.title,
@@ -42,7 +47,10 @@ impl ParserService {
             })
         })
         .await
-        .map_err(|source| AppError::TaskJoin { source })?
+        .map_err(|source| {
+            AppError::internal("parser_task_error", "The parser worker failed unexpectedly.")
+                .with_source(source)
+        })?
     }
 }
 

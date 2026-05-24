@@ -8,13 +8,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
 use axum::{Json, Router};
 use axum_extra::response::Attachment;
-use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
+use axum_typed_multipart::{FieldData, TryFromMultipart};
 use tempfile::NamedTempFile;
 use tokio_util::io::ReaderStream;
 
 use crate::error::{AppError, AppResult};
 use crate::files::meta::{BlobId, BlobName, BlobRecord};
-use crate::http::extract::{Pagination, optional_mime};
+use crate::http::extract::{MultipartForm, Pagination, optional_mime};
 use crate::http::response::created;
 use crate::pagination::{Limit, Page, PagePolicy, PagePolicySource};
 use crate::state::{AppState, FileState};
@@ -67,9 +67,9 @@ async fn meta(
 
 async fn upload_multipart(
     State(state): State<FileState>,
-    TypedMultipart(form): TypedMultipart<UploadForm>,
+    form: MultipartForm<UploadForm>,
 ) -> AppResult<(StatusCode, Json<BlobRecord>)> {
-    let stored = state.files.put_multipart(form.file).await?;
+    let stored = state.files.put_multipart(form.data.file).await?;
     Ok(created(BlobRecord::from(&stored)))
 }
 

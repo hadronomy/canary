@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::runtime::Runtime;
 
 use crate::config::RuntimeConfig;
-use crate::error::AppError;
+use crate::error::{ServerError, ServerResult};
 
-pub fn build_runtime(config: &RuntimeConfig) -> Result<Runtime, AppError> {
+pub fn build_runtime(config: &RuntimeConfig) -> ServerResult<Runtime> {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
 
     builder
@@ -18,7 +18,7 @@ pub fn build_runtime(config: &RuntimeConfig) -> Result<Runtime, AppError> {
         .global_queue_interval(config.global_queue_interval)
         .thread_name_fn(runtime_thread_name);
 
-    builder.build().map_err(|source| AppError::RuntimeBuild { source })
+    builder.build().map_err(|source| ServerError::RuntimeBuild { source })
 }
 
 fn runtime_thread_name() -> String {

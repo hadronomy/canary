@@ -3,12 +3,12 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::config::{LogFormat, ObservabilityConfig};
-use crate::error::AppError;
+use crate::error::{ServerError, ServerResult};
 
-pub fn init(config: &ObservabilityConfig) -> Result<(), AppError> {
+pub fn init(config: &ObservabilityConfig) -> ServerResult<()> {
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(&config.filter))
-        .map_err(|source| AppError::Observability { source: Box::new(source) })?;
+        .map_err(|source| ServerError::Observability { source: Box::new(source) })?;
 
     match config.format {
         LogFormat::Pretty => tracing_subscriber::registry()
@@ -21,7 +21,7 @@ pub fn init(config: &ObservabilityConfig) -> Result<(), AppError> {
                     .compact(),
             )
             .try_init()
-            .map_err(|source| AppError::Observability { source: Box::new(source) }),
+            .map_err(|source| ServerError::Observability { source: Box::new(source) }),
         LogFormat::Json => tracing_subscriber::registry()
             .with(filter)
             .with(
@@ -33,6 +33,6 @@ pub fn init(config: &ObservabilityConfig) -> Result<(), AppError> {
                     .flatten_event(true),
             )
             .try_init()
-            .map_err(|source| AppError::Observability { source: Box::new(source) }),
+            .map_err(|source| ServerError::Observability { source: Box::new(source) }),
     }
 }

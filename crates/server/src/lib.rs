@@ -19,7 +19,7 @@ pub use config::{
     ObservabilityConfig, RawSurrealMode, RuntimeConfig, ServerConfig, SurrealAuth, SurrealConfig,
 };
 pub use db::service::DatabaseService;
-pub use error::{AppError, AppResult, ConfigError, DbError, FileError};
+pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
 pub use files::list::ListBlobs;
 pub use files::meta::{
     BlobHash, BlobId, BlobKind, BlobMedia, BlobName, BlobRecord, BlobSize, StagedBlob, StoredBlob,

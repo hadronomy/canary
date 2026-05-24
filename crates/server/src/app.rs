@@ -11,7 +11,7 @@ use tower_http::normalize_path::NormalizePathLayer;
 
 use crate::config::LoadedConfig;
 use crate::db::service::DatabaseService;
-use crate::error::{AppError, AppResult};
+use crate::error::{ServerError, ServerResult};
 use crate::files::service::FileService;
 use crate::http;
 use crate::services::parser::ParserService;
@@ -49,7 +49,7 @@ impl ServerBuilder<MissingConfig> {
 }
 
 impl ServerBuilder<WithConfig> {
-    pub async fn build(self) -> AppResult<ServerApplication> {
+    pub async fn build(self) -> ServerResult<ServerApplication> {
         let loaded = self.state.loaded;
         let shutdown = ShutdownCoordinator::new(loaded.settings.server.shutdown_grace_period);
         let db = DatabaseService::connect(&loaded.settings.db).await?;
@@ -83,7 +83,7 @@ impl ServerApplication {
         self.router.clone()
     }
 
-    pub async fn run(self) -> AppResult<()> {
+    pub async fn run(self) -> ServerResult<()> {
         let Self { state, router, shutdown } = self;
         let bind_address = state.loaded_config().settings.server.bind;
         let request_timeout = state.loaded_config().settings.server.request_timeout;
@@ -91,11 +91,10 @@ impl ServerApplication {
 
         let listener = TcpListener::bind(bind_address)
             .await
-            .map_err(|source| AppError::Bind { address: bind_address, source })?;
-        let local_address = listener.local_addr().map_err(|source| {
-            AppError::internal("listener_introspection_error", "failed to inspect bound listener")
-                .with_source(source)
-        })?;
+            .map_err(|source| ServerError::Bind { address: bind_address, source })?;
+        let local_address = listener
+            .local_addr()
+            .map_err(|source| ServerError::ListenerIntrospection { source })?;
         state.update_http_ready();
         log_http_listener_ready(
             bind_address,
@@ -115,7 +114,7 @@ impl ServerApplication {
         tasks.spawn(async move {
             let reason = wait_for_shutdown_signal().await?;
             signal_shutdown.request(reason);
-            Ok::<_, AppError>(())
+            Ok::<_, ServerError>(())
         });
 
         let http_shutdown = shutdown.clone();
@@ -126,7 +125,7 @@ impl ServerApplication {
             axum::serve(listener, service)
                 .with_graceful_shutdown(signal)
                 .await
-                .map_err(|source| AppError::Serve { source })
+                .map_err(|source| ServerError::Serve { source })
         });
 
         supervise_tasks(&mut tasks, &shutdown).await
@@ -150,9 +149,9 @@ fn log_http_listener_ready(
 }
 
 async fn supervise_tasks(
-    tasks: &mut JoinSet<Result<(), AppError>>,
+    tasks: &mut JoinSet<Result<(), ServerError>>,
     shutdown: &ShutdownCoordinator,
-) -> AppResult<()> {
+) -> ServerResult<()> {
     while let Some(result) = tasks.join_next().await {
         match result {
             Ok(Ok(())) => {
@@ -164,7 +163,7 @@ async fn supervise_tasks(
             }
             Err(source) => {
                 shutdown.request(ShutdownReason::TaskFailed("server-task".into()));
-                return Err(AppError::TaskJoin { source });
+                return Err(ServerError::TaskJoin { source });
             }
         }
     }

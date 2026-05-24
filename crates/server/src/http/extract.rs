@@ -1,14 +1,19 @@
 //! Small HTTP extractors layered on top of the core server types.
 
 use std::marker::PhantomData;
+use std::ops::Deref;
 
-use axum::body::Body;
-use axum::extract::{FromRef, FromRequestParts, Query};
+use axum::body::{Body, Bytes};
+use axum::extract::{FromRef, FromRequest, FromRequestParts, Query};
 use axum::http::HeaderMap;
 use axum::http::request::Parts;
+use axum_typed_multipart::BaseMultipart;
+use serde_json::json;
 
 use crate::error::AppError;
-use crate::pagination::{DefaultPagePolicy, PagePolicy, PagePolicySource, PageQuery, PageWindow};
+use crate::pagination::{
+    DefaultPagePolicy, Limit, PagePolicy, PagePolicySource, PageQuery, PageWindow,
+};
 use crate::state::AppState;
 
 /// Axum extractor for validated pagination state.
@@ -34,7 +39,7 @@ impl<C, P> Pagination<C, P> {
     }
 
     #[must_use]
-    pub fn limit(&self) -> crate::pagination::Limit {
+    pub fn limit(&self) -> Limit {
         self.window.limit()
     }
 
@@ -83,10 +88,11 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let query = Query::<PageQuery<C>>::from_request_parts(parts, state)
             .await
-            .map_err(|err| AppError::bad_request(format!("invalid pagination query: {err}")))?;
-        let window = P::policy(state)
-            .resolve(query.0)
-            .map_err(|err| AppError::bad_request(format!("invalid pagination query: {err}")))?;
+            .map_err(AppError::from)?;
+        let window = P::policy(state).resolve(query.0).map_err(|err| {
+            AppError::validation_code("invalid_pagination", "The pagination query is invalid.")
+                .with_detail("reason", json!(err.to_string()))
+        })?;
         Ok(Self { window, policy: PhantomData })
     }
 }
@@ -96,6 +102,39 @@ impl FromRef<AppState> for PagePolicy {
         state.loaded_config().settings.http.pagination.clone()
     }
 }
+
+/// Request body bytes with custom [`AppError`] rejection handling.
+#[derive(Debug, Clone)]
+pub struct RequestBytes(Bytes);
+
+impl RequestBytes {
+    #[must_use]
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+impl Deref for RequestBytes {
+    type Target = Bytes;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for RequestBytes
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: axum::extract::Request, state: &S) -> Result<Self, Self::Rejection> {
+        Bytes::from_request(req, state).await.map(Self).map_err(AppError::from)
+    }
+}
+
+/// Multipart form extractor that preserves the server's JSON error shape.
+pub type MultipartForm<T> = BaseMultipart<T, AppError>;
 
 pub fn optional_mime(headers: &HeaderMap) -> Option<mime::Mime> {
     headers
@@ -176,8 +215,8 @@ mod tests {
 
         let err = Pagination::<usize>::from_request_parts(&mut parts, &state).await.unwrap_err();
 
-        assert_eq!(err.code(), "bad_request");
-        assert!(err.to_string().contains("must not exceed 100"));
+        assert_eq!(err.code(), "invalid_pagination");
+        assert_eq!(err.status_code().as_u16(), 422);
     }
 
     #[tokio::test]
@@ -189,7 +228,7 @@ mod tests {
         let err =
             Pagination::<usize, Tight>::from_request_parts(&mut parts, &state).await.unwrap_err();
 
-        assert_eq!(err.code(), "bad_request");
-        assert!(err.to_string().contains("must not exceed 20"));
+        assert_eq!(err.code(), "invalid_pagination");
+        assert_eq!(err.status_code().as_u16(), 422);
     }
 }

@@ -23,6 +23,7 @@ http.workspace = true
 human-panic.workspace = true
 humantime-serde.workspace = true
 infer.workspace = true
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
 mime.workspace = true
 mime_guess.workspace = true
 serde.workspace = true

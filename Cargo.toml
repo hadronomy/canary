@@ -26,6 +26,7 @@ human-panic           = "2.0.4"
 humantime-serde       = "1.1.1"
 indextree             = { version = "4.7", features = ["par_iter", "deser"] }
 infer                 = "0.19.0"
+miette                = "7.6.0"
 mime                  = "0.3.17"
 mime_guess            = "2.0.5"
 proc-macro2           = "1.0.106"

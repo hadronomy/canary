@@ -1,6 +1,9 @@
+use std::any::Any;
+
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::header::{AUTHORIZATION, COOKIE};
+use axum::middleware::from_fn;
 use axum::response::IntoResponse;
 use tower::timeout::TimeoutLayer;
 use tower::{BoxError, ServiceBuilder};
@@ -12,20 +15,27 @@ use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, T
 use tracing::Level;
 
 use crate::error::AppError;
+use crate::http::context::bind_request_context;
 use crate::state::AppState;
 
 async fn handle_middleware_error(error: BoxError) -> impl IntoResponse {
     AppError::from_box_error(error)
 }
 
+fn handle_panic(_: Box<dyn Any + Send + 'static>) -> axum::response::Response {
+    AppError::internal("panic", "The server encountered an unexpected internal error.")
+        .into_response()
+}
+
 pub fn apply(router: Router<AppState>, state: &AppState) -> Router<AppState> {
     let settings = &state.loaded_config().settings;
     router.layer(DefaultBodyLimit::max(settings.server.max_body_size_bytes)).layer(
         ServiceBuilder::new()
+            .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+            .layer(from_fn(bind_request_context))
             .layer(axum::error_handling::HandleErrorLayer::new(handle_middleware_error))
             .layer(TimeoutLayer::new(settings.server.request_timeout))
             .layer(SetSensitiveHeadersLayer::new([AUTHORIZATION, COOKIE]))
-            .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
             .layer(
                 TraceLayer::new_for_http()
                     .on_request(DefaultOnRequest::new().level(Level::DEBUG))
@@ -33,7 +43,7 @@ pub fn apply(router: Router<AppState>, state: &AppState) -> Router<AppState> {
                     .on_failure(DefaultOnFailure::new().level(Level::WARN)),
             )
             .layer(PropagateRequestIdLayer::x_request_id())
-            .layer(CatchPanicLayer::new())
+            .layer(CatchPanicLayer::custom(handle_panic))
             .layer(CompressionLayer::new()),
     )
 }
