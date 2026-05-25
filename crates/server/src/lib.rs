@@ -15,16 +15,23 @@ pub mod state;
 
 pub use app::{ServerApplication, ServerBuilder};
 pub use config::{
-    AppConfig, BlobConfig, ConfigOrigin, FilesConfig, HttpConfig, LoadedConfig, LogFormat,
-    ObservabilityConfig, RawSurrealMode, RuntimeConfig, ServerConfig, SurrealAuth, SurrealConfig,
+    AppConfig, BlobConfig, ConfigOrigin, FileBackendConfig, FilesConfig, HttpConfig, LoadedConfig,
+    LocalFileConfig, LogFormat, ObjectPrefix, ObservabilityConfig, RawSurrealMode, RuntimeConfig,
+    S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, SurrealAuth, SurrealConfig,
+    TransportSecurity,
 };
 pub use db::service::DatabaseService;
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
 pub use files::list::ListBlobs;
 pub use files::meta::{
-    BlobHash, BlobId, BlobKind, BlobMedia, BlobName, BlobRecord, BlobSize, StagedBlob, StoredBlob,
+    BlobHash, BlobId, BlobKey, BlobKind, BlobMedia, BlobName, BlobRecord, BlobSize, StagedBlob,
+    StoredBlob,
 };
-pub use files::service::FileService;
+pub use files::service::{BlobService, FileService, UploadService};
+pub use files::upload::{
+    ActorId, PartNumber, UploadAccess, UploadHeader, UploadMode, UploadPurpose, UploadSession,
+    UploadState,
+};
 pub use http::extract::Pagination;
 pub use observability::init as init_observability;
 pub use pagination::{

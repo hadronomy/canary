@@ -5,7 +5,6 @@ use axum::body::Body;
 use axum::extract::rejection::{BytesRejection, JsonRejection, QueryRejection};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum_typed_multipart::TypedMultipartError;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -95,24 +94,77 @@ impl From<FileError> for AppError {
             FileError::InvalidBlobId => {
                 Self::bad_request_code("invalid_blob_id", "The blob id is invalid.")
             }
+            FileError::InvalidActorId => Self::unauthorized_code(
+                "upload_unauthorized",
+                "Authentication is required for uploads.",
+            ),
             FileError::NotFound { id } => {
                 Self::not_found_code("blob_not_found", "The requested blob was not found.")
                     .with_context("blob_id", json!(id))
             }
+            FileError::UploadNotFound { id } => {
+                Self::not_found_code("upload_not_found", "The requested upload was not found.")
+                    .with_context("upload_id", json!(id))
+            }
+            FileError::UploadForbidden { id } => {
+                Self::forbidden_code("upload_forbidden", "You do not have access to this upload.")
+                    .with_context("upload_id", json!(id))
+            }
+            FileError::UploadExpired { id } => {
+                Self::bad_request_code("upload_expired", "The upload has expired.")
+                    .with_context("upload_id", json!(id))
+            }
+            FileError::UploadInvalidState { id, state } => Self::validation_code(
+                "upload_invalid_state",
+                "The upload is not in a valid state for this operation.",
+            )
+            .with_context("upload_id", json!(id))
+            .with_context("state", json!(state.to_string())),
             FileError::InvalidFileName => {
                 Self::bad_request_code("invalid_file_name", "The file name is invalid.")
+            }
+            FileError::InvalidUploadPurpose => {
+                Self::validation_code("invalid_upload_purpose", "The upload purpose is invalid.")
             }
             FileError::InvalidContentType => Self::unsupported_media_type_code(
                 "invalid_content_type",
                 "The provided content type is not supported.",
             ),
+            FileError::InvalidChecksum => {
+                Self::validation_code("invalid_checksum", "The checksum format is invalid.")
+            }
+            FileError::InvalidUploadParts => Self::validation_code(
+                "invalid_upload_parts",
+                "The multipart upload part selection is invalid.",
+            ),
+            FileError::ChecksumMismatch => Self::validation_code(
+                "upload_checksum_mismatch",
+                "The uploaded file checksum does not match the expected value.",
+            ),
+            FileError::SizeMismatch => Self::validation_code(
+                "upload_size_mismatch",
+                "The uploaded file size does not match the expected size.",
+            ),
+            FileError::DirectUploadUnavailable => Self::service_unavailable_code(
+                "direct_upload_unavailable",
+                "The upload backend cannot issue direct upload access right now.",
+            ),
+            FileError::UploadTooLarge => Self::payload_too_large_code(
+                "upload_too_large",
+                "The upload exceeds the configured size limit.",
+            ),
+            FileError::UploadIncomplete => {
+                Self::bad_request_code("upload_incomplete", "The upload has not finished yet.")
+            }
             FileError::CreateDir { .. }
             | FileError::ReadBody { .. }
             | FileError::Multipart { .. }
             | FileError::Open { .. }
             | FileError::Write { .. }
             | FileError::Persist { .. }
-            | FileError::ReadFile { .. } => {
+            | FileError::ReadFile { .. }
+            | FileError::Store { .. }
+            | FileError::Metadata { .. } => {
                 Self::internal("file_error", "The file operation failed.")
             }
         }
@@ -160,61 +212,6 @@ impl From<JsonRejection> for AppError {
     }
 }
 
-impl From<TypedMultipartError> for AppError {
-    fn from(source: TypedMultipartError) -> Self {
-        match source {
-            TypedMultipartError::MissingField { field_name } => {
-                Self::validation("The multipart form is missing required fields.")
-                    .with_field(field_name, "This field is required.")
-            }
-            TypedMultipartError::WrongFieldType { field_name, wanted_type, .. } => {
-                Self::validation("The multipart form contains invalid field values.")
-                    .with_field(field_name, format!("Expected a value of type '{wanted_type}'."))
-            }
-            TypedMultipartError::DuplicateField { field_name } => {
-                Self::validation("The multipart form contains duplicate fields.")
-                    .with_field(field_name, "This field may only appear once.")
-            }
-            TypedMultipartError::UnknownField { field_name } => {
-                Self::validation("The multipart form contains unknown fields.")
-                    .with_field(field_name, "This field is not allowed.")
-            }
-            TypedMultipartError::InvalidEnumValue { field_name, value } => {
-                Self::validation("The multipart form contains invalid field values.")
-                    .with_field(field_name, format!("'{value}' is not a valid value."))
-            }
-            TypedMultipartError::NamelessField => {
-                Self::bad_request_code("invalid_multipart", "The multipart form is malformed.")
-                    .with_context("reason", json!("field name is empty"))
-            }
-            TypedMultipartError::FieldTooLarge { field_name, limit_bytes } => {
-                Self::payload_too_large("A multipart field is too large.")
-                    .with_field(field_name, format!("Field exceeds {limit_bytes} bytes."))
-            }
-            TypedMultipartError::InvalidRequest { source } => Self::bad_request_code(
-                "invalid_multipart",
-                "The multipart form request is malformed.",
-            )
-            .with_context("reason", json!(source.body_text())),
-            TypedMultipartError::InvalidRequestBody { source } => {
-                if source.status() == StatusCode::PAYLOAD_TOO_LARGE {
-                    Self::payload_too_large("The multipart request body is too large.")
-                } else {
-                    Self::bad_request_code(
-                        "invalid_multipart",
-                        "The multipart request body is malformed.",
-                    )
-                }
-                .with_context("reason", json!(source.to_string()))
-            }
-            TypedMultipartError::Other { .. } => {
-                Self::internal("multipart_error", "Failed to process the multipart body.")
-            }
-            _ => Self::internal("multipart_error", "Failed to process the multipart body."),
-        }
-    }
-}
-
 impl AppError {
     #[must_use]
     pub fn bad_request(detail: impl Into<Cow<'static, str>>) -> Self {
@@ -238,12 +235,22 @@ impl AppError {
 
     #[must_use]
     pub fn unauthorized(detail: impl Into<Cow<'static, str>>) -> Self {
-        Self::Unauthorized(Box::new(ApiIssue::new("unauthorized", detail)))
+        Self::unauthorized_code("unauthorized", detail)
+    }
+
+    #[must_use]
+    pub fn unauthorized_code(code: &'static str, detail: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unauthorized(Box::new(ApiIssue::new(code, detail)))
     }
 
     #[must_use]
     pub fn forbidden(detail: impl Into<Cow<'static, str>>) -> Self {
-        Self::Forbidden(Box::new(ApiIssue::new("forbidden", detail)))
+        Self::forbidden_code("forbidden", detail)
+    }
+
+    #[must_use]
+    pub fn forbidden_code(code: &'static str, detail: impl Into<Cow<'static, str>>) -> Self {
+        Self::Forbidden(Box::new(ApiIssue::new(code, detail)))
     }
 
     #[must_use]

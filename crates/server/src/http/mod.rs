@@ -20,7 +20,7 @@ async fn method_not_allowed() -> AppError {
 pub fn router(state: &AppState) -> Router<AppState> {
     let router = Router::new()
         .merge(routes::system::router())
-        .merge(routes::api::router())
+        .merge(routes::api::router(state))
         .method_not_allowed_fallback(method_not_allowed)
         .fallback(not_found);
     middleware::apply(router, state)

@@ -1,8 +1,10 @@
+pub mod direct;
 pub mod error;
+pub mod events;
 pub mod list;
-pub mod local;
 pub mod meta;
+pub mod repo;
 pub mod service;
 pub mod sniff;
-pub mod stage;
 pub mod store;
+pub mod upload;

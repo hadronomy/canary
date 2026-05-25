@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::Router;
-use axum::extract::Request;
+use axum::extract::{FromRef, Request};
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 use tower::ServiceBuilder;
@@ -16,7 +16,7 @@ use crate::files::service::FileService;
 use crate::http;
 use crate::services::parser::ParserService;
 use crate::shutdown::{ShutdownCoordinator, ShutdownReason, wait_for_shutdown_signal};
-use crate::state::AppState;
+use crate::state::{AppState, FileState};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MissingConfig;
@@ -55,7 +55,7 @@ impl ServerBuilder<WithConfig> {
         let db = DatabaseService::connect(&loaded.settings.db).await?;
         db.health().await?;
         let parser = ParserService::new();
-        let files = FileService::new(loaded.settings.files.clone()).await?;
+        let files = FileService::new(loaded.settings.files.clone(), db.clone()).await?;
         let state = AppState::new(loaded, db, parser, files);
         state.update_db_ready();
         let router = http::router(&state).with_state(state.clone());
@@ -85,9 +85,10 @@ impl ServerApplication {
 
     pub async fn run(self) -> ServerResult<()> {
         let Self { state, router, shutdown } = self;
-        let bind_address = state.loaded_config().settings.server.bind;
-        let request_timeout = state.loaded_config().settings.server.request_timeout;
-        let shutdown_grace_period = state.loaded_config().settings.server.shutdown_grace_period;
+        let loaded_config = state.loaded_config();
+        let bind_address = loaded_config.settings.server.bind;
+        let request_timeout = loaded_config.settings.server.request_timeout;
+        let shutdown_grace_period = loaded_config.settings.server.shutdown_grace_period;
 
         let listener = TcpListener::bind(bind_address)
             .await
@@ -110,6 +111,22 @@ impl ServerApplication {
             axum::ServiceExt::<Request>::into_make_service_with_connect_info::<SocketAddr>(service);
 
         let mut tasks = JoinSet::new();
+        let uploads = FileState::from_ref(&state).files.uploads();
+        let upload_shutdown = shutdown.clone();
+        tasks.spawn(async move {
+            let mut tick = tokio::time::interval(uploads.sweep_interval());
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tokio::select! {
+                    _ = upload_shutdown.wait_for_shutdown() => return Ok::<_, ServerError>(()),
+                    _ = tick.tick() => {
+                        if let Err(err) = uploads.sweep_expired().await {
+                            tracing::warn!(error = %err, "upload cleanup sweep failed");
+                        }
+                    }
+                }
+            }
+        });
         let signal_shutdown = shutdown.clone();
         tasks.spawn(async move {
             let reason = wait_for_shutdown_signal().await?;

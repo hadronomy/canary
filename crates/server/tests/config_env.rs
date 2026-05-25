@@ -12,5 +12,10 @@ fn loads_memory_mode_from_overrides() {
     .expect("config should load");
 
     assert!(matches!(settings.settings.db.mode, canary_server::config::SurrealMode::Embedded(_)));
-    assert_eq!(settings.settings.files.root.as_path(), Path::new("tmp/test-blobs"));
+    assert!(matches!(
+        &settings.settings.files.backend,
+        canary_server::config::FileBackendConfig::Local(local)
+            if local.root.as_path() == Path::new("tmp/test-blobs")
+    ));
+    assert_eq!(settings.settings.files.staging.as_path(), Path::new("tmp/test-blobs/.staging"));
 }

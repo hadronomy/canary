@@ -82,6 +82,23 @@ impl BlobHash {
         Self(bytes)
     }
 
+    pub fn from_hex(value: &str) -> Result<Self, FileError> {
+        if value.len() != 64 {
+            return Err(FileError::InvalidChecksum);
+        }
+
+        let mut bytes = [0; 32];
+        for (idx, slot) in bytes.iter_mut().enumerate() {
+            let start = idx * 2;
+            let end = start + 2;
+            let byte = u8::from_str_radix(&value[start..end], 16)
+                .map_err(|_| FileError::InvalidChecksum)?;
+            *slot = byte;
+        }
+
+        Ok(Self(bytes))
+    }
+
     #[must_use]
     pub fn to_hex(&self) -> String {
         let mut out = String::with_capacity(64);
@@ -126,6 +143,11 @@ impl BlobKey {
     }
 
     #[must_use]
+    pub fn from_id(id: BlobId) -> Self {
+        Self::new(id.to_string())
+    }
+
+    #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -147,9 +169,10 @@ pub struct StoredBlob {
     pub key: BlobKey,
     pub name: Option<BlobName>,
     pub size: BlobSize,
-    pub hash: BlobHash,
+    pub hash: Option<BlobHash>,
     pub kind: BlobKind,
-    pub path: PathBuf,
+    pub etag: Option<String>,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,7 +180,7 @@ pub struct BlobRecord {
     pub id: String,
     pub name: Option<String>,
     pub size_bytes: u64,
-    pub hash_sha256: String,
+    pub hash_sha256: Option<String>,
     pub media_type: String,
     pub declared_media_type: Option<String>,
     pub sniffed_media_type: Option<String>,
@@ -169,7 +192,7 @@ impl From<&StoredBlob> for BlobRecord {
             id: value.id.to_string(),
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
-            hash_sha256: value.hash.to_hex(),
+            hash_sha256: value.hash.as_ref().map(BlobHash::to_hex),
             media_type: value.kind.effective.as_str().to_owned(),
             declared_media_type: value.kind.declared.as_ref().map(ToString::to_string),
             sniffed_media_type: value.kind.sniffed.as_ref().map(ToString::to_string),

@@ -6,15 +6,18 @@ use std::ops::Deref;
 use axum::body::{Body, Bytes};
 use axum::extract::{FromRef, FromRequest, FromRequestParts, Query};
 use axum::http::HeaderMap;
+use axum::http::header::HeaderName;
 use axum::http::request::Parts;
-use axum_typed_multipart::BaseMultipart;
 use serde_json::json;
 
 use crate::error::AppError;
+use crate::files::upload::ActorId;
 use crate::pagination::{
     DefaultPagePolicy, Limit, PagePolicy, PagePolicySource, PageQuery, PageWindow,
 };
 use crate::state::AppState;
+
+const ACTOR_HEADER: HeaderName = HeaderName::from_static("x-canary-actor-id");
 
 /// Axum extractor for validated pagination state.
 ///
@@ -133,9 +136,6 @@ where
     }
 }
 
-/// Multipart form extractor that preserves the server's JSON error shape.
-pub type MultipartForm<T> = BaseMultipart<T, AppError>;
-
 pub fn optional_mime(headers: &HeaderMap) -> Option<mime::Mime> {
     headers
         .get(axum::http::header::CONTENT_TYPE)
@@ -145,6 +145,59 @@ pub fn optional_mime(headers: &HeaderMap) -> Option<mime::Mime> {
 
 pub fn into_body_stream(body: Body) -> Body {
     body
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UploadActor(ActorId);
+
+impl UploadActor {
+    #[must_use]
+    pub fn into_inner(self) -> ActorId {
+        self.0
+    }
+}
+
+impl AsRef<ActorId> for UploadActor {
+    fn as_ref(&self) -> &ActorId {
+        &self.0
+    }
+}
+
+impl Deref for UploadActor {
+    type Target = ActorId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequestParts<S> for UploadActor
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        let Some(value) = parts.headers.get(&ACTOR_HEADER) else {
+            return Err(AppError::unauthorized_code(
+                "upload_unauthorized",
+                "Authentication is required for uploads.",
+            ));
+        };
+        let value = value.to_str().map_err(|_| {
+            AppError::unauthorized_code(
+                "upload_unauthorized",
+                "Authentication is required for uploads.",
+            )
+        })?;
+        let actor = ActorId::new(value).map_err(|_| {
+            AppError::unauthorized_code(
+                "upload_unauthorized",
+                "Authentication is required for uploads.",
+            )
+        })?;
+        Ok(Self(actor))
+    }
 }
 
 #[cfg(test)]

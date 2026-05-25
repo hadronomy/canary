@@ -1,60 +1,14 @@
+mod common;
+
 use axum::Router;
-use axum::body::{Body, to_bytes};
+use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::get;
-use canary_server::config::StoragePath;
-use canary_server::db::service::DatabaseService;
-use canary_server::files::service::FileService;
-use canary_server::services::parser::ParserService;
-use canary_server::{AppError, AppState, LoadedConfig, ServerBuilder, http};
+use canary_server::{AppError, http};
+use common::{app, json, request_id, state};
 use serde_json::Value;
-use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
-
-fn config(dir: &TempDir) -> LoadedConfig {
-    let mut cfg = LoadedConfig::default();
-    cfg.settings.files.root = StoragePath::new(dir.path()).expect("temp path should be valid");
-    cfg
-}
-
-async fn app(dir: &TempDir) -> Router {
-    ServerBuilder::new().with_config(config(dir)).build().await.expect("app should build").router()
-}
-
-async fn state(dir: &TempDir) -> AppState {
-    let cfg = config(dir);
-    let db = DatabaseService::connect(&cfg.settings.db).await.expect("db should connect");
-    db.health().await.expect("db should be healthy");
-    let files =
-        FileService::new(cfg.settings.files.clone()).await.expect("files should initialize");
-    let state = AppState::new(cfg, db, ParserService::new(), files);
-    state.update_db_ready();
-    state.update_http_ready();
-    state
-}
-
-fn request_id(response: &axum::response::Response) -> String {
-    response
-        .headers()
-        .get("x-request-id")
-        .expect("response should propagate x-request-id")
-        .to_str()
-        .expect("request id should be valid ascii")
-        .to_owned()
-}
-
-async fn json(response: axum::response::Response) -> Value {
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.expect("body should be readable");
-    serde_json::from_slice(&bytes).expect("error body should be valid json")
-}
-
-fn multipart(boundary: &str, name: &str, file: &str, ty: &str, body: &str) -> Vec<u8> {
-    format!(
-        "--{boundary}\r\ncontent-disposition: form-data; name=\"{name}\"; filename=\"{file}\"\r\ncontent-type: {ty}\r\n\r\n{body}\r\n--{boundary}--\r\n"
-    )
-    .into_bytes()
-}
 
 fn assert_common(body: &Value, code: &str, message: &str, status: u16, request_id: &str) {
     assert_eq!(body["type"], format!("/problems/{code}"));
@@ -192,46 +146,4 @@ async fn method_not_allowed_uses_consistent_error_shape() {
         &request_id,
     );
     assert_eq!(body["title"], "Method not allowed");
-}
-
-#[tokio::test]
-async fn multipart_upload_persists_and_can_be_read_back() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let app = app(&dir).await;
-    let boundary = "canary-boundary";
-    let body = multipart(boundary, "file", "hello.txt", "text/plain", "hello from multipart");
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/files")
-                .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
-                .body(Body::from(body))
-                .unwrap(),
-        )
-        .await
-        .expect("router should respond");
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-    assert_eq!(response.headers().get(header::CONTENT_TYPE).unwrap(), "application/json");
-
-    let created = json(response).await;
-    let id = created["id"].as_str().expect("created response should contain blob id");
-
-    let response = app
-        .oneshot(
-            Request::builder().uri(format!("/api/v1/files/{id}/meta")).body(Body::empty()).unwrap(),
-        )
-        .await
-        .expect("router should respond");
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let meta = json(response).await;
-    assert_eq!(meta["id"], id);
-    assert_eq!(meta["name"], "hello.txt");
-    assert_eq!(meta["media_type"], "text/plain");
-    assert_eq!(meta["size_bytes"], 20);
 }

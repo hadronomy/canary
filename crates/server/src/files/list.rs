@@ -2,24 +2,24 @@ use std::future::Future;
 
 use crate::error::FileError;
 use crate::files::meta::{BlobId, BlobRecord};
-use crate::files::service::FileService;
+use crate::files::service::BlobService;
 use crate::pagination::{Limit, Page, PageRequest, PageWindow};
 
 /// One-page file listing request.
 ///
-/// Build it from [`FileService::list`](crate::files::service::FileService::list),
+/// Build it from [`BlobService::list`](crate::files::service::BlobService::list),
 /// refine it with cursor methods like [`after`](Self::after), then either fetch
 /// one page with [`page`](Self::page) or walk all pages with
 /// [`paginated`](crate::pagination::PageRequest::paginated).
 #[must_use = "page requests do nothing unless you fetch a page or walk them"]
 #[derive(Clone)]
 pub struct ListBlobs {
-    files: FileService,
+    files: BlobService,
     window: PageWindow<BlobId>,
 }
 
 impl ListBlobs {
-    pub(crate) fn new(files: FileService, limit: Limit) -> Self {
+    pub(crate) fn new(files: BlobService, limit: Limit) -> Self {
         Self { files, window: PageWindow::new(limit) }
     }
 

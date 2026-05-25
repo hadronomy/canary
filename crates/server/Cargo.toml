@@ -10,9 +10,12 @@ version.workspace    = true
 
 [dependencies]
 async-trait.workspace = true
+aws-config.workspace = true
+aws-credential-types.workspace = true
+aws-sdk-s3.workspace = true
+aws-types.workspace = true
 axum.workspace = true
 axum-extra = { version = "0.12.6", features = ["attachment"] }
-axum_typed_multipart = { version = "0.16.5", features = ["tempfile_3"] }
 bytes.workspace = true
 chrono.workspace = true
 config.workspace = true
@@ -26,6 +29,7 @@ infer.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 mime.workspace = true
 mime_guess.workspace = true
+object_store = { workspace = true, features = ["aws", "fs"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -69,4 +73,5 @@ surreal-remote-http = ["surrealdb/protocol-http"]
 surreal-remote-ws = ["surrealdb/protocol-ws"]
 
 [dev-dependencies]
+reqwest            = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 tempfile.workspace = true

@@ -8,6 +8,7 @@ use std::{env, fmt};
 
 use config as config_rs;
 use config_rs::{Config, Environment, File, FileFormat};
+use object_store::path::Path as ObjectPath;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use url::Url;
@@ -23,11 +24,17 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(30);
 const DEFAULT_THREAD_KEEP_ALIVE: Duration = Duration::from_secs(10);
 const DEFAULT_BODY_LIMIT: usize = 8 * 1024 * 1024;
-const DEFAULT_RAW_UPLOAD_LIMIT: u64 = 64 * 1024 * 1024;
-const DEFAULT_MULTIPART_LIMIT: usize = 64 * 1024 * 1024;
 const DEFAULT_CHUNK_SIZE: usize = 64 * 1024;
 const DEFAULT_SNIFF_BYTES: usize = 8 * 1024;
+const DEFAULT_UPLOAD_INTENT_TTL: Duration = Duration::from_secs(15 * 60);
+const DEFAULT_UPLOAD_PRESIGN_TTL: Duration = Duration::from_secs(15 * 60);
+const DEFAULT_UPLOAD_MAX_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+const DEFAULT_MULTIPART_THRESHOLD: u64 = 100 * 1024 * 1024;
+const DEFAULT_MULTIPART_PART_SIZE: u64 = 8 * 1024 * 1024;
+const DEFAULT_MULTIPART_MAX_PARTS: u16 = 10_000;
 const DEFAULT_PAGE_LIMIT: usize = 100;
+const DEFAULT_FILE_ROOT: &str = "data/blobs";
+const DEFAULT_FILE_STAGING: &str = "data/files/.staging";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LoadedConfig {
@@ -198,8 +205,6 @@ pub enum LogFormat {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpConfig {
     pub parser_max_bytes: usize,
-    pub raw_upload_max_bytes: u64,
-    pub multipart_max_bytes: usize,
     pub pagination: PagePolicy,
 }
 
@@ -207,8 +212,6 @@ impl Default for HttpConfig {
     fn default() -> Self {
         Self {
             parser_max_bytes: DEFAULT_BODY_LIMIT,
-            raw_upload_max_bytes: DEFAULT_RAW_UPLOAD_LIMIT,
-            multipart_max_bytes: DEFAULT_MULTIPART_LIMIT,
             pagination: PagePolicy::unbounded(
                 Limit::new(DEFAULT_PAGE_LIMIT).expect("default page limit is valid"),
             ),
@@ -328,6 +331,29 @@ impl StoragePath {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectPrefix(SmolStr);
+
+impl ObjectPrefix {
+    pub fn new(value: impl Into<SmolStr>) -> Result<Self, ConfigError> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(ConfigError::invalid("object prefix cannot be empty"));
+        }
+        ObjectPath::parse(value.as_str())
+            .map_err(|source| {
+                ConfigError::invalid("object prefix must be a valid object-store path")
+                    .with_source(source)
+            })
+            .map(|_| Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteEndpoint {
     Ws(Url),
     Wss(Url),
@@ -361,17 +387,88 @@ impl RemoteEndpoint {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilesConfig {
-    pub root: StoragePath,
+    pub backend: FileBackendConfig,
+    pub staging: StoragePath,
     pub uploads: BlobConfig,
 }
 
 impl Default for FilesConfig {
     fn default() -> Self {
+        let root = StoragePath::new(DEFAULT_FILE_ROOT).expect("default blob root is valid");
         Self {
-            root: StoragePath::new("data/blobs").expect("default blob root is valid"),
+            staging: StoragePath::new(PathBuf::from(DEFAULT_FILE_ROOT).join(".staging"))
+                .expect("default blob staging path is valid"),
+            backend: FileBackendConfig::Local(LocalFileConfig { root }),
             uploads: BlobConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileBackendConfig {
+    Local(LocalFileConfig),
+    S3(Box<S3FileConfig>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalFileConfig {
+    pub root: StoragePath,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct S3FileConfig {
+    pub bucket: SmolStr,
+    pub region: SmolStr,
+    pub endpoint: Option<Url>,
+    pub prefix: Option<ObjectPrefix>,
+    pub addressing_style: S3AddressingStyle,
+    pub transport_security: TransportSecurity,
+    pub credentials: S3Credentials,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum S3AddressingStyle {
+    #[default]
+    VirtualHosted,
+    PathStyle,
+}
+
+impl S3AddressingStyle {
+    #[must_use]
+    pub fn is_path_style(self) -> bool {
+        matches!(self, Self::PathStyle)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransportSecurity {
+    #[default]
+    HttpsOnly,
+    AllowHttp,
+}
+
+impl TransportSecurity {
+    pub fn validate_endpoint(self, endpoint: &Url) -> Result<(), ConfigError> {
+        if matches!(self, Self::HttpsOnly) && endpoint.scheme() == "http" {
+            return Err(ConfigError::invalid(
+                "http s3 endpoints require transport_security = allow_http",
+            ));
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn allows_http(self) -> bool {
+        matches!(self, Self::AllowHttp)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum S3Credentials {
+    Ambient,
+    Static { access_key_id: SmolStr, secret_access_key: Secret, session_token: Option<Secret> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -379,11 +476,28 @@ impl Default for FilesConfig {
 pub struct BlobConfig {
     pub chunk_size_bytes: usize,
     pub sniff_bytes: usize,
+    pub max_bytes: u64,
+    pub multipart_threshold_bytes: u64,
+    pub multipart_part_size_bytes: u64,
+    pub multipart_max_parts: u16,
+    #[serde(with = "humantime_serde")]
+    pub intent_ttl: Duration,
+    #[serde(with = "humantime_serde")]
+    pub presign_ttl: Duration,
 }
 
 impl Default for BlobConfig {
     fn default() -> Self {
-        Self { chunk_size_bytes: DEFAULT_CHUNK_SIZE, sniff_bytes: DEFAULT_SNIFF_BYTES }
+        Self {
+            chunk_size_bytes: DEFAULT_CHUNK_SIZE,
+            sniff_bytes: DEFAULT_SNIFF_BYTES,
+            max_bytes: DEFAULT_UPLOAD_MAX_BYTES,
+            multipart_threshold_bytes: DEFAULT_MULTIPART_THRESHOLD,
+            multipart_part_size_bytes: DEFAULT_MULTIPART_PART_SIZE,
+            multipart_max_parts: DEFAULT_MULTIPART_MAX_PARTS,
+            intent_ttl: DEFAULT_UPLOAD_INTENT_TTL,
+            presign_ttl: DEFAULT_UPLOAD_PRESIGN_TTL,
+        }
     }
 }
 
@@ -398,36 +512,68 @@ struct RawAppConfig {
     files: RawFilesConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct RawFilesConfig {
-    root: PathBuf,
+    root: Option<PathBuf>,
+    staging: Option<PathBuf>,
+    backend: RawFileBackendConfig,
     uploads: BlobConfig,
 }
 
-impl Default for RawFilesConfig {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum RawFileBackendConfig {
+    Local {
+        root: PathBuf,
+    },
+    S3 {
+        #[serde(flatten)]
+        cfg: Box<RawS3FileConfig>,
+    },
+}
+
+impl Default for RawFileBackendConfig {
     fn default() -> Self {
-        Self { root: PathBuf::from("data/blobs"), uploads: BlobConfig::default() }
+        Self::Local { root: PathBuf::from(DEFAULT_FILE_ROOT) }
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct RawS3FileConfig {
+    bucket: String,
+    region: String,
+    endpoint: Option<Url>,
+    prefix: Option<String>,
+    addressing_style: S3AddressingStyle,
+    transport_security: TransportSecurity,
+    credentials: RawS3Credentials,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum RawS3Credentials {
+    #[default]
+    Ambient,
+    Static {
+        access_key_id: String,
+        secret_access_key: String,
+        #[serde(default)]
+        session_token: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct RawHttpConfig {
     parser_max_bytes: usize,
-    raw_upload_max_bytes: u64,
-    multipart_max_bytes: usize,
     pagination: RawPaginationConfig,
 }
 
 impl Default for RawHttpConfig {
     fn default() -> Self {
-        Self {
-            parser_max_bytes: DEFAULT_BODY_LIMIT,
-            raw_upload_max_bytes: DEFAULT_RAW_UPLOAD_LIMIT,
-            multipart_max_bytes: DEFAULT_MULTIPART_LIMIT,
-            pagination: RawPaginationConfig::default(),
-        }
+        Self { parser_max_bytes: DEFAULT_BODY_LIMIT, pagination: RawPaginationConfig::default() }
     }
 }
 
@@ -563,11 +709,59 @@ impl TryFrom<RawAppConfig> for AppConfig {
             observability: value.observability,
             http: HttpConfig::try_from(value.http)?,
             db: SurrealConfig::try_from(value.db)?,
-            files: FilesConfig {
-                root: StoragePath::new(value.files.root)?,
-                uploads: value.files.uploads,
-            },
+            files: FilesConfig::try_from(value.files)?,
         })
+    }
+}
+
+impl TryFrom<RawFilesConfig> for FilesConfig {
+    type Error = ConfigError;
+
+    fn try_from(value: RawFilesConfig) -> Result<Self, Self::Error> {
+        let backend = match value.backend {
+            RawFileBackendConfig::Local { root } => {
+                let root = StoragePath::new(value.root.unwrap_or(root))?;
+                FileBackendConfig::Local(LocalFileConfig { root })
+            }
+            RawFileBackendConfig::S3 { cfg } => {
+                let RawS3FileConfig {
+                    bucket,
+                    region,
+                    endpoint,
+                    prefix,
+                    addressing_style,
+                    transport_security,
+                    credentials,
+                } = *cfg;
+                if value.root.is_some() {
+                    return Err(ConfigError::invalid(
+                        "files.root is only valid with the local file backend",
+                    ));
+                }
+                if let Some(endpoint) = &endpoint {
+                    transport_security.validate_endpoint(endpoint)?;
+                }
+                FileBackendConfig::S3(Box::new(S3FileConfig {
+                    bucket: validate_text(bucket, "s3 bucket")?,
+                    region: validate_text(region, "s3 region")?,
+                    endpoint,
+                    prefix: prefix.map(ObjectPrefix::new).transpose()?,
+                    addressing_style,
+                    transport_security,
+                    credentials: S3Credentials::try_from(credentials)?,
+                }))
+            }
+        };
+
+        let staging = match (value.staging, &backend) {
+            (Some(path), _) => StoragePath::new(path)?,
+            (None, FileBackendConfig::Local(local)) => {
+                StoragePath::new(local.root.as_path().join(".staging"))?
+            }
+            (None, FileBackendConfig::S3(_)) => StoragePath::new(DEFAULT_FILE_STAGING)?,
+        };
+
+        Ok(Self { backend, staging, uploads: value.uploads })
     }
 }
 
@@ -592,8 +786,6 @@ impl TryFrom<RawHttpConfig> for HttpConfig {
 
         Ok(Self {
             parser_max_bytes: value.parser_max_bytes,
-            raw_upload_max_bytes: value.raw_upload_max_bytes,
-            multipart_max_bytes: value.multipart_max_bytes,
             pagination: PagePolicy::new(default, max).map_err(|source| {
                 ConfigError::invalid("invalid http.pagination configuration").with_source(source)
             })?,
@@ -657,9 +849,38 @@ impl TryFrom<RawSurrealMode> for SurrealMode {
     }
 }
 
+impl TryFrom<RawS3Credentials> for S3Credentials {
+    type Error = ConfigError;
+
+    fn try_from(value: RawS3Credentials) -> Result<Self, Self::Error> {
+        match value {
+            RawS3Credentials::Ambient => Ok(Self::Ambient),
+            RawS3Credentials::Static { access_key_id, secret_access_key, session_token } => {
+                Ok(Self::Static {
+                    access_key_id: validate_text(access_key_id, "s3 access key id")?,
+                    secret_access_key: Secret(validate_text(
+                        secret_access_key,
+                        "s3 secret access key",
+                    )?),
+                    session_token: session_token
+                        .map(|value| validate_text(value, "s3 session token").map(Secret))
+                        .transpose()?,
+                })
+            }
+        }
+    }
+}
+
 fn validate_auth_value(value: String, kind: &str) -> Result<SmolStr, ConfigError> {
     if value.trim().is_empty() {
         return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
     }
     Ok(SmolStr::from(value))
+}
+
+fn validate_text(value: String, kind: &str) -> Result<SmolStr, ConfigError> {
+    if value.trim().is_empty() {
+        return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
+    }
+    Ok(value.into())
 }
