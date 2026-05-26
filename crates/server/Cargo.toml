@@ -58,6 +58,7 @@ tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+base64 = "0.22.1"
 
 [features]
 default = ["surreal-embedded-mem", "surreal-remote-ws"]

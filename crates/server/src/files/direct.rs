@@ -4,9 +4,12 @@ use aws_config::BehaviorVersion;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::Builder as S3ConfigBuilder;
+use aws_sdk_s3::operation::head_object::HeadObjectOutput;
 use aws_sdk_s3::operation::list_parts::ListPartsOutput;
 use aws_sdk_s3::presigning::PresigningConfig;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, MetadataDirective};
+use aws_sdk_s3::types::{
+    ChecksumMode, ChecksumType, CompletedMultipartUpload, CompletedPart, MetadataDirective,
+};
 use aws_types::region::Region;
 use mime::Mime;
 use object_store::aws::AmazonS3Builder;
@@ -16,6 +19,10 @@ use zeroize::Zeroizing;
 
 use crate::config::{S3AddressingStyle, S3Credentials, S3FileConfig, TransportSecurity};
 use crate::error::FileError;
+use crate::files::meta::{
+    BlobChecksum, ChecksumAlgorithm, ChecksumKind, ChecksumVerifier, Sha256Digest,
+};
+use crate::files::store::BlobHead;
 use crate::files::upload::{
     CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, SignedUploadPart,
     UploadHeader,
@@ -143,11 +150,15 @@ impl S3DirectBackend {
         &self,
         key: &str,
         ty: Option<&Mime>,
+        sha256: Option<&Sha256Digest>,
         expires: Duration,
     ) -> Result<DirectPutAccess, FileError> {
         let mut req = self.cli.put_object().bucket(&self.bucket).key(key);
         if let Some(ty) = ty {
             req = req.content_type(ty.as_ref());
+        }
+        if let Some(sha256) = sha256 {
+            req = req.checksum_sha256(sha256.to_base64());
         }
         let req = req
             .presigned(pcfg(expires)?)
@@ -162,6 +173,24 @@ impl S3DirectBackend {
                     value: value.to_owned(),
                 })
                 .collect(),
+        })
+    }
+
+    pub async fn head(&self, key: &str) -> Result<BlobHead, FileError> {
+        let out = self
+            .cli
+            .head_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .checksum_mode(ChecksumMode::Enabled)
+            .send()
+            .await
+            .map_err(|source| FileError::Store { source: Box::new(source) })?;
+        Ok(BlobHead {
+            size: out.content_length().unwrap_or_default().max(0) as u64,
+            etag: out.e_tag().map(str::to_owned),
+            version: out.version_id().map(str::to_owned),
+            checksum: checksum(&out),
         })
     }
 
@@ -308,6 +337,44 @@ impl S3DirectBackend {
             tracing::warn!(%source, from, to, "failed to delete staging object after promotion");
         }
         Ok(())
+    }
+}
+
+fn checksum(out: &HeadObjectOutput) -> Option<BlobChecksum> {
+    if let Some(value) = out.checksum_sha256() {
+        return Some(BlobChecksum::new(
+            ChecksumAlgorithm::Sha256,
+            value,
+            kind(out.checksum_type(), ChecksumAlgorithm::Sha256),
+            ChecksumVerifier::Storage,
+        ));
+    }
+    if let Some(value) = out.checksum_crc64_nvme() {
+        return Some(BlobChecksum::new(
+            ChecksumAlgorithm::Crc64Nvme,
+            value,
+            kind(out.checksum_type(), ChecksumAlgorithm::Crc64Nvme),
+            ChecksumVerifier::Storage,
+        ));
+    }
+    if let Some(value) = out.checksum_crc32_c() {
+        return Some(BlobChecksum::new(
+            ChecksumAlgorithm::Crc32c,
+            value,
+            kind(out.checksum_type(), ChecksumAlgorithm::Crc32c),
+            ChecksumVerifier::Storage,
+        ));
+    }
+    None
+}
+
+fn kind(value: Option<&ChecksumType>, alg: ChecksumAlgorithm) -> ChecksumKind {
+    match value {
+        Some(ChecksumType::Composite) => ChecksumKind::Composite,
+        Some(ChecksumType::FullObject) => ChecksumKind::FullObject,
+        Some(_) => ChecksumKind::FullObject,
+        None if matches!(alg, ChecksumAlgorithm::Crc64Nvme) => ChecksumKind::FullObject,
+        None => ChecksumKind::FullObject,
     }
 }
 

@@ -167,3 +167,4 @@
   - `StoredBlob` owns a `ReadyKey`
 - Uploads always land under `staging/upload/<id>/object` first. Completion promotes the validated object into `ready/blob/<id>/original`, deletes the staging object, and only then marks the blob ready in metadata.
 - The old direct-upload-only `sync_content_type` repair step is gone. Promotion is now the single place where S3-compatible backends canonicalize stored `Content-Type`, which keeps the bucket structure and metadata policy aligned.
+- Blob integrity metadata now uses one canonical `checksum` field instead of the narrower `hash_sha256`. Proxy uploads populate it with a server-verified full-object SHA-256, direct single-part uploads can carry a storage-verified SHA-256 through `x-amz-checksum-sha256`, and direct uploads also surface storage-native object checksums when the backend exposes them through checksum-aware object head responses.

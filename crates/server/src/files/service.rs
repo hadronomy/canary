@@ -14,7 +14,9 @@ use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::events::UploadHub;
 use crate::files::list::ListBlobs;
-use crate::files::meta::{BlobHash, BlobId, BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
+use crate::files::meta::{
+    BlobChecksum, BlobId, BlobRecord, BlobSize, SampleCompleteness, Sha256Digest, StoredBlob,
+};
 use crate::files::repo::{BlobMetaRepo, InMemoryUploadRepo, SurrealBlobMetaRepo, UploadRepo};
 use crate::files::sniff::classify;
 use crate::files::store::{Backend, BlobHead, BlobRead};
@@ -115,7 +117,7 @@ impl UploadService {
             now + TimeDelta::from_std(self.cfg.intent_ttl).expect("intent ttl is valid");
         let id = BlobId::new();
         let common = draft.into_common(id, expires_at);
-        let session = match self.mode(common.declared_size(), common.declared_hash()) {
+        let session = match self.mode(common.declared_size(), common.sha256()) {
             UploadMode::ProxyPut => UploadSession::proxy(common),
             UploadMode::DirectPut => UploadSession::direct_put(common),
             UploadMode::DirectMultipart => UploadSession::multipart(common),
@@ -271,7 +273,9 @@ impl UploadService {
             key: session.ready_key().clone(),
             name: session.name().cloned(),
             size: BlobSize::new(size),
-            hash: Some(BlobHash::new(hasher.finalize().into())),
+            checksum: Some(BlobChecksum::sha256_server(&Sha256Digest::new(
+                hasher.finalize().into(),
+            ))),
             kind,
             etag: None,
             version: None,
@@ -339,11 +343,14 @@ impl UploadService {
         Ok(())
     }
 
-    fn mode(&self, size: BlobSize, hash: Option<&BlobHash>) -> UploadMode {
-        if !self.backend.supports_direct() || hash.is_some() {
+    fn mode(&self, size: BlobSize, sha256: Option<&Sha256Digest>) -> UploadMode {
+        if !self.backend.supports_direct() {
             return UploadMode::ProxyPut;
         }
         if size.get() > self.cfg.multipart_threshold_bytes {
+            if sha256.is_some() {
+                return UploadMode::ProxyPut;
+            }
             return UploadMode::DirectMultipart;
         }
         UploadMode::DirectPut
@@ -356,7 +363,12 @@ impl UploadService {
             })),
             UploadMode::DirectPut => Ok(UploadAccess::DirectPut(
                 self.backend
-                    .sign_put(session.staging_key(), session.declared_type(), self.cfg.presign_ttl)
+                    .sign_put(
+                        session.staging_key(),
+                        session.declared_type(),
+                        session.sha256(),
+                        self.cfg.presign_ttl,
+                    )
                     .await?,
             )),
             UploadMode::DirectMultipart => {
@@ -448,7 +460,7 @@ impl UploadService {
                 if !input.parts.is_empty() {
                     return Err(FileError::InvalidUploadParts);
                 }
-                Ok(CompleteCmd::Proxy(CompleteProxy { etag: input.etag, hash: input.hash }))
+                Ok(CompleteCmd::Proxy(CompleteProxy { etag: input.etag, sha256: input.sha256 }))
             }
             UploadMode::DirectPut => {
                 if !input.parts.is_empty() {
@@ -489,14 +501,14 @@ impl UploadService {
             self.fail(session.clone()).await?;
             return Err(FileError::SizeMismatch);
         }
-        if let Some(hash) = session.declared_hash()
-            && blob.hash.as_ref() != Some(hash)
+        if let Some(sha256) = session.sha256()
+            && !blob.checksum.as_ref().is_some_and(|checksum| checksum.matches_sha256(sha256))
         {
             self.fail(session.clone()).await?;
             return Err(FileError::ChecksumMismatch);
         }
-        if let Some(hash) = cmd.hash.as_ref()
-            && blob.hash.as_ref() != Some(hash)
+        if let Some(sha256) = cmd.sha256.as_ref()
+            && !blob.checksum.as_ref().is_some_and(|checksum| checksum.matches_sha256(sha256))
         {
             self.fail(session.clone()).await?;
             return Err(FileError::ChecksumMismatch);
@@ -556,7 +568,7 @@ impl UploadService {
             key: session.ready_key().clone(),
             name: session.name().cloned(),
             size: BlobSize::new(head.size),
-            hash: None,
+            checksum: head.checksum,
             kind: classify(
                 session.purpose().media_profile(),
                 session.declared_type().cloned(),

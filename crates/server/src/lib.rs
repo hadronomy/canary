@@ -24,11 +24,12 @@ pub use db::service::DatabaseService;
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
 pub use files::list::ListBlobs;
 pub use files::meta::{
-    BlobHash, BlobId, BlobKey, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord,
-    BlobSize, DetectedMedia, DetectionConfidence, DetectionSource, DetectionState,
-    DetectionStateKind, MediaProfile, MediaRisk, ReadyKey, SampleCompleteness, ServingContent,
-    ServingDisposition, ServingPolicy, StagedBlob, StagingKey, StoredBlob, UploadDecision,
-    ValidationNeed, ValidationState,
+    BlobChecksum, BlobId, BlobKey, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord,
+    BlobSize, ChecksumAlgorithm, ChecksumKind, ChecksumVerifier, DetectedMedia,
+    DetectionConfidence, DetectionSource, DetectionState, DetectionStateKind, MediaProfile,
+    MediaRisk, ReadyKey, SampleCompleteness, ServingContent, ServingDisposition, ServingPolicy,
+    Sha256Digest, StagedBlob, StagingKey, StoredBlob, UploadDecision, ValidationNeed,
+    ValidationState,
 };
 pub use files::service::{BlobService, FileService, UploadService};
 pub use files::upload::{

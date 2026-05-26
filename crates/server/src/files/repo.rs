@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::meta::{
-    BlobHash, BlobId, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord, BlobSize,
+    BlobChecksum, BlobId, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord, BlobSize,
     DetectedMedia, DetectionConfidence, DetectionSource, DetectionState, DetectionStateKind,
     MediaProfile, ReadyKey, SampleCompleteness, StoredBlob, ValidationState,
 };
@@ -214,7 +214,7 @@ struct BlobRow {
     key: String,
     name: Option<String>,
     size_bytes: u64,
-    hash_sha256: Option<String>,
+    checksum: Option<BlobChecksum>,
     media_profile: MediaProfile,
     media_type: String,
     declared_media_type: Option<String>,
@@ -235,7 +235,7 @@ impl From<&StoredBlob> for BlobRow {
             key: value.key.as_str().to_owned(),
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
-            hash_sha256: value.hash.as_ref().map(BlobHash::to_hex),
+            checksum: value.checksum.clone(),
             media_profile: value.kind.profile,
             media_type: value.kind.effective.as_str().to_owned(),
             declared_media_type: value.kind.observed.declared.as_ref().map(ToString::to_string),
@@ -299,7 +299,7 @@ impl TryFrom<BlobRow> for StoredBlob {
             key: ReadyKey::new(value.key),
             name: value.name.map(BlobName::new).transpose()?,
             size: BlobSize::new(value.size_bytes),
-            hash: value.hash_sha256.as_deref().map(BlobHash::from_hex).transpose()?,
+            checksum: value.checksum,
             kind: BlobKind {
                 profile: value.media_profile,
                 observed: BlobObservation { declared, detection, sample: value.sample_kind },

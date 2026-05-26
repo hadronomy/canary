@@ -16,7 +16,9 @@ use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 use crate::config::FileBackendConfig;
 use crate::error::FileError;
 use crate::files::direct::{MultipartSession, S3DirectBackend, S3RuntimeConfig};
-use crate::files::meta::{BlobId, BlobKey, ReadyKey, StagedBlob, StagingKey, StoredBlob};
+use crate::files::meta::{
+    BlobChecksum, BlobId, BlobKey, ReadyKey, Sha256Digest, StagedBlob, StagingKey, StoredBlob,
+};
 use crate::files::upload::{
     CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, SignedUploadPart,
 };
@@ -60,6 +62,7 @@ pub struct BlobHead {
     pub size: u64,
     pub etag: Option<String>,
     pub version: Option<String>,
+    pub checksum: Option<BlobChecksum>,
 }
 
 #[derive(Clone)]
@@ -137,7 +140,10 @@ impl Backend {
     }
 
     pub async fn head_staging(&self, key: &StagingKey) -> Result<BlobHead, FileError> {
-        self.bytes().head_staging(key).await
+        match self {
+            Self::Local(local) => local.bytes.head_staging(key).await,
+            Self::S3(s3) => s3.direct.head(s3.bytes.object_key(key.blob()).as_str()).await,
+        }
     }
 
     pub async fn peek_staging(&self, key: &StagingKey, len: usize) -> Result<Bytes, FileError> {
@@ -180,12 +186,15 @@ impl Backend {
         &self,
         key: &StagingKey,
         ty: Option<&mime::Mime>,
+        sha256: Option<&Sha256Digest>,
         expires: std::time::Duration,
     ) -> Result<DirectPutAccess, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
-                s3.direct.sign_put(s3.bytes.object_key(key.blob()).as_str(), ty, expires).await
+                s3.direct
+                    .sign_put(s3.bytes.object_key(key.blob()).as_str(), ty, sha256, expires)
+                    .await
             }
         }
     }
@@ -295,7 +304,7 @@ impl ObjectBytes {
             key,
             name: staged.name,
             size: staged.size,
-            hash: Some(staged.hash),
+            checksum: Some(BlobChecksum::sha256_server(&staged.sha256)),
             kind: staged.kind,
             etag: None,
             version: None,
@@ -374,7 +383,7 @@ fn map_store_err(id: BlobId, source: object_store::Error) -> FileError {
 
 impl From<ObjectMeta> for BlobHead {
     fn from(meta: ObjectMeta) -> Self {
-        Self { size: meta.size, etag: meta.e_tag, version: meta.version }
+        Self { size: meta.size, etag: meta.e_tag, version: meta.version, checksum: None }
     }
 }
 

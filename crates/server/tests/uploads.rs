@@ -270,6 +270,10 @@ async fn upload_flow_completes_and_exposes_blob() {
     assert_eq!(blob["id"], id);
     assert_eq!(blob["name"], "hello.txt");
     assert_eq!(blob["size_bytes"], 5);
+    assert_eq!(blob["checksum"]["algorithm"], "sha256");
+    assert_eq!(blob["checksum"]["value"], "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=");
+    assert_eq!(blob["checksum"]["kind"], "full_object");
+    assert_eq!(blob["checksum"]["verifier"], "server");
     assert_eq!(blob["media_type"], "text/plain");
 
     let response = app

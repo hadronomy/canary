@@ -2,6 +2,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use base64::Engine;
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
@@ -74,9 +75,9 @@ impl BlobSize {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlobHash([u8; 32]);
+pub struct Sha256Digest([u8; 32]);
 
-impl BlobHash {
+impl Sha256Digest {
     #[must_use]
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
@@ -107,6 +108,70 @@ impl BlobHash {
             let _ = write!(&mut out, "{byte:02x}");
         }
         out
+    }
+
+    #[must_use]
+    pub fn to_base64(&self) -> String {
+        base64::engine::general_purpose::STANDARD.encode(self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecksumAlgorithm {
+    Sha256,
+    Crc32c,
+    Crc64Nvme,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecksumKind {
+    FullObject,
+    Composite,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecksumVerifier {
+    Server,
+    Storage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlobChecksum {
+    pub algorithm: ChecksumAlgorithm,
+    pub value: String,
+    pub kind: ChecksumKind,
+    pub verifier: ChecksumVerifier,
+}
+
+impl BlobChecksum {
+    #[must_use]
+    pub fn new(
+        algorithm: ChecksumAlgorithm,
+        value: impl Into<String>,
+        kind: ChecksumKind,
+        verifier: ChecksumVerifier,
+    ) -> Self {
+        Self { algorithm, value: value.into(), kind, verifier }
+    }
+
+    #[must_use]
+    pub fn sha256_server(value: &Sha256Digest) -> Self {
+        Self::new(
+            ChecksumAlgorithm::Sha256,
+            value.to_base64(),
+            ChecksumKind::FullObject,
+            ChecksumVerifier::Server,
+        )
+    }
+
+    #[must_use]
+    pub fn matches_sha256(&self, value: &Sha256Digest) -> bool {
+        self.algorithm == ChecksumAlgorithm::Sha256
+            && self.kind == ChecksumKind::FullObject
+            && self.value == value.to_base64()
     }
 }
 
@@ -429,7 +494,7 @@ pub struct StagedBlob {
     pub id: BlobId,
     pub name: Option<BlobName>,
     pub size: BlobSize,
-    pub hash: BlobHash,
+    pub sha256: Sha256Digest,
     pub kind: BlobKind,
     pub path: PathBuf,
 }
@@ -440,7 +505,7 @@ pub struct StoredBlob {
     pub key: ReadyKey,
     pub name: Option<BlobName>,
     pub size: BlobSize,
-    pub hash: Option<BlobHash>,
+    pub checksum: Option<BlobChecksum>,
     pub kind: BlobKind,
     pub etag: Option<String>,
     pub version: Option<String>,
@@ -451,7 +516,7 @@ pub struct BlobRecord {
     pub id: String,
     pub name: Option<String>,
     pub size_bytes: u64,
-    pub hash_sha256: Option<String>,
+    pub checksum: Option<BlobChecksum>,
     pub media_type: String,
     pub declared_media_type: Option<String>,
     pub sniffed_media_type: Option<String>,
@@ -463,7 +528,7 @@ impl From<&StoredBlob> for BlobRecord {
             id: value.id.to_string(),
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
-            hash_sha256: value.hash.as_ref().map(BlobHash::to_hex),
+            checksum: value.checksum.clone(),
             media_type: value.kind.effective.as_str().to_owned(),
             declared_media_type: value.kind.observed.declared.as_ref().map(ToString::to_string),
             sniffed_media_type: value.kind.detected().map(|detected| detected.mime.to_string()),

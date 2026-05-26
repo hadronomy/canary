@@ -16,7 +16,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::Pagination;
 use crate::error::{AppError, AppResult};
-use crate::files::meta::{BlobHash, BlobId, BlobName, BlobRecord};
+use crate::files::meta::{BlobId, BlobName, BlobRecord, Sha256Digest};
 use crate::files::service::CreatedIntent;
 use crate::files::upload::{
     CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess,
@@ -168,7 +168,7 @@ async fn create_upload(
             name: body.name.map(BlobName::new).transpose()?,
             declared_type: parse_mime(body.content_type)?,
             declared_size: crate::files::meta::BlobSize::new(body.size_bytes),
-            declared_hash: body.sha256.as_deref().map(BlobHash::from_hex).transpose()?,
+            sha256: body.sha256.as_deref().map(Sha256Digest::from_hex).transpose()?,
         })
         .await?;
     Ok(created(upload(intent)))
@@ -264,7 +264,7 @@ async fn complete_upload(
             id,
             CompleteInput {
                 etag: body.etag,
-                hash: body.sha256.as_deref().map(BlobHash::from_hex).transpose()?,
+                sha256: body.sha256.as_deref().map(Sha256Digest::from_hex).transpose()?,
                 parts: body.parts,
             },
         )

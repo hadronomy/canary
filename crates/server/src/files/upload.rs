@@ -8,7 +8,7 @@ use smol_str::SmolStr;
 
 use crate::error::FileError;
 use crate::files::meta::{
-    BlobHash, BlobId, BlobName, BlobSize, MediaProfile, ReadyKey, StagingKey, StoredBlob,
+    BlobId, BlobName, BlobSize, MediaProfile, ReadyKey, Sha256Digest, StagingKey, StoredBlob,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -150,7 +150,7 @@ pub struct UploadCommon {
     name: Option<BlobName>,
     declared_type: Option<Mime>,
     declared_size: BlobSize,
-    declared_hash: Option<BlobHash>,
+    sha256: Option<Sha256Digest>,
     created_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
 }
@@ -197,8 +197,8 @@ impl UploadCommon {
     }
 
     #[must_use]
-    pub fn declared_hash(&self) -> Option<&BlobHash> {
-        self.declared_hash.as_ref()
+    pub fn sha256(&self) -> Option<&Sha256Digest> {
+        self.sha256.as_ref()
     }
 
     #[must_use]
@@ -219,7 +219,7 @@ pub struct UploadDraft {
     pub name: Option<BlobName>,
     pub declared_type: Option<Mime>,
     pub declared_size: BlobSize,
-    pub declared_hash: Option<BlobHash>,
+    pub sha256: Option<Sha256Digest>,
 }
 
 impl UploadDraft {
@@ -234,7 +234,7 @@ impl UploadDraft {
             name: self.name,
             declared_type: self.declared_type,
             declared_size: self.declared_size,
-            declared_hash: self.declared_hash,
+            sha256: self.sha256,
             created_at: Utc::now(),
             expires_at,
         }
@@ -352,8 +352,8 @@ impl UploadSession {
     }
 
     #[must_use]
-    pub fn declared_hash(&self) -> Option<&BlobHash> {
-        self.common().declared_hash()
+    pub fn sha256(&self) -> Option<&Sha256Digest> {
+        self.common().sha256()
     }
 
     #[must_use]
@@ -599,7 +599,7 @@ pub struct CompletedUploadPart {
 #[derive(Debug, Clone, Default)]
 pub struct CompleteInput {
     pub etag: Option<String>,
-    pub hash: Option<BlobHash>,
+    pub sha256: Option<Sha256Digest>,
     pub parts: Vec<CompletedUploadPart>,
 }
 
@@ -613,7 +613,7 @@ pub enum CompleteCmd {
 #[derive(Debug, Clone)]
 pub struct CompleteProxy {
     pub etag: Option<String>,
-    pub hash: Option<BlobHash>,
+    pub sha256: Option<Sha256Digest>,
 }
 
 #[derive(Debug, Clone)]
