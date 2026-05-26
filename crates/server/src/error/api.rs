@@ -130,6 +130,20 @@ impl From<FileError> for AppError {
                 "invalid_content_type",
                 "The provided content type is not supported.",
             ),
+            FileError::ContentTypeMismatch { declared, detected } => {
+                Self::unsupported_media_type_code(
+                    "upload_content_type_mismatch",
+                    "The uploaded file type does not match the declared content type.",
+                )
+                .with_context("declared_media_type", json!(declared))
+                .with_context("detected_media_type", json!(detected))
+            }
+            FileError::ActiveContentDisallowed { declared, detected } => Self::unsupported_media_type_code(
+                "upload_active_content_disallowed",
+                "The uploaded file contains browser-active content that is not allowed for this upload.",
+            )
+            .with_context("declared_media_type", json!(declared))
+            .with_context("detected_media_type", json!(detected)),
             FileError::InvalidChecksum => {
                 Self::validation_code("invalid_checksum", "The checksum format is invalid.")
             }

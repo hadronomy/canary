@@ -1,0 +1,33 @@
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      RUSTFS_ACCESS_KEY: canaryadmin
+      RUSTFS_SECRET_KEY: canarysecret123
+      RUSTFS_CONSOLE_ENABLE: "true"
+    command: ["/data"]
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+
+  rustfs-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      rustfs:
+        condition: service_started
+    environment:
+      AWS_ACCESS_KEY_ID: canaryadmin
+      AWS_SECRET_ACCESS_KEY: canarysecret123
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+    entrypoint:
+      - /bin/sh
+      - -euxc
+      - until aws --endpoint-url http://rustfs:9000 s3api list-buckets >/dev/null 2>&1; do sleep 1; done; aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket canary-dev >/dev/null 2>&1 || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket canary-dev
+
+volumes:
+  rustfs-data:
+  rustfs-logs:

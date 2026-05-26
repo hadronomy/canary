@@ -4,7 +4,7 @@ use std::str::FromStr;
 use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{FromRef, Path, Request, State};
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
@@ -293,9 +293,13 @@ async fn download(State(state): State<FileState>, Path(id): Path<String>) -> App
         .unwrap_or_else(|| format!("{id}.bin"));
     let response = Attachment::new(body)
         .filename(file_name)
-        .content_type(meta.kind.effective.as_str())
+        .content_type(meta.kind.serving().content_type(&meta.kind.effective))
         .into_response();
-    Ok(with_length(response, meta.size.get()))
+    let mut response = with_length(response, meta.size.get());
+    response
+        .headers_mut()
+        .insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    Ok(response)
 }
 
 fn upload(created: CreatedIntent) -> CreatedUpload {

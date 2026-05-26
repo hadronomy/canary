@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -10,7 +11,9 @@ use tokio::sync::RwLock;
 use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::meta::{
-    BlobHash, BlobId, BlobKey, BlobKind, BlobMedia, BlobName, BlobRecord, BlobSize, StoredBlob,
+    BlobHash, BlobId, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord, BlobSize,
+    DetectedMedia, DetectionConfidence, DetectionSource, DetectionState, DetectionStateKind,
+    MediaProfile, ReadyKey, SampleCompleteness, StoredBlob, ValidationState,
 };
 use crate::files::upload::{MultipartUploadId, PartNumber, UploadSession};
 use crate::pagination::{Page, PageWindow};
@@ -212,9 +215,15 @@ struct BlobRow {
     name: Option<String>,
     size_bytes: u64,
     hash_sha256: Option<String>,
+    media_profile: MediaProfile,
     media_type: String,
     declared_media_type: Option<String>,
     sniffed_media_type: Option<String>,
+    sniffed_state: Option<DetectionStateKind>,
+    sniffed_source: Option<DetectionSource>,
+    sniffed_confidence: Option<DetectionConfidence>,
+    sample_kind: SampleCompleteness,
+    validation_state: ValidationState,
     etag: Option<String>,
     version: Option<String>,
 }
@@ -227,9 +236,18 @@ impl From<&StoredBlob> for BlobRow {
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
             hash_sha256: value.hash.as_ref().map(BlobHash::to_hex),
+            media_profile: value.kind.profile,
             media_type: value.kind.effective.as_str().to_owned(),
-            declared_media_type: value.kind.declared.as_ref().map(ToString::to_string),
-            sniffed_media_type: value.kind.sniffed.as_ref().map(ToString::to_string),
+            declared_media_type: value.kind.observed.declared.as_ref().map(ToString::to_string),
+            sniffed_media_type: value.kind.detected().map(|detected| detected.mime.to_string()),
+            sniffed_state: match &value.kind.observed.detection {
+                DetectionState::Missing => None,
+                state => Some(state.kind()),
+            },
+            sniffed_source: value.kind.detected().map(|detected| detected.source),
+            sniffed_confidence: value.kind.detected().map(|detected| detected.confidence),
+            sample_kind: value.kind.observed.sample,
+            validation_state: value.kind.validation,
             etag: value.etag.clone(),
             version: value.version.clone(),
         }
@@ -243,23 +261,51 @@ impl TryFrom<BlobRow> for StoredBlob {
         let id = BlobId::from_str(value.cursor.as_str())?;
         let declared =
             value.declared_media_type.as_deref().map(str::parse).transpose().map_err(meta_err)?;
-        let sniffed =
-            value.sniffed_media_type.as_deref().map(str::parse).transpose().map_err(meta_err)?;
-        let effective = if value.media_type == mime::APPLICATION_OCTET_STREAM.as_ref()
-            && declared.is_none()
-            && sniffed.is_none()
-        {
-            BlobMedia::Unknown
-        } else {
-            BlobMedia::Known(value.media_type.parse().map_err(meta_err)?)
+        let detection = match (
+            value.sniffed_media_type.as_deref(),
+            value.sniffed_state,
+            value.sniffed_source,
+            value.sniffed_confidence,
+        ) {
+            (None, None, None, None) => DetectionState::Missing,
+            (Some(mime), Some(state), Some(source), Some(confidence)) => match state {
+                DetectionStateKind::Known => DetectionState::Known(DetectedMedia::new(
+                    mime.parse().map_err(meta_err)?,
+                    source,
+                    confidence,
+                )),
+                DetectionStateKind::Possible => DetectionState::Possible(DetectedMedia::new(
+                    mime.parse().map_err(meta_err)?,
+                    source,
+                    confidence,
+                )),
+                DetectionStateKind::Missing => DetectionState::Missing,
+            },
+            _ => {
+                return Err(FileError::Metadata {
+                    source: Box::new(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "incomplete sniffed metadata",
+                    )),
+                });
+            }
+        };
+        let effective = match value.media_type.as_str() {
+            ty if ty == mime::APPLICATION_OCTET_STREAM.as_ref() => BlobMedia::Unknown,
+            _ => BlobMedia::Known(value.media_type.parse().map_err(meta_err)?),
         };
         Ok(Self {
             id,
-            key: BlobKey::new(value.key),
+            key: ReadyKey::new(value.key),
             name: value.name.map(BlobName::new).transpose()?,
             size: BlobSize::new(value.size_bytes),
             hash: value.hash_sha256.as_deref().map(BlobHash::from_hex).transpose()?,
-            kind: BlobKind { declared, sniffed, effective },
+            kind: BlobKind {
+                profile: value.media_profile,
+                observed: BlobObservation { declared, detection, sample: value.sample_kind },
+                effective,
+                validation: value.validation_state,
+            },
             etag: value.etag,
             version: value.version,
         })

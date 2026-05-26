@@ -14,9 +14,9 @@ use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::events::UploadHub;
 use crate::files::list::ListBlobs;
-use crate::files::meta::{BlobHash, BlobId, BlobRecord, BlobSize, StoredBlob};
+use crate::files::meta::{BlobHash, BlobId, BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
 use crate::files::repo::{BlobMetaRepo, InMemoryUploadRepo, SurrealBlobMetaRepo, UploadRepo};
-use crate::files::sniff::detect;
+use crate::files::sniff::classify;
 use crate::files::store::{Backend, BlobHead, BlobRead};
 use crate::files::upload::{
     ActorId, CompleteCmd, CompleteDirectPut, CompleteInput, CompleteMultipart, CompleteProxy,
@@ -180,14 +180,18 @@ impl UploadService {
         let session = if session.multipart_upload_id().is_some() {
             session
         } else {
-            let next =
-                self.backend.create_multipart(session.key(), session.declared_type()).await?;
+            let next = self
+                .backend
+                .create_multipart(session.staging_key(), session.declared_type())
+                .await?;
             let session = self.uploads.attach_multipart(id, next.id).await?;
             self.publish(UploadEventKind::Uploading, session.clone()).await;
             session
         };
         let upload_id = session.multipart_upload_id().ok_or(FileError::UploadIncomplete)?.clone();
-        self.backend.sign_parts(session.key(), &upload_id, &parts, self.cfg.presign_ttl).await
+        self.backend
+            .sign_parts(session.staging_key(), &upload_id, &parts, self.cfg.presign_ttl)
+            .await
     }
 
     pub async fn put_body(
@@ -207,22 +211,54 @@ impl UploadService {
         self.publish(UploadEventKind::Uploading, session.clone()).await;
 
         let limit = session.declared_size().get().min(self.cfg.max_bytes);
-        let mut write = self.backend.begin_write(session.key()).await?;
         let mut hasher = Sha256::new();
         let mut sniff = Vec::with_capacity(self.cfg.sniff_bytes);
+        let mut prefix = Vec::new();
         let mut size = 0u64;
         let mut stream = body.into_data_stream();
+        let mut done = false;
 
-        while let Some(chunk) = stream.next().await {
+        while sniff.len() < self.cfg.sniff_bytes {
+            let Some(chunk) = stream.next().await else {
+                done = true;
+                break;
+            };
             let chunk = chunk.map_err(|source| FileError::ReadBody { source: Box::new(source) })?;
             size += chunk.len() as u64;
             if size > limit {
                 self.fail(session.clone()).await?;
                 return Err(FileError::UploadTooLarge);
             }
-            if sniff.len() < self.cfg.sniff_bytes {
-                let take = (self.cfg.sniff_bytes - sniff.len()).min(chunk.len());
-                sniff.extend_from_slice(&chunk[..take]);
+            hasher.update(&chunk);
+            let take = (self.cfg.sniff_bytes - sniff.len()).min(chunk.len());
+            sniff.extend_from_slice(&chunk[..take]);
+            prefix.push(chunk);
+        }
+
+        let decision = classify(
+            session.purpose().media_profile(),
+            session.declared_type().cloned(),
+            &sniff,
+            proxy_sample(sniff.len(), done),
+        );
+        let kind = match decision.into_result() {
+            Ok(kind) => kind,
+            Err(err) => {
+                self.fail(session.clone()).await?;
+                return Err(err);
+            }
+        };
+        let mut write =
+            self.backend.begin_write(session.staging_key(), kind.effective.as_str()).await?;
+        for chunk in prefix {
+            write.write_all(&chunk).await.map_err(|source| FileError::Persist { source })?;
+        }
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|source| FileError::ReadBody { source: Box::new(source) })?;
+            size += chunk.len() as u64;
+            if size > limit {
+                self.fail(session.clone()).await?;
+                return Err(FileError::UploadTooLarge);
             }
             hasher.update(&chunk);
             write.write_all(&chunk).await.map_err(|source| FileError::Persist { source })?;
@@ -232,11 +268,11 @@ impl UploadService {
 
         let blob = StoredBlob {
             id: session.id(),
-            key: session.key().clone(),
+            key: session.ready_key().clone(),
             name: session.name().cloned(),
             size: BlobSize::new(size),
             hash: Some(BlobHash::new(hasher.finalize().into())),
-            kind: detect(session.declared_type().cloned(), &sniff),
+            kind,
             etag: None,
             version: None,
         };
@@ -320,7 +356,7 @@ impl UploadService {
             })),
             UploadMode::DirectPut => Ok(UploadAccess::DirectPut(
                 self.backend
-                    .sign_put(session.key(), session.declared_type(), self.cfg.presign_ttl)
+                    .sign_put(session.staging_key(), session.declared_type(), self.cfg.presign_ttl)
                     .await?,
             )),
             UploadMode::DirectMultipart => {
@@ -381,12 +417,15 @@ impl UploadService {
         if session.mode() != UploadMode::DirectMultipart {
             return Ok(session);
         }
+        if !matches!(session.state(), UploadState::Created | UploadState::Uploading) {
+            return Ok(session);
+        }
         let Some(upload_id) = session.multipart_upload_id().cloned() else {
             return Ok(session);
         };
         let next = self
             .backend
-            .list_multipart_parts(session.key(), &upload_id)
+            .list_multipart_parts(session.staging_key(), &upload_id)
             .await?
             .into_iter()
             .collect::<BTreeSet<_>>();
@@ -432,7 +471,7 @@ impl UploadService {
         if session.state() != UploadState::Uploaded {
             return Err(FileError::UploadInvalidState { id: session.id(), state: session.state() });
         }
-        let head = match self.backend.head(session.key()).await {
+        let head = match self.backend.head_staging(session.staging_key()).await {
             Ok(head) => head,
             Err(err) => {
                 self.fail(session.clone()).await?;
@@ -472,14 +511,7 @@ impl UploadService {
         session: UploadSession,
         cmd: CompleteDirectPut,
     ) -> Result<StoredBlob, FileError> {
-        let blob = match self.inspect_remote_blob(&session, cmd.etag).await {
-            Ok(blob) => blob,
-            Err(err) => {
-                self.fail(session.clone()).await?;
-                return Err(err);
-            }
-        };
-        self.finish(session, blob).await
+        self.finalize_remote(session, cmd.etag).await
     }
 
     async fn complete_multipart(
@@ -503,19 +535,12 @@ impl UploadService {
             return Err(FileError::UploadIncomplete);
         }
         if let Err(err) =
-            self.backend.complete_multipart(session.key(), &upload_id, &cmd.parts).await
+            self.backend.complete_multipart(session.staging_key(), &upload_id, &cmd.parts).await
         {
             self.fail(session.clone()).await?;
             return Err(err);
         }
-        let blob = match self.inspect_remote_blob(&session, cmd.etag).await {
-            Ok(blob) => blob,
-            Err(err) => {
-                self.fail(session.clone()).await?;
-                return Err(err);
-            }
-        };
-        self.finish(session, blob).await
+        self.finalize_remote(session, cmd.etag).await
     }
 
     async fn inspect_remote_blob(
@@ -523,16 +548,22 @@ impl UploadService {
         session: &UploadSession,
         etag: Option<String>,
     ) -> Result<StoredBlob, FileError> {
-        let head = self.backend.head(session.key()).await?;
+        let head = self.backend.head_staging(session.staging_key()).await?;
         self.ensure_size(session, &head)?;
-        let sniff = self.backend.peek(session.key(), self.cfg.sniff_bytes).await?;
+        let sniff = self.backend.peek_staging(session.staging_key(), self.cfg.sniff_bytes).await?;
         Ok(StoredBlob {
             id: session.id(),
-            key: session.key().clone(),
+            key: session.ready_key().clone(),
             name: session.name().cloned(),
             size: BlobSize::new(head.size),
             hash: None,
-            kind: detect(session.declared_type().cloned(), sniff.as_ref()),
+            kind: classify(
+                session.purpose().media_profile(),
+                session.declared_type().cloned(),
+                sniff.as_ref(),
+                remote_sample(head.size, sniff.len()),
+            )
+            .into_result()?,
             etag: etag.or(head.etag),
             version: head.version,
         })
@@ -548,12 +579,33 @@ impl UploadService {
     async fn finish(
         &self,
         session: UploadSession,
-        blob: StoredBlob,
+        mut blob: StoredBlob,
     ) -> Result<StoredBlob, FileError> {
+        let head = self
+            .backend
+            .promote(session.staging_key(), session.ready_key(), blob.kind.effective.as_str())
+            .await?;
+        blob.etag = head.etag.or(blob.etag);
+        blob.version = head.version.or(blob.version);
         let blob = self.blobs.put_ready(blob).await?;
         let session = self.uploads.mark_ready(session.id(), blob.clone(), Utc::now()).await?;
         self.publish(UploadEventKind::Completed, session).await;
         Ok(blob)
+    }
+
+    async fn finalize_remote(
+        &self,
+        session: UploadSession,
+        etag: Option<String>,
+    ) -> Result<StoredBlob, FileError> {
+        let blob = match self.inspect_remote_blob(&session, etag).await {
+            Ok(blob) => blob,
+            Err(err) => {
+                self.fail(session.clone()).await?;
+                return Err(err);
+            }
+        };
+        self.finish(session, blob).await
     }
 
     async fn fail(&self, session: UploadSession) -> Result<(), FileError> {
@@ -568,7 +620,8 @@ impl UploadService {
         state: UploadState,
     ) -> Result<UploadSession, FileError> {
         if let Some(upload_id) = session.multipart_upload_id()
-            && let Err(source) = self.backend.abort_multipart(session.key(), upload_id).await
+            && let Err(source) =
+                self.backend.abort_multipart(session.staging_key(), upload_id).await
         {
             tracing::warn!(
                 %source,
@@ -577,7 +630,7 @@ impl UploadService {
                 "failed to abort multipart upload",
             );
         }
-        if let Err(source) = self.backend.delete(session.key()).await {
+        if let Err(source) = self.backend.delete_staging(session.staging_key()).await {
             tracing::warn!(%source, upload_id = %session.id(), "failed to clean object");
         }
         let _ = self.blobs.delete_ready(session.id()).await;
@@ -594,4 +647,24 @@ impl UploadService {
     async fn publish(&self, kind: UploadEventKind, session: UploadSession) {
         self.events.publish(kind, session).await;
     }
+}
+
+fn proxy_sample(len: usize, done: bool) -> SampleCompleteness {
+    if len == 0 {
+        return SampleCompleteness::Empty;
+    }
+    if done {
+        return SampleCompleteness::Complete;
+    }
+    SampleCompleteness::Prefix
+}
+
+fn remote_sample(size: u64, len: usize) -> SampleCompleteness {
+    if size == 0 {
+        return SampleCompleteness::Empty;
+    }
+    if size <= len as u64 {
+        return SampleCompleteness::Complete;
+    }
+    SampleCompleteness::Prefix
 }

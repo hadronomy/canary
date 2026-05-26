@@ -9,14 +9,14 @@ use futures_util::stream::BoxStream;
 use object_store::buffered::BufWriter;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use object_store::{DynObjectStore, ObjectMeta};
+use object_store::{Attribute, Attributes, DynObjectStore, ObjectMeta};
 use tokio::fs;
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 
 use crate::config::FileBackendConfig;
 use crate::error::FileError;
 use crate::files::direct::{MultipartSession, S3DirectBackend, S3RuntimeConfig};
-use crate::files::meta::{BlobId, BlobKey, StagedBlob, StoredBlob};
+use crate::files::meta::{BlobId, BlobKey, ReadyKey, StagedBlob, StagingKey, StoredBlob};
 use crate::files::upload::{
     CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, SignedUploadPart,
 };
@@ -125,52 +125,87 @@ impl Backend {
         self.bytes().put(staged).await
     }
 
-    pub async fn begin_write(&self, key: &BlobKey) -> Result<BlobWrite, FileError> {
-        self.bytes().begin_write(key).await
+    pub async fn begin_write(&self, key: &StagingKey, ty: &str) -> Result<BlobWrite, FileError> {
+        match self {
+            Self::Local(local) => local.bytes.begin_write(key, None).await,
+            Self::S3(s3) => s3.bytes.begin_write(key, Some(ty)).await,
+        }
     }
 
     pub async fn open(&self, blob: &StoredBlob) -> Result<BlobRead, FileError> {
         self.bytes().open(blob).await
     }
 
-    pub async fn head(&self, key: &BlobKey) -> Result<BlobHead, FileError> {
-        self.bytes().head(key).await
+    pub async fn head_staging(&self, key: &StagingKey) -> Result<BlobHead, FileError> {
+        self.bytes().head_staging(key).await
     }
 
-    pub async fn peek(&self, key: &BlobKey, len: usize) -> Result<Bytes, FileError> {
-        self.bytes().peek(key, len).await
+    pub async fn peek_staging(&self, key: &StagingKey, len: usize) -> Result<Bytes, FileError> {
+        self.bytes().peek_staging(key, len).await
     }
 
-    pub async fn delete(&self, key: &BlobKey) -> Result<(), FileError> {
-        self.bytes().delete(key).await
+    pub async fn delete_staging(&self, key: &StagingKey) -> Result<(), FileError> {
+        self.bytes().delete_staging(key).await
+    }
+
+    /// Promotes a validated upload from staging into the ready namespace.
+    ///
+    /// Uploads always land under staging keys first. Only after the server has
+    /// inspected and accepted the bytes do they move into a ready key that the
+    /// rest of the system can serve. S3-compatible backends also canonicalize
+    /// `Content-Type` during this promotion step so the stored object metadata
+    /// matches Canary's validated media decision.
+    pub async fn promote(
+        &self,
+        from: &StagingKey,
+        to: &ReadyKey,
+        ty: &str,
+    ) -> Result<BlobHead, FileError> {
+        match self {
+            Self::Local(local) => local.bytes.promote(from, to).await,
+            Self::S3(s3) => {
+                s3.direct
+                    .promote(
+                        s3.bytes.object_key(from.blob()).as_str(),
+                        s3.bytes.object_key(to.blob()).as_str(),
+                        ty,
+                    )
+                    .await?;
+                s3.bytes.head_ready(to).await
+            }
+        }
     }
 
     pub async fn sign_put(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         ty: Option<&mime::Mime>,
         expires: std::time::Duration,
     ) -> Result<DirectPutAccess, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
-            Self::S3(s3) => s3.direct.sign_put(s3.bytes.key(key).as_str(), ty, expires).await,
+            Self::S3(s3) => {
+                s3.direct.sign_put(s3.bytes.object_key(key.blob()).as_str(), ty, expires).await
+            }
         }
     }
 
     pub async fn create_multipart(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         ty: Option<&mime::Mime>,
     ) -> Result<MultipartSession, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
-            Self::S3(s3) => s3.direct.create_multipart(s3.bytes.key(key).as_str(), ty).await,
+            Self::S3(s3) => {
+                s3.direct.create_multipart(s3.bytes.object_key(key.blob()).as_str(), ty).await
+            }
         }
     }
 
     pub async fn sign_parts(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         upload_id: &MultipartUploadId,
         parts: &[PartNumber],
         expires: std::time::Duration,
@@ -178,44 +213,52 @@ impl Backend {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
-                s3.direct.sign_parts(s3.bytes.key(key).as_str(), upload_id, parts, expires).await
+                s3.direct
+                    .sign_parts(s3.bytes.object_key(key.blob()).as_str(), upload_id, parts, expires)
+                    .await
             }
         }
     }
 
     pub async fn list_multipart_parts(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         upload_id: &MultipartUploadId,
     ) -> Result<Vec<PartNumber>, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
-            Self::S3(s3) => s3.direct.list_parts(s3.bytes.key(key).as_str(), upload_id).await,
+            Self::S3(s3) => {
+                s3.direct.list_parts(s3.bytes.object_key(key.blob()).as_str(), upload_id).await
+            }
         }
     }
 
     pub async fn complete_multipart(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         upload_id: &MultipartUploadId,
         parts: &[CompletedUploadPart],
     ) -> Result<(), FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
-                s3.direct.complete_multipart(s3.bytes.key(key).as_str(), upload_id, parts).await
+                s3.direct
+                    .complete_multipart(s3.bytes.object_key(key.blob()).as_str(), upload_id, parts)
+                    .await
             }
         }
     }
 
     pub async fn abort_multipart(
         &self,
-        key: &BlobKey,
+        key: &StagingKey,
         upload_id: &MultipartUploadId,
     ) -> Result<(), FileError> {
         match self {
             Self::Local(_) => Ok(()),
-            Self::S3(s3) => s3.direct.abort_multipart(s3.bytes.key(key).as_str(), upload_id).await,
+            Self::S3(s3) => {
+                s3.direct.abort_multipart(s3.bytes.object_key(key.blob()).as_str(), upload_id).await
+            }
         }
     }
 
@@ -234,8 +277,8 @@ impl Backend {
 
 impl ObjectBytes {
     async fn put(&self, staged: StagedBlob) -> Result<StoredBlob, FileError> {
-        let key = BlobKey::from_id(staged.id);
-        let path = self.path(&key);
+        let key = ReadyKey::from_id(staged.id);
+        let path = self.path(key.blob());
         let file =
             fs::File::open(&staged.path).await.map_err(|source| FileError::Open { source })?;
         let mut src = BufReader::with_capacity(self.chunk, file);
@@ -259,44 +302,66 @@ impl ObjectBytes {
         })
     }
 
-    async fn begin_write(&self, key: &BlobKey) -> Result<BlobWrite, FileError> {
-        Ok(BlobWrite { inner: BufWriter::new(Arc::clone(&self.store), self.path(key)) })
+    async fn begin_write(
+        &self,
+        key: &StagingKey,
+        ty: Option<&str>,
+    ) -> Result<BlobWrite, FileError> {
+        let inner = match ty {
+            Some(ty) => BufWriter::new(Arc::clone(&self.store), self.path(key.blob()))
+                .with_attributes(Attributes::from_iter([(Attribute::ContentType, ty.to_owned())])),
+            None => BufWriter::new(Arc::clone(&self.store), self.path(key.blob())),
+        };
+        Ok(BlobWrite { inner })
     }
 
     async fn open(&self, blob: &StoredBlob) -> Result<BlobRead, FileError> {
         let get = self
             .store
-            .get(&self.path(&blob.key))
+            .get(&self.path(blob.key.blob()))
             .await
             .map_err(|source| map_store_err(blob.id, source))?;
         Ok(BlobRead { body: get.into_stream() })
     }
 
-    async fn head(&self, key: &BlobKey) -> Result<BlobHead, FileError> {
-        let meta = self.store.head(&self.path(key)).await.map_err(map_upload_err)?;
+    async fn head_staging(&self, key: &StagingKey) -> Result<BlobHead, FileError> {
+        let meta = self.store.head(&self.path(key.blob())).await.map_err(map_upload_err)?;
         Ok(BlobHead::from(meta))
     }
 
-    async fn peek(&self, key: &BlobKey, len: usize) -> Result<Bytes, FileError> {
-        self.store.get_range(&self.path(key), 0..len as u64).await.map_err(map_upload_err)
+    async fn head_ready(&self, key: &ReadyKey) -> Result<BlobHead, FileError> {
+        let meta = self.store.head(&self.path(key.blob())).await.map_err(map_upload_err)?;
+        Ok(BlobHead::from(meta))
     }
 
-    async fn delete(&self, key: &BlobKey) -> Result<(), FileError> {
+    async fn peek_staging(&self, key: &StagingKey, len: usize) -> Result<Bytes, FileError> {
+        self.store.get_range(&self.path(key.blob()), 0..len as u64).await.map_err(map_upload_err)
+    }
+
+    async fn delete_staging(&self, key: &StagingKey) -> Result<(), FileError> {
         self.store
-            .delete(&self.path(key))
+            .delete(&self.path(key.blob()))
             .await
             .map_err(|source| FileError::Store { source: Box::new(source) })
     }
 
-    fn path(&self, key: &BlobKey) -> ObjectPath {
-        match self.prefix.as_deref() {
-            Some(prefix) => ObjectPath::from_iter([prefix, key.as_str()]),
-            None => ObjectPath::from(key.as_str()),
-        }
+    async fn promote(&self, from: &StagingKey, to: &ReadyKey) -> Result<BlobHead, FileError> {
+        self.store
+            .rename(&self.path(from.blob()), &self.path(to.blob()))
+            .await
+            .map_err(|source| FileError::Store { source: Box::new(source) })?;
+        self.head_ready(to).await
     }
 
-    fn key(&self, key: &BlobKey) -> String {
-        self.path(key).to_string()
+    fn path(&self, key: &BlobKey) -> ObjectPath {
+        ObjectPath::from(self.object_key(key))
+    }
+
+    fn object_key(&self, key: &BlobKey) -> String {
+        match self.prefix.as_deref() {
+            Some(prefix) => format!("{prefix}/{}", key.as_str()),
+            None => key.as_str().to_owned(),
+        }
     }
 }
 

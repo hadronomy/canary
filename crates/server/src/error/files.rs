@@ -39,6 +39,12 @@ pub enum FileError {
     #[error("invalid content type")]
     #[diagnostic(code(canary_server::files::invalid_content_type))]
     InvalidContentType,
+    #[error("upload content type does not match the file contents")]
+    #[diagnostic(code(canary_server::files::content_type_mismatch))]
+    ContentTypeMismatch { declared: Option<String>, detected: String },
+    #[error("browser-active content is not allowed for this upload")]
+    #[diagnostic(code(canary_server::files::active_content_disallowed))]
+    ActiveContentDisallowed { declared: Option<String>, detected: Option<String> },
     #[error("invalid checksum")]
     #[diagnostic(code(canary_server::files::invalid_checksum))]
     InvalidChecksum,

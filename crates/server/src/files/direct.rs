@@ -4,8 +4,9 @@ use aws_config::BehaviorVersion;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::config::Builder as S3ConfigBuilder;
+use aws_sdk_s3::operation::list_parts::ListPartsOutput;
 use aws_sdk_s3::presigning::PresigningConfig;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, MetadataDirective};
 use aws_types::region::Region;
 use mime::Mime;
 use object_store::aws::AmazonS3Builder;
@@ -101,6 +102,7 @@ impl S3RuntimeConfig {
                     "canary-server",
                 );
                 let mut builder = S3ConfigBuilder::new()
+                    .behavior_version(BehaviorVersion::latest())
                     .region(Region::new(self.region.clone()))
                     .credentials_provider(creds);
                 if let Some(endpoint) = &self.endpoint {
@@ -222,8 +224,8 @@ impl S3DirectBackend {
             for part in out.parts().iter().filter_map(|part| part.part_number()) {
                 parts.push(PartNumber::new(part as u16)?);
             }
-            match out.next_part_number_marker() {
-                Some(next) => token = Some(next.to_owned()),
+            match next_token(&out) {
+                Some(next) => token = Some(next),
                 None => break,
             }
         }
@@ -273,6 +275,29 @@ impl S3DirectBackend {
             .map_err(|source| FileError::Store { source: Box::new(source) })?;
         Ok(())
     }
+
+    /// Copies a validated staging object into its ready key with canonical metadata.
+    ///
+    /// Direct uploads land in staging first. After Canary validates the object,
+    /// promotion copies it into the ready namespace with the authoritative
+    /// `Content-Type`, then deletes the staging object. This keeps staging
+    /// private and ensures only ready keys are ever served.
+    pub async fn promote(&self, from: &str, to: &str, ty: &str) -> Result<(), FileError> {
+        self.cli
+            .copy_object()
+            .bucket(&self.bucket)
+            .key(to)
+            .copy_source(format!("{}/{}", self.bucket, from))
+            .metadata_directive(MetadataDirective::Replace)
+            .content_type(ty)
+            .send()
+            .await
+            .map_err(|source| FileError::Store { source: Box::new(source) })?;
+        if let Err(source) = self.cli.delete_object().bucket(&self.bucket).key(from).send().await {
+            tracing::warn!(%source, from, to, "failed to delete staging object after promotion");
+        }
+        Ok(())
+    }
 }
 
 fn pcfg(expires: Duration) -> Result<PresigningConfig, FileError> {
@@ -280,4 +305,32 @@ fn pcfg(expires: Duration) -> Result<PresigningConfig, FileError> {
         .expires_in(expires)
         .build()
         .map_err(|source| FileError::Store { source: Box::new(source) })
+}
+
+fn next_token(out: &ListPartsOutput) -> Option<String> {
+    if out.is_truncated() == Some(true) {
+        return out.next_part_number_marker().map(str::to_owned);
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use aws_sdk_s3::operation::list_parts::ListPartsOutput;
+
+    use super::next_token;
+
+    #[test]
+    fn ignores_marker_when_page_is_not_truncated() {
+        let out =
+            ListPartsOutput::builder().is_truncated(false).next_part_number_marker("2").build();
+        assert_eq!(next_token(&out), None);
+    }
+
+    #[test]
+    fn returns_marker_when_page_is_truncated() {
+        let out =
+            ListPartsOutput::builder().is_truncated(true).next_part_number_marker("2").build();
+        assert_eq!(next_token(&out), Some("2".to_owned()));
+    }
 }

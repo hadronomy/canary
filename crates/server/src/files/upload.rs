@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 
 use crate::error::FileError;
-use crate::files::meta::{BlobHash, BlobId, BlobKey, BlobName, BlobSize, StoredBlob};
+use crate::files::meta::{
+    BlobHash, BlobId, BlobName, BlobSize, MediaProfile, ReadyKey, StagingKey, StoredBlob,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ActorId(SmolStr);
@@ -53,6 +55,11 @@ impl UploadPurpose {
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    #[must_use]
+    pub fn media_profile(&self) -> MediaProfile {
+        MediaProfile::Attachment
     }
 }
 
@@ -138,7 +145,8 @@ pub struct UploadCommon {
     id: BlobId,
     actor: ActorId,
     purpose: UploadPurpose,
-    key: BlobKey,
+    staging: StagingKey,
+    ready: ReadyKey,
     name: Option<BlobName>,
     declared_type: Option<Mime>,
     declared_size: BlobSize,
@@ -164,8 +172,13 @@ impl UploadCommon {
     }
 
     #[must_use]
-    pub fn key(&self) -> &BlobKey {
-        &self.key
+    pub fn staging_key(&self) -> &StagingKey {
+        &self.staging
+    }
+
+    #[must_use]
+    pub fn ready_key(&self) -> &ReadyKey {
+        &self.ready
     }
 
     #[must_use]
@@ -216,7 +229,8 @@ impl UploadDraft {
             id,
             actor: self.actor,
             purpose: self.purpose,
-            key: BlobKey::from_id(id),
+            staging: StagingKey::from_id(id),
+            ready: ReadyKey::from_id(id),
             name: self.name,
             declared_type: self.declared_type,
             declared_size: self.declared_size,
@@ -313,8 +327,13 @@ impl UploadSession {
     }
 
     #[must_use]
-    pub fn key(&self) -> &BlobKey {
-        self.common().key()
+    pub fn staging_key(&self) -> &StagingKey {
+        self.common().staging_key()
+    }
+
+    #[must_use]
+    pub fn ready_key(&self) -> &ReadyKey {
+        self.common().ready_key()
     }
 
     #[must_use]

@@ -46,6 +46,7 @@ coverage
 # Misc
 *.tgz
 .cache
+.tmp/
 tmp
 temp.worktrees/
 *.sqlite*

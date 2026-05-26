@@ -71,6 +71,26 @@
 - Phase 2 creates S3-compatible multipart sessions lazily on the first `POST /files/uploads/{id}/parts` request instead of during intent creation. That keeps intent creation cheap, keeps the initial upload status honestly `created`, and avoids making the route depend on a live storage round trip before the client has actually decided to upload.
 - Direct uploads currently preserve strong checksum semantics by choosing `proxy_put` whenever the client declares a SHA-256 digest. The server does not yet re-download direct objects or use backend-native checksum APIs to verify SHA-256 after a direct upload, so falling back to proxying keeps the public integrity story honest.
 - Direct uploads finalize object metadata from object-store `head` plus a bounded `peek` for MIME sniffing. The server records `etag` and `version` when available, but it does not currently persist a verified `hash_sha256` for direct uploads.
+- Upload completion now treats the sniffed/effective media type as authoritative for serving and storage metadata. The original declared type is still preserved for audit/debugging, but successful finalization rewrites S3-compatible object `Content-Type` metadata when the backend object would otherwise drift from Canary's authoritative type.
+- Proxy uploads now classify the file before opening the upstream object-store writer. That lets the server start the S3-compatible write with the authoritative `Content-Type` already attached, so the metadata-rewrite path is only needed for direct uploads where the backend object exists before Canary can inspect it.
+- The media policy is intentionally conservative for active/renderable content. Safe passive mismatches like `application/octet-stream` plus a sniffed PNG are normalized to the sniffed type, while suspicious mismatches involving HTML, XML, SVG, or script-like types are rejected with `upload_content_type_mismatch`.
+- The old one-shot MIME resolver has been split conceptually into two steps:
+  - media inspection records what the client declared, what the server detected, where the detection came from, and how confident that detector was
+  - media policy decides whether that observation is acceptable for the upload profile and what the authoritative stored type should be
+- Uploads currently use one explicit media profile, `attachment`. That profile is permissive for passive content and opaque binaries, but it rejects undeclared or unverified browser-active content and derives a serving policy separately from the stored type.
+- Media inspection now tracks sample completeness explicitly as `empty`, `complete`, or `prefix`. That matters for formats like JSON where a valid large document often cannot be fully parsed from the first sniff window.
+- MIME comparison now uses MIME essence instead of full parameter equality. That avoids false security failures for equivalent types like `text/plain` versus `text/plain; charset=utf-8`.
+- Serving behavior is now modeled as a first-class policy instead of implicitly mirroring the authoritative media type. The current attachment profile serves passive media with their effective type, but downgrades active media to `application/octet-stream` if they are ever admitted in a future profile.
+- Download responses now include `X-Content-Type-Options: nosniff` so the HTTP edge matches the stricter media-classification model.
+- Classification now returns an upload decision instead of only `Result<BlobKind, FileError>`. The current decisions are:
+  - `accept` for fully verified classifications
+  - `review` for accepted uploads whose media type was inferred from an incomplete prefix and still needs fuller validation later
+  - `reject` for policy failures
+- `BlobKind` now carries its validation state so accepted-but-incomplete classifications stay visible after persistence. That keeps large JSON prefixes or other heuristic passive detections from silently collapsing into a fully verified MIME label.
+- The S3 direct backend now sets an AWS behavior version for both ambient and static credential paths. Without that, static-credential startup panicked during client construction even though the ambient path worked.
+- Multipart status refresh now only re-lists backend parts while a multipart upload is still in `created` or `uploading`. Once the upload reaches `ready`, the backend multipart session may already be gone, so continuing to refresh it turned a successful upload into a spurious 500 on the status endpoint.
+- The S3-compatible validation setup now includes a RustFS compose stack and a working `rustfs-init` helper that creates the validation bucket idempotently through the AWS CLI container.
+- During live RustFS validation, the rewritten object `Content-Type` was observable immediately through Canary and after a short delay through `head-object` on the RustFS side. The rewrite does land correctly, but RustFS metadata visibility was not strictly synchronous on the first zero-delay check.
 - Expired upload cleanup now happens both opportunistically during upload lifecycle operations and through a periodic background sweep in `ServerApplication::run`. The remaining gap is durable upload-session storage, not the existence of a scheduled cleaner.
 
 ### File download semantics
@@ -142,3 +162,8 @@
 - Upload route body limits now come from `files.uploads.max_bytes`. The separate HTTP raw/multipart upload caps were removed so there is one authoritative upload size policy.
 - The in-memory upload repo now owns explicit transition methods like `begin_upload`, `attach_multipart`, `record_parts`, `mark_uploaded`, `mark_ready`, and terminal state markers. That let the coarse global async mutex disappear without replacing it with another subsystem-wide lock.
 - Durable blob metadata now lives behind `SurrealBlobMetaRepo`, so listing and blob lookups no longer depend on the lifetime of one server process. The remaining durable-state gap is upload sessions themselves, which are intentionally still in-memory until their persistence model is designed deliberately.
+- Upload keys are now split by lifecycle:
+  - `UploadSession` owns a `StagingKey`
+  - `StoredBlob` owns a `ReadyKey`
+- Uploads always land under `staging/upload/<id>/object` first. Completion promotes the validated object into `ready/blob/<id>/original`, deletes the staging object, and only then marks the blob ready in metadata.
+- The old direct-upload-only `sync_content_type` repair step is gone. Promotion is now the single place where S3-compatible backends canonicalize stored `Content-Type`, which keeps the bucket structure and metadata policy aligned.
