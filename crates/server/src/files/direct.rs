@@ -10,7 +10,9 @@ use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, MetadataDirecti
 use aws_types::region::Region;
 use mime::Mime;
 use object_store::aws::AmazonS3Builder;
+use secrecy::ExposeSecret;
 use url::Url;
+use zeroize::Zeroizing;
 
 use crate::config::{S3AddressingStyle, S3Credentials, S3FileConfig, TransportSecurity};
 use crate::error::FileError;
@@ -64,8 +66,11 @@ impl S3RuntimeConfig {
         let mut builder = AmazonS3Builder::from_env()
             .with_bucket_name(self.bucket())
             .with_region(self.region.as_str())
-            .with_allow_http(self.transport_security.allows_http())
-            .with_virtual_hosted_style_request(!self.addressing_style.is_path_style());
+            .with_allow_http(matches!(self.transport_security, TransportSecurity::AllowHttp))
+            .with_virtual_hosted_style_request(!matches!(
+                self.addressing_style,
+                S3AddressingStyle::PathStyle
+            ));
         if let Some(endpoint) = &self.endpoint {
             builder = builder.with_endpoint(endpoint.as_str());
         }
@@ -74,9 +79,9 @@ impl S3RuntimeConfig {
         {
             builder = builder
                 .with_access_key_id(access_key_id.as_str())
-                .with_secret_access_key(secret_access_key.reveal());
+                .with_secret_access_key(secret_access_key.expose_secret());
             if let Some(token) = session_token {
-                builder = builder.with_token(token.reveal());
+                builder = builder.with_token(token.expose_secret());
             }
         }
         builder
@@ -94,10 +99,14 @@ impl S3RuntimeConfig {
                 S3ConfigBuilder::from(&shared)
             }
             S3Credentials::Static { access_key_id, secret_access_key, session_token } => {
+                let key = Zeroizing::new(secret_access_key.expose_secret().to_owned());
+                let tok = session_token
+                    .as_ref()
+                    .map(|token| Zeroizing::new(token.expose_secret().to_owned()));
                 let creds = Credentials::new(
                     access_key_id.as_str(),
-                    secret_access_key.reveal().to_owned(),
-                    session_token.as_ref().map(|token| token.reveal().to_owned()),
+                    key.as_str(),
+                    tok.as_deref().cloned(),
                     None,
                     "canary-server",
                 );
@@ -112,7 +121,9 @@ impl S3RuntimeConfig {
             }
         };
         Ok(Client::from_conf(
-            builder.force_path_style(self.addressing_style.is_path_style()).build(),
+            builder
+                .force_path_style(matches!(self.addressing_style, S3AddressingStyle::PathStyle))
+                .build(),
         ))
     }
 }

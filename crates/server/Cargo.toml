@@ -32,6 +32,7 @@ mime_guess.workspace = true
 object_store = { workspace = true, features = ["aws", "fs"] }
 serde.workspace = true
 serde_json.workspace = true
+secrecy.workspace = true
 sha2.workspace = true
 smol_str.workspace = true
 surrealdb.workspace = true
@@ -56,6 +57,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 [features]
 default = ["surreal-embedded-mem", "surreal-remote-ws"]

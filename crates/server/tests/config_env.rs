@@ -6,8 +6,8 @@ use canary_server::LoadedConfig;
 #[test]
 fn loads_memory_mode_from_overrides() {
     let settings = LoadedConfig::load_from_environment_map(HashMap::from([
-        ("db.mode.kind".into(), "memory".into()),
-        ("files.root".into(), "tmp/test-blobs".into()),
+        ("CANARY_SERVER__DB__MODE__KIND".into(), "memory".into()),
+        ("CANARY_SERVER__FILES__ROOT".into(), "tmp/test-blobs".into()),
     ]))
     .expect("config should load");
 
@@ -17,5 +17,4 @@ fn loads_memory_mode_from_overrides() {
         canary_server::config::FileBackendConfig::Local(local)
             if local.root.as_path() == Path::new("tmp/test-blobs")
     ));
-    assert_eq!(settings.settings.files.staging.as_path(), Path::new("tmp/test-blobs/.staging"));
 }

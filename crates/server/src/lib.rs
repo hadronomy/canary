@@ -15,10 +15,10 @@ pub mod state;
 
 pub use app::{ServerApplication, ServerBuilder};
 pub use config::{
-    AppConfig, BlobConfig, ConfigOrigin, FileBackendConfig, FilesConfig, HttpConfig, LoadedConfig,
-    LocalFileConfig, LogFormat, ObjectPrefix, ObservabilityConfig, RawSurrealMode, RuntimeConfig,
-    S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, SurrealAuth, SurrealConfig,
-    TransportSecurity,
+    AppConfig, BlobConfig, ConfigOrigin, EnvironmentLayer, FileBackendConfig, FilesConfig,
+    HttpConfig, LoadedConfig, LocalFileConfig, LogFormat, ObjectPrefix, ObservabilityConfig,
+    RawSurrealMode, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig,
+    SurrealAuth, SurrealConfig, TransportSecurity,
 };
 pub use db::service::DatabaseService;
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};

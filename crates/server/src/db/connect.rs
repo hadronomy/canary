@@ -1,3 +1,4 @@
+use secrecy::ExposeSecret;
 use surrealdb::Surreal;
 use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::{Database as DatabaseAuth, Namespace as NamespaceAuth, Root};
@@ -14,7 +15,7 @@ pub async fn connect_db(config: &SurrealConfig) -> Result<Surreal<Any>, DbError>
     match &config.auth {
         SurrealAuth::None => {}
         SurrealAuth::Root { username, password } => {
-            db.signin(Root { username: username.as_str(), password: password.reveal() })
+            db.signin(Root { username: username.as_str(), password: password.expose_secret() })
                 .await
                 .map_err(|source| DbError::Authenticate { source: Box::new(source) })?;
         }
@@ -22,7 +23,7 @@ pub async fn connect_db(config: &SurrealConfig) -> Result<Surreal<Any>, DbError>
             db.signin(NamespaceAuth {
                 namespace: config.ns.as_str(),
                 username: username.as_str(),
-                password: password.reveal(),
+                password: password.expose_secret(),
             })
             .await
             .map_err(|source| DbError::Authenticate { source: Box::new(source) })?;
@@ -32,7 +33,7 @@ pub async fn connect_db(config: &SurrealConfig) -> Result<Surreal<Any>, DbError>
                 namespace: config.ns.as_str(),
                 database: config.db.as_str(),
                 username: username.as_str(),
-                password: password.reveal(),
+                password: password.expose_secret(),
             })
             .await
             .map_err(|source| DbError::Authenticate { source: Box::new(source) })?;

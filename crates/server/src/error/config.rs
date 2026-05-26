@@ -24,12 +24,6 @@ pub enum ConfigError {
         #[source]
         source: Option<SourceError>,
     },
-    #[error("failed to serialize the default configuration layer")]
-    #[diagnostic(code(canary_server::config::serialize_defaults))]
-    SerializeDefaults {
-        #[source]
-        source: toml::ser::Error,
-    },
     #[error("failed to build layered configuration")]
     #[diagnostic(code(canary_server::config::build))]
     Build {

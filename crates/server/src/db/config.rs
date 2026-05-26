@@ -1,4 +1,4 @@
 pub use crate::config::{
-    DatabaseName, EmbeddedSurrealConfig, Namespace, RemoteEndpoint, RemoteSurrealConfig, Secret,
-    StoragePath, SurrealAuth, SurrealConfig, SurrealMode,
+    DatabaseName, EmbeddedSurrealConfig, Namespace, RemoteEndpoint, RemoteSurrealConfig,
+    SecretString, StoragePath, SurrealAuth, SurrealConfig, SurrealMode,
 };

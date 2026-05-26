@@ -16,8 +16,6 @@ pub fn config(dir: &TempDir) -> LoadedConfig {
     cfg.settings.files.backend = FileBackendConfig::Local(LocalFileConfig {
         root: StoragePath::new(&root).expect("temp path should be valid"),
     });
-    cfg.settings.files.staging =
-        StoragePath::new(root.join(".staging")).expect("staging path should be valid");
     cfg
 }
 
