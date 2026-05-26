@@ -1,0 +1,535 @@
+{
+  "benchmarks": {
+    "parser_gungraun::parse_group::bench_build_tree::fixtures_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_build_tree",
+      "id": "fixtures_0",
+      "key": "parser_gungraun::parse_group::bench_build_tree::fixtures_0",
+      "label": "parser_gungraun::parse_group::bench_build_tree [fixtures_0]",
+      "module_path": "parser_gungraun::parse_group::bench_build_tree",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_build_tree.fixtures_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::parse_group::bench_build_tree::fixtures_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_build_tree",
+      "id": "fixtures_1",
+      "key": "parser_gungraun::parse_group::bench_build_tree::fixtures_1",
+      "label": "parser_gungraun::parse_group::bench_build_tree [fixtures_1]",
+      "module_path": "parser_gungraun::parse_group::bench_build_tree",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_build_tree.fixtures_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::parse_group::bench_parse_document::fixtures_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_parse_document",
+      "id": "fixtures_0",
+      "key": "parser_gungraun::parse_group::bench_parse_document::fixtures_0",
+      "label": "parser_gungraun::parse_group::bench_parse_document [fixtures_0]",
+      "module_path": "parser_gungraun::parse_group::bench_parse_document",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_parse_document.fixtures_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::parse_group::bench_parse_document::fixtures_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_parse_document",
+      "id": "fixtures_1",
+      "key": "parser_gungraun::parse_group::bench_parse_document::fixtures_1",
+      "label": "parser_gungraun::parse_group::bench_parse_document [fixtures_1]",
+      "module_path": "parser_gungraun::parse_group::bench_parse_document",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_parse_document.fixtures_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::parse_group::bench_parse_end_to_end::fixtures_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_parse_end_to_end",
+      "id": "fixtures_0",
+      "key": "parser_gungraun::parse_group::bench_parse_end_to_end::fixtures_0",
+      "label": "parser_gungraun::parse_group::bench_parse_end_to_end [fixtures_0]",
+      "module_path": "parser_gungraun::parse_group::bench_parse_end_to_end",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_parse_end_to_end.fixtures_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::parse_group::bench_parse_end_to_end::fixtures_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_parse_end_to_end",
+      "id": "fixtures_1",
+      "key": "parser_gungraun::parse_group::bench_parse_end_to_end::fixtures_1",
+      "label": "parser_gungraun::parse_group::bench_parse_end_to_end [fixtures_1]",
+      "module_path": "parser_gungraun::parse_group::bench_parse_end_to_end",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/parse_group/bench_parse_end_to_end.fixtures_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_extract_text::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_extract_text",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_extract_text::cases_0",
+      "label": "parser_gungraun::query_group::bench_extract_text [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_extract_text",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_extract_text.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_extract_text::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_extract_text",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_extract_text::cases_1",
+      "label": "parser_gungraun::query_group::bench_extract_text [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_extract_text",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_extract_text.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_find_by_anchor::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_find_by_anchor",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_find_by_anchor::cases_0",
+      "label": "parser_gungraun::query_group::bench_find_by_anchor [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_find_by_anchor",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_find_by_anchor.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_find_by_anchor::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_find_by_anchor",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_find_by_anchor::cases_1",
+      "label": "parser_gungraun::query_group::bench_find_by_anchor [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_find_by_anchor",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_find_by_anchor.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_find_by_path::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_find_by_path",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_find_by_path::cases_0",
+      "label": "parser_gungraun::query_group::bench_find_by_path [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_find_by_path",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_find_by_path.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_find_by_path::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_find_by_path",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_find_by_path::cases_1",
+      "label": "parser_gungraun::query_group::bench_find_by_path [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_find_by_path",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_find_by_path.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_anchor::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_anchor",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_resolve_anchor::cases_0",
+      "label": "parser_gungraun::query_group::bench_resolve_anchor [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_anchor",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_anchor.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_anchor::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_anchor",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_resolve_anchor::cases_1",
+      "label": "parser_gungraun::query_group::bench_resolve_anchor [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_anchor",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_anchor.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_fuzzy::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_fuzzy",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_resolve_fuzzy::cases_0",
+      "label": "parser_gungraun::query_group::bench_resolve_fuzzy [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_fuzzy",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_fuzzy.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_fuzzy::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_fuzzy",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_resolve_fuzzy::cases_1",
+      "label": "parser_gungraun::query_group::bench_resolve_fuzzy [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_fuzzy",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_fuzzy.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_section::cases_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_section",
+      "id": "cases_0",
+      "key": "parser_gungraun::query_group::bench_resolve_section::cases_0",
+      "label": "parser_gungraun::query_group::bench_resolve_section [cases_0]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_section",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_section.cases_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::query_group::bench_resolve_section::cases_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_resolve_section",
+      "id": "cases_1",
+      "key": "parser_gungraun::query_group::bench_resolve_section::cases_1",
+      "label": "parser_gungraun::query_group::bench_resolve_section [cases_1]",
+      "module_path": "parser_gungraun::query_group::bench_resolve_section",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/query_group/bench_resolve_section.cases_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::render_group::bench_render_markdown_boe::fixtures_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_render_markdown_boe",
+      "id": "fixtures_0",
+      "key": "parser_gungraun::render_group::bench_render_markdown_boe::fixtures_0",
+      "label": "parser_gungraun::render_group::bench_render_markdown_boe [fixtures_0]",
+      "module_path": "parser_gungraun::render_group::bench_render_markdown_boe",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/render_group/bench_render_markdown_boe.fixtures_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::render_group::bench_render_markdown_boe::fixtures_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_render_markdown_boe",
+      "id": "fixtures_1",
+      "key": "parser_gungraun::render_group::bench_render_markdown_boe::fixtures_1",
+      "label": "parser_gungraun::render_group::bench_render_markdown_boe [fixtures_1]",
+      "module_path": "parser_gungraun::render_group::bench_render_markdown_boe",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/render_group/bench_render_markdown_boe.fixtures_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::render_group::bench_render_markdown_plain::fixtures_0": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_render_markdown_plain",
+      "id": "fixtures_0",
+      "key": "parser_gungraun::render_group::bench_render_markdown_plain::fixtures_0",
+      "label": "parser_gungraun::render_group::bench_render_markdown_plain [fixtures_0]",
+      "module_path": "parser_gungraun::render_group::bench_render_markdown_plain",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/render_group/bench_render_markdown_plain.fixtures_0/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    },
+    "parser_gungraun::render_group::bench_render_markdown_plain::fixtures_1": {
+      "baselines": [
+        "main",
+        "main"
+      ],
+      "function_name": "bench_render_markdown_plain",
+      "id": "fixtures_1",
+      "key": "parser_gungraun::render_group::bench_render_markdown_plain::fixtures_1",
+      "label": "parser_gungraun::render_group::bench_render_markdown_plain [fixtures_1]",
+      "module_path": "parser_gungraun::render_group::bench_render_markdown_plain",
+      "summary_path": "target/gungraun/document-hierarchy/parser_gungraun/render_group/bench_render_markdown_plain.fixtures_1/summary.json",
+      "tools": {
+        "Callgrind": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        },
+        "DHAT": {
+          "metrics": {},
+          "regressions": [],
+          "summary_kind": null
+        }
+      }
+    }
+  },
+  "generated_at": "2026-05-26T02:15:13Z",
+  "schema_version": 1,
+  "suite": "gungraun"
+}
