@@ -16,11 +16,12 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::Pagination;
 use crate::error::{AppError, AppResult};
-use crate::files::meta::{BlobId, BlobName, BlobRecord, Sha256Digest};
+use crate::files::meta::{BlobId, BlobName, BlobRecord, BlobSize, Sha256Digest};
 use crate::files::service::CreatedIntent;
 use crate::files::upload::{
-    CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess,
-    UploadEventKind, UploadHeader, UploadMode, UploadSession, UploadState,
+    CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess, UploadDraft,
+    UploadEventKind, UploadHeader, UploadMode, UploadNotice, UploadPurpose, UploadSession,
+    UploadState,
 };
 use crate::http::extract::UploadActor;
 use crate::http::response::created;
@@ -158,16 +159,16 @@ async fn create_upload(
     let intent = files
         .files
         .uploads()
-        .create_intent(crate::files::upload::UploadDraft {
+        .create_intent(UploadDraft {
             actor: actor.into_inner(),
             purpose: body
                 .purpose
-                .map(crate::files::upload::UploadPurpose::new)
+                .map(UploadPurpose::new)
                 .transpose()?
-                .unwrap_or_else(crate::files::upload::UploadPurpose::attachment),
+                .unwrap_or_else(UploadPurpose::attachment),
             name: body.name.map(BlobName::new).transpose()?,
             declared_type: parse_mime(body.content_type)?,
-            declared_size: crate::files::meta::BlobSize::new(body.size_bytes),
+            declared_size: BlobSize::new(body.size_bytes),
             sha256: body.sha256.as_deref().map(Sha256Digest::from_hex).transpose()?,
         })
         .await?;
@@ -375,7 +376,7 @@ fn event(kind: UploadEventKind, record: UploadRecord) -> UploadEvent {
 async fn stream_socket(
     mut socket: WebSocket,
     current: UploadSession,
-    mut rx: tokio::sync::watch::Receiver<crate::files::upload::UploadNotice>,
+    mut rx: tokio::sync::watch::Receiver<UploadNotice>,
 ) {
     if send_socket(&mut socket, UploadEventKind::Snapshot, record(&current)).await.is_err() {
         return;
