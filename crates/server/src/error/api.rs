@@ -147,6 +147,12 @@ impl From<FileError> for AppError {
             FileError::InvalidChecksum => {
                 Self::validation_code("invalid_checksum", "The checksum format is invalid.")
             }
+            FileError::UploadChecksumRequired { algorithm, kind } => Self::validation_code(
+                "upload_checksum_required",
+                "This upload requires a checksum before direct storage access can be issued.",
+            )
+            .with_context("algorithm", json!(algorithm))
+            .with_context("kind", json!(kind)),
             FileError::InvalidUploadParts => Self::validation_code(
                 "invalid_upload_parts",
                 "The multipart upload part selection is invalid.",
@@ -170,15 +176,7 @@ impl From<FileError> for AppError {
             FileError::UploadIncomplete => {
                 Self::bad_request_code("upload_incomplete", "The upload has not finished yet.")
             }
-            FileError::CreateDir { .. }
-            | FileError::ReadBody { .. }
-            | FileError::Multipart { .. }
-            | FileError::Open { .. }
-            | FileError::Write { .. }
-            | FileError::Persist { .. }
-            | FileError::ReadFile { .. }
-            | FileError::Store { .. }
-            | FileError::Metadata { .. } => {
+            FileError::CreateDir { .. } | FileError::Store { .. } | FileError::Metadata { .. } => {
                 Self::internal("file_error", "The file operation failed.")
             }
         }

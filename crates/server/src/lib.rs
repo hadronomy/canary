@@ -28,13 +28,12 @@ pub use files::meta::{
     BlobSize, ChecksumAlgorithm, ChecksumKind, ChecksumVerifier, DetectedMedia,
     DetectionConfidence, DetectionSource, DetectionState, DetectionStateKind, MediaProfile,
     MediaRisk, ReadyKey, SampleCompleteness, ServingContent, ServingDisposition, ServingPolicy,
-    Sha256Digest, StagedBlob, StagingKey, StoredBlob, UploadDecision, ValidationNeed,
-    ValidationState,
+    Sha256Digest, StagingKey, StoredBlob, UploadDecision, ValidationNeed, ValidationState,
 };
-pub use files::service::{BlobService, FileService, UploadService};
+pub use files::service::{BlobService, DownloadAccess, FileService, UploadService};
 pub use files::upload::{
-    ActorId, PartNumber, UploadAccess, UploadHeader, UploadMode, UploadPurpose, UploadSession,
-    UploadState,
+    ActorId, ChecksumEncoding, PartNumber, UploadAccess, UploadChecksum, UploadHeader, UploadMode,
+    UploadPurpose, UploadSession, UploadState,
 };
 pub use http::extract::Pagination;
 pub use observability::init as init_observability;

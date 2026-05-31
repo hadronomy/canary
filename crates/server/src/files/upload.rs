@@ -8,7 +8,8 @@ use smol_str::SmolStr;
 
 use crate::error::FileError;
 use crate::files::meta::{
-    BlobId, BlobName, BlobSize, MediaProfile, ReadyKey, Sha256Digest, StagingKey, StoredBlob,
+    BlobId, BlobName, BlobSize, ChecksumAlgorithm, ChecksumKind, MediaProfile, ReadyKey,
+    Sha256Digest, StagingKey, StoredBlob,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -66,7 +67,6 @@ impl UploadPurpose {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UploadMode {
-    ProxyPut,
     DirectPut,
     DirectMultipart,
 }
@@ -76,7 +76,6 @@ pub enum UploadMode {
 pub enum UploadState {
     Created,
     Uploading,
-    Uploaded,
     Ready,
     Failed,
     Expired,
@@ -88,7 +87,6 @@ impl fmt::Display for UploadState {
         let text = match self {
             Self::Created => "created",
             Self::Uploading => "uploading",
-            Self::Uploaded => "uploaded",
             Self::Ready => "ready",
             Self::Failed => "failed",
             Self::Expired => "expired",
@@ -242,14 +240,6 @@ impl UploadDraft {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProxyUpload {
-    common: UploadCommon,
-    state: UploadState,
-    actual: Option<StoredBlob>,
-    completed_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone)]
 pub struct DirectPutUpload {
     common: UploadCommon,
     state: UploadState,
@@ -274,22 +264,11 @@ pub struct MultipartUpload {
 
 #[derive(Debug, Clone)]
 pub enum UploadSession {
-    Proxy(ProxyUpload),
     DirectPut(DirectPutUpload),
     Multipart(MultipartUpload),
 }
 
 impl UploadSession {
-    #[must_use]
-    pub fn proxy(common: UploadCommon) -> Self {
-        Self::Proxy(ProxyUpload {
-            common,
-            state: UploadState::Created,
-            actual: None,
-            completed_at: None,
-        })
-    }
-
     #[must_use]
     pub fn direct_put(common: UploadCommon) -> Self {
         Self::DirectPut(DirectPutUpload {
@@ -369,7 +348,6 @@ impl UploadSession {
     #[must_use]
     pub fn mode(&self) -> UploadMode {
         match self {
-            Self::Proxy(_) => UploadMode::ProxyPut,
             Self::DirectPut(_) => UploadMode::DirectPut,
             Self::Multipart(_) => UploadMode::DirectMultipart,
         }
@@ -378,7 +356,6 @@ impl UploadSession {
     #[must_use]
     pub fn state(&self) -> UploadState {
         match self {
-            Self::Proxy(upload) => upload.state,
             Self::DirectPut(upload) => upload.state,
             Self::Multipart(upload) => upload.state,
         }
@@ -387,7 +364,6 @@ impl UploadSession {
     #[must_use]
     pub fn actual(&self) -> Option<&StoredBlob> {
         match self {
-            Self::Proxy(upload) => upload.actual.as_ref(),
             Self::DirectPut(upload) => upload.actual.as_ref(),
             Self::Multipart(upload) => upload.actual.as_ref(),
         }
@@ -396,7 +372,6 @@ impl UploadSession {
     #[must_use]
     pub fn completed_at(&self) -> Option<DateTime<Utc>> {
         match self {
-            Self::Proxy(upload) => upload.completed_at,
             Self::DirectPut(upload) => upload.completed_at,
             Self::Multipart(upload) => upload.completed_at,
         }
@@ -437,17 +412,6 @@ impl UploadSession {
         ) && now >= self.expires_at()
     }
 
-    pub fn begin_upload(mut self) -> Result<Self, FileError> {
-        if self.state() == UploadState::Uploading {
-            return Ok(self);
-        }
-        if self.state() != UploadState::Created {
-            return Err(FileError::UploadInvalidState { id: self.id(), state: self.state() });
-        }
-        self.set_state(UploadState::Uploading);
-        Ok(self)
-    }
-
     pub fn attach_multipart(mut self, id: MultipartUploadId) -> Result<Self, FileError> {
         let Self::Multipart(upload) = &mut self else {
             return Err(FileError::UploadInvalidState { id: self.id(), state: self.state() });
@@ -473,15 +437,6 @@ impl UploadSession {
         if upload.state == UploadState::Created {
             upload.state = UploadState::Uploading;
         }
-        Ok(self)
-    }
-
-    pub fn mark_uploaded(mut self, blob: StoredBlob) -> Result<Self, FileError> {
-        let Self::Proxy(upload) = &mut self else {
-            return Err(FileError::UploadInvalidState { id: self.id(), state: self.state() });
-        };
-        upload.actual = Some(blob);
-        upload.state = UploadState::Uploaded;
         Ok(self)
     }
 
@@ -516,7 +471,6 @@ impl UploadSession {
 
     fn common(&self) -> &UploadCommon {
         match self {
-            Self::Proxy(upload) => &upload.common,
             Self::DirectPut(upload) => &upload.common,
             Self::Multipart(upload) => &upload.common,
         }
@@ -524,7 +478,6 @@ impl UploadSession {
 
     fn set_state(&mut self, state: UploadState) {
         match self {
-            Self::Proxy(upload) => upload.state = state,
             Self::DirectPut(upload) => upload.state = state,
             Self::Multipart(upload) => upload.state = state,
         }
@@ -532,7 +485,6 @@ impl UploadSession {
 
     fn set_actual(&mut self, blob: Option<StoredBlob>) {
         match self {
-            Self::Proxy(upload) => upload.actual = blob,
             Self::DirectPut(upload) => upload.actual = blob,
             Self::Multipart(upload) => upload.actual = blob,
         }
@@ -540,7 +492,6 @@ impl UploadSession {
 
     fn set_completed_at(&mut self, when: Option<DateTime<Utc>>) {
         match self {
-            Self::Proxy(upload) => upload.completed_at = when,
             Self::DirectPut(upload) => upload.completed_at = when,
             Self::Multipart(upload) => upload.completed_at = when,
         }
@@ -549,26 +500,35 @@ impl UploadSession {
 
 #[derive(Debug, Clone)]
 pub enum UploadAccess {
-    Proxy(ProxyAccess),
     DirectPut(DirectPutAccess),
     Multipart(MultipartAccess),
 }
 
-#[derive(Debug, Clone)]
-pub struct ProxyAccess {
-    pub max_bytes: u64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecksumEncoding {
+    Base64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct UploadChecksum {
+    pub algorithm: ChecksumAlgorithm,
+    pub kind: ChecksumKind,
+    pub encoding: ChecksumEncoding,
 }
 
 #[derive(Debug, Clone)]
 pub struct DirectPutAccess {
     pub url: String,
     pub headers: Vec<UploadHeader>,
+    pub checksum: UploadChecksum,
 }
 
 #[derive(Debug, Clone)]
 pub struct MultipartAccess {
     pub part_size_bytes: u64,
     pub max_parts: u16,
+    pub checksum: UploadChecksum,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -587,33 +547,33 @@ pub struct SignedUploadPart {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PartRequest {
-    pub parts: Vec<PartNumber>,
+    pub parts: Vec<RequestedUploadPart>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequestedUploadPart {
+    pub number: PartNumber,
+    pub checksum: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CompletedUploadPart {
     pub number: PartNumber,
     pub etag: String,
+    pub checksum: String,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct CompleteInput {
     pub etag: Option<String>,
-    pub sha256: Option<Sha256Digest>,
+    pub checksum: Option<String>,
     pub parts: Vec<CompletedUploadPart>,
 }
 
 #[derive(Debug, Clone)]
 pub enum CompleteCmd {
-    Proxy(CompleteProxy),
     DirectPut(CompleteDirectPut),
     Multipart(CompleteMultipart),
-}
-
-#[derive(Debug, Clone)]
-pub struct CompleteProxy {
-    pub etag: Option<String>,
-    pub sha256: Option<Sha256Digest>,
 }
 
 #[derive(Debug, Clone)]
@@ -624,6 +584,7 @@ pub struct CompleteDirectPut {
 #[derive(Debug, Clone)]
 pub struct CompleteMultipart {
     pub etag: Option<String>,
+    pub checksum: String,
     pub parts: Vec<CompletedUploadPart>,
 }
 
@@ -633,7 +594,6 @@ pub enum UploadEventKind {
     Created,
     AccessRefreshed,
     Uploading,
-    Uploaded,
     Completed,
     Failed,
     Expired,
@@ -648,7 +608,6 @@ impl UploadEventKind {
             Self::Created => "upload.created",
             Self::AccessRefreshed => "upload.access_refreshed",
             Self::Uploading => "upload.uploading",
-            Self::Uploaded => "upload.uploaded",
             Self::Completed => "upload.completed",
             Self::Failed => "upload.failed",
             Self::Expired => "upload.expired",

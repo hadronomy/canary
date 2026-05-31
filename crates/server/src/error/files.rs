@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::SourceError;
-use crate::files::meta::BlobId;
+use crate::files::meta::{BlobId, ChecksumAlgorithm, ChecksumKind};
 use crate::files::upload::UploadState;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -48,6 +48,9 @@ pub enum FileError {
     #[error("invalid checksum")]
     #[diagnostic(code(canary_server::files::invalid_checksum))]
     InvalidChecksum,
+    #[error("upload checksum is required")]
+    #[diagnostic(code(canary_server::files::upload_checksum_required))]
+    UploadChecksumRequired { algorithm: ChecksumAlgorithm, kind: ChecksumKind },
     #[error("upload parts are invalid")]
     #[diagnostic(code(canary_server::files::invalid_upload_parts))]
     InvalidUploadParts,
@@ -69,42 +72,6 @@ pub enum FileError {
     #[error("failed to create staging directory")]
     #[diagnostic(code(canary_server::files::create_dir))]
     CreateDir {
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to read upload body")]
-    #[diagnostic(code(canary_server::files::read_body))]
-    ReadBody {
-        #[source]
-        source: SourceError,
-    },
-    #[error("failed to read multipart body")]
-    #[diagnostic(code(canary_server::files::multipart))]
-    Multipart {
-        #[source]
-        source: SourceError,
-    },
-    #[error("failed to open staged file")]
-    #[diagnostic(code(canary_server::files::open))]
-    Open {
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to write staged file")]
-    #[diagnostic(code(canary_server::files::write))]
-    Write {
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to persist staged file")]
-    #[diagnostic(code(canary_server::files::persist))]
-    Persist {
-        #[source]
-        source: io::Error,
-    },
-    #[error("failed to read persisted file")]
-    #[diagnostic(code(canary_server::files::read_file))]
-    ReadFile {
         #[source]
         source: io::Error,
     },

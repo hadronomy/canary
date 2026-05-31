@@ -8,7 +8,8 @@ use aws_sdk_s3::operation::head_object::HeadObjectOutput;
 use aws_sdk_s3::operation::list_parts::ListPartsOutput;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::types::{
-    ChecksumMode, ChecksumType, CompletedMultipartUpload, CompletedPart, MetadataDirective,
+    ChecksumAlgorithm as AwsChecksumAlgorithm, ChecksumMode, ChecksumType,
+    CompletedMultipartUpload, CompletedPart, MetadataDirective,
 };
 use aws_types::region::Region;
 use mime::Mime;
@@ -24,8 +25,8 @@ use crate::files::meta::{
 };
 use crate::files::store::BlobHead;
 use crate::files::upload::{
-    CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, SignedUploadPart,
-    UploadHeader,
+    ChecksumEncoding, CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber,
+    RequestedUploadPart, SignedUploadPart, UploadChecksum, UploadHeader,
 };
 
 #[derive(Debug, Clone)]
@@ -173,7 +174,32 @@ impl S3DirectBackend {
                     value: value.to_owned(),
                 })
                 .collect(),
+            checksum: UploadChecksum {
+                algorithm: ChecksumAlgorithm::Sha256,
+                kind: ChecksumKind::FullObject,
+                encoding: ChecksumEncoding::Base64,
+            },
         })
+    }
+
+    pub async fn sign_get(
+        &self,
+        key: &str,
+        ty: &str,
+        name: &str,
+        expires: Duration,
+    ) -> Result<String, FileError> {
+        let req = self
+            .cli
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .response_content_type(ty)
+            .response_content_disposition(disposition(name))
+            .presigned(pcfg(expires)?)
+            .await
+            .map_err(|source| FileError::Store { source: Box::new(source) })?;
+        Ok(req.uri().to_string())
     }
 
     pub async fn head(&self, key: &str) -> Result<BlobHead, FileError> {
@@ -198,11 +224,13 @@ impl S3DirectBackend {
         &self,
         key: &str,
         ty: Option<&Mime>,
+        checksum: UploadChecksum,
     ) -> Result<MultipartSession, FileError> {
         let mut req = self.cli.create_multipart_upload().bucket(&self.bucket).key(key);
         if let Some(ty) = ty {
             req = req.content_type(ty.as_ref());
         }
+        req = req.checksum_algorithm(alg(checksum.algorithm)).checksum_type(kind(checksum.kind));
         let out =
             req.send().await.map_err(|source| FileError::Store { source: Box::new(source) })?;
         let Some(upload_id) = out.upload_id() else {
@@ -215,23 +243,24 @@ impl S3DirectBackend {
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
-        parts: &[PartNumber],
+        parts: &[RequestedUploadPart],
         expires: Duration,
     ) -> Result<Vec<SignedUploadPart>, FileError> {
         let mut out = Vec::with_capacity(parts.len());
-        for &part in parts {
+        for part in parts {
             let req = self
                 .cli
                 .upload_part()
                 .bucket(&self.bucket)
                 .key(key)
                 .upload_id(upload_id.as_str())
-                .part_number(i32::from(part.get()))
+                .part_number(i32::from(part.number.get()))
+                .checksum_crc64_nvme(part.checksum.clone())
                 .presigned(pcfg(expires)?)
                 .await
                 .map_err(|source| FileError::Store { source: Box::new(source) })?;
             out.push(SignedUploadPart {
-                number: part,
+                number: part.number,
                 method: "PUT",
                 url: req.uri().to_string(),
                 headers: req
@@ -276,6 +305,8 @@ impl S3DirectBackend {
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
+        checksum: &str,
+        size: u64,
         parts: &[CompletedUploadPart],
     ) -> Result<(), FileError> {
         let parts = parts
@@ -284,6 +315,7 @@ impl S3DirectBackend {
                 CompletedPart::builder()
                     .part_number(i32::from(part.number.get()))
                     .e_tag(part.etag.clone())
+                    .checksum_crc64_nvme(part.checksum.clone())
                     .build()
             })
             .collect::<Vec<_>>();
@@ -293,6 +325,9 @@ impl S3DirectBackend {
             .bucket(&self.bucket)
             .key(key)
             .upload_id(upload_id.as_str())
+            .checksum_crc64_nvme(checksum)
+            .checksum_type(ChecksumType::FullObject)
+            .mpu_object_size(size as i64)
             .multipart_upload(upload)
             .send()
             .await
@@ -345,7 +380,7 @@ fn checksum(out: &HeadObjectOutput) -> Option<BlobChecksum> {
         return Some(BlobChecksum::new(
             ChecksumAlgorithm::Sha256,
             value,
-            kind(out.checksum_type(), ChecksumAlgorithm::Sha256),
+            head_kind(out.checksum_type(), ChecksumAlgorithm::Sha256),
             ChecksumVerifier::Storage,
         ));
     }
@@ -353,7 +388,7 @@ fn checksum(out: &HeadObjectOutput) -> Option<BlobChecksum> {
         return Some(BlobChecksum::new(
             ChecksumAlgorithm::Crc64Nvme,
             value,
-            kind(out.checksum_type(), ChecksumAlgorithm::Crc64Nvme),
+            head_kind(out.checksum_type(), ChecksumAlgorithm::Crc64Nvme),
             ChecksumVerifier::Storage,
         ));
     }
@@ -361,14 +396,14 @@ fn checksum(out: &HeadObjectOutput) -> Option<BlobChecksum> {
         return Some(BlobChecksum::new(
             ChecksumAlgorithm::Crc32c,
             value,
-            kind(out.checksum_type(), ChecksumAlgorithm::Crc32c),
+            head_kind(out.checksum_type(), ChecksumAlgorithm::Crc32c),
             ChecksumVerifier::Storage,
         ));
     }
     None
 }
 
-fn kind(value: Option<&ChecksumType>, alg: ChecksumAlgorithm) -> ChecksumKind {
+fn head_kind(value: Option<&ChecksumType>, alg: ChecksumAlgorithm) -> ChecksumKind {
     match value {
         Some(ChecksumType::Composite) => ChecksumKind::Composite,
         Some(ChecksumType::FullObject) => ChecksumKind::FullObject,
@@ -376,6 +411,25 @@ fn kind(value: Option<&ChecksumType>, alg: ChecksumAlgorithm) -> ChecksumKind {
         None if matches!(alg, ChecksumAlgorithm::Crc64Nvme) => ChecksumKind::FullObject,
         None => ChecksumKind::FullObject,
     }
+}
+
+fn kind(value: ChecksumKind) -> ChecksumType {
+    match value {
+        ChecksumKind::FullObject => ChecksumType::FullObject,
+        ChecksumKind::Composite => ChecksumType::Composite,
+    }
+}
+
+fn alg(value: ChecksumAlgorithm) -> AwsChecksumAlgorithm {
+    match value {
+        ChecksumAlgorithm::Sha256 => AwsChecksumAlgorithm::Sha256,
+        ChecksumAlgorithm::Crc32c => AwsChecksumAlgorithm::Crc32C,
+        ChecksumAlgorithm::Crc64Nvme => AwsChecksumAlgorithm::Crc64Nvme,
+    }
+}
+
+fn disposition(name: &str) -> String {
+    format!("attachment; filename=\"{}\"", name.replace('\"', ""))
 }
 
 fn pcfg(expires: Duration) -> Result<PresigningConfig, FileError> {

@@ -2,11 +2,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::Body;
 use chrono::{TimeDelta, Utc};
-use futures_util::StreamExt;
-use sha2::{Digest, Sha256};
-use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
 
 use crate::config::{BlobConfig, FilesConfig};
@@ -14,18 +10,17 @@ use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::events::UploadHub;
 use crate::files::list::ListBlobs;
-use crate::files::meta::{
-    BlobChecksum, BlobId, BlobRecord, BlobSize, SampleCompleteness, Sha256Digest, StoredBlob,
-};
+use crate::files::meta::{BlobId, BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
 use crate::files::repo::{BlobMetaRepo, InMemoryUploadRepo, SurrealBlobMetaRepo, UploadRepo};
 use crate::files::sniff::classify;
-use crate::files::store::{Backend, BlobHead, BlobRead};
+use crate::files::store::{Backend, BlobHead};
 use crate::files::upload::{
-    ActorId, CompleteCmd, CompleteDirectPut, CompleteInput, CompleteMultipart, CompleteProxy,
-    PartNumber, PartRequest, ProxyAccess, SignedUploadPart, UploadAccess, UploadDraft,
+    ActorId, ChecksumEncoding, CompleteCmd, CompleteDirectPut, CompleteInput, CompleteMultipart,
+    PartNumber, PartRequest, SignedUploadPart, UploadAccess, UploadChecksum, UploadDraft,
     UploadEventKind, UploadMode, UploadNotice, UploadSession, UploadState,
 };
 use crate::pagination::{Limit, Page, PageWindow};
+use crate::{ChecksumAlgorithm, ChecksumKind};
 
 #[derive(Clone)]
 pub struct FileService {
@@ -43,6 +38,7 @@ pub struct CreatedIntent {
 pub struct BlobService {
     backend: Arc<Backend>,
     blobs: Arc<dyn BlobMetaRepo>,
+    ttl: Duration,
 }
 
 #[derive(Clone)]
@@ -54,12 +50,21 @@ pub struct UploadService {
     uploads: Arc<dyn UploadRepo>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DownloadAccess {
+    pub url: String,
+}
+
 impl FileService {
     pub async fn new(cfg: FilesConfig, db: DatabaseService) -> Result<Self, FileError> {
         let backend = Arc::new(Backend::new(&cfg.backend, cfg.uploads.chunk_size_bytes).await?);
         let uploads_repo: Arc<dyn UploadRepo> = Arc::new(InMemoryUploadRepo::new());
         let blobs_repo: Arc<dyn BlobMetaRepo> = Arc::new(SurrealBlobMetaRepo::new(db));
-        let blobs = BlobService { backend: Arc::clone(&backend), blobs: Arc::clone(&blobs_repo) };
+        let blobs = BlobService {
+            backend: Arc::clone(&backend),
+            blobs: Arc::clone(&blobs_repo),
+            ttl: cfg.uploads.presign_ttl,
+        };
         let uploads = UploadService {
             backend,
             blobs: blobs_repo,
@@ -86,10 +91,19 @@ impl FileService {
 }
 
 impl BlobService {
-    pub async fn get(&self, id: BlobId) -> Result<(StoredBlob, BlobRead), FileError> {
+    pub async fn access(&self, id: BlobId) -> Result<DownloadAccess, FileError> {
         let meta = self.blobs.head_ready(id).await?;
-        let body = self.backend.open(&meta).await?;
-        Ok((meta, body))
+        Ok(DownloadAccess {
+            url: self
+                .backend
+                .sign_get(
+                    &meta.key,
+                    meta.kind.serving().content_type(&meta.kind.effective),
+                    file_name(&meta),
+                    self.ttl,
+                )
+                .await?,
+        })
     }
 
     pub async fn head(&self, id: BlobId) -> Result<StoredBlob, FileError> {
@@ -112,13 +126,15 @@ impl UploadService {
     pub async fn create_intent(&self, draft: UploadDraft) -> Result<CreatedIntent, FileError> {
         let now = Utc::now();
         self.purge_expired(now).await?;
+        if !self.backend.supports_direct() {
+            return Err(FileError::DirectUploadUnavailable);
+        }
         self.validate_draft(&draft)?;
         let expires_at =
             now + TimeDelta::from_std(self.cfg.intent_ttl).expect("intent ttl is valid");
         let id = BlobId::new();
         let common = draft.into_common(id, expires_at);
-        let session = match self.mode(common.declared_size(), common.sha256()) {
-            UploadMode::ProxyPut => UploadSession::proxy(common),
+        let session = match self.mode(common.declared_size()) {
             UploadMode::DirectPut => UploadSession::direct_put(common),
             UploadMode::DirectMultipart => UploadSession::multipart(common),
         };
@@ -178,13 +194,17 @@ impl UploadService {
         if session.mode() != UploadMode::DirectMultipart {
             return Err(FileError::UploadInvalidState { id, state: session.state() });
         }
-        let parts = self.normalize_parts(&input.parts)?;
+        self.normalize_parts(&input.parts)?;
         let session = if session.multipart_upload_id().is_some() {
             session
         } else {
             let next = self
                 .backend
-                .create_multipart(session.staging_key(), session.declared_type())
+                .create_multipart(
+                    session.staging_key(),
+                    session.declared_type(),
+                    self.multipart_checksum(),
+                )
                 .await?;
             let session = self.uploads.attach_multipart(id, next.id).await?;
             self.publish(UploadEventKind::Uploading, session.clone()).await;
@@ -192,97 +212,8 @@ impl UploadService {
         };
         let upload_id = session.multipart_upload_id().ok_or(FileError::UploadIncomplete)?.clone();
         self.backend
-            .sign_parts(session.staging_key(), &upload_id, &parts, self.cfg.presign_ttl)
+            .sign_parts(session.staging_key(), &upload_id, &input.parts, self.cfg.presign_ttl)
             .await
-    }
-
-    pub async fn put_body(
-        &self,
-        actor: &ActorId,
-        id: BlobId,
-        body: Body,
-    ) -> Result<UploadSession, FileError> {
-        self.purge_expired(Utc::now()).await?;
-        let session = self.uploads.get(id).await?;
-        self.ensure_owner(&session, actor)?;
-        self.ensure_active(&session)?;
-        if session.mode() != UploadMode::ProxyPut || session.state() != UploadState::Created {
-            return Err(FileError::UploadInvalidState { id, state: session.state() });
-        }
-        let session = self.uploads.begin_upload(id).await?;
-        self.publish(UploadEventKind::Uploading, session.clone()).await;
-
-        let limit = session.declared_size().get().min(self.cfg.max_bytes);
-        let mut hasher = Sha256::new();
-        let mut sniff = Vec::with_capacity(self.cfg.sniff_bytes);
-        let mut prefix = Vec::new();
-        let mut size = 0u64;
-        let mut stream = body.into_data_stream();
-        let mut done = false;
-
-        while sniff.len() < self.cfg.sniff_bytes {
-            let Some(chunk) = stream.next().await else {
-                done = true;
-                break;
-            };
-            let chunk = chunk.map_err(|source| FileError::ReadBody { source: Box::new(source) })?;
-            size += chunk.len() as u64;
-            if size > limit {
-                self.fail(session.clone()).await?;
-                return Err(FileError::UploadTooLarge);
-            }
-            hasher.update(&chunk);
-            let take = (self.cfg.sniff_bytes - sniff.len()).min(chunk.len());
-            sniff.extend_from_slice(&chunk[..take]);
-            prefix.push(chunk);
-        }
-
-        let decision = classify(
-            session.purpose().media_profile(),
-            session.declared_type().cloned(),
-            &sniff,
-            proxy_sample(sniff.len(), done),
-        );
-        let kind = match decision.into_result() {
-            Ok(kind) => kind,
-            Err(err) => {
-                self.fail(session.clone()).await?;
-                return Err(err);
-            }
-        };
-        let mut write =
-            self.backend.begin_write(session.staging_key(), kind.effective.as_str()).await?;
-        for chunk in prefix {
-            write.write_all(&chunk).await.map_err(|source| FileError::Persist { source })?;
-        }
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|source| FileError::ReadBody { source: Box::new(source) })?;
-            size += chunk.len() as u64;
-            if size > limit {
-                self.fail(session.clone()).await?;
-                return Err(FileError::UploadTooLarge);
-            }
-            hasher.update(&chunk);
-            write.write_all(&chunk).await.map_err(|source| FileError::Persist { source })?;
-        }
-
-        write.shutdown().await.map_err(|source| FileError::Persist { source })?;
-
-        let blob = StoredBlob {
-            id: session.id(),
-            key: session.ready_key().clone(),
-            name: session.name().cloned(),
-            size: BlobSize::new(size),
-            checksum: Some(BlobChecksum::sha256_server(&Sha256Digest::new(
-                hasher.finalize().into(),
-            ))),
-            kind,
-            etag: None,
-            version: None,
-        };
-        let session = self.uploads.mark_uploaded(id, blob).await?;
-        self.publish(UploadEventKind::Uploaded, session.clone()).await;
-        Ok(session)
     }
 
     pub async fn complete(
@@ -300,7 +231,6 @@ impl UploadService {
         }
         let session = self.refresh(session).await?;
         match self.complete_cmd(&session, input)? {
-            CompleteCmd::Proxy(cmd) => self.complete_proxy(session, cmd).await,
             CompleteCmd::DirectPut(cmd) => self.complete_direct_put(session, cmd).await,
             CompleteCmd::Multipart(cmd) => self.complete_multipart(session, cmd).await,
         }
@@ -340,17 +270,17 @@ impl UploadService {
         if size > max {
             return Err(FileError::UploadTooLarge);
         }
+        if size <= self.cfg.multipart_threshold_bytes && draft.sha256.is_none() {
+            return Err(FileError::UploadChecksumRequired {
+                algorithm: ChecksumAlgorithm::Sha256,
+                kind: ChecksumKind::FullObject,
+            });
+        }
         Ok(())
     }
 
-    fn mode(&self, size: BlobSize, sha256: Option<&Sha256Digest>) -> UploadMode {
-        if !self.backend.supports_direct() {
-            return UploadMode::ProxyPut;
-        }
+    fn mode(&self, size: BlobSize) -> UploadMode {
         if size.get() > self.cfg.multipart_threshold_bytes {
-            if sha256.is_some() {
-                return UploadMode::ProxyPut;
-            }
             return UploadMode::DirectMultipart;
         }
         UploadMode::DirectPut
@@ -358,9 +288,6 @@ impl UploadService {
 
     async fn access_for(&self, session: &UploadSession) -> Result<UploadAccess, FileError> {
         match session.mode() {
-            UploadMode::ProxyPut => Ok(UploadAccess::Proxy(ProxyAccess {
-                max_bytes: session.declared_size().get().min(self.cfg.max_bytes),
-            })),
             UploadMode::DirectPut => Ok(UploadAccess::DirectPut(
                 self.backend
                     .sign_put(
@@ -375,22 +302,32 @@ impl UploadService {
                 Ok(UploadAccess::Multipart(crate::files::upload::MultipartAccess {
                     part_size_bytes: self.cfg.multipart_part_size_bytes,
                     max_parts: self.cfg.multipart_max_parts,
+                    checksum: self.multipart_checksum(),
                 }))
             }
         }
     }
 
-    fn normalize_parts(&self, parts: &[PartNumber]) -> Result<Vec<PartNumber>, FileError> {
+    fn normalize_parts(
+        &self,
+        parts: &[crate::files::upload::RequestedUploadPart],
+    ) -> Result<Vec<PartNumber>, FileError> {
         if parts.is_empty() {
             return Err(FileError::InvalidUploadParts);
         }
         let mut seen = BTreeSet::new();
         let mut out = Vec::with_capacity(parts.len());
-        for &part in parts {
-            if part.get() > self.cfg.multipart_max_parts || !seen.insert(part) {
+        for part in parts {
+            if part.checksum.trim().is_empty() {
+                return Err(FileError::UploadChecksumRequired {
+                    algorithm: self.multipart_checksum().algorithm,
+                    kind: self.multipart_checksum().kind,
+                });
+            }
+            if part.number.get() > self.cfg.multipart_max_parts || !seen.insert(part.number) {
                 return Err(FileError::InvalidUploadParts);
             }
-            out.push(part);
+            out.push(part.number);
         }
         Ok(out)
     }
@@ -456,12 +393,6 @@ impl UploadService {
         input: CompleteInput,
     ) -> Result<CompleteCmd, FileError> {
         match session.mode() {
-            UploadMode::ProxyPut => {
-                if !input.parts.is_empty() {
-                    return Err(FileError::InvalidUploadParts);
-                }
-                Ok(CompleteCmd::Proxy(CompleteProxy { etag: input.etag, sha256: input.sha256 }))
-            }
             UploadMode::DirectPut => {
                 if !input.parts.is_empty() {
                     return Err(FileError::InvalidUploadParts);
@@ -470,52 +401,15 @@ impl UploadService {
             }
             UploadMode::DirectMultipart => Ok(CompleteCmd::Multipart(CompleteMultipart {
                 etag: input.etag,
+                checksum: input.checksum.filter(|value| !value.trim().is_empty()).ok_or(
+                    FileError::UploadChecksumRequired {
+                        algorithm: self.multipart_checksum().algorithm,
+                        kind: self.multipart_checksum().kind,
+                    },
+                )?,
                 parts: input.parts,
             })),
         }
-    }
-
-    async fn complete_proxy(
-        &self,
-        session: UploadSession,
-        cmd: CompleteProxy,
-    ) -> Result<StoredBlob, FileError> {
-        if session.state() != UploadState::Uploaded {
-            return Err(FileError::UploadInvalidState { id: session.id(), state: session.state() });
-        }
-        let head = match self.backend.head_staging(session.staging_key()).await {
-            Ok(head) => head,
-            Err(err) => {
-                self.fail(session.clone()).await?;
-                return Err(err);
-            }
-        };
-        let mut blob = match session.actual().cloned() {
-            Some(blob) => blob,
-            None => {
-                self.fail(session.clone()).await?;
-                return Err(FileError::UploadIncomplete);
-            }
-        };
-        if blob.size != session.declared_size() || head.size != blob.size.get() {
-            self.fail(session.clone()).await?;
-            return Err(FileError::SizeMismatch);
-        }
-        if let Some(sha256) = session.sha256()
-            && !blob.checksum.as_ref().is_some_and(|checksum| checksum.matches_sha256(sha256))
-        {
-            self.fail(session.clone()).await?;
-            return Err(FileError::ChecksumMismatch);
-        }
-        if let Some(sha256) = cmd.sha256.as_ref()
-            && !blob.checksum.as_ref().is_some_and(|checksum| checksum.matches_sha256(sha256))
-        {
-            self.fail(session.clone()).await?;
-            return Err(FileError::ChecksumMismatch);
-        }
-        blob.etag = cmd.etag.or(head.etag);
-        blob.version = head.version;
-        self.finish(session, blob).await
     }
 
     async fn complete_direct_put(
@@ -523,7 +417,7 @@ impl UploadService {
         session: UploadSession,
         cmd: CompleteDirectPut,
     ) -> Result<StoredBlob, FileError> {
-        self.finalize_remote(session, cmd.etag).await
+        self.finalize_remote(session, cmd.etag, None).await
     }
 
     async fn complete_multipart(
@@ -535,7 +429,15 @@ impl UploadService {
             return Err(FileError::UploadIncomplete);
         }
         let parts = self
-            .normalize_parts(&cmd.parts.iter().map(|part| part.number).collect::<Vec<_>>())?
+            .normalize_parts(
+                &cmd.parts
+                    .iter()
+                    .map(|part| crate::files::upload::RequestedUploadPart {
+                        number: part.number,
+                        checksum: part.checksum.clone(),
+                    })
+                    .collect::<Vec<_>>(),
+            )?
             .into_iter()
             .collect::<BTreeSet<_>>();
         let session = self.refresh(session).await?;
@@ -546,13 +448,21 @@ impl UploadService {
         if parts.iter().any(|part| !uploaded.contains(part)) {
             return Err(FileError::UploadIncomplete);
         }
-        if let Err(err) =
-            self.backend.complete_multipart(session.staging_key(), &upload_id, &cmd.parts).await
+        if let Err(err) = self
+            .backend
+            .complete_multipart(
+                session.staging_key(),
+                &upload_id,
+                cmd.checksum.as_str(),
+                session.declared_size().get(),
+                &cmd.parts,
+            )
+            .await
         {
             self.fail(session.clone()).await?;
             return Err(err);
         }
-        self.finalize_remote(session, cmd.etag).await
+        self.finalize_remote(session, cmd.etag, Some(cmd.checksum.as_str())).await
     }
 
     async fn inspect_remote_blob(
@@ -609,6 +519,7 @@ impl UploadService {
         &self,
         session: UploadSession,
         etag: Option<String>,
+        checksum: Option<&str>,
     ) -> Result<StoredBlob, FileError> {
         let blob = match self.inspect_remote_blob(&session, etag).await {
             Ok(blob) => blob,
@@ -617,6 +528,10 @@ impl UploadService {
                 return Err(err);
             }
         };
+        if let Err(err) = self.ensure_checksum(&session, &blob, checksum) {
+            self.fail(session.clone()).await?;
+            return Err(err);
+        }
         self.finish(session, blob).await
     }
 
@@ -659,16 +574,56 @@ impl UploadService {
     async fn publish(&self, kind: UploadEventKind, session: UploadSession) {
         self.events.publish(kind, session).await;
     }
+    fn multipart_checksum(&self) -> UploadChecksum {
+        UploadChecksum {
+            algorithm: ChecksumAlgorithm::Crc64Nvme,
+            kind: ChecksumKind::FullObject,
+            encoding: ChecksumEncoding::Base64,
+        }
+    }
+
+    fn ensure_checksum(
+        &self,
+        session: &UploadSession,
+        blob: &StoredBlob,
+        checksum: Option<&str>,
+    ) -> Result<(), FileError> {
+        match session.mode() {
+            UploadMode::DirectPut => {
+                let Some(sha256) = session.sha256() else {
+                    return Err(FileError::UploadChecksumRequired {
+                        algorithm: ChecksumAlgorithm::Sha256,
+                        kind: ChecksumKind::FullObject,
+                    });
+                };
+                if blob.checksum.as_ref().is_some_and(|value| value.matches_sha256(sha256)) {
+                    return Ok(());
+                }
+                Err(FileError::ChecksumMismatch)
+            }
+            UploadMode::DirectMultipart => {
+                let Some(value) = checksum else {
+                    return Err(FileError::UploadChecksumRequired {
+                        algorithm: self.multipart_checksum().algorithm,
+                        kind: self.multipart_checksum().kind,
+                    });
+                };
+                let required = self.multipart_checksum();
+                if blob.checksum.as_ref().is_some_and(|found| {
+                    found.algorithm == required.algorithm
+                        && found.kind == required.kind
+                        && found.value == value
+                }) {
+                    return Ok(());
+                }
+                Err(FileError::ChecksumMismatch)
+            }
+        }
+    }
 }
 
-fn proxy_sample(len: usize, done: bool) -> SampleCompleteness {
-    if len == 0 {
-        return SampleCompleteness::Empty;
-    }
-    if done {
-        return SampleCompleteness::Complete;
-    }
-    SampleCompleteness::Prefix
+fn file_name(blob: &StoredBlob) -> &str {
+    blob.name.as_ref().map(|name| name.as_str()).unwrap_or("download.bin")
 }
 
 fn remote_sample(size: u64, len: usize) -> SampleCompleteness {

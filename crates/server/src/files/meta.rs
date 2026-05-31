@@ -1,5 +1,4 @@
 use std::fmt;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use base64::Engine;
@@ -487,16 +486,6 @@ impl ReadyKey {
     pub fn blob(&self) -> &BlobKey {
         &self.0
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct StagedBlob {
-    pub id: BlobId,
-    pub name: Option<BlobName>,
-    pub size: BlobSize,
-    pub sha256: Sha256Digest,
-    pub kind: BlobKind,
-    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone)]

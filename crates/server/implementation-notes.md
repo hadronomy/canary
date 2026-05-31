@@ -143,8 +143,8 @@
 
 ### Upload refactor
 
-- The old `POST /api/v1/files` and `PUT /api/v1/files/raw` compatibility upload routes are gone. The only supported write path is now upload intent creation plus the upload session lifecycle.
-- `stage.rs` and the tempfile-based compatibility staging path were removed with those legacy routes. Uploads now flow through either direct S3-compatible access or streamed proxy writes.
+- The old `POST /api/v1/files` and `PUT /api/v1/files/raw` compatibility upload routes are gone. The only supported write path is now upload intent creation plus the direct upload session lifecycle.
+- `stage.rs` and the tempfile-based compatibility staging path were removed with those legacy routes. The public upload API no longer proxies request bodies through the server at all.
 - `FileService` is now just a façade over two focused services:
   - `UploadService` owns upload intent and lifecycle orchestration.
   - `BlobService` owns ready-blob reads and listing.
@@ -154,11 +154,13 @@
   - `Backend::Local(LocalBackend)`
   - `Backend::S3(S3Backend)`
 - That backend enum keeps byte persistence and direct-upload capability structurally aligned, so invalid combinations like “local bytes plus S3 direct upload” are no longer representable.
-- Upload sessions are now strategy-specific values instead of one broad struct with optional multipart fields. The current model uses `UploadSession::{Proxy, DirectPut, Multipart}` with shared data extracted into `UploadCommon`.
+- Upload sessions are now strategy-specific values instead of one broad struct with optional multipart fields. The current model uses `UploadSession::{DirectPut, Multipart}` with shared data extracted into `UploadCommon`.
 - Multipart session identity is now represented explicitly with `MultipartUploadId` and `PartNumber` newtypes instead of raw strings and integers at subsystem boundaries.
 - Route DTOs such as `CreatedUpload`, `UploadTarget`, and `UploadRecord` are now built in the HTTP route layer instead of inside the upload service. The service returns semantic access plans and session state, not route strings.
 - Upload events now use a keyed `watch`-based `UploadHub` instead of one global broadcast bus. Subscribers watch one upload id at a time and receive the latest session snapshot plus subsequent lifecycle changes.
 - Direct single-shot uploads now support access refresh through `POST /api/v1/files/uploads/{id}/access`. That closes the gap where an expired presigned `PUT` URL could not previously be renewed.
+- Small direct uploads now require a declared SHA-256 digest. The server presigns `PUT` access with `x-amz-checksum-sha256` and only accepts completion if object storage reports the same full-object checksum back.
+- Multipart uploads now use a storage-native checksum contract instead of ETags alone. The server requires `CRC64NVME` with `FULL_OBJECT` semantics for the multipart session, signs part uploads with per-part checksum headers, and only accepts completion when object storage reports the same full-object checksum.
 - Upload route body limits now come from `files.uploads.max_bytes`. The separate HTTP raw/multipart upload caps were removed so there is one authoritative upload size policy.
 - The in-memory upload repo now owns explicit transition methods like `begin_upload`, `attach_multipart`, `record_parts`, `mark_uploaded`, `mark_ready`, and terminal state markers. That let the coarse global async mutex disappear without replacing it with another subsystem-wide lock.
 - Durable blob metadata now lives behind `SurrealBlobMetaRepo`, so listing and blob lookups no longer depend on the lifetime of one server process. The remaining durable-state gap is upload sessions themselves, which are intentionally still in-memory until their persistence model is designed deliberately.
@@ -167,4 +169,5 @@
   - `StoredBlob` owns a `ReadyKey`
 - Uploads always land under `staging/upload/<id>/object` first. Completion promotes the validated object into `ready/blob/<id>/original`, deletes the staging object, and only then marks the blob ready in metadata.
 - The old direct-upload-only `sync_content_type` repair step is gone. Promotion is now the single place where S3-compatible backends canonicalize stored `Content-Type`, which keeps the bucket structure and metadata policy aligned.
-- Blob integrity metadata now uses one canonical `checksum` field instead of the narrower `hash_sha256`. Proxy uploads populate it with a server-verified full-object SHA-256, direct single-part uploads can carry a storage-verified SHA-256 through `x-amz-checksum-sha256`, and direct uploads also surface storage-native object checksums when the backend exposes them through checksum-aware object head responses.
+- Blob integrity metadata now uses one canonical `checksum` field instead of the narrower `hash_sha256`. Completed uploads only surface integrity values that were actually verified, either by storage (`sha256`, `crc64_nvme`) or by a future first-class verifier with equivalent guarantees.
+- Downloads no longer proxy object bytes through the app server. The blob route now redirects to a short-lived presigned `GET` for the ready object, with response content type and attachment disposition derived from Canary's validated blob metadata.

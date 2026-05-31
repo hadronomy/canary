@@ -3,13 +3,16 @@ mod common;
 use std::env;
 
 use axum::http::{Request, StatusCode, header};
+use base64::Engine;
 use canary_server::config::{
     FileBackendConfig, ObjectPrefix, S3AddressingStyle, S3Credentials, S3FileConfig,
     TransportSecurity,
 };
 use common::{actor, app_with, json};
+use crc64fast_nvme::Digest as Crc64;
 use reqwest::Client;
 use serde_json::json as json_value;
+use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 use url::Url;
 use uuid::Uuid;
@@ -74,6 +77,18 @@ fn put(req: reqwest::RequestBuilder, headers: &[serde_json::Value]) -> reqwest::
     })
 }
 
+fn sha256(data: &[u8]) -> String {
+    let mut hash = Sha256::new();
+    hash.update(data);
+    hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn crc64(data: &[u8]) -> String {
+    let mut hash = Crc64::new();
+    hash.write(data);
+    base64::engine::general_purpose::STANDARD.encode(hash.sum64().to_be_bytes())
+}
+
 #[tokio::test]
 #[ignore = "requires CANARY_RUSTFS_* environment and ambient AWS-style credentials"]
 async fn rustfs_direct_put_roundtrip() {
@@ -97,6 +112,7 @@ async fn rustfs_direct_put_roundtrip() {
                     "name": "hello.txt",
                     "content_type": "text/plain",
                     "size_bytes": 5,
+                    "sha256": sha256(b"hello"),
                     "purpose": "attachment"
                 })
                 .to_string(),
@@ -110,6 +126,8 @@ async fn rustfs_direct_put_roundtrip() {
     let created = json(response).await;
     let id = created["id"].as_str().expect("id should be present");
     assert_eq!(created["upload"]["kind"], "direct_put");
+    assert_eq!(created["upload"]["checksum"]["algorithm"], "sha256");
+    assert_eq!(created["upload"]["checksum"]["kind"], "full_object");
 
     let upload = put(
         http.put(created["upload"]["url"].as_str().expect("signed upload url should exist")),
@@ -141,6 +159,8 @@ async fn rustfs_direct_put_roundtrip() {
     let blob = json(response).await;
     assert_eq!(blob["id"], id);
     assert_eq!(blob["size_bytes"], 5);
+    assert_eq!(blob["checksum"]["algorithm"], "sha256");
+    assert_eq!(blob["checksum"]["verifier"], "storage");
 }
 
 #[tokio::test]
@@ -151,6 +171,9 @@ async fn rustfs_direct_multipart_roundtrip() {
     let app = app_with(rustfs_cfg(&dir, &rustfs)).await;
     let http = Client::new();
     let part = vec![b'a'; 5 * 1024 * 1024];
+    let first_sum = crc64(&part);
+    let second_sum = crc64(b"b");
+    let full_sum = crc64(&[part.as_slice(), b"b"].concat());
 
     let response = app
         .clone()
@@ -180,6 +203,8 @@ async fn rustfs_direct_multipart_roundtrip() {
     let created = json(response).await;
     let id = created["id"].as_str().expect("id should be present");
     assert_eq!(created["upload"]["kind"], "direct_multipart");
+    assert_eq!(created["upload"]["checksum"]["algorithm"], "crc64_nvme");
+    assert_eq!(created["upload"]["checksum"]["kind"], "full_object");
 
     let response = app
         .clone()
@@ -191,7 +216,15 @@ async fn rustfs_direct_multipart_roundtrip() {
                     .header(header::CONTENT_TYPE, "application/json"),
                 "alice",
             )
-            .body(axum::body::Body::from(json_value!({ "parts": [1, 2] }).to_string()))
+            .body(axum::body::Body::from(
+                json_value!({
+                    "parts": [
+                        { "number": 1, "checksum": first_sum },
+                        { "number": 2, "checksum": second_sum }
+                    ]
+                })
+                .to_string(),
+            ))
             .unwrap(),
         )
         .await
@@ -236,6 +269,7 @@ async fn rustfs_direct_multipart_roundtrip() {
                     "parts": [
                         {
                             "number": 1,
+                            "checksum": first_sum,
                             "etag": first
                                 .headers()
                                 .get(header::ETAG)
@@ -244,13 +278,15 @@ async fn rustfs_direct_multipart_roundtrip() {
                         },
                         {
                             "number": 2,
+                            "checksum": second_sum,
                             "etag": second
                                 .headers()
                                 .get(header::ETAG)
                                 .and_then(|value| value.to_str().ok())
                                 .expect("etag should exist"),
                         }
-                    ]
+                    ],
+                    "checksum": full_sum
                 })
                 .to_string(),
             ))
@@ -263,4 +299,7 @@ async fn rustfs_direct_multipart_roundtrip() {
     let blob = json(response).await;
     assert_eq!(blob["id"], id);
     assert_eq!(blob["size_bytes"], part.len() as u64 + 1);
+    assert_eq!(blob["checksum"]["algorithm"], "crc64_nvme");
+    assert_eq!(blob["checksum"]["kind"], "full_object");
+    assert_eq!(blob["checksum"]["verifier"], "storage");
 }

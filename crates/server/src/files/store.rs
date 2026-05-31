@@ -1,61 +1,20 @@
-use std::io;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::time::Duration;
 
 use bytes::Bytes;
-use futures_util::Stream;
-use futures_util::stream::BoxStream;
-use object_store::buffered::BufWriter;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use object_store::{Attribute, Attributes, DynObjectStore, ObjectMeta};
+use object_store::{DynObjectStore, ObjectMeta};
 use tokio::fs;
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 
 use crate::config::FileBackendConfig;
 use crate::error::FileError;
 use crate::files::direct::{MultipartSession, S3DirectBackend, S3RuntimeConfig};
-use crate::files::meta::{
-    BlobChecksum, BlobId, BlobKey, ReadyKey, Sha256Digest, StagedBlob, StagingKey, StoredBlob,
-};
+use crate::files::meta::{BlobChecksum, BlobKey, ReadyKey, Sha256Digest, StagingKey};
 use crate::files::upload::{
-    CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, SignedUploadPart,
+    CompletedUploadPart, DirectPutAccess, MultipartUploadId, PartNumber, RequestedUploadPart,
+    SignedUploadPart, UploadChecksum,
 };
-
-pub struct BlobRead {
-    body: BoxStream<'static, object_store::Result<Bytes>>,
-}
-
-impl Stream for BlobRead {
-    type Item = object_store::Result<Bytes>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.get_mut().body.as_mut().poll_next(cx)
-    }
-}
-
-pub struct BlobWrite {
-    inner: BufWriter,
-}
-
-impl AsyncWrite for BlobWrite {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct BlobHead {
@@ -84,13 +43,12 @@ pub struct S3Backend {
 
 #[derive(Clone)]
 struct ObjectBytes {
-    chunk: usize,
     prefix: Option<String>,
     store: Arc<DynObjectStore>,
 }
 
 impl Backend {
-    pub async fn new(cfg: &FileBackendConfig, chunk: usize) -> Result<Self, FileError> {
+    pub async fn new(cfg: &FileBackendConfig, _chunk: usize) -> Result<Self, FileError> {
         match cfg {
             FileBackendConfig::Local(local) => {
                 fs::create_dir_all(local.root.as_path())
@@ -99,11 +57,7 @@ impl Backend {
                 let store = LocalFileSystem::new_with_prefix(local.root.as_path())
                     .map_err(|source| FileError::Store { source: Box::new(source) })?;
                 Ok(Self::Local(LocalBackend {
-                    bytes: ObjectBytes {
-                        chunk: chunk.max(1),
-                        prefix: None,
-                        store: Arc::new(store),
-                    },
+                    bytes: ObjectBytes { prefix: None, store: Arc::new(store) },
                 }))
             }
             FileBackendConfig::S3(s3) => {
@@ -114,7 +68,6 @@ impl Backend {
                     .map_err(|source| FileError::Store { source: Box::new(source) })?;
                 Ok(Self::S3(S3Backend {
                     bytes: ObjectBytes {
-                        chunk: chunk.max(1),
                         prefix: runtime.prefix().map(ToOwned::to_owned),
                         store: Arc::new(store),
                     },
@@ -124,19 +77,21 @@ impl Backend {
         }
     }
 
-    pub async fn put(&self, staged: StagedBlob) -> Result<StoredBlob, FileError> {
-        self.bytes().put(staged).await
-    }
-
-    pub async fn begin_write(&self, key: &StagingKey, ty: &str) -> Result<BlobWrite, FileError> {
+    pub async fn sign_get(
+        &self,
+        key: &ReadyKey,
+        ty: &str,
+        name: &str,
+        expires: Duration,
+    ) -> Result<String, FileError> {
         match self {
-            Self::Local(local) => local.bytes.begin_write(key, None).await,
-            Self::S3(s3) => s3.bytes.begin_write(key, Some(ty)).await,
+            Self::Local(_) => Err(FileError::DirectUploadUnavailable),
+            Self::S3(s3) => {
+                s3.direct
+                    .sign_get(s3.bytes.object_key(key.blob()).as_str(), ty, name, expires)
+                    .await
+            }
         }
-    }
-
-    pub async fn open(&self, blob: &StoredBlob) -> Result<BlobRead, FileError> {
-        self.bytes().open(blob).await
     }
 
     pub async fn head_staging(&self, key: &StagingKey) -> Result<BlobHead, FileError> {
@@ -203,11 +158,14 @@ impl Backend {
         &self,
         key: &StagingKey,
         ty: Option<&mime::Mime>,
+        checksum: UploadChecksum,
     ) -> Result<MultipartSession, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
-                s3.direct.create_multipart(s3.bytes.object_key(key.blob()).as_str(), ty).await
+                s3.direct
+                    .create_multipart(s3.bytes.object_key(key.blob()).as_str(), ty, checksum)
+                    .await
             }
         }
     }
@@ -216,8 +174,8 @@ impl Backend {
         &self,
         key: &StagingKey,
         upload_id: &MultipartUploadId,
-        parts: &[PartNumber],
-        expires: std::time::Duration,
+        parts: &[RequestedUploadPart],
+        expires: Duration,
     ) -> Result<Vec<SignedUploadPart>, FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
@@ -246,13 +204,21 @@ impl Backend {
         &self,
         key: &StagingKey,
         upload_id: &MultipartUploadId,
+        checksum: &str,
+        size: u64,
         parts: &[CompletedUploadPart],
     ) -> Result<(), FileError> {
         match self {
             Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
                 s3.direct
-                    .complete_multipart(s3.bytes.object_key(key.blob()).as_str(), upload_id, parts)
+                    .complete_multipart(
+                        s3.bytes.object_key(key.blob()).as_str(),
+                        upload_id,
+                        checksum,
+                        size,
+                        parts,
+                    )
                     .await
             }
         }
@@ -264,7 +230,7 @@ impl Backend {
         upload_id: &MultipartUploadId,
     ) -> Result<(), FileError> {
         match self {
-            Self::Local(_) => Ok(()),
+            Self::Local(_) => Err(FileError::DirectUploadUnavailable),
             Self::S3(s3) => {
                 s3.direct.abort_multipart(s3.bytes.object_key(key.blob()).as_str(), upload_id).await
             }
@@ -285,54 +251,6 @@ impl Backend {
 }
 
 impl ObjectBytes {
-    async fn put(&self, staged: StagedBlob) -> Result<StoredBlob, FileError> {
-        let key = ReadyKey::from_id(staged.id);
-        let path = self.path(key.blob());
-        let file =
-            fs::File::open(&staged.path).await.map_err(|source| FileError::Open { source })?;
-        let mut src = BufReader::with_capacity(self.chunk, file);
-        let mut dst = BufWriter::new(Arc::clone(&self.store), path);
-        tokio::io::copy(&mut src, &mut dst)
-            .await
-            .map_err(|source| FileError::Persist { source })?;
-        dst.shutdown().await.map_err(|source| FileError::Persist { source })?;
-        if let Err(source) = fs::remove_file(&staged.path).await {
-            tracing::warn!(%source, path = %staged.path.display(), "failed to clean staged blob");
-        }
-        Ok(StoredBlob {
-            id: staged.id,
-            key,
-            name: staged.name,
-            size: staged.size,
-            checksum: Some(BlobChecksum::sha256_server(&staged.sha256)),
-            kind: staged.kind,
-            etag: None,
-            version: None,
-        })
-    }
-
-    async fn begin_write(
-        &self,
-        key: &StagingKey,
-        ty: Option<&str>,
-    ) -> Result<BlobWrite, FileError> {
-        let inner = match ty {
-            Some(ty) => BufWriter::new(Arc::clone(&self.store), self.path(key.blob()))
-                .with_attributes(Attributes::from_iter([(Attribute::ContentType, ty.to_owned())])),
-            None => BufWriter::new(Arc::clone(&self.store), self.path(key.blob())),
-        };
-        Ok(BlobWrite { inner })
-    }
-
-    async fn open(&self, blob: &StoredBlob) -> Result<BlobRead, FileError> {
-        let get = self
-            .store
-            .get(&self.path(blob.key.blob()))
-            .await
-            .map_err(|source| map_store_err(blob.id, source))?;
-        Ok(BlobRead { body: get.into_stream() })
-    }
-
     async fn head_staging(&self, key: &StagingKey) -> Result<BlobHead, FileError> {
         let meta = self.store.head(&self.path(key.blob())).await.map_err(map_upload_err)?;
         Ok(BlobHead::from(meta))
@@ -371,13 +289,6 @@ impl ObjectBytes {
             Some(prefix) => format!("{prefix}/{}", key.as_str()),
             None => key.as_str().to_owned(),
         }
-    }
-}
-
-fn map_store_err(id: BlobId, source: object_store::Error) -> FileError {
-    match source {
-        object_store::Error::NotFound { .. } => FileError::NotFound { id },
-        source => FileError::Store { source: Box::new(source) },
     }
 }
 

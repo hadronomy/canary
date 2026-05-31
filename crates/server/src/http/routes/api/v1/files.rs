@@ -1,35 +1,31 @@
 use std::convert::Infallible;
 use std::str::FromStr;
 
-use axum::body::Body;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{FromRef, Path, Request, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::extract::{FromRef, Path, State};
+use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post, put};
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use axum_extra::response::Attachment;
 use futures_util::stream::{self, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::Pagination;
 use crate::error::{AppError, AppResult};
 use crate::files::meta::{BlobId, BlobName, BlobRecord, BlobSize, Sha256Digest};
 use crate::files::service::CreatedIntent;
 use crate::files::upload::{
-    CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess, UploadDraft,
-    UploadEventKind, UploadHeader, UploadMode, UploadNotice, UploadPurpose, UploadSession,
-    UploadState,
+    CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess,
+    UploadChecksum, UploadDraft, UploadEventKind, UploadHeader, UploadMode, UploadNotice,
+    UploadPurpose, UploadSession, UploadState,
 };
 use crate::http::extract::UploadActor;
 use crate::http::response::created;
 use crate::pagination::{Limit, Page, PagePolicy, PagePolicySource};
 use crate::state::{AppState, FileState};
 
-pub fn router(state: &AppState) -> Router<AppState> {
-    let raw_limit = cap(state.loaded_config().settings.files.uploads.max_bytes);
+pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/files", get(list))
         .route("/files/uploads", post(create_upload))
@@ -37,10 +33,6 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/files/uploads/{id}/access", post(refresh_access))
         .route("/files/uploads/{id}/parts", post(upload_parts))
         .route("/files/uploads/{id}/ws", get(upload_socket))
-        .route(
-            "/files/uploads/{id}/content",
-            put(upload_content).layer(RequestBodyLimitLayer::new(raw_limit)),
-        )
         .route("/files/uploads/{id}/events", get(upload_events))
         .route("/files/uploads/{id}/complete", post(complete_upload))
         .route("/files/uploads/{id}/abort", post(abort_upload))
@@ -60,7 +52,7 @@ struct CreateUploadBody {
 #[derive(Deserialize, Default)]
 struct CompleteUploadBody {
     etag: Option<String>,
-    sha256: Option<String>,
+    checksum: Option<String>,
     #[serde(default)]
     parts: Vec<CompletedUploadPart>,
 }
@@ -100,19 +92,16 @@ struct UploadEvent {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum UploadTarget {
-    ProxyPut {
-        method: &'static str,
-        url: String,
-        max_bytes: u64,
-    },
     DirectPut {
         method: &'static str,
         url: String,
         headers: Vec<UploadHeader>,
+        checksum: UploadChecksum,
     },
     DirectMultipart {
         part_size_bytes: u64,
         max_parts: u16,
+        checksum: UploadChecksum,
         parts_url: String,
         complete_url: String,
         abort_url: String,
@@ -228,17 +217,6 @@ async fn upload_socket(
     Ok(ws.on_upgrade(move |socket| stream_socket(socket, current, rx)).into_response())
 }
 
-async fn upload_content(
-    State(state): State<FileState>,
-    actor: UploadActor,
-    Path(id): Path<String>,
-    request: Request,
-) -> AppResult<(StatusCode, Json<UploadRecord>)> {
-    let id = BlobId::from_str(&id)?;
-    let session = state.files.uploads().put_body(actor.as_ref(), id, request.into_body()).await?;
-    Ok((StatusCode::ACCEPTED, Json(record(&session))))
-}
-
 async fn upload_parts(
     State(state): State<FileState>,
     actor: UploadActor,
@@ -263,11 +241,7 @@ async fn complete_upload(
         .complete(
             actor.as_ref(),
             id,
-            CompleteInput {
-                etag: body.etag,
-                sha256: body.sha256.as_deref().map(Sha256Digest::from_hex).transpose()?,
-                parts: body.parts,
-            },
+            CompleteInput { etag: body.etag, checksum: body.checksum, parts: body.parts },
         )
         .await?;
     Ok(Json(BlobRecord::from(&blob)))
@@ -283,24 +257,10 @@ async fn abort_upload(
     Ok((StatusCode::ACCEPTED, Json(record(&session))))
 }
 
-async fn download(State(state): State<FileState>, Path(id): Path<String>) -> AppResult<Response> {
+async fn download(State(state): State<FileState>, Path(id): Path<String>) -> AppResult<Redirect> {
     let id = BlobId::from_str(&id)?;
-    let (meta, body) = state.files.blobs().get(id).await?;
-    let body = Body::from_stream(body);
-    let file_name = meta
-        .name
-        .as_ref()
-        .map(|name| name.as_str().to_owned())
-        .unwrap_or_else(|| format!("{id}.bin"));
-    let response = Attachment::new(body)
-        .filename(file_name)
-        .content_type(meta.kind.serving().content_type(&meta.kind.effective))
-        .into_response();
-    let mut response = with_length(response, meta.size.get());
-    response
-        .headers_mut()
-        .insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    Ok(response)
+    let access = state.files.blobs().access(id).await?;
+    Ok(Redirect::temporary(&access.url))
 }
 
 fn upload(created: CreatedIntent) -> CreatedUpload {
@@ -328,17 +288,16 @@ fn record(session: &UploadSession) -> UploadRecord {
 
 fn target(id: BlobId, access: UploadAccess) -> UploadTarget {
     match access {
-        UploadAccess::Proxy(access) => UploadTarget::ProxyPut {
+        UploadAccess::DirectPut(access) => UploadTarget::DirectPut {
             method: "PUT",
-            url: content_url(id),
-            max_bytes: access.max_bytes,
+            url: access.url,
+            headers: access.headers,
+            checksum: access.checksum,
         },
-        UploadAccess::DirectPut(access) => {
-            UploadTarget::DirectPut { method: "PUT", url: access.url, headers: access.headers }
-        }
         UploadAccess::Multipart(access) => UploadTarget::DirectMultipart {
             part_size_bytes: access.part_size_bytes,
             max_parts: access.max_parts,
+            checksum: access.checksum,
             parts_url: parts_url(id),
             complete_url: complete_url(id),
             abort_url: abort_url(id),
@@ -346,18 +305,17 @@ fn target(id: BlobId, access: UploadAccess) -> UploadTarget {
     }
 }
 
-fn content_url(id: BlobId) -> String {
-    format!("/api/v1/files/uploads/{id}/content")
-}
-
+#[inline(always)]
 fn parts_url(id: BlobId) -> String {
     format!("/api/v1/files/uploads/{id}/parts")
 }
 
+#[inline(always)]
 fn complete_url(id: BlobId) -> String {
     format!("/api/v1/files/uploads/{id}/complete")
 }
 
+#[inline(always)]
 fn abort_url(id: BlobId) -> String {
     format!("/api/v1/files/uploads/{id}/abort")
 }
@@ -417,10 +375,6 @@ async fn send_socket(
     socket.send(Message::Text(body.into())).await
 }
 
-fn cap(limit: u64) -> usize {
-    limit.min(usize::MAX as u64) as usize
-}
-
 fn parse_mime(value: Option<String>) -> Result<Option<mime::Mime>, AppError> {
     match value {
         Some(value) => value.parse::<mime::Mime>().map(Some).map_err(|_| {
@@ -428,10 +382,4 @@ fn parse_mime(value: Option<String>) -> Result<Option<mime::Mime>, AppError> {
         }),
         None => Ok(None),
     }
-}
-
-fn with_length(mut response: Response, len: u64) -> Response {
-    let header = HeaderValue::from_str(&len.to_string()).expect("content length should be valid");
-    response.headers_mut().insert(axum::http::header::CONTENT_LENGTH, header);
-    response
 }

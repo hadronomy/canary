@@ -23,7 +23,6 @@ pub trait UploadRepo: Send + Sync {
     async fn create(&self, session: UploadSession) -> Result<UploadSession, FileError>;
     async fn get(&self, id: BlobId) -> Result<UploadSession, FileError>;
     async fn expired(&self, now: DateTime<Utc>) -> Result<Vec<UploadSession>, FileError>;
-    async fn begin_upload(&self, id: BlobId) -> Result<UploadSession, FileError>;
     async fn attach_multipart(
         &self,
         id: BlobId,
@@ -34,8 +33,6 @@ pub trait UploadRepo: Send + Sync {
         id: BlobId,
         parts: BTreeSet<PartNumber>,
     ) -> Result<UploadSession, FileError>;
-    async fn mark_uploaded(&self, id: BlobId, blob: StoredBlob)
-    -> Result<UploadSession, FileError>;
     async fn mark_ready(
         &self,
         id: BlobId,
@@ -138,11 +135,6 @@ impl UploadRepo for InMemoryUploadRepo {
             .collect())
     }
 
-    async fn begin_upload(&self, id: BlobId) -> Result<UploadSession, FileError> {
-        let mut state = self.inner.write().await;
-        Self::replace(&mut state, id, UploadSession::begin_upload)
-    }
-
     async fn attach_multipart(
         &self,
         id: BlobId,
@@ -159,15 +151,6 @@ impl UploadRepo for InMemoryUploadRepo {
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
         Self::replace(&mut state, id, |session| session.record_parts(parts))
-    }
-
-    async fn mark_uploaded(
-        &self,
-        id: BlobId,
-        blob: StoredBlob,
-    ) -> Result<UploadSession, FileError> {
-        let mut state = self.inner.write().await;
-        Self::replace(&mut state, id, |session| session.mark_uploaded(blob))
     }
 
     async fn mark_ready(
