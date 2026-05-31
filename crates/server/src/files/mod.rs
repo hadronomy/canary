@@ -1,147 +1,195 @@
-//! File uploads, blob metadata, and object-storage access.
+#![doc(alias = "uploads")]
+#![doc(alias = "blobs")]
+
+//! File uploads, blob metadata, and signed object-storage access.
 //!
-//! This module owns the server-side half of Canary's file pipeline. It does not
-//! act as a byte proxy. Instead, it issues constrained upload access, waits for
-//! object storage to verify the upload, inspects the staged object, and only
-//! then promotes it into the ready namespace that the rest of the system can
-//! treat as durable application data.
+//! This module is the server-side contract for Canary's file pipeline. It
+//! answers three closely related questions:
 //!
-//! The result is a deliberately narrow contract:
+//! - **Who is allowed to upload?**
+//! - **When does an uploaded object become a real blob?**
+//! - **How is a ready blob served without reopening the staging path?**
 //!
-//! - uploads always land in object storage first
-//! - ready blobs are published only after validation succeeds
-//! - download access is derived from ready metadata, not from staging objects
-//! - integrity data reflects what was actually verified, not what would be
-//!   convenient to claim
+//! The answer is intentionally conservative. Canary does **not** proxy upload
+//! bodies through the application server, and it does **not** treat an object
+//! as a blob just because storage accepted some bytes. Uploads land in
+//! *staging*, storage verifies the checksum contract, Canary inspects the
+//! object, and only then does the object move into the *ready* namespace and
+//! become durable application data.[^ready]
 //!
-//! # High-level shape
+//! <div class="warning">
 //!
-//! The public entry point is [`service::FileService`], which is a small facade
-//! over two focused services:
+//! A staged object is **never** part of the serving path.
 //!
-//! - [`service::UploadService`] manages upload intents, access refresh, multipart
-//!   coordination, completion, expiry, and lifecycle events.
-//! - [`service::BlobService`] handles ready-blob reads, metadata lookup, listing,
-//!   and signed download access.
+//! If an upload has not been validated, promoted into the ready namespace, and
+//! persisted in the ready metadata store, it must remain invisible to normal
+//! blob reads.
 //!
-//! The rest of the module is split along the same boundaries:
+//! </div>
 //!
-//! - [`upload`] models upload sessions, upload modes, and client-facing access
-//!   contracts.
-//! - [`meta`] defines blob identity, checksum metadata, media classification, and
-//!   the difference between staging keys and ready keys.
-//! - [`store`] wraps the configured storage backend and exposes the operations
-//!   the rest of the module is allowed to perform.
-//! - [`direct`] contains the S3-compatible signing and multipart logic used by
-//!   direct uploads.
-//! - [`repo`] separates upload-session state from durable ready-blob metadata.
-//! - [`sniff`] inspects object bytes and turns them into policy-aware media
-//!   decisions.
-//! - [`events`] publishes keyed upload lifecycle updates for SSE and WebSocket
-//!   consumers.
-//! - [`list`] provides the paginated ready-blob listing flow.
+//! # At a glance
 //!
-//! # Lifecycle
+//! | Area | Primary items | Responsibility |
+//! | --- | --- | --- |
+//! | Service layer | [`service::FileService`], [`service::UploadService`], [`service::BlobService`] | Orchestrates upload lifecycle, ready-blob access, and listing |
+//! | Upload model | [`upload::UploadSession`], [`upload::UploadMode`], [`upload::UploadAccess`] | Describes what a client may do next and which state an upload is in |
+//! | Blob model | [`meta::StoredBlob`], [`meta::BlobChecksum`], [`meta::ReadyKey`] | Defines the durable shape of a ready blob |
+//! | Storage boundary | [`store::Backend`], [`direct`] | Talks to the configured object store and signs direct access |
+//! | Metadata boundary | [`repo::UploadRepo`], [`repo::BlobMetaRepo`] | Separates upload-session state from durable ready-blob metadata |
+//! | Media policy | [`sniff`], [`meta::MediaProfile`] | Turns observed bytes into an explicit serving decision |
+//! | Eventing | [`events`] | Publishes keyed upload lifecycle updates for SSE and WebSocket consumers |
 //!
-//! Uploads move through two object namespaces:
+//! # The happy path
 //!
-//! - staging objects live under `staging/upload/<id>/object`
-//! - ready objects live under `ready/blob/<id>/original`
+//! A typical upload looks like this:
 //!
-//! That split is more than naming. It is the boundary that keeps unfinished or
-//! rejected uploads out of the serving path.
-//!
-//! A typical upload goes through these steps:
-//!
-//! 1. The caller creates an upload intent through [`service::UploadService`].
-//! 2. The service chooses a direct upload strategy:
+//! 1. A caller creates an upload intent through [`service::UploadService`].
+//! 2. The service chooses a direct strategy:
 //!    - [`upload::UploadMode::DirectPut`] for smaller objects
 //!    - [`upload::UploadMode::DirectMultipart`] for larger ones
-//! 3. Object storage receives the upload at the session's staging key and
-//!    verifies the required checksum contract.
-//! 4. Completion causes Canary to inspect the staged object, validate size and
-//!    checksum, classify its media, and derive the final serving policy.
-//! 5. The validated object is promoted into its ready key.
-//! 6. Only after promotion succeeds is the blob written to the ready metadata
-//!    repository and the upload marked [`upload::UploadState::Ready`].
+//! 3. The client uploads directly into the session's [`meta::StagingKey`].
+//! 4. Object storage verifies the required checksum contract.
+//! 5. Completion causes Canary to inspect the staged object, validate its size
+//!    and checksum, and classify its media.
+//! 6. The validated object is promoted into its [`meta::ReadyKey`].
+//! 7. Only after promotion succeeds does Canary persist a [`meta::StoredBlob`]
+//!    and mark the upload [`upload::UploadState::Ready`].
 //!
-//! The important invariant is simple:
+//! That separation is not cosmetic. It is the mechanism that keeps an
+//! unfinished upload from quietly becoming application data.
 //!
-//! > Nothing is a real blob until it has left staging.
+//! # Example
+//!
+//! The application service is intentionally small at the call site. The caller
+//! asks for an intent, then reacts to the direct access contract that comes
+//! back.
+//!
+//! ```no_run
+//! # use canary_server::files::upload::UploadDraft;
+//! # use canary_server::{
+//! #     BlobName, BlobSize, FileError, Sha256Digest, UploadAccess, UploadPurpose, UploadService,
+//! # };
+//! # async fn demo(uploads: UploadService) -> Result<(), FileError> {
+//! let intent = uploads
+//!     .create_intent(UploadDraft {
+//!         actor: canary_server::ActorId::new("alice")?,
+//!         purpose: UploadPurpose::attachment(),
+//!         name: Some(BlobName::new("report.pdf")?),
+//!         declared_type: Some("application/pdf".parse().expect("valid mime")),
+//!         declared_size: BlobSize::new(128 * 1024),
+//!         sha256: Some(Sha256Digest::from_hex(
+//!             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+//!         )?),
+//!     })
+//!     .await?;
+//!
+//! match intent.access {
+//!     UploadAccess::DirectPut(put) => {
+//!         let _url = put.url;
+//!         let _headers = put.headers;
+//!         let _checksum = put.checksum;
+//!     }
+//!     UploadAccess::Multipart(mp) => {
+//!         let _part_size = mp.part_size_bytes;
+//!         let _max_parts = mp.max_parts;
+//!         let _checksum = mp.checksum;
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
 //!
 //! # Integrity model
 //!
-//! The module treats integrity as part of the storage contract rather than as a
-//! best-effort embellishment.
+//! Integrity metadata in this module is meant to be a *statement of fact*, not
+//! a convenience field.
 //!
-//! - Direct single-part uploads require a declared SHA-256 digest. The server
+//! - Direct single-part uploads require a declared SHA-256 digest. Canary
 //!   presigns access with `x-amz-checksum-sha256`, and completion succeeds only
-//!   if object storage reports the same full-object checksum back.
-//! - Direct multipart uploads use a storage-native CRC64/NVME full-object
-//!   checksum contract. Part uploads carry per-part checksum headers, and
-//!   completion requires the final checksum that storage verifies for the whole
-//!   object.
+//!   if object storage reports the same **full-object** checksum back.
+//! - Direct multipart uploads use a storage-native CRC64/NVME contract. Part
+//!   uploads carry per-part checksums, and completion succeeds only if storage
+//!   reports the same **full-object** checksum for the assembled object.
 //!
-//! Blob metadata stores this as [`meta::BlobChecksum`], which records the
-//! algorithm, checksum kind, and the verifier that actually established it.
-//! That keeps the API honest across single-part and multipart uploads instead of
-//! flattening everything into a pretend "one hash fits all" story.
+//! The result is stored as [`meta::BlobChecksum`], which records the checksum
+//! algorithm, the checksum kind, and the verifier that actually established the
+//! value. That keeps the API honest across direct `PUT` and multipart uploads
+//! without flattening very different integrity stories into one vague field.
 //!
 //! # Media validation
 //!
-//! File type handling is split into observation and decision making.
+//! File type handling is split cleanly between *observation* and *policy*.
 //!
-//! [`sniff`] inspects a bounded sample of bytes and produces media observations
-//! such as:
+//! [`sniff`] inspects a bounded sample and records things such as:
 //!
 //! - what the client declared
-//! - what the sample strongly or heuristically suggests
-//! - whether the sample is complete or only a prefix
+//! - what the bytes strongly or heuristically suggest
+//! - whether the sample was complete or only a prefix
 //!
-//! [`meta::MediaProfile`] then turns that observation into a serving decision.
-//! This keeps media policy explicit and leaves room for different upload
-//! purposes to evolve without turning MIME detection into a grab bag of special
-//! cases.
+//! [`meta::MediaProfile`] then decides what that observation means for serving.
+//! This keeps media rules explicit and leaves room for different upload purposes
+//! to evolve without turning MIME detection into a hidden policy engine.
 //!
 //! # Serving
 //!
-//! Ready blobs are not streamed through the server. [`service::BlobService`]
-//! resolves a ready blob into signed object-storage access and the HTTP layer
-//! redirects callers to that URL. This keeps the application out of the hot
-//! byte path while preserving server-side control over:
+//! Ready blobs are not streamed through the application server. Instead,
+//! [`service::BlobService`] resolves a ready blob into signed object-storage
+//! access and the HTTP layer redirects callers to that URL.
 //!
-//! - which key may be read
+//! That preserves server-side control over:
+//!
+//! - which ready key may be read
 //! - which `Content-Type` should be served
-//! - whether the object should be treated as an attachment
+//! - whether the object should be presented as an attachment
 //!
-//! Staging objects are never part of that flow.
+//! while keeping the application out of the hot byte path.
+//!
+//! # Storage and metadata boundaries
+//!
+//! Two splits make this module much easier to reason about:
+//!
+//! - [`repo::UploadRepo`] owns upload-session state.
+//! - [`repo::BlobMetaRepo`] owns durable ready-blob metadata.
+//!
+//! and:
+//!
+//! - [`meta::StagingKey`] belongs to an upload session.
+//! - [`meta::ReadyKey`] belongs to a stored blob.
+//!
+//! Those are small distinctions, but they prevent the system from collapsing
+//! "bytes were written somewhere" into "a blob exists now."
 //!
 //! # Backend expectations
 //!
 //! The production upload API assumes a direct-capable object store. In practice
-//! that means the S3-compatible backend in [`direct`]. The local backend remains
-//! useful for tests and development scaffolding, but it does not pretend to be a
-//! full direct-upload target and will reject public upload-intent creation.
+//! that means the S3-compatible path implemented in [`direct`]. The local
+//! backend remains useful for tests and development scaffolding, but it does not
+//! pretend to be a fully capable public upload target.
 //!
-//! # Design notes
+//! # Module guide
 //!
-//! A few constraints are worth preserving as the module evolves:
+//! If you are orienting yourself in the implementation, these are the best
+//! starting points:
 //!
-//! - transport concerns stay in the route layer; the service layer returns
-//!   semantic access plans and state transitions
-//! - upload-session state and ready-blob metadata remain distinct concerns
-//! - storage metadata is aligned during promotion, not by mutating a served
-//!   object in place after the fact
-//! - download access is always derived from ready metadata
-//!
-//! Those rules keep the subsystem pleasant to reason about even as multipart
-//! behavior, media policy, or backend capabilities grow more sophisticated.
+//! - Start with [`service`] for the public orchestration story.
+//! - Read [`upload`] next to understand the session state machine and client
+//!   access contracts.
+//! - Read [`meta`] for the durable blob model, checksum types, and key
+//!   boundaries.
+//! - Follow [`store`] and [`direct`] when you need to understand storage
+//!   behavior or presigned access generation.
+//! - Read [`repo`] when tracking what survives process restarts and what does
+//!   not.
 //!
 //! # TODO
 //!
 //! - Evaluate issuing temporary object-storage credentials for constrained
 //!   upload sessions when presigned URLs become too limiting, while preserving
 //!   the current checksum contract and staging-to-ready lifecycle guarantees.
+//!
+//! [^ready]: In this module, *ready* means more than "the bytes exist." It
+//!   means the object has been validated, promoted, and published in durable
+//!   ready-blob metadata.
 
 pub mod direct;
 pub mod error;

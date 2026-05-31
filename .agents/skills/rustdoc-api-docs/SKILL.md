@@ -24,6 +24,11 @@ Use this skill when:
 
 Great rustdoc explains why an API exists, not just how to call it. The best examples feel like small, believable programs rather than toy fragments. The docs should mirror the public API shape closely enough that changing code without changing docs feels obviously wrong.
 
+For crate and module landing pages, aim higher than a plain summary. Those pages
+should read like editorial front doors to the subsystem: clear first sentence,
+strong sectioning, thoughtful emphasis, and enough structure that a reader can
+scan and then dive deeper without feeling lost.
+
 ## Workflow
 
 1. Inspect the public API surface that changed.
@@ -86,6 +91,10 @@ Treat these as part of the contract, not optional commentary.
 
 Use rustdoc links for related types, traits, modules, and methods. Make the docs easy to explore from inside docs.rs.
 
+For module and crate docs, prefer rich *intra-doc navigation* over repeating
+raw type names in prose. If readers should jump to another item, give them a
+good link.
+
 ### Hide unhelpful details
 
 Prefer `pub(crate)` and `#[doc(hidden)]` for implementation-only details that should not clutter the public story. Use `#[doc(inline)]` and `#[doc(no_inline)]` deliberately for re-exports.
@@ -93,6 +102,20 @@ Prefer `pub(crate)` and `#[doc(hidden)]` for implementation-only details that sh
 ### Improve discoverability
 
 Use `#[doc(alias = \"...\")]` when users may search for another common term, protocol name, or legacy name.
+
+### Use rustdoc's editorial surface deliberately
+
+Rustdoc is not limited to plain paragraphs and fenced code blocks. Use its
+Markdown support with taste:
+
+- **bold** for truly important constraints or guarantees
+- *italics* for gentle emphasis or domain terms
+- tables when a module map or capability overview genuinely scans better that way
+- footnotes when a small nuance would otherwise interrupt the flow
+- warning callouts with HTML blocks when a misuse would create a real hazard
+
+These tools should make the page feel more polished and easier to navigate, not
+busier.
 
 ## Keeping Docs Updated
 
@@ -113,6 +136,13 @@ Do not leave docs “for later” after an API rename or builder change. Rust do
 - Use `//!` docs in `lib.rs` and major module roots.
 - Give crate-level docs an introduction, a realistic getting-started example, and any important feature or environment notes.
 - For modules, explain why the module exists and how it fits the rest of the crate.
+- Treat major module docs as landing pages. A strong module page often benefits
+  from:
+  - a short opening promise
+  - a brief "at a glance" map
+  - one realistic example or workflow
+  - explicit invariants or lifecycle notes
+  - links to the key submodules or types
 
 ## Async And Builder Docs
 
@@ -193,3 +223,8 @@ If the repo has linting or docs.rs-specific checks, run those too.
 ## Taste Summary
 
 Write rustdoc that feels like excellent product writing backed by executable truth. It should guide, reassure, and stay synchronized with the real API shape.
+
+Use the full editorial range of rustdoc when it genuinely helps the reader.
+Plain prose is often enough, but the best documentation pages also know when to
+use emphasis, tables, callouts, footnotes, aliases, and carefully placed links
+to make a subsystem feel legible at a glance.
