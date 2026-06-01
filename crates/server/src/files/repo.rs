@@ -1,17 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use public_id::Uuid;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::db::service::DatabaseService;
 use crate::error::FileError;
+use crate::files::id::{FileId, UploadId};
 use crate::files::meta::{
-    BlobChecksum, BlobId, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord, BlobSize,
+    BlobChecksum, BlobKind, BlobMedia, BlobName, BlobObservation, BlobRecord, BlobSize,
     DetectedMedia, DetectionConfidence, DetectionSource, DetectionState, DetectionStateKind,
     MediaProfile, ReadyKey, SampleCompleteness, StoredBlob, ValidationState,
 };
@@ -21,37 +22,37 @@ use crate::pagination::{Page, PageWindow};
 #[async_trait]
 pub trait UploadRepo: Send + Sync {
     async fn create(&self, session: UploadSession) -> Result<UploadSession, FileError>;
-    async fn get(&self, id: BlobId) -> Result<UploadSession, FileError>;
+    async fn get(&self, id: UploadId) -> Result<UploadSession, FileError>;
     async fn expired(&self, now: DateTime<Utc>) -> Result<Vec<UploadSession>, FileError>;
     async fn attach_multipart(
         &self,
-        id: BlobId,
+        id: UploadId,
         upload_id: MultipartUploadId,
     ) -> Result<UploadSession, FileError>;
     async fn record_parts(
         &self,
-        id: BlobId,
+        id: UploadId,
         parts: BTreeSet<PartNumber>,
     ) -> Result<UploadSession, FileError>;
     async fn mark_ready(
         &self,
-        id: BlobId,
+        id: UploadId,
         blob: StoredBlob,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError>;
     async fn mark_failed(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError>;
     async fn mark_expired(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError>;
     async fn mark_deleted(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError>;
 }
@@ -59,12 +60,12 @@ pub trait UploadRepo: Send + Sync {
 #[async_trait]
 pub trait BlobMetaRepo: Send + Sync {
     async fn put_ready(&self, blob: StoredBlob) -> Result<StoredBlob, FileError>;
-    async fn delete_ready(&self, id: BlobId) -> Result<(), FileError>;
-    async fn head_ready(&self, id: BlobId) -> Result<StoredBlob, FileError>;
+    async fn delete_ready(&self, id: FileId) -> Result<(), FileError>;
+    async fn head_ready(&self, id: FileId) -> Result<StoredBlob, FileError>;
     async fn list_ready_page(
         &self,
-        window: PageWindow<BlobId>,
-    ) -> Result<Page<BlobRecord, BlobId>, FileError>;
+        window: PageWindow<FileId>,
+    ) -> Result<Page<BlobRecord, FileId>, FileError>;
 }
 
 #[derive(Clone, Default)]
@@ -79,7 +80,7 @@ pub struct SurrealBlobMetaRepo {
 
 #[derive(Default)]
 struct RepoState {
-    uploads: BTreeMap<BlobId, UploadSession>,
+    uploads: BTreeMap<UploadId, UploadSession>,
 }
 
 impl InMemoryUploadRepo {
@@ -90,7 +91,7 @@ impl InMemoryUploadRepo {
 
     fn replace(
         state: &mut RepoState,
-        id: BlobId,
+        id: UploadId,
         f: impl FnOnce(UploadSession) -> Result<UploadSession, FileError>,
     ) -> Result<UploadSession, FileError> {
         let Some(session) = state.uploads.remove(&id) else {
@@ -116,7 +117,7 @@ impl UploadRepo for InMemoryUploadRepo {
         Ok(session)
     }
 
-    async fn get(&self, id: BlobId) -> Result<UploadSession, FileError> {
+    async fn get(&self, id: UploadId) -> Result<UploadSession, FileError> {
         let Some(session) = self.inner.read().await.uploads.get(&id).cloned() else {
             return Err(FileError::UploadNotFound { id });
         };
@@ -137,7 +138,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn attach_multipart(
         &self,
-        id: BlobId,
+        id: UploadId,
         upload_id: MultipartUploadId,
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
@@ -146,7 +147,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn record_parts(
         &self,
-        id: BlobId,
+        id: UploadId,
         parts: BTreeSet<PartNumber>,
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
@@ -155,7 +156,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn mark_ready(
         &self,
-        id: BlobId,
+        id: UploadId,
         blob: StoredBlob,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError> {
@@ -165,7 +166,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn mark_failed(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
@@ -174,7 +175,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn mark_expired(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
@@ -183,7 +184,7 @@ impl UploadRepo for InMemoryUploadRepo {
 
     async fn mark_deleted(
         &self,
-        id: BlobId,
+        id: UploadId,
         when: DateTime<Utc>,
     ) -> Result<UploadSession, FileError> {
         let mut state = self.inner.write().await;
@@ -214,7 +215,7 @@ struct BlobRow {
 impl From<&StoredBlob> for BlobRow {
     fn from(value: &StoredBlob) -> Self {
         Self {
-            cursor: value.id.to_string(),
+            cursor: value.id.as_uuid().to_string(),
             key: value.key.as_str().to_owned(),
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
@@ -241,7 +242,7 @@ impl TryFrom<BlobRow> for StoredBlob {
     type Error = FileError;
 
     fn try_from(value: BlobRow) -> Result<Self, Self::Error> {
-        let id = BlobId::from_str(value.cursor.as_str())?;
+        let id = Uuid::parse_str(value.cursor.as_str()).map(FileId::from_uuid).map_err(meta_err)?;
         let declared =
             value.declared_media_type.as_deref().map(str::parse).transpose().map_err(meta_err)?;
         let detection = match (
@@ -309,15 +310,23 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
         Ok(blob)
     }
 
-    async fn delete_ready(&self, id: BlobId) -> Result<(), FileError> {
-        let _: Option<BlobRow> =
-            self.db.client().delete(("file_blob", id.to_string())).await.map_err(meta_err)?;
+    async fn delete_ready(&self, id: FileId) -> Result<(), FileError> {
+        let _: Option<BlobRow> = self
+            .db
+            .client()
+            .delete(("file_blob", id.as_uuid().to_string()))
+            .await
+            .map_err(meta_err)?;
         Ok(())
     }
 
-    async fn head_ready(&self, id: BlobId) -> Result<StoredBlob, FileError> {
-        let row: Option<BlobRow> =
-            self.db.client().select(("file_blob", id.to_string())).await.map_err(meta_err)?;
+    async fn head_ready(&self, id: FileId) -> Result<StoredBlob, FileError> {
+        let row: Option<BlobRow> = self
+            .db
+            .client()
+            .select(("file_blob", id.as_uuid().to_string()))
+            .await
+            .map_err(meta_err)?;
         let Some(row) = row else {
             return Err(FileError::NotFound { id });
         };
@@ -326,14 +335,14 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
 
     async fn list_ready_page(
         &self,
-        window: PageWindow<BlobId>,
-    ) -> Result<Page<BlobRecord, BlobId>, FileError> {
+        window: PageWindow<FileId>,
+    ) -> Result<Page<BlobRecord, FileId>, FileError> {
         let limit = window.limit().get() + 1;
         let mut query = if let Some(after) = window.after() {
             self.db
                 .client()
                 .query("SELECT * FROM file_blob WHERE cursor > $after ORDER BY cursor LIMIT $limit")
-                .bind(("after", after.to_string()))
+                .bind(("after", after.as_uuid().to_string()))
         } else {
             self.db.client().query("SELECT * FROM file_blob ORDER BY cursor LIMIT $limit")
         };
@@ -341,7 +350,10 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
         let mut out = query.await.map_err(meta_err)?;
         let mut rows: Vec<BlobRow> = out.take(0).map_err(meta_err)?;
         let next = if rows.len() > window.limit().get() {
-            rows.pop().map(|row| BlobId::from_str(row.cursor.as_str())).transpose()?
+            rows.pop()
+                .map(|row| Uuid::parse_str(row.cursor.as_str()).map(FileId::from_uuid))
+                .transpose()
+                .map_err(meta_err)?
         } else {
             None
         };

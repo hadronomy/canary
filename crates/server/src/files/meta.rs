@@ -1,44 +1,11 @@
-use std::fmt;
-use std::str::FromStr;
-
 use base64::Engine;
 use mime::Mime;
+use public_id::PublicId;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use uuid::Uuid;
 
 use crate::error::FileError;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct BlobId(Uuid);
-
-impl BlobId {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
-    }
-}
-
-impl Default for BlobId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl fmt::Display for BlobId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for BlobId {
-    type Err = FileError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Uuid::parse_str(value).map(Self).map_err(|_| FileError::InvalidBlobId)
-    }
-}
+use crate::files::id::{FileId, UploadId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobName(SmolStr);
@@ -428,8 +395,8 @@ impl BlobKey {
     }
 
     #[must_use]
-    pub fn from_id(id: BlobId) -> Self {
-        Self::new(id.to_string())
+    pub fn from_file(id: FileId) -> Self {
+        Self::new(id.as_uuid().to_string())
     }
 
     #[must_use]
@@ -448,8 +415,8 @@ impl StagingKey {
     }
 
     #[must_use]
-    pub fn from_id(id: BlobId) -> Self {
-        Self::new(format!("staging/upload/{id}/object"))
+    pub fn from_upload(id: UploadId) -> Self {
+        Self::new(format!("staging/upload/{}/object", id.as_uuid()))
     }
 
     #[must_use]
@@ -473,8 +440,8 @@ impl ReadyKey {
     }
 
     #[must_use]
-    pub fn from_id(id: BlobId) -> Self {
-        Self::new(format!("ready/blob/{id}/original"))
+    pub fn from_file(id: FileId) -> Self {
+        Self::new(format!("ready/blob/{}/original", id.as_uuid()))
     }
 
     #[must_use]
@@ -490,7 +457,7 @@ impl ReadyKey {
 
 #[derive(Debug, Clone)]
 pub struct StoredBlob {
-    pub id: BlobId,
+    pub id: FileId,
     pub key: ReadyKey,
     pub name: Option<BlobName>,
     pub size: BlobSize,
@@ -502,7 +469,7 @@ pub struct StoredBlob {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobRecord {
-    pub id: String,
+    pub id: PublicId<FileId>,
     pub name: Option<String>,
     pub size_bytes: u64,
     pub checksum: Option<BlobChecksum>,
@@ -514,7 +481,7 @@ pub struct BlobRecord {
 impl From<&StoredBlob> for BlobRecord {
     fn from(value: &StoredBlob) -> Self {
         Self {
-            id: value.id.to_string(),
+            id: value.id.public(),
             name: value.name.as_ref().map(|name| name.as_str().to_owned()),
             size_bytes: value.size.get(),
             checksum: value.checksum.clone(),

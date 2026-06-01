@@ -113,13 +113,20 @@ impl<T, C> Page<T, C> {
 ///
 /// Keep this as the wire shape and convert it into a validated [`PageWindow`]
 /// through [`PagePolicy::resolve`].
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[serde(bound(serialize = "C: Serialize", deserialize = "C: serde::Deserialize<'de>"))]
 pub struct PageQuery<C> {
     #[serde(skip_serializing_if = "Option::is_none")]
     after: Option<C>,
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<Limit>,
+}
+
+impl<C> Default for PageQuery<C> {
+    fn default() -> Self {
+        Self { after: None, limit: None }
+    }
 }
 
 impl<C> PageQuery<C> {

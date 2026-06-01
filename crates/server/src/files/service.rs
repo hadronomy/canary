@@ -9,8 +9,9 @@ use crate::config::{BlobConfig, FilesConfig};
 use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::events::UploadHub;
+use crate::files::id::{FileId, UploadId};
 use crate::files::list::ListBlobs;
-use crate::files::meta::{BlobId, BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
+use crate::files::meta::{BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
 use crate::files::repo::{BlobMetaRepo, InMemoryUploadRepo, SurrealBlobMetaRepo, UploadRepo};
 use crate::files::sniff::classify;
 use crate::files::store::{Backend, BlobHead};
@@ -91,7 +92,7 @@ impl FileService {
 }
 
 impl BlobService {
-    pub async fn access(&self, id: BlobId) -> Result<DownloadAccess, FileError> {
+    pub async fn access(&self, id: FileId) -> Result<DownloadAccess, FileError> {
         let meta = self.blobs.head_ready(id).await?;
         Ok(DownloadAccess {
             url: self
@@ -106,7 +107,7 @@ impl BlobService {
         })
     }
 
-    pub async fn head(&self, id: BlobId) -> Result<StoredBlob, FileError> {
+    pub async fn head(&self, id: FileId) -> Result<StoredBlob, FileError> {
         self.blobs.head_ready(id).await
     }
 
@@ -116,8 +117,8 @@ impl BlobService {
 
     pub(crate) async fn list_page(
         &self,
-        window: PageWindow<BlobId>,
-    ) -> Result<Page<BlobRecord, BlobId>, FileError> {
+        window: PageWindow<FileId>,
+    ) -> Result<Page<BlobRecord, FileId>, FileError> {
         self.blobs.list_ready_page(window).await
     }
 }
@@ -132,8 +133,9 @@ impl UploadService {
         self.validate_draft(&draft)?;
         let expires_at =
             now + TimeDelta::from_std(self.cfg.intent_ttl).expect("intent ttl is valid");
-        let id = BlobId::new();
-        let common = draft.into_common(id, expires_at);
+        let id = UploadId::new();
+        let file = FileId::new();
+        let common = draft.into_common(id, file, expires_at);
         let session = match self.mode(common.declared_size()) {
             UploadMode::DirectPut => UploadSession::direct_put(common),
             UploadMode::DirectMultipart => UploadSession::multipart(common),
@@ -144,7 +146,7 @@ impl UploadService {
         Ok(CreatedIntent { access, session })
     }
 
-    pub async fn get(&self, actor: &ActorId, id: BlobId) -> Result<UploadSession, FileError> {
+    pub async fn get(&self, actor: &ActorId, id: UploadId) -> Result<UploadSession, FileError> {
         self.purge_expired(Utc::now()).await?;
         let session = self.uploads.get(id).await?;
         self.ensure_owner(&session, actor)?;
@@ -156,7 +158,7 @@ impl UploadService {
     pub async fn subscribe(
         &self,
         actor: &ActorId,
-        id: BlobId,
+        id: UploadId,
     ) -> Result<(UploadSession, watch::Receiver<UploadNotice>), FileError> {
         let session = self.get(actor, id).await?;
         let rx = self.events.subscribe(session.clone()).await;
@@ -166,7 +168,7 @@ impl UploadService {
     pub async fn refresh_access(
         &self,
         actor: &ActorId,
-        id: BlobId,
+        id: UploadId,
     ) -> Result<UploadAccess, FileError> {
         self.purge_expired(Utc::now()).await?;
         let session = self.uploads.get(id).await?;
@@ -184,7 +186,7 @@ impl UploadService {
     pub async fn sign_parts(
         &self,
         actor: &ActorId,
-        id: BlobId,
+        id: UploadId,
         input: PartRequest,
     ) -> Result<Vec<SignedUploadPart>, FileError> {
         self.purge_expired(Utc::now()).await?;
@@ -219,7 +221,7 @@ impl UploadService {
     pub async fn complete(
         &self,
         actor: &ActorId,
-        id: BlobId,
+        id: UploadId,
         input: CompleteInput,
     ) -> Result<StoredBlob, FileError> {
         self.purge_expired(Utc::now()).await?;
@@ -236,7 +238,7 @@ impl UploadService {
         }
     }
 
-    pub async fn abort(&self, actor: &ActorId, id: BlobId) -> Result<UploadSession, FileError> {
+    pub async fn abort(&self, actor: &ActorId, id: UploadId) -> Result<UploadSession, FileError> {
         self.purge_expired(Utc::now()).await?;
         let session = self.uploads.get(id).await?;
         self.ensure_owner(&session, actor)?;
@@ -474,7 +476,7 @@ impl UploadService {
         self.ensure_size(session, &head)?;
         let sniff = self.backend.peek_staging(session.staging_key(), self.cfg.sniff_bytes).await?;
         Ok(StoredBlob {
-            id: session.id(),
+            id: session.file_id(),
             key: session.ready_key().clone(),
             name: session.name().cloned(),
             size: BlobSize::new(head.size),
@@ -560,7 +562,7 @@ impl UploadService {
         if let Err(source) = self.backend.delete_staging(session.staging_key()).await {
             tracing::warn!(%source, upload_id = %session.id(), "failed to clean object");
         }
-        let _ = self.blobs.delete_ready(session.id()).await;
+        let _ = self.blobs.delete_ready(session.file_id()).await;
         let when = Utc::now();
         let next = match state {
             UploadState::Failed => self.uploads.mark_failed(session.id(), when).await?,

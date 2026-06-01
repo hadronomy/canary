@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 
 use crate::error::FileError;
+use crate::files::id::{FileId, UploadId};
 use crate::files::meta::{
-    BlobId, BlobName, BlobSize, ChecksumAlgorithm, ChecksumKind, MediaProfile, ReadyKey,
-    Sha256Digest, StagingKey, StoredBlob,
+    BlobName, BlobSize, ChecksumAlgorithm, ChecksumKind, MediaProfile, ReadyKey, Sha256Digest,
+    StagingKey, StoredBlob,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -140,7 +141,8 @@ impl PartNumber {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UploadCommon {
-    id: BlobId,
+    id: UploadId,
+    file: FileId,
     actor: ActorId,
     purpose: UploadPurpose,
     staging: StagingKey,
@@ -155,8 +157,13 @@ pub struct UploadCommon {
 
 impl UploadCommon {
     #[must_use]
-    pub fn id(&self) -> BlobId {
+    pub fn id(&self) -> UploadId {
         self.id
+    }
+
+    #[must_use]
+    pub fn file_id(&self) -> FileId {
+        self.file
     }
 
     #[must_use]
@@ -222,13 +229,19 @@ pub struct UploadDraft {
 
 impl UploadDraft {
     #[must_use]
-    pub fn into_common(self, id: BlobId, expires_at: DateTime<Utc>) -> UploadCommon {
+    pub fn into_common(
+        self,
+        id: UploadId,
+        file: FileId,
+        expires_at: DateTime<Utc>,
+    ) -> UploadCommon {
         UploadCommon {
             id,
+            file,
             actor: self.actor,
             purpose: self.purpose,
-            staging: StagingKey::from_id(id),
-            ready: ReadyKey::from_id(id),
+            staging: StagingKey::from_upload(id),
+            ready: ReadyKey::from_file(file),
             name: self.name,
             declared_type: self.declared_type,
             declared_size: self.declared_size,
@@ -291,8 +304,13 @@ impl UploadSession {
     }
 
     #[must_use]
-    pub fn id(&self) -> BlobId {
+    pub fn id(&self) -> UploadId {
         self.common().id()
+    }
+
+    #[must_use]
+    pub fn file_id(&self) -> FileId {
+        self.common().file_id()
     }
 
     #[must_use]

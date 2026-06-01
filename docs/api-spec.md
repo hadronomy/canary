@@ -230,6 +230,10 @@ UUIDv7 also reveals rough creation ordering because it is time-ordered. That is 
 
 ## 5. Public ID Implementation
 
+> Status (2026-06-01): **Done.** This design is now implemented in
+> [`crates/public-id`](../crates/public-id) and integrated into the server's
+> file and upload APIs with distinct `FileId` and `UploadId` types.
+
 The public/API representation should be typed. Do **not** use an untyped wrapper like this:
 
 ```rust

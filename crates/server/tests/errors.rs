@@ -4,11 +4,10 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::get;
-use canary_server::{AppError, http};
+use canary_server::{AppError, FileId, http};
 use common::{app, json, request_id, state};
 use serde_json::Value;
 use tower::ServiceExt;
-use uuid::Uuid;
 
 fn assert_common(body: &Value, code: &str, message: &str, status: u16, request_id: &str) {
     assert_eq!(body["type"], format!("/problems/{code}"));
@@ -22,7 +21,7 @@ fn assert_common(body: &Value, code: &str, message: &str, status: u16, request_i
 #[tokio::test]
 async fn domain_errors_use_stable_error_shape() {
     let dir = tempfile::tempdir().expect("temp dir should create");
-    let id = Uuid::new_v4();
+    let id = FileId::new();
     let response = app(&dir)
         .await
         .oneshot(
@@ -37,9 +36,9 @@ async fn domain_errors_use_stable_error_shape() {
     let request_id = request_id(&response);
     let body = json(response).await;
 
-    assert_common(&body, "blob_not_found", "The requested blob was not found.", 404, &request_id);
+    assert_common(&body, "file_not_found", "The requested file was not found.", 404, &request_id);
     assert_eq!(body["title"], "Resource not found");
-    assert_eq!(body["context"]["blob_id"], Value::String(id.to_string()));
+    assert_eq!(body["context"]["file_id"], Value::String(id.to_string()));
 }
 
 #[tokio::test]

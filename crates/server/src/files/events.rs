@@ -3,12 +3,12 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex, watch};
 
-use crate::files::meta::BlobId;
+use crate::files::id::UploadId;
 use crate::files::upload::{UploadEventKind, UploadNotice, UploadSession};
 
 #[derive(Clone, Default)]
 pub struct UploadHub {
-    slots: Arc<Mutex<BTreeMap<BlobId, watch::Sender<UploadNotice>>>>,
+    slots: Arc<Mutex<BTreeMap<UploadId, watch::Sender<UploadNotice>>>>,
 }
 
 impl UploadHub {
@@ -45,7 +45,7 @@ impl UploadHub {
         }
     }
 
-    pub async fn drop_upload(&self, id: BlobId) {
+    pub async fn drop_upload(&self, id: UploadId) {
         self.slots.lock().await.remove(&id);
     }
 }

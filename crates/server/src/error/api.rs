@@ -91,34 +91,37 @@ impl From<DbError> for AppError {
 impl From<FileError> for AppError {
     fn from(source: FileError) -> Self {
         match source {
-            FileError::InvalidBlobId => {
-                Self::bad_request_code("invalid_blob_id", "The blob id is invalid.")
+            FileError::InvalidFileId => {
+                Self::bad_request_code("invalid_file_id", "The file id is invalid.")
+            }
+            FileError::InvalidUploadId => {
+                Self::bad_request_code("invalid_upload_id", "The upload id is invalid.")
             }
             FileError::InvalidActorId => Self::unauthorized_code(
                 "upload_unauthorized",
                 "Authentication is required for uploads.",
             ),
             FileError::NotFound { id } => {
-                Self::not_found_code("blob_not_found", "The requested blob was not found.")
-                    .with_context("blob_id", json!(id))
+                Self::not_found_code("file_not_found", "The requested file was not found.")
+                    .with_context("file_id", json!(id.to_string()))
             }
             FileError::UploadNotFound { id } => {
                 Self::not_found_code("upload_not_found", "The requested upload was not found.")
-                    .with_context("upload_id", json!(id))
+                    .with_context("upload_id", json!(id.to_string()))
             }
             FileError::UploadForbidden { id } => {
                 Self::forbidden_code("upload_forbidden", "You do not have access to this upload.")
-                    .with_context("upload_id", json!(id))
+                    .with_context("upload_id", json!(id.to_string()))
             }
             FileError::UploadExpired { id } => {
                 Self::bad_request_code("upload_expired", "The upload has expired.")
-                    .with_context("upload_id", json!(id))
+                    .with_context("upload_id", json!(id.to_string()))
             }
             FileError::UploadInvalidState { id, state } => Self::validation_code(
                 "upload_invalid_state",
                 "The upload is not in a valid state for this operation.",
             )
-            .with_context("upload_id", json!(id))
+            .with_context("upload_id", json!(id.to_string()))
             .with_context("state", json!(state.to_string())),
             FileError::InvalidFileName => {
                 Self::bad_request_code("invalid_file_name", "The file name is invalid.")

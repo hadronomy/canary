@@ -8,6 +8,7 @@ use axum::extract::{FromRef, FromRequest, FromRequestParts, Query};
 use axum::http::HeaderMap;
 use axum::http::header::HeaderName;
 use axum::http::request::Parts;
+use public_id::{PublicId, ResourceId};
 use serde_json::json;
 
 use crate::error::AppError;
@@ -25,17 +26,23 @@ const ACTOR_HEADER: HeaderName = HeaderName::from_static("x-canary-actor-id");
 ///
 /// - deserializes a shared [`PageQuery`] from the query string
 /// - applies configured defaults and optional bounds
+/// - decodes the optional wire cursor into the domain cursor type
 /// - yields a validated [`PageWindow`]-shaped value to the handler
 ///
 /// It is designed to keep handlers focused on domain logic rather than query
 /// parsing and limit validation.
+///
+/// `C` is the domain cursor type seen by the handler. `W` is the wire cursor
+/// type deserialized from the query string and defaults to `C`. When the API
+/// boundary uses typed wrappers such as [`PublicId<T>`], `W` can stay public
+/// while `C` stays domain-shaped.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pagination<C, P = DefaultPagePolicy> {
+pub struct Pagination<C, P = DefaultPagePolicy, W = C> {
     window: PageWindow<C>,
-    policy: PhantomData<P>,
+    marker: PhantomData<(P, W)>,
 }
 
-impl<C, P> Pagination<C, P> {
+impl<C, P, W> Pagination<C, P, W> {
     #[must_use]
     pub fn after(&self) -> Option<&C> {
         self.window.after()
@@ -57,15 +64,34 @@ impl<C, P> Pagination<C, P> {
     }
 }
 
-impl<C, P> From<PageWindow<C>> for Pagination<C, P> {
+impl<C, P, W> From<PageWindow<C>> for Pagination<C, P, W> {
     fn from(window: PageWindow<C>) -> Self {
-        Self { window, policy: PhantomData }
+        Self { window, marker: PhantomData }
     }
 }
 
-impl<C, P> From<Pagination<C, P>> for PageWindow<C> {
-    fn from(value: Pagination<C, P>) -> Self {
+impl<C, P, W> From<Pagination<C, P, W>> for PageWindow<C> {
+    fn from(value: Pagination<C, P, W>) -> Self {
         value.window
+    }
+}
+
+/// Decodes a pagination cursor from its wire representation into the domain
+/// cursor type consumed by handlers and services.
+pub trait PageCursor<W>: Sized {
+    /// Converts one wire cursor into its domain form.
+    fn decode_cursor(wire: W) -> Result<Self, AppError>;
+}
+
+impl<T> PageCursor<T> for T {
+    fn decode_cursor(wire: T) -> Result<Self, AppError> {
+        Ok(wire)
+    }
+}
+
+impl<T: ResourceId> PageCursor<PublicId<T>> for T {
+    fn decode_cursor(wire: PublicId<T>) -> Result<Self, AppError> {
+        Ok(wire.into_inner())
     }
 }
 
@@ -79,24 +105,28 @@ where
     }
 }
 
-impl<S, C, P> FromRequestParts<S> for Pagination<C, P>
+impl<S, C, P, W> FromRequestParts<S> for Pagination<C, P, W>
 where
     S: Send + Sync,
     P: PagePolicySource<S>,
-    C: Clone + Send + Sync + 'static,
-    PageQuery<C>: serde::de::DeserializeOwned,
+    C: Clone + PageCursor<W> + Send + Sync + 'static,
+    W: Clone + Send + Sync + 'static,
+    PageQuery<W>: serde::de::DeserializeOwned,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let query = Query::<PageQuery<C>>::from_request_parts(parts, state)
+        let query = Query::<PageQuery<W>>::from_request_parts(parts, state)
             .await
             .map_err(AppError::from)?;
-        let window = P::policy(state).resolve(query.0).map_err(|err| {
+        let query = PageQuery::new()
+            .with_after(query.0.after().cloned().map(C::decode_cursor).transpose()?)
+            .with_limit(query.0.limit());
+        let window = P::policy(state).resolve(query).map_err(|err| {
             AppError::validation_code("invalid_pagination", "The pagination query is invalid.")
                 .with_detail("reason", json!(err.to_string()))
         })?;
-        Ok(Self { window, policy: PhantomData })
+        Ok(Self { window, marker: PhantomData })
     }
 }
 
@@ -205,9 +235,12 @@ mod tests {
     use axum::body::Body;
     use axum::extract::{FromRef, FromRequestParts};
     use http::Request;
+    use public_id::{PublicId, resource_id};
 
     use super::Pagination;
-    use crate::pagination::{Limit, PagePolicy, PagePolicySource};
+    use crate::pagination::{DefaultPagePolicy, Limit, PagePolicy, PagePolicySource};
+
+    resource_id!(TestId, "test");
 
     #[derive(Clone)]
     struct TestState {
@@ -283,5 +316,27 @@ mod tests {
 
         assert_eq!(err.code(), "invalid_pagination");
         assert_eq!(err.status_code().as_u16(), 422);
+    }
+
+    #[tokio::test]
+    async fn decodes_public_cursor_into_domain_cursor() {
+        let state = TestState {
+            cfg: PagePolicy::bounded(Limit::new(25).unwrap(), Limit::new(100).unwrap()).unwrap(),
+        };
+        let id = TestId::new();
+        let request = Request::builder()
+            .uri(format!("/files?after={}&limit=50", PublicId::from(id)))
+            .body(Body::empty())
+            .unwrap();
+        let (mut parts, _) = request.into_parts();
+
+        let page = Pagination::<TestId, DefaultPagePolicy, PublicId<TestId>>::from_request_parts(
+            &mut parts, &state,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(page.after(), Some(&id));
+        assert_eq!(page.limit().get(), 50);
     }
 }

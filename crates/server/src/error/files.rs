@@ -4,32 +4,36 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use super::SourceError;
-use crate::files::meta::{BlobId, ChecksumAlgorithm, ChecksumKind};
+use crate::files::id::{FileId, UploadId};
+use crate::files::meta::{ChecksumAlgorithm, ChecksumKind};
 use crate::files::upload::UploadState;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum FileError {
-    #[error("invalid blob id")]
-    #[diagnostic(code(canary_server::files::invalid_blob_id))]
-    InvalidBlobId,
+    #[error("invalid file id")]
+    #[diagnostic(code(canary_server::files::invalid_file_id))]
+    InvalidFileId,
+    #[error("invalid upload id")]
+    #[diagnostic(code(canary_server::files::invalid_upload_id))]
+    InvalidUploadId,
     #[error("invalid actor id")]
     #[diagnostic(code(canary_server::files::invalid_actor_id))]
     InvalidActorId,
-    #[error("blob {id} not found")]
+    #[error("file {id} not found")]
     #[diagnostic(code(canary_server::files::not_found))]
-    NotFound { id: BlobId },
+    NotFound { id: FileId },
     #[error("upload {id} not found")]
     #[diagnostic(code(canary_server::files::upload_not_found))]
-    UploadNotFound { id: BlobId },
+    UploadNotFound { id: UploadId },
     #[error("upload {id} is forbidden")]
     #[diagnostic(code(canary_server::files::upload_forbidden))]
-    UploadForbidden { id: BlobId },
+    UploadForbidden { id: UploadId },
     #[error("upload {id} has expired")]
     #[diagnostic(code(canary_server::files::upload_expired))]
-    UploadExpired { id: BlobId },
+    UploadExpired { id: UploadId },
     #[error("upload {id} is in invalid state `{state}`")]
     #[diagnostic(code(canary_server::files::upload_invalid_state))]
-    UploadInvalidState { id: BlobId, state: UploadState },
+    UploadInvalidState { id: UploadId, state: UploadState },
     #[error("invalid file name")]
     #[diagnostic(code(canary_server::files::invalid_file_name))]
     InvalidFileName,

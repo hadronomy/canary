@@ -1357,6 +1357,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "object_store",
+ "public-id",
  "reqwest",
  "secrecy",
  "serde",
@@ -4610,6 +4611,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "public-id"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "bs58",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

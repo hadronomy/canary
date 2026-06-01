@@ -33,6 +33,7 @@
 //! | --- | --- | --- |
 //! | Service layer | [`service::FileService`], [`service::UploadService`], [`service::BlobService`] | Orchestrates upload lifecycle, ready-blob access, and listing |
 //! | Upload model | [`upload::UploadSession`], [`upload::UploadMode`], [`upload::UploadAccess`] | Describes what a client may do next and which state an upload is in |
+//! | Identity | [`id::FileId`], [`id::UploadId`] | Keeps ready blobs and upload sessions distinct at the type level |
 //! | Blob model | [`meta::StoredBlob`], [`meta::BlobChecksum`], [`meta::ReadyKey`] | Defines the durable shape of a ready blob |
 //! | Storage boundary | [`store::Backend`], [`direct`] | Talks to the configured object store and signs direct access |
 //! | Metadata boundary | [`repo::UploadRepo`], [`repo::BlobMetaRepo`] | Separates upload-session state from durable ready-blob metadata |
@@ -194,6 +195,7 @@
 pub mod direct;
 pub mod error;
 pub mod events;
+pub mod id;
 pub mod list;
 pub mod meta;
 pub mod repo;

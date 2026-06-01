@@ -9,11 +9,13 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::stream::{self, Stream, StreamExt};
+use public_id::PublicId;
 use serde::{Deserialize, Serialize};
 
 use crate::Pagination;
 use crate::error::{AppError, AppResult};
-use crate::files::meta::{BlobId, BlobName, BlobRecord, BlobSize, Sha256Digest};
+use crate::files::id::{FileId, UploadId};
+use crate::files::meta::{BlobName, BlobRecord, BlobSize, Sha256Digest};
 use crate::files::service::CreatedIntent;
 use crate::files::upload::{
     CompleteInput, CompletedUploadPart, PartRequest, SignedUploadPart, UploadAccess,
@@ -59,7 +61,7 @@ struct CompleteUploadBody {
 
 #[derive(Serialize)]
 struct CreatedUpload {
-    id: String,
+    id: PublicId<UploadId>,
     status: UploadState,
     expires_at: chrono::DateTime<chrono::Utc>,
     upload: UploadTarget,
@@ -72,7 +74,7 @@ struct SignedUploadParts {
 
 #[derive(Serialize)]
 struct UploadRecord {
-    id: String,
+    id: PublicId<UploadId>,
     status: UploadState,
     strategy: UploadMode,
     purpose: String,
@@ -108,7 +110,7 @@ enum UploadTarget {
     },
 }
 
-type FilePage = Pagination<BlobId, FilesPagePolicy>;
+type FilePage = Pagination<FileId, FilesPagePolicy, PublicId<FileId>>;
 
 struct FilesPagePolicy;
 
@@ -125,16 +127,16 @@ impl PagePolicySource<AppState> for FilesPagePolicy {
 async fn list(
     State(state): State<FileState>,
     page: FilePage,
-) -> AppResult<Json<Page<BlobRecord, BlobId>>> {
-    let req = state.files.list(page.limit()).after_opt(page.after().copied());
-    Ok(Json(req.page().await?))
+) -> AppResult<Json<Page<BlobRecord, PublicId<FileId>>>> {
+    let page = state.files.list(page.limit()).after_opt(page.after().copied()).page().await?;
+    Ok(Json(Page::new(page.items, page.next.map(PublicId::from))))
 }
 
 async fn meta(
     State(state): State<FileState>,
     Path(id): Path<String>,
 ) -> AppResult<Json<BlobRecord>> {
-    let id = BlobId::from_str(&id)?;
+    let id = file(&id)?;
     let meta = state.files.blobs().head(id).await?;
     Ok(Json(BlobRecord::from(&meta)))
 }
@@ -169,7 +171,7 @@ async fn upload_status(
     actor: UploadActor,
     Path(id): Path<String>,
 ) -> AppResult<Json<UploadRecord>> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let session = state.files.uploads().get(actor.as_ref(), id).await?;
     Ok(Json(record(&session)))
 }
@@ -179,7 +181,7 @@ async fn refresh_access(
     actor: UploadActor,
     Path(id): Path<String>,
 ) -> AppResult<Json<UploadTarget>> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let access = state.files.uploads().refresh_access(actor.as_ref(), id).await?;
     Ok(Json(target(id, access)))
 }
@@ -189,7 +191,7 @@ async fn upload_events(
     actor: UploadActor,
     Path(id): Path<String>,
 ) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let (current, rx) = state.files.uploads().subscribe(actor.as_ref(), id).await?;
     let first = stream::once(async move {
         Ok::<_, Infallible>(encode(UploadEventKind::Snapshot, record(&current)))
@@ -212,7 +214,7 @@ async fn upload_socket(
     Path(id): Path<String>,
     ws: WebSocketUpgrade,
 ) -> AppResult<Response> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let (current, rx) = state.files.uploads().subscribe(actor.as_ref(), id).await?;
     Ok(ws.on_upgrade(move |socket| stream_socket(socket, current, rx)).into_response())
 }
@@ -223,7 +225,7 @@ async fn upload_parts(
     Path(id): Path<String>,
     Json(body): Json<PartRequest>,
 ) -> AppResult<Json<SignedUploadParts>> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let parts = state.files.uploads().sign_parts(actor.as_ref(), id, body).await?;
     Ok(Json(SignedUploadParts { parts }))
 }
@@ -234,7 +236,7 @@ async fn complete_upload(
     Path(id): Path<String>,
     Json(body): Json<CompleteUploadBody>,
 ) -> AppResult<Json<BlobRecord>> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let blob = state
         .files
         .uploads()
@@ -252,20 +254,20 @@ async fn abort_upload(
     actor: UploadActor,
     Path(id): Path<String>,
 ) -> AppResult<(StatusCode, Json<UploadRecord>)> {
-    let id = BlobId::from_str(&id)?;
+    let id = upl(&id)?;
     let session = state.files.uploads().abort(actor.as_ref(), id).await?;
     Ok((StatusCode::ACCEPTED, Json(record(&session))))
 }
 
 async fn download(State(state): State<FileState>, Path(id): Path<String>) -> AppResult<Redirect> {
-    let id = BlobId::from_str(&id)?;
+    let id = file(&id)?;
     let access = state.files.blobs().access(id).await?;
     Ok(Redirect::temporary(&access.url))
 }
 
 fn upload(created: CreatedIntent) -> CreatedUpload {
     CreatedUpload {
-        id: created.session.id().to_string(),
+        id: created.session.id().public(),
         status: created.session.state(),
         expires_at: created.session.expires_at(),
         upload: target(created.session.id(), created.access),
@@ -274,7 +276,7 @@ fn upload(created: CreatedIntent) -> CreatedUpload {
 
 fn record(session: &UploadSession) -> UploadRecord {
     UploadRecord {
-        id: session.id().to_string(),
+        id: session.id().public(),
         status: session.state(),
         strategy: session.mode(),
         purpose: session.purpose().as_str().to_owned(),
@@ -286,7 +288,7 @@ fn record(session: &UploadSession) -> UploadRecord {
     }
 }
 
-fn target(id: BlobId, access: UploadAccess) -> UploadTarget {
+fn target(id: UploadId, access: UploadAccess) -> UploadTarget {
     match access {
         UploadAccess::DirectPut(access) => UploadTarget::DirectPut {
             method: "PUT",
@@ -306,18 +308,28 @@ fn target(id: BlobId, access: UploadAccess) -> UploadTarget {
 }
 
 #[inline(always)]
-fn parts_url(id: BlobId) -> String {
+fn parts_url(id: UploadId) -> String {
     format!("/api/v1/files/uploads/{id}/parts")
 }
 
 #[inline(always)]
-fn complete_url(id: BlobId) -> String {
+fn complete_url(id: UploadId) -> String {
     format!("/api/v1/files/uploads/{id}/complete")
 }
 
 #[inline(always)]
-fn abort_url(id: BlobId) -> String {
+fn abort_url(id: UploadId) -> String {
     format!("/api/v1/files/uploads/{id}/abort")
+}
+
+#[inline(always)]
+fn file(id: &str) -> AppResult<FileId> {
+    FileId::from_str(id).map_err(|_| AppError::from(crate::error::FileError::InvalidFileId))
+}
+
+#[inline(always)]
+fn upl(id: &str) -> AppResult<UploadId> {
+    UploadId::from_str(id).map_err(|_| AppError::from(crate::error::FileError::InvalidUploadId))
 }
 
 fn encode(kind: UploadEventKind, record: UploadRecord) -> Event {
