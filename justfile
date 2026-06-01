@@ -18,15 +18,15 @@ help:
 
 [private]
 js-deps:
-    [ -d "{{ root }}/node_modules" ] || mise exec -- bun install --frozen-lockfile
+    @[ -d "{{ root }}/node_modules" ] || mise exec -- bun install --frozen-lockfile
 
 [private]
 db-env:
-    [ -f "{{ db }}/.env" ] || cp "{{ db }}/.env.example" "{{ db }}/.env"
+    @[ -f "{{ db }}/.env" ] || cp "{{ db }}/.env.example" "{{ db }}/.env"
 
 [private]
 db-ready: db-up
-    cid="$(docker compose -f "{{ compose }}" ps -q surrealdb)"; \
+    @cid="$(docker compose -f "{{ compose }}" ps -q surrealdb)"; \
     if [ -z "$cid" ]; then \
     echo "surrealdb container not found"; \
     exit 1; \
@@ -44,8 +44,8 @@ db-ready: db-up
 # Install the repo-managed toolchain and JavaScript dependencies.
 [group('workflow')]
 install:
-    mise i
-    mise exec -- bun install --frozen-lockfile
+    @mise i
+    @mise exec -- bun install --frozen-lockfile
 
 # Show the local toolchain this repository expects.
 [group('workflow')]
@@ -94,124 +94,124 @@ check: fmt-check lint typecheck test doctest
 # The hook-friendly validation path.
 [group('workflow')]
 pre-commit: js-deps
-    mise exec -- bunx lint-staged
+    @mise exec -- bunx lint-staged
 
 # Build the Rust workspace with all features enabled.
 [group('rust')]
 build:
-    cargo build --workspace --all-features
+    @cargo build --workspace --all-features
 
 # Format the Rust workspace.
 [group('rust')]
 rust-fmt:
-    cargo +nightly fmt --all
+    @cargo +nightly fmt --all
 
 # Verify Rust formatting.
 [group('rust')]
 rust-fmt-check:
-    cargo +nightly fmt --all --check
+    @cargo +nightly fmt --all --check
 
 # Run clippy across the Rust workspace.
 [group('rust')]
 clippy:
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    @cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Run the fast clippy path used by the pre-commit hook.
 [group('rust')]
 clippy-fast:
-    cargo clippy --workspace --all-targets -- -D warnings
+    @cargo clippy --workspace --all-targets -- -D warnings
 
 # Run the Rust test suite.
 [group('rust')]
 test:
-    mise exec -- cargo nextest run --workspace --all-features
+    @mise exec -- cargo nextest run --workspace --all-features
 
 # Run Rust doctests.
 [group('rust')]
 doctest:
-    cargo test --workspace --doc
+    @cargo test --workspace --doc
 
 # Format TOML files.
 [group('workspace')]
 toml-fmt:
-    mise exec -- taplo format
+    @mise exec -- taplo format
 
 # Verify TOML formatting.
 [group('workspace')]
 toml-fmt-check:
-    mise exec -- taplo format --check
+    @mise exec -- taplo format --check
 
 # Format JavaScript and TypeScript files.
 [group('workspace')]
 js-fmt: js-deps
-    mise exec -- bunx oxfmt --write
+    @mise exec -- bunx oxfmt --write
 
 # Verify JavaScript and TypeScript formatting.
 [group('workspace')]
 js-fmt-check: js-deps
-    mise exec -- bunx oxfmt --check
+    @mise exec -- bunx oxfmt --check
 
 # Lint JavaScript and TypeScript files.
 [group('workspace')]
 js-lint: js-deps
-    mise exec -- bunx oxlint
+    @mise exec -- bunx oxlint
 
 # Run the workspace type checks.
 [group('workspace')]
 typecheck: js-deps
-    mise exec -- bun run check-types
+    @mise exec -- bun run check-types
 
 # Start the SurrealDB development instance for the database crate.
 [group('database')]
 db-up:
-    docker compose -f "{{ compose }}" up -d surrealdb
+    @docker compose -f "{{ compose }}" up -d surrealdb
 
 # Stop the SurrealDB development instance.
 [group('database')]
 db-stop:
-    docker compose -f "{{ compose }}" stop surrealdb
+    @docker compose -f "{{ compose }}" stop surrealdb
 
 # Remove the SurrealDB development stack.
 [group('database')]
 db-down:
-    docker compose -f "{{ compose }}" down --remove-orphans
+    @docker compose -f "{{ compose }}" down --remove-orphans
 
 # Tail the SurrealDB logs.
 [group('database')]
 db-logs:
-    docker compose -f "{{ compose }}" logs -f surrealdb
+    @docker compose -f "{{ compose }}" logs -f surrealdb
 
 # Sync the desired schema into the local SurrealDB instance.
 [group('database')]
 db-sync: db-env db-ready
-    cd "{{ db }}" && mise exec -- surrealkit sync
+    @cd "{{ db }}" && mise exec -- surrealkit sync
 
 # Seed the local SurrealDB instance.
 [group('database')]
 db-seed: db-env db-ready
-    cd "{{ db }}" && mise exec -- surrealkit seed
+    @cd "{{ db }}" && mise exec -- surrealkit seed
 
 # Run Surrealkit database suites.
 [group('database')]
 db-test: db-env db-ready
-    cd "{{ db }}" && mise exec -- surrealkit test
+    @cd "{{ db }}" && mise exec -- surrealkit test
 
 # Show the current rollout and schema state.
 [group('database')]
 db-status: db-env db-ready
-    cd "{{ db }}" && mise exec -- surrealkit status
+    @cd "{{ db }}" && mise exec -- surrealkit status
 
 # Remove the local SurrealDB data directory.
 [group('database')]
 db-reset: db-down
-    rm -rf "{{ db }}/.local/surrealdb"
+    @rm -rf "{{ db }}/.local/surrealdb"
 
 # Run the local Rust server.
 [group('dev')]
 server:
-    cargo run -p canary-server
+    @cargo run -p canary-server
 
 # Remove Rust build artifacts.
 [group('maintenance')]
 clean:
-    cargo clean
+    @cargo clean
