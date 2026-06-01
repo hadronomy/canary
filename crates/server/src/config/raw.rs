@@ -17,7 +17,7 @@ pub(crate) struct RawAppConfig {
     pub(crate) runtime: RuntimeConfig,
     pub(crate) observability: ObservabilityConfig,
     pub(crate) http: RawHttpConfig,
-    pub(crate) db: RawSurrealConfig,
+    pub(crate) db: database::Config,
     pub(crate) files: RawFilesConfig,
 }
 
@@ -96,59 +96,4 @@ impl Default for RawPaginationConfig {
     fn default() -> Self {
         Self { default_limit: DEFAULT_PAGE_LIMIT, max_limit: None }
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub(crate) struct RawSurrealConfig {
-    pub(crate) ns: String,
-    pub(crate) db: String,
-    pub(crate) auth: RawSurrealAuth,
-    pub(crate) mode: RawSurrealMode,
-}
-
-impl Default for RawSurrealConfig {
-    fn default() -> Self {
-        Self {
-            ns: "main".into(),
-            db: "main".into(),
-            auth: RawSurrealAuth::None,
-            mode: RawSurrealMode::Memory,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum RawSurrealAuth {
-    #[default]
-    None,
-    Root {
-        username: String,
-        password: SecretString,
-    },
-    Namespace {
-        username: String,
-        password: SecretString,
-    },
-    Database {
-        username: String,
-        password: SecretString,
-    },
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum RawSurrealMode {
-    Remote {
-        endpoint: String,
-    },
-    #[default]
-    Memory,
-    Rocksdb {
-        path: PathBuf,
-    },
-    Surrealkv {
-        path: PathBuf,
-    },
 }

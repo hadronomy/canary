@@ -1,4 +1,3 @@
-use std::fmt;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -27,7 +26,7 @@ pub struct AppConfig {
     pub runtime: RuntimeConfig,
     pub observability: ObservabilityConfig,
     pub http: HttpConfig,
-    pub db: SurrealConfig,
+    pub db: database::Config,
     pub files: FilesConfig,
 }
 
@@ -137,83 +136,6 @@ impl Default for HttpConfig {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct SurrealConfig {
-    pub ns: Namespace,
-    pub db: DatabaseName,
-    pub auth: SurrealAuth,
-    pub mode: SurrealMode,
-}
-
-impl Default for SurrealConfig {
-    fn default() -> Self {
-        Self {
-            ns: Namespace::new("main").expect("default namespace is valid"),
-            db: DatabaseName::new("main").expect("default database is valid"),
-            auth: SurrealAuth::None,
-            mode: SurrealMode::Embedded(EmbeddedSurrealConfig::Memory),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SurrealMode {
-    Remote(RemoteSurrealConfig),
-    Embedded(EmbeddedSurrealConfig),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteSurrealConfig {
-    pub endpoint: RemoteEndpoint,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EmbeddedSurrealConfig {
-    Memory,
-    RocksDb { path: StoragePath },
-    SurrealKv { path: StoragePath },
-}
-
-#[derive(Debug, Clone)]
-pub enum SurrealAuth {
-    None,
-    Root { username: SmolStr, password: SecretString },
-    Namespace { username: SmolStr, password: SecretString },
-    Database { username: SmolStr, password: SecretString },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Namespace(SmolStr);
-
-impl Namespace {
-    pub fn new(value: impl Into<SmolStr>) -> Result<Self, ConfigError> {
-        let value = value.into();
-        validate_name(value.as_str(), "namespace")?;
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DatabaseName(SmolStr);
-
-impl DatabaseName {
-    pub fn new(value: impl Into<SmolStr>) -> Result<Self, ConfigError> {
-        let value = value.into();
-        validate_name(value.as_str(), "database")?;
-        Ok(Self(value))
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoragePath(PathBuf);
 
@@ -252,38 +174,6 @@ impl ObjectPrefix {
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RemoteEndpoint {
-    Ws(Url),
-    Wss(Url),
-    Http(Url),
-    Https(Url),
-}
-
-impl RemoteEndpoint {
-    pub fn parse(value: &str) -> Result<Self, ConfigError> {
-        let url = Url::parse(value).map_err(|source| {
-            ConfigError::invalid("invalid surrealdb remote endpoint").with_source(source)
-        })?;
-        match url.scheme() {
-            "ws" => Ok(Self::Ws(url)),
-            "wss" => Ok(Self::Wss(url)),
-            "http" => Ok(Self::Http(url)),
-            "https" => Ok(Self::Https(url)),
-            scheme => {
-                Err(ConfigError::invalid(format!("unsupported surrealdb remote scheme `{scheme}`")))
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::Ws(url) | Self::Wss(url) | Self::Http(url) | Self::Https(url) => url.as_str(),
-        }
     }
 }
 
@@ -389,29 +279,5 @@ impl Default for BlobConfig {
             intent_ttl: DEFAULT_UPLOAD_INTENT_TTL,
             presign_ttl: DEFAULT_UPLOAD_PRESIGN_TTL,
         }
-    }
-}
-
-fn validate_name(value: &str, kind: &str) -> Result<(), ConfigError> {
-    if value.trim().is_empty() {
-        return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
-    }
-    if !value.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.')) {
-        return Err(ConfigError::invalid(format!(
-            "{kind} may only contain ASCII letters, digits, '-', '_' and '.'"
-        )));
-    }
-    Ok(())
-}
-
-impl fmt::Display for Namespace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl fmt::Display for DatabaseName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
     }
 }

@@ -90,6 +90,7 @@ The clean default is:
 - WebSockets over the same event model when the client prefers a socket transport
 
 SSE is the better default because upload progress is mostly server-to-client notification, not a bidirectional messaging problem.
+
 ### 5. `object_store` is good for bytes, but not enough for upload presigning policy
 
 `object_store` is still the right storage abstraction for:

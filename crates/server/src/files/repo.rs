@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use database::Database;
 use public_id::Uuid;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::id::{FileId, UploadId};
 use crate::files::meta::{
@@ -75,7 +75,7 @@ pub struct InMemoryUploadRepo {
 
 #[derive(Clone)]
 pub struct SurrealBlobMetaRepo {
-    db: DatabaseService,
+    db: Database,
 }
 
 #[derive(Default)]
@@ -105,7 +105,7 @@ impl InMemoryUploadRepo {
 
 impl SurrealBlobMetaRepo {
     #[must_use]
-    pub fn new(db: DatabaseService) -> Self {
+    pub fn new(db: Database) -> Self {
         Self { db }
     }
 }
@@ -302,7 +302,6 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
         let row = BlobRow::from(&blob);
         let _: Option<BlobRow> = self
             .db
-            .client()
             .upsert(("file_blob", row.cursor.clone()))
             .content(row)
             .await
@@ -311,22 +310,14 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
     }
 
     async fn delete_ready(&self, id: FileId) -> Result<(), FileError> {
-        let _: Option<BlobRow> = self
-            .db
-            .client()
-            .delete(("file_blob", id.as_uuid().to_string()))
-            .await
-            .map_err(meta_err)?;
+        let _: Option<BlobRow> =
+            self.db.delete(("file_blob", id.as_uuid().to_string())).await.map_err(meta_err)?;
         Ok(())
     }
 
     async fn head_ready(&self, id: FileId) -> Result<StoredBlob, FileError> {
-        let row: Option<BlobRow> = self
-            .db
-            .client()
-            .select(("file_blob", id.as_uuid().to_string()))
-            .await
-            .map_err(meta_err)?;
+        let row: Option<BlobRow> =
+            self.db.select(("file_blob", id.as_uuid().to_string())).await.map_err(meta_err)?;
         let Some(row) = row else {
             return Err(FileError::NotFound { id });
         };
@@ -340,11 +331,10 @@ impl BlobMetaRepo for SurrealBlobMetaRepo {
         let limit = window.limit().get() + 1;
         let mut query = if let Some(after) = window.after() {
             self.db
-                .client()
                 .query("SELECT * FROM file_blob WHERE cursor > $after ORDER BY cursor LIMIT $limit")
                 .bind(("after", after.as_uuid().to_string()))
         } else {
-            self.db.client().query("SELECT * FROM file_blob ORDER BY cursor LIMIT $limit")
+            self.db.query("SELECT * FROM file_blob ORDER BY cursor LIMIT $limit")
         };
         query = query.bind(("limit", limit));
         let mut out = query.await.map_err(meta_err)?;

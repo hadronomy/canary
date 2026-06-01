@@ -1,0 +1,21 @@
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    command:
+      - start
+      - --log
+      - info
+      - --user
+      - root
+      - --pass
+      - root
+      - surrealkv://data/dev
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./.local/surrealdb:/data
+    healthcheck:
+      test: ['CMD', '/surreal', 'is-ready']
+      interval: 1s
+      timeout: 5s
+      retries: 30

@@ -1,4 +1,4 @@
 interface:
-  display_name: "Rust API Design"
-  short_description: "Design delightful Rust APIs"
-  default_prompt: "Use $rust-api-design to design or review a fluent, strongly typed Rust API."
+  display_name: 'Rust API Design'
+  short_description: 'Design delightful Rust APIs'
+  default_prompt: 'Use $rust-api-design to design or review a fluent, strongly typed Rust API.'

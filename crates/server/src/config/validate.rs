@@ -3,12 +3,11 @@ use smol_str::SmolStr;
 
 use super::raw::{
     RawAppConfig, RawFileBackendConfig, RawFilesConfig, RawHttpConfig, RawS3Credentials,
-    RawS3FileConfig, RawSurrealAuth, RawSurrealConfig, RawSurrealMode,
+    RawS3FileConfig,
 };
 use super::types::{
-    AppConfig, DatabaseName, EmbeddedSurrealConfig, FileBackendConfig, FilesConfig, HttpConfig,
-    LocalFileConfig, Namespace, ObjectPrefix, RemoteEndpoint, RemoteSurrealConfig, S3Credentials,
-    S3FileConfig, StoragePath, SurrealAuth, SurrealConfig, SurrealMode,
+    AppConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, ObjectPrefix,
+    S3Credentials, S3FileConfig, StoragePath,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -22,7 +21,7 @@ impl TryFrom<RawAppConfig> for AppConfig {
             runtime: value.runtime,
             observability: value.observability,
             http: HttpConfig::try_from(value.http)?,
-            db: SurrealConfig::try_from(value.db)?,
+            db: value.db,
             files: FilesConfig::try_from(value.files)?,
         })
     }
@@ -99,62 +98,6 @@ impl TryFrom<RawHttpConfig> for HttpConfig {
     }
 }
 
-impl TryFrom<RawSurrealConfig> for SurrealConfig {
-    type Error = ConfigError;
-
-    fn try_from(value: RawSurrealConfig) -> Result<Self, Self::Error> {
-        Ok(Self {
-            ns: Namespace::new(value.ns)?,
-            db: DatabaseName::new(value.db)?,
-            auth: SurrealAuth::try_from(value.auth)?,
-            mode: SurrealMode::try_from(value.mode)?,
-        })
-    }
-}
-
-impl TryFrom<RawSurrealAuth> for SurrealAuth {
-    type Error = ConfigError;
-
-    fn try_from(value: RawSurrealAuth) -> Result<Self, Self::Error> {
-        match value {
-            RawSurrealAuth::None => Ok(Self::None),
-            RawSurrealAuth::Root { username, password } => Ok(Self::Root {
-                username: validate_auth_value(username, "root username")?,
-                password: validate_secret(password, "root password")?,
-            }),
-            RawSurrealAuth::Namespace { username, password } => Ok(Self::Namespace {
-                username: validate_auth_value(username, "namespace username")?,
-                password: validate_secret(password, "namespace password")?,
-            }),
-            RawSurrealAuth::Database { username, password } => Ok(Self::Database {
-                username: validate_auth_value(username, "database username")?,
-                password: validate_secret(password, "database password")?,
-            }),
-        }
-    }
-}
-
-impl TryFrom<RawSurrealMode> for SurrealMode {
-    type Error = ConfigError;
-
-    fn try_from(value: RawSurrealMode) -> Result<Self, Self::Error> {
-        match value {
-            RawSurrealMode::Remote { endpoint } => Ok(Self::Remote(RemoteSurrealConfig {
-                endpoint: RemoteEndpoint::parse(&endpoint)?,
-            })),
-            RawSurrealMode::Memory => Ok(Self::Embedded(EmbeddedSurrealConfig::Memory)),
-            RawSurrealMode::Rocksdb { path } => {
-                Ok(Self::Embedded(EmbeddedSurrealConfig::RocksDb { path: StoragePath::new(path)? }))
-            }
-            RawSurrealMode::Surrealkv { path } => {
-                Ok(Self::Embedded(EmbeddedSurrealConfig::SurrealKv {
-                    path: StoragePath::new(path)?,
-                }))
-            }
-        }
-    }
-}
-
 impl TryFrom<RawS3Credentials> for S3Credentials {
     type Error = ConfigError;
 
@@ -172,13 +115,6 @@ impl TryFrom<RawS3Credentials> for S3Credentials {
             }
         }
     }
-}
-
-fn validate_auth_value(value: String, kind: &str) -> Result<SmolStr, ConfigError> {
-    if value.trim().is_empty() {
-        return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
-    }
-    Ok(SmolStr::from(value))
 }
 
 fn validate_secret(value: SecretString, kind: &str) -> Result<SecretString, ConfigError> {

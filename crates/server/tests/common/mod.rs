@@ -3,10 +3,10 @@
 use axum::Router;
 use axum::body::to_bytes;
 use canary_server::config::{FileBackendConfig, LocalFileConfig, StoragePath};
-use canary_server::db::service::DatabaseService;
 use canary_server::files::service::FileService;
 use canary_server::services::parser::ParserService;
 use canary_server::{AppState, LoadedConfig, ServerBuilder};
+use database::Database;
 use serde_json::Value;
 use tempfile::TempDir;
 
@@ -32,7 +32,7 @@ pub async fn app_with(cfg: LoadedConfig) -> Router {
 }
 
 pub async fn state_with(cfg: LoadedConfig) -> AppState {
-    let db = DatabaseService::connect(&cfg.settings.db).await.expect("db should connect");
+    let db = Database::connect(&cfg.settings.db).await.expect("db should connect");
     db.health().await.expect("db should be healthy");
     let files = FileService::new(cfg.settings.files.clone(), db.clone())
         .await

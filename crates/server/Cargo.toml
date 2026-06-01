@@ -15,10 +15,11 @@ aws-credential-types.workspace = true
 aws-sdk-s3.workspace = true
 aws-types.workspace = true
 axum.workspace = true
+base64 = "0.22.1"
 bytes.workspace = true
-public-id = { path = "../public-id" }
 chrono.workspace = true
 config.workspace = true
+database = { workspace = true, default-features = false }
 document-hierarchy = { path = "../parser" }
 futures-util = "0.3.31"
 headers.workspace = true
@@ -30,12 +31,12 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 mime.workspace = true
 mime_guess.workspace = true
 object_store = { workspace = true, features = ["aws", "fs"] }
+public-id = { path = "../public-id" }
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-secrecy.workspace = true
 sha2.workspace = true
 smol_str.workspace = true
-surrealdb.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -58,7 +59,6 @@ tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
-base64 = "0.22.1"
 
 [features]
 default = ["surreal-embedded-mem", "surreal-remote-ws"]
@@ -69,13 +69,13 @@ surreal-all = [
   "surreal-remote-http",
   "surreal-remote-ws",
 ]
-surreal-embedded-mem = ["surrealdb/kv-mem"]
-surreal-embedded-rocksdb = ["surrealdb/kv-rocksdb"]
-surreal-embedded-surrealkv = ["surrealdb/kv-surrealkv"]
-surreal-remote-http = ["surrealdb/protocol-http"]
-surreal-remote-ws = ["surrealdb/protocol-ws"]
+surreal-embedded-mem = ["database/embedded-mem"]
+surreal-embedded-rocksdb = ["database/embedded-rocksdb"]
+surreal-embedded-surrealkv = ["database/embedded-surrealkv"]
+surreal-remote-http = ["database/remote-http"]
+surreal-remote-ws = ["database/remote-ws"]
 
 [dev-dependencies]
-crc64fast-nvme = "1.2.1"
+crc64fast-nvme     = "1.2.1"
 reqwest            = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 tempfile.workspace = true

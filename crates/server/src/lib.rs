@@ -2,7 +2,6 @@
 
 pub mod app;
 pub mod config;
-pub mod db;
 pub mod error;
 pub mod files;
 pub mod http;
@@ -15,12 +14,13 @@ pub mod state;
 
 pub use app::{ServerApplication, ServerBuilder};
 pub use config::{
-    AppConfig, BlobConfig, ConfigOrigin, EnvironmentLayer, FileBackendConfig, FilesConfig,
-    HttpConfig, LoadedConfig, LocalFileConfig, LogFormat, ObjectPrefix, ObservabilityConfig,
-    RawSurrealMode, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig,
-    SurrealAuth, SurrealConfig, TransportSecurity,
+    AppConfig, BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir,
+    DatabaseEndpoint, DatabaseEngine, DatabaseName, EnvironmentLayer, FileBackendConfig,
+    FilesConfig, HttpConfig, LoadedConfig, LocalFileConfig, LogFormat, Namespace, ObjectPrefix,
+    ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig,
+    ServerConfig, StoragePath, TransportSecurity,
 };
-pub use db::service::DatabaseService;
+pub use database::{ConfigError as DatabaseConfigError, Database, Error as DatabaseError, Session};
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
 pub use files::id::{FileId, UploadId};
 pub use files::list::ListBlobs;

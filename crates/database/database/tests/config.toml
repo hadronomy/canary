@@ -1,0 +1,6 @@
+[defaults]
+timeout_ms = 10000
+base_url = "http://127.0.0.1:8080"
+
+[actors.root]
+kind = "root"

@@ -2,13 +2,13 @@ services:
   rustfs:
     image: rustfs/rustfs:latest
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '9000:9000'
+      - '9001:9001'
     environment:
       RUSTFS_ACCESS_KEY: canaryadmin
       RUSTFS_SECRET_KEY: canarysecret123
-      RUSTFS_CONSOLE_ENABLE: "true"
-    command: ["/data"]
+      RUSTFS_CONSOLE_ENABLE: 'true'
+    command: ['/data']
     volumes:
       - rustfs-data:/data
       - rustfs-logs:/logs
@@ -22,7 +22,7 @@ services:
       AWS_ACCESS_KEY_ID: canaryadmin
       AWS_SECRET_ACCESS_KEY: canarysecret123
       AWS_DEFAULT_REGION: us-east-1
-      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_EC2_METADATA_DISABLED: 'true'
     entrypoint:
       - /bin/sh
       - -euxc

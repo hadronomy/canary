@@ -158,11 +158,8 @@ API:      typed `PublicId<T>` values serialized as compact prefixed strings
 UUIDv7 gives you the production trifecta:
 
 1. Globally unique without central coordination.
-    
 2. Sortable by creation time.
-    
 3. Better database locality than UUIDv4.
-    
 
 Random UUIDv4 primary keys scatter inserts across B-tree indexes. Time-ordered UUIDs keep recent writes closer together, which is much friendlier for database locality. For this server, most core resources are database-backed entities created at high volume: files, documents, chunks, ingestions, source runs, events, and operations. UUIDv7 is the right boring default.
 
@@ -170,16 +167,16 @@ Use raw UUIDv7 for database keys, not encoded strings. The encoding is only an A
 
 ### 4.3 Where Each ID Type Belongs
 
-|Use case|ID type|
-|---|---|
-|Database primary keys|native `uuid`, generated as UUIDv7|
-|Public API resource IDs|prefixed encoded UUIDv7, such as `doc_...`|
-|Rust domain IDs|typed newtypes over `Uuid`, such as `DocumentId`|
-|Foreign keys|raw `uuid` columns|
-|Idempotency keys|client-provided opaque strings|
-|Session tokens, magic links, API keys|high-entropy random secrets, not UUIDv7|
-|File deduplication|content hash, usually SHA-256 or BLAKE3|
-|External source identity|normalized external key plus hash, not primary ID|
+| Use case                              | ID type                                           |
+| ------------------------------------- | ------------------------------------------------- |
+| Database primary keys                 | native `uuid`, generated as UUIDv7                |
+| Public API resource IDs               | prefixed encoded UUIDv7, such as `doc_...`        |
+| Rust domain IDs                       | typed newtypes over `Uuid`, such as `DocumentId`  |
+| Foreign keys                          | raw `uuid` columns                                |
+| Idempotency keys                      | client-provided opaque strings                    |
+| Session tokens, magic links, API keys | high-entropy random secrets, not UUIDv7           |
+| File deduplication                    | content hash, usually SHA-256 or BLAKE3           |
+| External source identity              | normalized external key plus hash, not primary ID |
 
 ### 4.4 Public Prefixes
 
@@ -1246,10 +1243,7 @@ A source run may produce many document ingestions. Keep those linked:
   "documents_created": 12,
   "documents_updated": 4,
   "documents_deleted": 0,
-  "ingestion_ids": [
-    "ing_4FYkFK8uT9N8rKqQ7uVw1z",
-    "ing_8kfUMmMckS4NpNM6xW9EVD"
-  ]
+  "ingestion_ids": ["ing_4FYkFK8uT9N8rKqQ7uVw1z", "ing_8kfUMmMckS4NpNM6xW9EVD"]
 }
 ```
 
@@ -1951,18 +1945,11 @@ boring under pressure
 The most important decisions are:
 
 1. Use `collections` as the public RAG boundary.
-    
 2. Keep MCP separate from the REST API.
-    
 3. Treat sources, runs, schedules, ingestions, and operations as first-class resources.
-    
 4. Use UUIDv7 in storage and typed `PublicId<T>` wrappers encoded as prefixed base58 IDs at the API boundary.
-    
 5. Make ingestion asynchronous and observable.
-    
 6. Use cursor pagination, idempotency keys, structured errors, and request IDs from the beginning.
-    
 7. Keep handlers thin; put real behavior in services, workers, workflows, and domain types.
-    
 
 That combination gives you a server that is delightful to integrate with, pleasant to debug, safe for agents to use, and ready to evolve without painting the API into a corner.

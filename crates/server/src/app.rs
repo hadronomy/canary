@@ -4,13 +4,13 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::extract::{FromRef, Request};
+use database::Database;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 
 use crate::config::LoadedConfig;
-use crate::db::service::DatabaseService;
 use crate::error::{ServerError, ServerResult};
 use crate::files::service::FileService;
 use crate::http;
@@ -52,7 +52,7 @@ impl ServerBuilder<WithConfig> {
     pub async fn build(self) -> ServerResult<ServerApplication> {
         let loaded = self.state.loaded;
         let shutdown = ShutdownCoordinator::new(loaded.settings.server.shutdown_grace_period);
-        let db = DatabaseService::connect(&loaded.settings.db).await?;
+        let db = Database::connect(&loaded.settings.db).await?;
         db.health().await?;
         let parser = ParserService::new();
         let files = FileService::new(loaded.settings.files.clone(), db.clone()).await?;

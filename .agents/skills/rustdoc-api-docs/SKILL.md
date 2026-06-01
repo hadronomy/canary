@@ -91,7 +91,7 @@ Treat these as part of the contract, not optional commentary.
 
 Use rustdoc links for related types, traits, modules, and methods. Make the docs easy to explore from inside docs.rs.
 
-For module and crate docs, prefer rich *intra-doc navigation* over repeating
+For module and crate docs, prefer rich _intra-doc navigation_ over repeating
 raw type names in prose. If readers should jump to another item, give them a
 good link.
 
@@ -109,7 +109,7 @@ Rustdoc is not limited to plain paragraphs and fenced code blocks. Use its
 Markdown support with taste:
 
 - **bold** for truly important constraints or guarantees
-- *italics* for gentle emphasis or domain terms
+- _italics_ for gentle emphasis or domain terms
 - tables when a module map or capability overview genuinely scans better that way
 - footnotes when a small nuance would otherwise interrupt the flow
 - warning callouts with HTML blocks when a misuse would create a real hazard
@@ -187,7 +187,7 @@ Hard-to-document APIs are often hard-to-use APIs.
 
 ## Example Shape
 
-```rust
+````rust
 /// Publishes a message to the configured topic.
 ///
 /// This method creates a lazy publish operation. The message is not sent
@@ -208,7 +208,7 @@ Hard-to-document APIs are often hard-to-use APIs.
 /// Returns an error if the payload cannot be encoded or the broker rejects
 /// the publish request.
 pub fn publish(&self, topic: &str) -> Publish<'_, C> { ... }
-```
+````
 
 ## Validation
 

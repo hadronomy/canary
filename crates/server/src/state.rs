@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 
 use axum::extract::FromRef;
 use chrono::{DateTime, Utc};
+use database::Database;
 use serde::Serialize;
 use tokio::sync::watch;
 
 use crate::config::LoadedConfig;
-use crate::db::service::DatabaseService;
 use crate::files::service::FileService;
 use crate::services::parser::ParserService;
 
@@ -22,7 +22,7 @@ struct AppStateInner {
     started_at: DateTime<Utc>,
     started_at_instant: Instant,
     readiness: Readiness,
-    db: DatabaseService,
+    db: Database,
     parser: ParserService,
     files: FileService,
 }
@@ -40,7 +40,7 @@ impl fmt::Debug for AppState {
 impl AppState {
     pub fn new(
         loaded: LoadedConfig,
-        db: DatabaseService,
+        db: Database,
         parser: ParserService,
         files: FileService,
     ) -> Self {
@@ -187,7 +187,7 @@ pub struct FileState {
 
 #[derive(Clone)]
 pub struct DbState {
-    pub db: DatabaseService,
+    pub db: Database,
 }
 
 impl FromRef<AppState> for ParserState {

@@ -1,0 +1,13 @@
+# Project-local Surrealkit configuration.
+#
+# Keep schema workflow state inside this crate:
+# - schema files in `./database/schema`
+# - rollout manifests in `./database/rollouts`
+# - seed files in `./database/seed`
+# - generated snapshots in `./database/snapshots`
+# - declarative test suites in `./database/tests`
+#
+# Runtime connection settings come from CLI flags, environment variables, or
+# `.env`, not from this file.
+
+[variables]

@@ -48,16 +48,21 @@
     "@effect/language-service": "^0.80.0",
     "@types/bun": "^1.3.10",
     "husky": "^9.1.7",
-    "lint-staged": "^16.3.3",
+    "lint-staged": "^17.0.7",
     "oxfmt": "^0.40.0",
     "oxlint": "^1.55.0",
     "turbo": "^2.8.16",
     "typescript": "^5.9.3"
   },
   "lint-staged": {
-    "*": [
-      "oxlint",
-      "oxfmt --write --no-error-on-unmatched-pattern"
+    "*.{js,jsx,ts,tsx,mjs,cjs}": [
+      "mise exec -- bunx oxlint"
+    ],
+    "*.{js,jsx,ts,tsx,mjs,cjs,json,md,yml,yaml}": [
+      "mise exec -- bunx oxfmt --write --no-error-on-unmatched-pattern"
+    ],
+    "*.toml": [
+      "mise exec -- taplo format"
     ]
   },
   "packageManager": "bun@1.3.10"

@@ -1,0 +1,8 @@
+name = "smoke"
+tags = ["smoke"]
+
+[[cases]]
+name = "surrealkit_rollout_table_exists"
+kind = "schema_metadata"
+sql = "INFO FOR TABLE __rollout;"
+contains = ["__rollout"]

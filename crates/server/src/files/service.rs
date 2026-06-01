@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{TimeDelta, Utc};
+use database::Database;
 use tokio::sync::watch;
 
 use crate::config::{BlobConfig, FilesConfig};
-use crate::db::service::DatabaseService;
 use crate::error::FileError;
 use crate::files::events::UploadHub;
 use crate::files::id::{FileId, UploadId};
@@ -57,7 +57,7 @@ pub struct DownloadAccess {
 }
 
 impl FileService {
-    pub async fn new(cfg: FilesConfig, db: DatabaseService) -> Result<Self, FileError> {
+    pub async fn new(cfg: FilesConfig, db: Database) -> Result<Self, FileError> {
         let backend = Arc::new(Backend::new(&cfg.backend, cfg.uploads.chunk_size_bytes).await?);
         let uploads_repo: Arc<dyn UploadRepo> = Arc::new(InMemoryUploadRepo::new());
         let blobs_repo: Arc<dyn BlobMetaRepo> = Arc::new(SurrealBlobMetaRepo::new(db));

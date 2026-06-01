@@ -11,7 +11,7 @@ fn loads_memory_mode_from_overrides() {
     ]))
     .expect("config should load");
 
-    assert!(matches!(settings.settings.db.mode, canary_server::config::SurrealMode::Embedded(_)));
+    assert!(matches!(settings.settings.db.engine(), database::Engine::Memory));
     assert!(matches!(
         &settings.settings.files.backend,
         canary_server::config::FileBackendConfig::Local(local)

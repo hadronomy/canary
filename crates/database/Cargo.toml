@@ -1,0 +1,31 @@
+[package]
+name              = "database"
+publish.workspace = true
+
+authors.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+repository.workspace = true
+version.workspace    = true
+
+[dependencies]
+miette.workspace    = true
+secrecy.workspace   = true
+serde.workspace     = true
+smol_str.workspace  = true
+surrealdb.workspace = true
+thiserror.workspace = true
+url.workspace       = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tokio.workspace      = true
+
+[features]
+all                = ["embedded-mem", "embedded-rocksdb", "embedded-surrealkv", "remote-http", "remote-ws"]
+default            = ["embedded-mem", "remote-ws"]
+embedded-mem       = ["surrealdb/kv-mem"]
+embedded-rocksdb   = ["surrealdb/kv-rocksdb"]
+embedded-surrealkv = ["surrealdb/kv-surrealkv"]
+remote-http        = ["surrealdb/protocol-http"]
+remote-ws          = ["surrealdb/protocol-ws"]
