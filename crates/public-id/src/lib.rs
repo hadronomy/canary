@@ -113,11 +113,11 @@ pub trait ResourceId: Sized + Copy + Eq + Ord + Hash + fmt::Debug + 'static {
     }
 }
 
-/// Typed public representation of a [`ResourceId`].
+/// Public ID wrapper for a [`ResourceId`].
 ///
-/// The type parameter keeps the API boundary honest. A `PublicId<FileId>` and a
-/// `PublicId<UploadId>` are both strings on the wire, but they are not
-/// interchangeable in Rust.
+/// `PublicId<FileId>` and `PublicId<UploadId>` both serialize as strings, but
+/// Rust still treats them as different types. This prevents mixing resource IDs
+/// that look the same in API payloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct PublicId<T: ResourceId> {

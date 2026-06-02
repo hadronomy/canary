@@ -1,80 +1,98 @@
-# Database Workflow
+# Canary database
 
-This crate owns **two separate concerns**:
+This crate is Canary's SurrealDB boundary.
+
+It holds two things that belong together, but should not be mixed together:
 
 - the Rust runtime integration in [`src/`](./src)
-- the Surrealkit schema workflow in [`database/`](./database)
+- the schema project managed with Surrealkit in [`database/`](./database)
 
-Everything related to Surrealkit lives inside this directory on purpose. That
-includes:
+The Rust side owns connection setup, authentication, health checks, and the
+application-facing database handle. The Surrealkit side owns schema files,
+rollouts, seed data, snapshots, and database-focused test suites.
 
-- [`surrealkit.toml`](./surrealkit.toml)
-- [`database/schema`](./database/schema)
-- [`database/rollouts`](./database/rollouts)
-- [`database/seed`](./database/seed)
-- [`database/snapshots`](./database/snapshots)
-- [`database/tests`](./database/tests)
-- local Docker workflow in [`compose.yml`](./compose.yml)
+## Layout
 
-The Rust crate in [`src/`](./src) stays focused on runtime concerns. Schema
-authoring, rollout history, seed data, and database-specific test suites all
-belong to Surrealkit.
+```text
+crates/database/
+  src/                 # Rust runtime API
+  tests/               # Rust integration checks for the crate
+  surrealkit.toml      # Surrealkit project config
+  compose.yml          # Local SurrealDB workflow
+  .env.example         # Local Surrealkit environment template
+  database/
+    schema/            # Desired schema
+    rollouts/          # Reviewed schema changes for shared environments
+    seed/              # Seed data
+    snapshots/         # Generated Surrealkit snapshots
+    tests/             # Declarative Surrealkit suites
+    setup.surql        # Shared setup applied before schema
+```
 
-The current published Surrealkit CLI expects its project root to be named
-`database/`. We keep that convention, but scope it under this crate so the full
-workflow still lives inside `crates/database/`.
+## What this crate is for
 
-## Quick start
+Use this crate when you need to:
 
-### 1. Install the local tools
+- load validated SurrealDB configuration
+- open a database handle for the server runtime
+- create explicit sessions
+- keep the runtime and schema lifecycle separate
 
-From the repository root:
+Do not use this crate as an ad hoc migration runner. Schema lifecycle work
+lives in Surrealkit.
+
+## Local development
+
+Install the repo-managed toolchain from the repository root:
 
 ```sh
 mise i
 ```
 
-### 2. Start SurrealDB
-
-From the repository root:
+Start the local database:
 
 ```sh
-docker compose -f crates/database/compose.yml up -d surrealdb
+just db-up
 ```
 
-### 3. Sync the schema
-
-Using the Mise-managed binary:
+Sync the desired schema:
 
 ```sh
-cd crates/database
-cp .env.example .env
-mise exec -- surrealkit sync
+just db-sync
 ```
 
-### 4. Seed or test
+Seed or test it if you need a fuller local setup:
 
 ```sh
-cd crates/database
-cp .env.example .env
-mise exec -- surrealkit seed
-mise exec -- surrealkit test
+just db-seed
+just db-test
 ```
 
-## Workflow guidance
+Check the current rollout state:
 
-- Use `sync` for local and disposable databases.
-- Use `rollout` for shared and production databases.
-- Keep schema changes in `database/schema/*.surql`.
-- Keep rollout manifests in `database/rollouts/`.
-- Keep seed files in `database/seed/*.surql`.
-- Keep declarative test suites in `database/tests/suites/*.toml`.
-- Keep runtime connection logic in Rust code, not in schema files.
+```sh
+just db-status
+```
+
+## Working on schema
+
+For local and disposable environments:
+
+- edit `database/schema/*.surql`
+- run `surrealkit sync`
+- use `surrealkit sync --watch` when you want a tight feedback loop
+
+For shared or production environments:
+
+- create and review rollouts under `database/rollouts/`
+- use Surrealkit's rollout flow instead of applying changes informally
+
+That split is important. Canary treats the runtime database API and the schema
+lifecycle as separate concerns on purpose.
 
 ## Local environment
 
-Start from [`.env.example`](./.env.example) and create a local `.env` if you
-want to override the default local connection settings:
+Start from [`.env.example`](./.env.example) if you want a crate-local `.env`.
 
 The default local assumptions are:
 

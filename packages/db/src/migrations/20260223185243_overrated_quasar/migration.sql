@@ -1,1 +1,0 @@
-CREATE INDEX "idx_ref_target_canonical" ON "reference_anchors" ("target_canonical_id");

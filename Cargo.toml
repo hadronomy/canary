@@ -4,11 +4,11 @@ resolver = "3"
 
 [workspace.package]
 authors     = ["Pablo Hernandez <hadronomy@gmail.com> (https://hadronomy.com/)"]
-description = "Language tools for the `ram` language"
+description = "AI legal assistant and retrieval infrastructure for Spanish law"
 edition     = "2024"
 license     = "MIT"
 publish     = false
-repository  = "https://github.com/hadronomy/ram"
+repository  = "https://github.com/hadronomy/canary"
 version     = "0.1.0-alpha.1"
 
 [workspace.dependencies]

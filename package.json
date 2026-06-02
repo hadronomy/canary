@@ -20,15 +20,6 @@
     "check-types": "turbo check-types",
     "dev:tui": "turbo -F tui dev",
     "dev:web": "turbo -F web dev",
-    "dev:server": "turbo -F server dev",
-    "db:push": "turbo -F @canary/db db:push",
-    "db:studio": "turbo -F @canary/db db:studio",
-    "db:generate": "turbo -F @canary/db db:generate",
-    "db:migrate": "turbo -F @canary/db db:migrate",
-    "db:start": "turbo -F @canary/db db:start",
-    "db:watch": "turbo -F @canary/db db:watch",
-    "db:stop": "turbo -F @canary/db db:stop",
-    "db:down": "turbo -F @canary/db db:down",
     "check": "oxlint && oxfmt --write",
     "prepare": "husky && effect-language-service patch"
   },
@@ -38,9 +29,7 @@
     "@effect/platform": "^0.94.5",
     "@effect/platform-bun": "^0.87.1",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "1.0.0-beta.15-90d1d1a",
     "effect": "^3.19.19",
-    "tsdown": "^0.21.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

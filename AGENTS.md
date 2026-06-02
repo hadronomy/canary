@@ -137,26 +137,29 @@ Use this as an important reference implementation with opentui best practices.
 - Exception: when defining Effect-based service/runtime operations, prefer `const x = Effect.fn("...")` for traceable spans and ergonomic composition.
 - In test directories, extract repeated fixture/parser helpers into a local shared module (for example `test/collectors/<domain>/common.ts`) and import from there.
 
-## Database Best Practices (Drizzle)
+## Database Best Practices (SurrealDB + Surrealkit)
 
-**IMPORTANT:** Never write manual SQL migrations.
+**IMPORTANT:** Keep schema lifecycle work in `crates/database/database/` and
+runtime connection logic in the Rust `database` crate.
 
-1. Update the TypeScript Drizzle schema files (in `packages/db/src/schema/`)
-2. Run `bun db:generate` (or equivalent) to auto-generate migrations
-3. Review the generated migration files before applying
-4. Run `bun db:migrate` to apply migrations
+1. Edit schema files under `crates/database/database/schema/`
+2. Use Surrealkit for schema sync, rollouts, seeds, and DB-focused tests
+3. Keep rollout history in `crates/database/database/rollouts/`
+4. Use the repo Justfile for local DB workflows such as `just db-sync`,
+   `just db-test`, and `just db-status`
 
 **Anti-patterns to avoid:**
 
-- ❌ Writing `.sql` migration files manually
-- ❌ Editing generated migration files (unless fixing a bug)
-- ❌ Using raw SQL for schema changes when Drizzle DSL can express them
+- ❌ Turning the application runtime into a migration runner
+- ❌ Mixing runtime connection code with schema lifecycle files
+- ❌ Hiding schema changes in ad hoc startup scripts
 
-**When to use raw SQL:**
+**When to use raw SQL / SurrealQL directly:**
 
-- Complex PostgreSQL-specific features not yet supported by Drizzle
-- Performance optimizations requiring custom indexes
-- Data migrations/transformations (not schema changes)
+- SurrealQL queries that are part of the runtime data model
+- Storage- or engine-specific performance tuning that belongs in schema files
+- Data backfills or one-off repair scripts that are clearly operational, not
+  part of request handling
 
 ## Dependency Management
 

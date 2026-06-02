@@ -29,6 +29,11 @@ should read like editorial front doors to the subsystem: clear first sentence,
 strong sectioning, thoughtful emphasis, and enough structure that a reader can
 scan and then dive deeper without feeling lost.
 
+Write like one engineer helping another use the code correctly. Favor concrete
+mechanical truth over architecture slogans. Prefer "prevents mixing file IDs
+and upload IDs" to "keeps the boundary honest". When a sentence starts
+defending the elegance of the design instead of explaining behavior, rewrite it.
+
 ## Workflow
 
 1. Inspect the public API surface that changed.
@@ -56,6 +61,24 @@ Use that style. Avoid examples that only prove syntax.
 
 Begin each public item by naming what it does in domain terms. The first sentence should help a reader decide whether this item is the right one.
 
+### Prefer concrete consequences over abstract intent
+
+Readers care about what the type, function, or module does, what mistake it
+prevents, and what assumption it encodes. Say that directly.
+
+Good:
+
+- "Prevents mixing file IDs and upload IDs after deserialization."
+- "Stores the staged object key until promotion succeeds."
+
+Avoid:
+
+- "Keeps the API boundary honest."
+- "Encodes the architecture's core philosophy."
+- "Provides a principled abstraction for transport semantics."
+
+Those phrases sound clever, but they make the reader do extra translation work.
+
 ### Show real call sites
 
 Prefer examples that use the actual API shape readers will write:
@@ -69,6 +92,17 @@ That is better than pseudo-code or isolated fragments with no surrounding contex
 ### Explain why, not only how
 
 A good example should reveal the intended use case, not merely the syntax of the method call.
+
+### Cut scaffolding phrases
+
+Remove empty setup language such as:
+
+- "The core idea is simple"
+- "This type basically"
+- "In practice"
+- "What this really means"
+
+If the sentence still works after deleting the phrase, delete it.
 
 ### Keep examples copy-friendly
 
@@ -116,6 +150,26 @@ Markdown support with taste:
 
 These tools should make the page feel more polished and easier to navigate, not
 busier.
+
+### Sound human without sounding casual
+
+Human writing in technical docs is:
+
+- direct
+- specific
+- slightly warm
+- free of canned transitions
+- willing to say "this prevents X" or "use Y when Z"
+
+Human writing is not:
+
+- jokey by default
+- slogan-heavy
+- overly reverent about the design
+- stuffed with internal architecture vocabulary
+
+The goal is not "friendly marketing copy". The goal is clean, confident prose
+that sounds like a careful engineer.
 
 ## Keeping Docs Updated
 
@@ -172,6 +226,10 @@ Hard-to-document APIs are often hard-to-use APIs.
 - Do not hide meaningful failure behavior.
 - Do not leave doctests stale after changing builders, wrappers, or result types.
 - Do not overuse `no_run` for examples that could compile and run normally.
+- Do not use metaphor or virtue-language when a plain engineering statement is
+  clearer.
+- Do not write abstraction-first prose when a concrete example or consequence
+  would explain the API faster.
 
 ## Review Checklist
 
@@ -188,25 +246,44 @@ Hard-to-document APIs are often hard-to-use APIs.
 ## Example Shape
 
 ````rust
-/// Publishes a message to the configured topic.
+/// Uploads a file fragment and returns its typed public ID.
 ///
-/// This method creates a lazy publish operation. The message is not sent
-/// until the returned value is awaited.
+/// Use this when the caller already has validated bytes and wants the fragment
+/// to participate in the normal file lifecycle. The returned [`PublicId`] can
+/// be sent back to API clients directly, while the server keeps working with
+/// the typed domain ID internally.
+///
+/// This method does not publish the fragment immediately. It writes the bytes
+/// into staged storage first, then commits the metadata once the upload
+/// succeeds. That prevents partially written fragments from showing up in the
+/// ready set.
 ///
 /// # Examples
 ///
 /// ```no_run
 /// # use std::error::Error;
-/// # async fn run(client: Client) -> Result<(), Box<dyn Error>> {
-/// client.publish("events").payload("hello").await?;
+/// # async fn run(service: FileService, actor: ActorId) -> Result<(), Box<dyn Error>> {
+/// let fragment = service
+///     .upload_fragment(actor)
+///     .name("article-12.txt")
+///     .content_type("text/plain")
+///     .bytes("El derecho a...".as_bytes())
+///     .await?;
+///
+/// assert_eq!(fragment.media_type(), Some("text/plain"));
+/// println!("public id: {}", fragment.id());
 /// # Ok(())
 /// # }
 /// ```
 ///
 /// # Errors
 ///
-/// Returns an error if the payload cannot be encoded or the broker rejects
-/// the publish request.
+/// Returns an error if the bytes cannot be written, if the fragment metadata is
+/// invalid, or if the storage backend rejects the upload.
+///
+/// # Panics
+///
+/// Does not panic.
 pub fn publish(&self, topic: &str) -> Publish<'_, C> { ... }
 ````
 

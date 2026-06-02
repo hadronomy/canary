@@ -1,16 +1,12 @@
 <div align="center">
   <img src="/.github/images/github-header-image.webp" alt="GitHub Header Image" width="auto" />
   <p></p>
-  <p></p>
-  <!-- MIT License -->
   <a href="https://github.com/hadronomy/canary/blob/main/LICENSE">
     <img
       alt="Content License"
       src="https://img.shields.io/github/license/hadronomy/canary?style=for-the-badge&logo=starship&color=ee999f&logoColor=D9E0EE&labelColor=302D41"
     />
   </a>
-
-  <!-- GitHub Repo Stars -->
   <a href="https://github.com/hadronomy/canary/stargazers">
     <img
       alt="Stars"
@@ -24,164 +20,161 @@
   </p>
   <p></p>
   <a href="#getting-started">Getting Started</a> •
-  <a href="#architecture">Architecture</a> •
+  <a href="#overview">Overview</a> •
+  <a href="#repository-layout">Repository Layout</a> •
   <a href="#license">License</a>
   <hr />
-
 </div>
 
 > [!WARNING]
-> This project is currently under heavy development
+> Canary is still under heavy development.
 
-This project is a WIP, agentic legal assistance system. It is designed to support legislators, lawyers, public sector practitioners, law and political science students, and the general public in retrieving and consulting legal information.
+Canary is an AI legal assistant for Spanish law (for now). It parses BOE
+(Boletín Oficial del Estado) documents into navigable temporal fragments and
+indexes them with poly-vector matryoshka embeddings for legal retrieval.
 
-The agent will use all of its tools that interface with the database index, to fetch with multiple hops and reasoning the relevant laws for any query.
+The point is not just to find matching text. Canary keeps the shape of each
+document, the links between norms, and the valid version of the law inside the
+retrieval model itself. That makes it possible to answer with the right
+article, the right surrounding context, and the right legal version for the
+question at hand.
 
-It features a parser that extracts complete legal documents (BOE - Boletín Oficial del Estado) into a complete node/path system, where from each fragment of the node you can navigate the documents, find the articles you need and the context you need, giving superpowers to the agent.
+It is built for legislators, lawyers, public sector practitioners, law and
+political science students, and anyone else who needs something better than
+keyword search over legal text.
 
-## Architecture
+## Overview
 
-### Data Model
+Canary treats law as structured material.
 
-Legal documents are stored in a hierarchical structure using PostgreSQL with pgvector:
+It parses BOE documents into legal fragments such as *libros*, *títulos*,
+*capítulos*, *secciones*, *artículos*, and *párrafos*. Those fragments keep
+their place in the hierarchy, so the system can move up, down, and sideways
+through the document instead of treating every paragraph as an isolated chunk.
 
-- **legal_documents**: Main document storage with 256-dim summary embeddings
-- **sense_fragments**: Document fragments with dual embeddings (256-dim for ANN search, 1024-dim for reranking)
-- **reference_anchors**: Cross-references between documents (deroga, modifica, interpreta, etc.)
-- **document_versions**: Version control for temporal validity tracking
-- **fragment_index_jobs**: Queue for embedding generation
+It also keeps temporal validity in the model. If a provision changes over time,
+the system can distinguish what is currently in force from what used to be in
+force, and can retrieve the version that actually matters for a question.
 
-The system uses PostgreSQL's `ltree` extension for hierarchical path queries, enabling efficient navigation from any fragment to its parents, children, and siblings.
+The same idea applies to legal references. Modifications, repeals,
+interpretations, and related citations are part of the retrieval path. If one
+norm changes another, Canary can follow that relationship instead of pretending
+the documents are unrelated.
 
-### Two-Stage Retrieval System
+## Retrieval model
 
-1. **Fast Candidate Generation**: Uses 256-dim embeddings with HNSW index for approximate nearest neighbor search
-2. **Precise Reranking**: Uses 1024-dim embeddings for accurate relevance scoring
-3. **Context Expansion**: Uses ltree paths to navigate the document hierarchy and gather surrounding context
-4. **Multi-hop Navigation**: Follows reference anchors to related documents (modifications, repeals, citations)
+Retrieval happens in stages.
 
-### Parser System
+First, Canary uses smaller scout vectors to search broadly and cheaply. Then it
+uses larger full vectors to rerank candidates with more precision. After that,
+it rebuilds context from the document hierarchy and follows relevant legal
+references when the answer depends on neighboring provisions or linked norms.
 
-The BOE parser converts XML documents into a navigable AST with:
+That combination matters. A legal question often depends on more than the first
+matching paragraph. It may depend on the article above it, the section around
+it, the norm that modified it, or the version that was valid on a particular
+date.
 
-- Hierarchical node structure (libro → título → capítulo → sección → artículo → párrafo)
-- Dual path representation: structural paths and legal citation paths
-- Fragment extraction for semantic search indexing
-- Reference extraction for cross-document linking
+Canary is built around that reality.
 
-## Tech Stack
+## Document model
 
-- **Effect** - Type-safe, composable async effects and service layer
-- **TypeScript** - Type safety throughout the entire stack
-- **Bun** - Fast JavaScript runtime
-- **PostgreSQL + pgvector** - Vector database with HNSW indexing
-- **Drizzle ORM** - TypeScript-first database schema
-- **TanStack Router** - File-based routing (web)
-- **TailwindCSS** - Utility-first CSS (web)
-- **shadcn/ui** - Reusable UI components (web)
-- **Turborepo** - Optimized monorepo build system
-- **Oxlint** - Linting and formatting
+BOE documents are represented as navigable legal hierarchies.
 
-## Project Structure
+Each fragment carries:
 
-```
-canary/
-├── apps/
-│   ├── web/              # Frontend application (React + TanStack Router)
-│   ├── server/           # Backend services (Effect-based collector/indexer)
-│   ├── tui/              # Terminal UI application
-│   └── fumadocs/         # Documentation site
-├── packages/
-│   ├── db/               # Database schema and Effect service
-│   ├── env/              # Environment configuration
-│   └── config/           # Shared configuration
-└── docs/                 # Design docs and RFCs
-```
+- its structural position in the document
+- its legal citation identity
+- its temporal validity
+- its links to related legal material
 
-## Getting Started
+That gives retrieval a real document model to work with instead of a flat pile
+of embeddings.
+
+## Tech stack
+
+The core of Canary is written in Rust. That includes the parser, the server,
+the file workflows, the database integration, and the supporting runtime
+components around them. The HTTP layer runs on Axum, operational state lives in
+SurrealDB, and orchestration uses Temporal.
+
+The application layer around that core is written in TypeScript. The web UI,
+the TUI, the docs site, and the shared frontend tooling live in the TypeScript
+workspace and run on Bun.
+
+## Repository layout
+
+### Rust crates
+
+- `crates/parser` (`document-hierarchy`) parses BOE documents into the
+  navigable document tree and fragment model
+- `crates/server` (`canary-server`) exposes the HTTP API, file flows, and
+  runtime application wiring
+- `crates/database` owns SurrealDB runtime access and the Surrealkit schema
+  project under `crates/database/database/`
+- `crates/public-id` provides typed public identifiers for API resources
+
+### TypeScript apps and packages
+
+- `apps/web` is the main web client
+- `apps/tui` is the terminal UI
+- `apps/fumadocs` is the documentation site
+- `packages/env` and `packages/config` hold shared TypeScript configuration
+
+## Getting started
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) installed
-- PostgreSQL 16+ with pgvector extension
-- Jina AI API key (for embeddings)
+- Rust toolchain
+- [Mise](https://mise.jdx.dev/)
+- [Bun](https://bun.sh/)
+- Docker for the local SurrealDB workflow
 
-### Installation
+### Install local tooling
 
-```bash
+```sh
+mise i
 bun install
 ```
 
-### Database Setup
+### Start the local database
 
-1. Create a PostgreSQL database with pgvector:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS ltree;
+```sh
+just db-up
+just db-sync
 ```
 
-2. Configure environment:
+If you want seed data and schema-focused tests as well:
 
-```bash
-cp apps/server/.env.example apps/server/.env
-# Edit with your DATABASE_URL and JINA_API_KEY
+```sh
+just db-seed
+just db-test
 ```
 
-3. Push schema to database:
+### Run the server
 
-```bash
-bun run db:push
+```sh
+just server
 ```
 
-### Running the Collector
+At that point, SurrealDB is running locally, the schema is applied, and the
+Rust server is running against the current workspace code.
 
-The collector fetches and indexes BOE documents:
+### Run the frontend or docs
 
-```bash
-bun run dev:server
-```
-
-This starts the Effect-based collector service that:
-
-- Fetches XML documents from BOE
-- Parses into hierarchical fragments
-- Generates embeddings via Jina AI
-- Stores in PostgreSQL with vector indexing
-
-### Running the Web App
-
-```bash
+```sh
 bun run dev:web
+bun --cwd apps/fumadocs dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) to access the web interface.
+## Common commands
 
-## Development Commands
-
-- `bun run dev` - Start all applications in development mode
-- `bun run dev:web` - Start only the web application
-- `bun run dev:server` - Start the collector/indexer service
-- `bun run build` - Build all applications
-- `bun run check-types` - Type-check all packages
-- `bun run db:push` - Push schema changes to database
-- `bun run db:studio` - Open Drizzle Studio
-- `bun run check` - Run Oxlint and Oxfmt
-- `bun run retrieval:audit` - Benchmark retrieval performance
-
-## Git Hooks
-
-Initialize hooks:
-
-```bash
-bun run prepare
-```
-
-Format and lint:
-
-```bash
-bun run check
-```
+- `just help`
+- `just fmt`
+- `just check`
+- `just db-status`
+- `just db-down`
+- `cargo test --workspace`
 
 ## License
 
