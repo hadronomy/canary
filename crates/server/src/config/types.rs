@@ -11,11 +11,11 @@ use smol_str::SmolStr;
 use url::Url;
 
 use super::defaults::{
-    DEFAULT_BODY_LIMIT, DEFAULT_CHUNK_SIZE, DEFAULT_FILE_ROOT, DEFAULT_MULTIPART_MAX_PARTS,
-    DEFAULT_MULTIPART_PART_SIZE, DEFAULT_MULTIPART_THRESHOLD, DEFAULT_PAGE_LIMIT,
-    DEFAULT_REQUEST_TIMEOUT, DEFAULT_SHUTDOWN_GRACE_PERIOD, DEFAULT_SNIFF_BYTES,
-    DEFAULT_THREAD_KEEP_ALIVE, DEFAULT_UPLOAD_INTENT_TTL, DEFAULT_UPLOAD_MAX_BYTES,
-    DEFAULT_UPLOAD_PRESIGN_TTL,
+    DEFAULT_BODY_LIMIT, DEFAULT_CHUNK_SIZE, DEFAULT_FILE_ROOT, DEFAULT_MCP_SSE_KEEP_ALIVE,
+    DEFAULT_MCP_SSE_RETRY, DEFAULT_MULTIPART_MAX_PARTS, DEFAULT_MULTIPART_PART_SIZE,
+    DEFAULT_MULTIPART_THRESHOLD, DEFAULT_PAGE_LIMIT, DEFAULT_REQUEST_TIMEOUT,
+    DEFAULT_SHUTDOWN_GRACE_PERIOD, DEFAULT_SNIFF_BYTES, DEFAULT_THREAD_KEEP_ALIVE,
+    DEFAULT_UPLOAD_INTENT_TTL, DEFAULT_UPLOAD_MAX_BYTES, DEFAULT_UPLOAD_PRESIGN_TTL,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -26,6 +26,7 @@ pub struct AppConfig {
     pub runtime: RuntimeConfig,
     pub observability: ObservabilityConfig,
     pub http: HttpConfig,
+    pub mcp: McpConfig,
     pub db: database::Config,
     pub files: FilesConfig,
 }
@@ -48,6 +49,45 @@ impl Default for ServerConfig {
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             shutdown_grace_period: DEFAULT_SHUTDOWN_GRACE_PERIOD,
             max_body_size_bytes: DEFAULT_BODY_LIMIT,
+        }
+    }
+}
+
+/// Streamable HTTP settings for the MCP endpoint.
+///
+/// Missing `Origin` headers are accepted because desktop MCP clients usually
+/// do not run in a browser. When a browser sends an `Origin`, it must match one
+/// of [`Self::allowed_origins`]. Public deployments should replace the local
+/// defaults with externally reachable hostnames and trusted browser origins.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct McpConfig {
+    /// Host authorities accepted by the MCP transport.
+    pub allowed_hosts: Vec<String>,
+
+    /// Browser origins accepted when an MCP request carries an `Origin` header.
+    pub allowed_origins: Vec<String>,
+
+    /// Interval between SSE keep-alive events.
+    #[serde(with = "humantime_serde")]
+    pub sse_keep_alive: Duration,
+
+    /// Delay clients should observe before reconnecting an interrupted SSE stream.
+    #[serde(with = "humantime_serde")]
+    pub sse_retry: Duration,
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            allowed_hosts: vec!["localhost".into(), "127.0.0.1".into(), "::1".into()],
+            allowed_origins: vec![
+                "http://localhost".into(),
+                "http://127.0.0.1".into(),
+                "http://[::1]".into(),
+            ],
+            sse_keep_alive: DEFAULT_MCP_SSE_KEEP_ALIVE,
+            sse_retry: DEFAULT_MCP_SSE_RETRY,
         }
     }
 }

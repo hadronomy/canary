@@ -58,7 +58,7 @@ impl ServerBuilder<WithConfig> {
         let files = FileService::new(loaded.settings.files.clone(), db.clone()).await?;
         let state = AppState::new(loaded, db, parser, files);
         state.update_db_ready();
-        let router = http::router(&state).with_state(state.clone());
+        let router = http::router(&state, shutdown.register()).with_state(state.clone());
         Ok(ServerApplication { state, router, shutdown })
     }
 }

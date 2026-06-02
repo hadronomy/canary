@@ -85,6 +85,7 @@ MCP endpoints:
 ```txt
 POST /mcp
 GET  /mcp
+DELETE /mcp
 ```
 
 REST endpoints:
@@ -1833,87 +1834,96 @@ scheduler owns programmed execution
 
 ## 10. Clean Final Endpoint Map
 
-```txt
-# System
-GET    /livez
-GET    /readyz
-GET    /healthz
-GET    /metrics
-GET    /openapi.json
-GET    /docs
+Checked endpoints are scaffolded in `crates/server`. A checked endpoint may still return a
+structured TODO response until its application service is implemented.
 
-# MCP
-POST   /mcp
-GET    /mcp
+### System
 
-# Collections
-POST   /v1/collections
-GET    /v1/collections
-GET    /v1/collections/{collection_id}
-PATCH  /v1/collections/{collection_id}
-DELETE /v1/collections/{collection_id}
+- [x] `GET    /livez`
+- [x] `GET    /readyz`
+- [x] `GET    /healthz`
+- [x] `GET    /metrics`
+- [x] `GET    /openapi.json`
+- [x] `GET    /docs`
 
-# Files and uploads
-POST   /v1/files
-GET    /v1/files
-GET    /v1/files/{file_id}
-DELETE /v1/files/{file_id}
+### MCP
 
-POST   /v1/uploads
-GET    /v1/uploads/{upload_id}
-POST   /v1/uploads/{upload_id}/parts
-POST   /v1/uploads/{upload_id}/complete
-POST   /v1/uploads/{upload_id}/abort
+- [x] `POST   /mcp`
+- [x] `GET    /mcp`
+- [x] `DELETE /mcp`
 
-# Documents
-POST   /v1/collections/{collection_id}/documents
-GET    /v1/collections/{collection_id}/documents
-GET    /v1/collections/{collection_id}/documents/{document_id}
-PATCH  /v1/collections/{collection_id}/documents/{document_id}
-DELETE /v1/collections/{collection_id}/documents/{document_id}
+### Collections
 
-GET    /v1/collections/{collection_id}/documents/{document_id}/versions
-GET    /v1/collections/{collection_id}/documents/{document_id}/versions/{version_id}
-GET    /v1/collections/{collection_id}/documents/{document_id}/chunks
-GET    /v1/collections/{collection_id}/chunks/{chunk_id}
+- [x] `POST   /v1/collections`
+- [x] `GET    /v1/collections`
+- [x] `GET    /v1/collections/{collection_id}`
+- [x] `PATCH  /v1/collections/{collection_id}`
+- [x] `DELETE /v1/collections/{collection_id}`
 
-# Ingestions
-POST   /v1/collections/{collection_id}/ingestions
-GET    /v1/collections/{collection_id}/ingestions
-GET    /v1/collections/{collection_id}/ingestions/{ingestion_id}
-POST   /v1/collections/{collection_id}/ingestions/{ingestion_id}/cancel
-GET    /v1/collections/{collection_id}/ingestions/{ingestion_id}/events
+### Files and uploads
 
-# Sources
-POST   /v1/collections/{collection_id}/sources
-GET    /v1/collections/{collection_id}/sources
-GET    /v1/collections/{collection_id}/sources/{source_id}
-PATCH  /v1/collections/{collection_id}/sources/{source_id}
-DELETE /v1/collections/{collection_id}/sources/{source_id}
+- [x] `POST   /v1/files`
+- [x] `GET    /v1/files`
+- [x] `GET    /v1/files/{file_id}`
+- [x] `DELETE /v1/files/{file_id}`
+- [x] `POST   /v1/uploads`
+- [x] `GET    /v1/uploads/{upload_id}`
+- [x] `POST   /v1/uploads/{upload_id}/parts`
+- [x] `POST   /v1/uploads/{upload_id}/complete`
+- [x] `POST   /v1/uploads/{upload_id}/abort`
 
-POST   /v1/collections/{collection_id}/sources/{source_id}/runs
-GET    /v1/collections/{collection_id}/sources/{source_id}/runs
-GET    /v1/collections/{collection_id}/sources/{source_id}/runs/{run_id}
-POST   /v1/collections/{collection_id}/sources/{source_id}/runs/{run_id}/cancel
+### Documents
 
-# Schedules
-POST   /v1/schedules
-GET    /v1/schedules
-GET    /v1/schedules/{schedule_id}
-PATCH  /v1/schedules/{schedule_id}
-DELETE /v1/schedules/{schedule_id}
-POST   /v1/schedules/{schedule_id}/pause
-POST   /v1/schedules/{schedule_id}/resume
-POST   /v1/schedules/{schedule_id}/trigger
-GET    /v1/schedules/{schedule_id}/runs
+- [x] `POST   /v1/collections/{collection_id}/documents`
+- [x] `GET    /v1/collections/{collection_id}/documents`
+- [x] `GET    /v1/collections/{collection_id}/documents/{document_id}`
+- [x] `PATCH  /v1/collections/{collection_id}/documents/{document_id}`
+- [x] `DELETE /v1/collections/{collection_id}/documents/{document_id}`
+- [x] `GET    /v1/collections/{collection_id}/documents/{document_id}/versions`
+- [x] `GET    /v1/collections/{collection_id}/documents/{document_id}/versions/{version_id}`
+- [x] `GET    /v1/collections/{collection_id}/documents/{document_id}/chunks`
+- [x] `GET    /v1/collections/{collection_id}/chunks/{chunk_id}`
 
-# Retrieval
-POST   /v1/collections/{collection_id}/search
+### Ingestions
 
-# Generic operations
-GET    /v1/operations/{operation_id}
-POST   /v1/operations/{operation_id}/cancel
-```
+- [x] `POST   /v1/collections/{collection_id}/ingestions`
+- [x] `GET    /v1/collections/{collection_id}/ingestions`
+- [x] `GET    /v1/collections/{collection_id}/ingestions/{ingestion_id}`
+- [x] `POST   /v1/collections/{collection_id}/ingestions/{ingestion_id}/cancel`
+- [x] `GET    /v1/collections/{collection_id}/ingestions/{ingestion_id}/events`
+
+### Sources
+
+- [x] `POST   /v1/collections/{collection_id}/sources`
+- [x] `GET    /v1/collections/{collection_id}/sources`
+- [x] `GET    /v1/collections/{collection_id}/sources/{source_id}`
+- [x] `PATCH  /v1/collections/{collection_id}/sources/{source_id}`
+- [x] `DELETE /v1/collections/{collection_id}/sources/{source_id}`
+- [x] `POST   /v1/collections/{collection_id}/sources/{source_id}/runs`
+- [x] `GET    /v1/collections/{collection_id}/sources/{source_id}/runs`
+- [x] `GET    /v1/collections/{collection_id}/sources/{source_id}/runs/{run_id}`
+- [x] `POST   /v1/collections/{collection_id}/sources/{source_id}/runs/{run_id}/cancel`
+
+### Schedules
+
+- [x] `POST   /v1/schedules`
+- [x] `GET    /v1/schedules`
+- [x] `GET    /v1/schedules/{schedule_id}`
+- [x] `PATCH  /v1/schedules/{schedule_id}`
+- [x] `DELETE /v1/schedules/{schedule_id}`
+- [x] `POST   /v1/schedules/{schedule_id}/pause`
+- [x] `POST   /v1/schedules/{schedule_id}/resume`
+- [x] `POST   /v1/schedules/{schedule_id}/trigger`
+- [x] `GET    /v1/schedules/{schedule_id}/runs`
+
+### Retrieval
+
+- [x] `POST   /v1/collections/{collection_id}/search`
+
+### Generic operations
+
+- [x] `GET    /v1/operations/{operation_id}`
+- [x] `POST   /v1/operations/{operation_id}/cancel`
 
 ---
 

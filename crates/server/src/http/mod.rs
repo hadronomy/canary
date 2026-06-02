@@ -5,6 +5,7 @@ pub mod response;
 pub mod routes;
 
 use axum::Router;
+use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::state::AppState;
@@ -17,11 +18,16 @@ async fn method_not_allowed() -> AppError {
     AppError::method_not_allowed("The requested method is not allowed for this resource.")
 }
 
-pub fn router(state: &AppState) -> Router<AppState> {
+/// Builds the complete HTTP surface with streaming-safe middleware around MCP.
+pub fn router(state: &AppState, token: CancellationToken) -> Router<AppState> {
+    let rest = middleware::rest(
+        Router::new().merge(routes::system::router()).merge(routes::api::router(state)),
+        state,
+    );
     let router = Router::new()
-        .merge(routes::system::router())
-        .merge(routes::api::router(state))
+        .merge(routes::mcp::router(state, token))
+        .merge(rest)
         .method_not_allowed_fallback(method_not_allowed)
         .fallback(not_found);
-    middleware::apply(router, state)
+    middleware::shared(router, state)
 }

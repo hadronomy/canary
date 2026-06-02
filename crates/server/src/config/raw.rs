@@ -6,7 +6,7 @@ use url::Url;
 
 use super::defaults::{DEFAULT_BODY_LIMIT, DEFAULT_FILE_ROOT, DEFAULT_PAGE_LIMIT};
 use super::types::{
-    BlobConfig, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, ServerConfig,
+    BlobConfig, McpConfig, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, ServerConfig,
     TransportSecurity,
 };
 
@@ -17,6 +17,7 @@ pub(crate) struct RawAppConfig {
     pub(crate) runtime: RuntimeConfig,
     pub(crate) observability: ObservabilityConfig,
     pub(crate) http: RawHttpConfig,
+    pub(crate) mcp: McpConfig,
     pub(crate) db: database::Config,
     pub(crate) files: RawFilesConfig,
 }

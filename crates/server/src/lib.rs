@@ -5,6 +5,9 @@ pub mod config;
 pub mod error;
 pub mod files;
 pub mod http;
+pub mod id;
+pub mod idempotency;
+pub mod mcp;
 pub mod observability;
 pub mod pagination;
 pub mod runtime;
@@ -16,9 +19,9 @@ pub use app::{ServerApplication, ServerBuilder};
 pub use config::{
     AppConfig, BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir,
     DatabaseEndpoint, DatabaseEngine, DatabaseName, EnvironmentLayer, FileBackendConfig,
-    FilesConfig, HttpConfig, LoadedConfig, LocalFileConfig, LogFormat, Namespace, ObjectPrefix,
-    ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig,
-    ServerConfig, StoragePath, TransportSecurity,
+    FilesConfig, HttpConfig, LoadedConfig, LocalFileConfig, LogFormat, McpConfig, Namespace,
+    ObjectPrefix, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials,
+    S3FileConfig, ServerConfig, StoragePath, TransportSecurity,
 };
 pub use database::{ConfigError as DatabaseConfigError, Database, Error as DatabaseError, Session};
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
@@ -37,6 +40,11 @@ pub use files::upload::{
     UploadPurpose, UploadSession, UploadState,
 };
 pub use http::extract::{PageCursor, Pagination};
+pub use id::{
+    ChunkId, CollectionId, DocumentId, DocumentVersionId, EventId, IngestionId, OperationId, RunId,
+    ScheduleId, SourceId,
+};
+pub use idempotency::{IdempotencyKey, IdempotencyKeyError};
 pub use observability::init as init_observability;
 pub use pagination::{
     DefaultPagePolicy, Limit, Page, PagePolicy, PagePolicySource, PageQuery, PageRequest,

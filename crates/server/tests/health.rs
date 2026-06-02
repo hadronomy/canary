@@ -19,3 +19,20 @@ async fn healthz_returns_ok() {
 
     assert_eq!(response.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn livez_returns_no_content() {
+    let app = ServerBuilder::new()
+        .with_config(LoadedConfig::default())
+        .build()
+        .await
+        .expect("app should build");
+
+    let response = app
+        .router()
+        .oneshot(Request::builder().uri("/livez").body(Body::empty()).unwrap())
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}

@@ -12,6 +12,6 @@ pub use load::{ConfigOrigin, EnvironmentLayer, LoadedConfig};
 pub use secrecy::SecretString;
 pub use types::{
     AppConfig, BlobConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, LogFormat,
-    ObjectPrefix, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials,
+    McpConfig, ObjectPrefix, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials,
     S3FileConfig, ServerConfig, StoragePath, TransportSecurity,
 };

@@ -24,12 +24,13 @@ use crate::files::upload::{
 };
 use crate::http::extract::UploadActor;
 use crate::http::response::created;
+use crate::http::routes::todo::todo;
 use crate::pagination::{Limit, Page, PagePolicy, PagePolicySource};
 use crate::state::{AppState, FileState};
 
 pub fn router(_state: &AppState) -> Router<AppState> {
     Router::new()
-        .route("/files", get(list))
+        .route("/files", get(list).post(todo))
         .route("/files/uploads", post(create_upload))
         .route("/files/uploads/{id}", get(upload_status))
         .route("/files/uploads/{id}/access", post(refresh_access))
@@ -38,8 +39,16 @@ pub fn router(_state: &AppState) -> Router<AppState> {
         .route("/files/uploads/{id}/events", get(upload_events))
         .route("/files/uploads/{id}/complete", post(complete_upload))
         .route("/files/uploads/{id}/abort", post(abort_upload))
-        .route("/files/{id}", get(download))
+        .route("/files/{id}", get(download).delete(todo))
         .route("/files/{id}/meta", get(meta))
+        .route("/uploads", post(create_upload))
+        .route("/uploads/{id}", get(upload_status))
+        .route("/uploads/{id}/access", post(refresh_access))
+        .route("/uploads/{id}/parts", post(upload_parts))
+        .route("/uploads/{id}/ws", get(upload_socket))
+        .route("/uploads/{id}/events", get(upload_events))
+        .route("/uploads/{id}/complete", post(complete_upload))
+        .route("/uploads/{id}/abort", post(abort_upload))
 }
 
 #[derive(Deserialize)]
@@ -309,17 +318,17 @@ fn target(id: UploadId, access: UploadAccess) -> UploadTarget {
 
 #[inline(always)]
 fn parts_url(id: UploadId) -> String {
-    format!("/api/v1/files/uploads/{id}/parts")
+    format!("/v1/uploads/{id}/parts")
 }
 
 #[inline(always)]
 fn complete_url(id: UploadId) -> String {
-    format!("/api/v1/files/uploads/{id}/complete")
+    format!("/v1/uploads/{id}/complete")
 }
 
 #[inline(always)]
 fn abort_url(id: UploadId) -> String {
-    format!("/api/v1/files/uploads/{id}/abort")
+    format!("/v1/uploads/{id}/abort")
 }
 
 #[inline(always)]

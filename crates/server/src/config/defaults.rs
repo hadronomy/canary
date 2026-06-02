@@ -7,6 +7,8 @@ pub(crate) const DEFAULT_CONFIG_CANDIDATES: &[&str] =
     &["canary-server.toml", "config/canary-server.toml"];
 pub(crate) const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) const DEFAULT_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(30);
+pub(crate) const DEFAULT_MCP_SSE_KEEP_ALIVE: Duration = Duration::from_secs(15);
+pub(crate) const DEFAULT_MCP_SSE_RETRY: Duration = Duration::from_secs(3);
 pub(crate) const DEFAULT_THREAD_KEEP_ALIVE: Duration = Duration::from_secs(10);
 pub(crate) const DEFAULT_BODY_LIMIT: usize = 8 * 1024 * 1024;
 pub(crate) const DEFAULT_CHUNK_SIZE: usize = 64 * 1024;

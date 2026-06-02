@@ -108,6 +108,7 @@ pub trait ResourceId: Sized + Copy + Eq + Ord + Hash + fmt::Debug + 'static {
 
     /// Creates a new time-ordered UUIDv7-backed domain ID.
     #[must_use]
+    #[inline(always)]
     fn new() -> Self {
         Self::from_uuid(Uuid::now_v7())
     }
@@ -128,30 +129,35 @@ pub struct PublicId<T: ResourceId> {
 impl<T: ResourceId> PublicId<T> {
     /// Wraps a domain identifier for API use.
     #[must_use]
+    #[inline(always)]
     pub fn new(inner: T) -> Self {
         Self { inner, _marker: PhantomData }
     }
 
     /// Returns the resource prefix for this public ID type.
     #[must_use]
+    #[inline(always)]
     pub const fn prefix(&self) -> &'static str {
         T::PREFIX
     }
 
     /// Returns the wrapped domain ID.
     #[must_use]
+    #[inline(always)]
     pub fn into_inner(self) -> T {
         self.inner
     }
 
     /// Borrows the wrapped domain ID.
     #[must_use]
+    #[inline(always)]
     pub fn inner(&self) -> &T {
         &self.inner
     }
 
     /// Returns the raw UUID stored by the wrapped domain ID.
     #[must_use]
+    #[inline(always)]
     pub fn as_uuid(self) -> Uuid {
         self.inner.as_uuid()
     }
@@ -189,12 +195,14 @@ impl<T: ResourceId> PublicId<T> {
 }
 
 impl<T: ResourceId> From<T> for PublicId<T> {
+    #[inline(always)]
     fn from(inner: T) -> Self {
         Self::new(inner)
     }
 }
 
 impl<T: ResourceId> fmt::Display for PublicId<T> {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.encode())
     }
@@ -203,6 +211,7 @@ impl<T: ResourceId> fmt::Display for PublicId<T> {
 impl<T: ResourceId> FromStr for PublicId<T> {
     type Err = PublicIdError;
 
+    #[inline(always)]
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         Self::decode(input)
     }
@@ -211,6 +220,7 @@ impl<T: ResourceId> FromStr for PublicId<T> {
 impl<T: ResourceId> TryFrom<&str> for PublicId<T> {
     type Error = PublicIdError;
 
+    #[inline(always)]
     fn try_from(input: &str) -> Result<Self, Self::Error> {
         Self::decode(input)
     }
@@ -219,6 +229,7 @@ impl<T: ResourceId> TryFrom<&str> for PublicId<T> {
 impl<T: ResourceId> TryFrom<String> for PublicId<T> {
     type Error = PublicIdError;
 
+    #[inline(always)]
     fn try_from(input: String) -> Result<Self, Self::Error> {
         Self::decode(&input)
     }
@@ -283,30 +294,35 @@ macro_rules! resource_id {
 
             /// Creates a new UUIDv7-backed identifier.
             #[must_use]
+            #[inline(always)]
             pub fn new() -> Self {
                 <Self as $crate::ResourceId>::new()
             }
 
             /// Builds the identifier from a raw UUID.
             #[must_use]
+            #[inline(always)]
             pub fn from_uuid(uuid: $crate::Uuid) -> Self {
                 Self(uuid)
             }
 
             /// Returns the raw UUID stored by this identifier.
             #[must_use]
+            #[inline(always)]
             pub fn as_uuid(self) -> $crate::Uuid {
                 self.0
             }
 
             /// Wraps the identifier in its typed public representation.
             #[must_use]
+            #[inline(always)]
             pub fn public(self) -> $crate::PublicId<Self> {
                 $crate::PublicId::from(self)
             }
         }
 
         impl Default for $name {
+            #[inline(always)]
             fn default() -> Self {
                 Self::new()
             }
@@ -315,28 +331,33 @@ macro_rules! resource_id {
         impl $crate::ResourceId for $name {
             const PREFIX: &'static str = $prefix;
 
+            #[inline(always)]
             fn from_uuid(uuid: $crate::Uuid) -> Self {
                 Self(uuid)
             }
 
+            #[inline(always)]
             fn as_uuid(self) -> $crate::Uuid {
                 self.0
             }
         }
 
         impl From<$name> for $crate::Uuid {
+            #[inline(always)]
             fn from(id: $name) -> Self {
                 id.0
             }
         }
 
         impl From<$crate::Uuid> for $name {
+            #[inline(always)]
             fn from(uuid: $crate::Uuid) -> Self {
                 Self(uuid)
             }
         }
 
         impl ::std::fmt::Display for $name {
+            #[inline(always)]
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                 self.public().fmt(f)
             }
@@ -345,6 +366,7 @@ macro_rules! resource_id {
         impl ::std::str::FromStr for $name {
             type Err = $crate::PublicIdError;
 
+            #[inline(always)]
             fn from_str(input: &str) -> Result<Self, Self::Err> {
                 $crate::PublicId::<Self>::decode(input).map($crate::PublicId::into_inner)
             }
@@ -353,6 +375,7 @@ macro_rules! resource_id {
         impl ::std::convert::TryFrom<&str> for $name {
             type Error = $crate::PublicIdError;
 
+            #[inline(always)]
             fn try_from(input: &str) -> Result<Self, Self::Error> {
                 input.parse()
             }
@@ -361,6 +384,7 @@ macro_rules! resource_id {
         impl ::std::convert::TryFrom<String> for $name {
             type Error = $crate::PublicIdError;
 
+            #[inline(always)]
             fn try_from(input: String) -> Result<Self, Self::Error> {
                 input.parse()
             }

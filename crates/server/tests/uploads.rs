@@ -66,7 +66,7 @@ async fn local_backend_rejects_direct_upload_intents() {
             actor(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/v1/files/uploads")
+                    .uri("/v1/uploads")
                     .header(header::CONTENT_TYPE, "application/json"),
                 "alice",
             )

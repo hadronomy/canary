@@ -6,10 +6,17 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 
+use crate::http::routes::todo::todo;
 use crate::state::{AppState, ReadinessSnapshot};
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/healthz", get(health)).route("/readyz", get(readiness))
+    Router::new()
+        .route("/livez", get(liveness))
+        .route("/readyz", get(readiness))
+        .route("/healthz", get(health))
+        .route("/metrics", get(todo))
+        .route("/openapi.json", get(todo))
+        .route("/docs", get(todo))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -26,6 +33,11 @@ struct ReadinessResponse {
     service: &'static str,
     version: &'static str,
     readiness: ReadinessSnapshot,
+}
+
+#[inline(always)]
+async fn liveness() -> StatusCode {
+    StatusCode::NO_CONTENT
 }
 
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {

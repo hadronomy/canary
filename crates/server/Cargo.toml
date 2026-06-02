@@ -32,6 +32,12 @@ mime.workspace = true
 mime_guess.workspace = true
 object_store = { workspace = true, features = ["aws", "fs"] }
 public-id = { path = "../public-id" }
+rmcp = { version = "1.7.0", default-features = false, features = [
+  "server",
+  "macros",
+  "transport-streamable-http-server",
+] }
+schemars = "1.2.1"
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

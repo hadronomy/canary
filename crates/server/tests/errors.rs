@@ -93,6 +93,30 @@ async fn unknown_routes_use_not_found_fallback() {
 }
 
 #[tokio::test]
+async fn todo_routes_use_consistent_error_shape() {
+    let dir = tempfile::tempdir().expect("temp dir should create");
+    let response = app(&dir)
+        .await
+        .oneshot(Request::builder().uri("/v1/collections").body(Body::empty()).unwrap())
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+
+    let request_id = request_id(&response);
+    let body = json(response).await;
+
+    assert_common(
+        &body,
+        "not_implemented",
+        "This API operation has not been implemented yet.",
+        501,
+        &request_id,
+    );
+    assert_eq!(body["title"], "Not implemented");
+}
+
+#[tokio::test]
 async fn pagination_validation_uses_consistent_error_shape() {
     let dir = tempfile::tempdir().expect("temp dir should create");
     let response = app(&dir)

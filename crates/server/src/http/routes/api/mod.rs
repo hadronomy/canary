@@ -5,5 +5,6 @@ use axum::Router;
 use crate::state::AppState;
 
 pub fn router(state: &AppState) -> Router<AppState> {
-    Router::new().nest("/api/v1", v1::router(state))
+    let router = v1::router(state);
+    Router::new().nest("/v1", router.clone()).nest("/api/v1", router)
 }

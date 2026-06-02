@@ -6,8 +6,8 @@ use super::raw::{
     RawS3FileConfig,
 };
 use super::types::{
-    AppConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, ObjectPrefix,
-    S3Credentials, S3FileConfig, StoragePath,
+    AppConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, McpConfig,
+    ObjectPrefix, S3Credentials, S3FileConfig, StoragePath,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -21,6 +21,7 @@ impl TryFrom<RawAppConfig> for AppConfig {
             runtime: value.runtime,
             observability: value.observability,
             http: HttpConfig::try_from(value.http)?,
+            mcp: validate_mcp(value.mcp)?,
             db: value.db,
             files: FilesConfig::try_from(value.files)?,
         })
@@ -117,6 +118,28 @@ impl TryFrom<RawS3Credentials> for S3Credentials {
     }
 }
 
+fn validate_mcp(value: McpConfig) -> Result<McpConfig, ConfigError> {
+    validate_list(&value.allowed_hosts, "mcp.allowed_hosts")?;
+    validate_list(&value.allowed_origins, "mcp.allowed_origins")?;
+    if value.sse_keep_alive.is_zero() {
+        return Err(ConfigError::invalid("mcp.sse_keep_alive must be greater than zero"));
+    }
+    if value.sse_retry.is_zero() {
+        return Err(ConfigError::invalid("mcp.sse_retry must be greater than zero"));
+    }
+    Ok(value)
+}
+
+fn validate_list(values: &[String], kind: &str) -> Result<(), ConfigError> {
+    if values.is_empty() {
+        return Err(ConfigError::invalid(format!("{kind} must contain at least one value")));
+    }
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(ConfigError::invalid(format!("{kind} values cannot be empty")));
+    }
+    Ok(())
+}
+
 fn validate_secret(value: SecretString, kind: &str) -> Result<SecretString, ConfigError> {
     if value.expose_secret().trim().is_empty() {
         return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
@@ -129,4 +152,35 @@ fn validate_text(value: String, kind: &str) -> Result<SmolStr, ConfigError> {
         return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
     }
     Ok(value.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn mcp_requires_transport_safeguards() {
+        let mut cfg = RawAppConfig::default();
+        cfg.mcp.allowed_hosts.clear();
+        assert_eq!(
+            AppConfig::try_from(cfg).unwrap_err().to_string(),
+            "mcp.allowed_hosts must contain at least one value"
+        );
+
+        let mut cfg = RawAppConfig::default();
+        cfg.mcp.allowed_origins.clear();
+        assert_eq!(
+            AppConfig::try_from(cfg).unwrap_err().to_string(),
+            "mcp.allowed_origins must contain at least one value"
+        );
+
+        let mut cfg = RawAppConfig::default();
+        cfg.mcp.sse_keep_alive = Duration::ZERO;
+        assert_eq!(
+            AppConfig::try_from(cfg).unwrap_err().to_string(),
+            "mcp.sse_keep_alive must be greater than zero"
+        );
+    }
 }

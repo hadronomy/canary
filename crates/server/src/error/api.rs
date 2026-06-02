@@ -65,6 +65,8 @@ pub enum AppError {
     #[error("{0}")]
     PayloadTooLarge(Box<ApiIssue>),
     #[error("{0}")]
+    NotImplemented(Box<ApiIssue>),
+    #[error("{0}")]
     ServiceUnavailable(Box<ApiIssue>),
     #[error("{issue}")]
     Internal {
@@ -310,6 +312,12 @@ impl AppError {
     }
 
     #[must_use]
+    #[inline(always)]
+    pub fn not_implemented(detail: impl Into<Cow<'static, str>>) -> Self {
+        Self::NotImplemented(Box::new(ApiIssue::new("not_implemented", detail)))
+    }
+
+    #[must_use]
     pub fn service_unavailable(detail: impl Into<Cow<'static, str>>) -> Self {
         Self::service_unavailable_code("service_unavailable", detail)
     }
@@ -338,6 +346,7 @@ impl AppError {
             | Self::MethodNotAllowed(issue)
             | Self::UnsupportedMediaType(issue)
             | Self::PayloadTooLarge(issue)
+            | Self::NotImplemented(issue)
             | Self::ServiceUnavailable(issue) => {
                 issue.context.insert(key.into(), value);
             }
@@ -365,6 +374,7 @@ impl AppError {
             | Self::MethodNotAllowed(issue)
             | Self::UnsupportedMediaType(issue)
             | Self::PayloadTooLarge(issue)
+            | Self::NotImplemented(issue)
             | Self::ServiceUnavailable(issue) => {
                 issue.errors.push(FieldError { field: field.into(), message: message.into() });
             }
@@ -448,6 +458,11 @@ impl AppError {
             Self::PayloadTooLarge(issue) => ErrorSpec::new(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "Payload too large",
+                issue.as_ref().clone(),
+            ),
+            Self::NotImplemented(issue) => ErrorSpec::new(
+                StatusCode::NOT_IMPLEMENTED,
+                "Not implemented",
                 issue.as_ref().clone(),
             ),
             Self::ServiceUnavailable(issue) => ErrorSpec::new(
