@@ -7,10 +7,10 @@
       "packages/*"
     ],
     "catalog": {
-      "dotenv": "^17.3.1",
-      "zod": "^4.3.6",
-      "typescript": "^5.9.3",
-      "@types/bun": "^1.3.10"
+      "dotenv": "^17.4.2",
+      "zod": "^4.4.3",
+      "typescript": "^6.0.3",
+      "@types/bun": "^1.3.14"
     }
   },
   "type": "module",
@@ -25,23 +25,23 @@
   },
   "dependencies": {
     "@canary/env": "workspace:*",
-    "@effect/cli": "^0.73.2",
-    "@effect/platform": "^0.94.5",
-    "@effect/platform-bun": "^0.87.1",
-    "dotenv": "^17.3.1",
-    "effect": "^3.19.19",
-    "zod": "^4.3.6"
+    "@effect/cli": "^0.75.1",
+    "@effect/platform": "^0.96.1",
+    "@effect/platform-bun": "^0.89.0",
+    "dotenv": "^17.4.2",
+    "effect": "^3.21.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "@effect/language-service": "^0.80.0",
-    "@types/bun": "^1.3.10",
+    "@effect/language-service": "^0.86.2",
+    "@types/bun": "^1.3.14",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
-    "oxfmt": "^0.40.0",
-    "oxlint": "^1.55.0",
-    "turbo": "^2.8.16",
-    "typescript": "^5.9.3"
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0",
+    "turbo": "^2.9.16",
+    "typescript": "^6.0.3"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs}": [
@@ -54,5 +54,5 @@
       "mise exec -- taplo format"
     ]
   },
-  "packageManager": "bun@1.3.10"
+  "packageManager": "bun@1.3.14"
 }
