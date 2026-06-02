@@ -9,6 +9,8 @@ repository.workspace = true
 version.workspace    = true
 
 [dependencies]
+anstream = "1.0.0"
+anstyle = "1.0.14"
 async-trait.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
@@ -42,6 +44,7 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+shadow-rs = { version = "2.0.0", default-features = false }
 smol_str.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
@@ -85,3 +88,7 @@ surreal-remote-ws = ["database/remote-ws"]
 crc64fast-nvme     = "1.2.1"
 reqwest            = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 tempfile.workspace = true
+
+[build-dependencies]
+rusty-figlet = { version = "0.3.5", default-features = false }
+shadow-rs    = { version = "2.0.0", default-features = false, features = ["build"] }

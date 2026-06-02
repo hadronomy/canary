@@ -1,10 +1,11 @@
-use canary_server::{LoadedConfig, ServerBuilder, build_runtime, init_observability};
+use canary_server::{BANNER, LoadedConfig, ServerBuilder, build_runtime, init_observability};
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result, WrapErr};
 
 fn main() -> Result<()> {
     human_panic::setup_panic!();
     install_diagnostics()?;
     let loaded = LoadedConfig::load().wrap_err("Failed to load server configuration.")?;
+    BANNER.print().into_diagnostic().wrap_err("Failed to print banner.")?;
     init_observability(&loaded.settings.observability)
         .into_diagnostic()
         .wrap_err("Failed to initialize observability.")?;

@@ -1,6 +1,10 @@
 #![forbid(unsafe_code)]
 
 pub mod app;
+pub mod banner;
+mod build {
+    shadow_rs::shadow!(info);
+}
 pub mod config;
 pub mod error;
 pub mod files;
@@ -16,6 +20,7 @@ pub mod shutdown;
 pub mod state;
 
 pub use app::{ServerApplication, ServerBuilder};
+pub use banner::{BANNER, Banner};
 pub use config::{
     AppConfig, BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir,
     DatabaseEndpoint, DatabaseEngine, DatabaseName, EnvironmentLayer, FileBackendConfig,
