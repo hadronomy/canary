@@ -39,7 +39,7 @@ const ACTOR_HEADER: HeaderName = HeaderName::from_static("x-canary-actor-id");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pagination<C, P = DefaultPagePolicy, W = C> {
     window: PageWindow<C>,
-    marker: PhantomData<(P, W)>,
+    _marker: PhantomData<(P, W)>,
 }
 
 impl<C, P, W> Pagination<C, P, W> {
@@ -66,7 +66,7 @@ impl<C, P, W> Pagination<C, P, W> {
 
 impl<C, P, W> From<PageWindow<C>> for Pagination<C, P, W> {
     fn from(window: PageWindow<C>) -> Self {
-        Self { window, marker: PhantomData }
+        Self { window, _marker: PhantomData }
     }
 }
 
@@ -126,7 +126,7 @@ where
             AppError::validation_code("invalid_pagination", "The pagination query is invalid.")
                 .with_detail("reason", json!(err.to_string()))
         })?;
-        Ok(Self { window, marker: PhantomData })
+        Ok(Self { window, _marker: PhantomData })
     }
 }
 

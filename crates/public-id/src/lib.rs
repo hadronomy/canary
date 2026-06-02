@@ -122,14 +122,14 @@ pub trait ResourceId: Sized + Copy + Eq + Ord + Hash + fmt::Debug + 'static {
 #[repr(transparent)]
 pub struct PublicId<T: ResourceId> {
     inner: T,
-    marker: PhantomData<T>,
+    _marker: PhantomData<T>,
 }
 
 impl<T: ResourceId> PublicId<T> {
     /// Wraps a domain identifier for API use.
     #[must_use]
     pub fn new(inner: T) -> Self {
-        Self { inner, marker: PhantomData }
+        Self { inner, _marker: PhantomData }
     }
 
     /// Returns the resource prefix for this public ID type.
