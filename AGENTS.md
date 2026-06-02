@@ -137,6 +137,12 @@ Use this as an important reference implementation with opentui best practices.
 - Exception: when defining Effect-based service/runtime operations, prefer `const x = Effect.fn("...")` for traceable spans and ergonomic composition.
 - In test directories, extract repeated fixture/parser helpers into a local shared module (for example `test/collectors/<domain>/common.ts`) and import from there.
 
+## Writing style
+
+For documentation, rustdoc, comments, and user-facing prose, write like a
+thoughtful human maintainer: clear, direct, and unmistakable, but never stiff,
+canned, or legalistic. Prefer natural sentences over boilerplate.
+
 ## Database Best Practices (SurrealDB + Surrealkit)
 
 **IMPORTANT:** Keep schema lifecycle work in `crates/database/database/` and
