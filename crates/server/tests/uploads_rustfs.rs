@@ -5,8 +5,7 @@ use std::env;
 use axum::http::{Request, StatusCode, header};
 use base64::Engine;
 use canary_server::config::{
-    FileBackendConfig, ObjectPrefix, S3AddressingStyle, S3Credentials, S3FileConfig,
-    TransportSecurity,
+    ObjectPrefix, S3AddressingStyle, S3Credentials, S3FileConfig, TransportSecurity,
 };
 use common::{actor, app_with, json};
 use crc64fast_nvme::Digest as Crc64;
@@ -44,9 +43,9 @@ impl RustFsEnv {
     }
 }
 
-fn rustfs_cfg(dir: &tempfile::TempDir, rustfs: &RustFsEnv) -> canary_server::LoadedConfig {
-    let mut cfg = common::config(dir);
-    cfg.settings.files.backend = FileBackendConfig::S3(Box::new(S3FileConfig {
+fn rustfs_cfg(rustfs: &RustFsEnv) -> canary_server::LoadedConfig {
+    let mut cfg = common::config();
+    cfg.settings.files.storage = S3FileConfig {
         bucket: rustfs.bucket.clone().into(),
         region: rustfs.region.clone().into(),
         endpoint: Some(rustfs.endpoint.clone()),
@@ -61,7 +60,7 @@ fn rustfs_cfg(dir: &tempfile::TempDir, rustfs: &RustFsEnv) -> canary_server::Loa
             TransportSecurity::HttpsOnly
         },
         credentials: S3Credentials::Ambient,
-    }));
+    };
     cfg.settings.files.uploads.multipart_threshold_bytes = 5 * 1024 * 1024;
     cfg.settings.files.uploads.multipart_part_size_bytes = 5 * 1024 * 1024;
     cfg.settings.files.uploads.multipart_max_parts = 32;
@@ -93,8 +92,7 @@ fn crc64(data: &[u8]) -> String {
 #[ignore = "requires CANARY_RUSTFS_* environment and ambient AWS-style credentials"]
 async fn rustfs_direct_put_roundtrip() {
     let rustfs = RustFsEnv::load();
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let app = app_with(rustfs_cfg(&dir, &rustfs)).await;
+    let app = app_with(rustfs_cfg(&rustfs)).await;
     let http = Client::new();
 
     let response = app
@@ -167,8 +165,7 @@ async fn rustfs_direct_put_roundtrip() {
 #[ignore = "requires CANARY_RUSTFS_* environment and ambient AWS-style credentials"]
 async fn rustfs_direct_multipart_roundtrip() {
     let rustfs = RustFsEnv::load();
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let app = app_with(rustfs_cfg(&dir, &rustfs)).await;
+    let app = app_with(rustfs_cfg(&rustfs)).await;
     let http = Client::new();
     let part = vec![b'a'; 5 * 1024 * 1024];
     let first_sum = crc64(&part);

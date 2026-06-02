@@ -32,7 +32,7 @@ infer.workspace = true
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 mime.workspace = true
 mime_guess.workspace = true
-object_store = { workspace = true, features = ["aws", "fs"] }
+object_store = { workspace = true, features = ["aws"] }
 public-id = { path = "../public-id" }
 rmcp = { version = "1.7.0", default-features = false, features = [
   "server",
@@ -46,7 +46,6 @@ serde_json.workspace = true
 sha2.workspace = true
 shadow-rs = { version = "2.0.0", default-features = false }
 smol_str.workspace = true
-tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -85,9 +84,8 @@ surreal-remote-http = ["database/remote-http"]
 surreal-remote-ws = ["database/remote-ws"]
 
 [dev-dependencies]
-crc64fast-nvme     = "1.2.1"
-reqwest            = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
-tempfile.workspace = true
+crc64fast-nvme = "1.2.1"
+reqwest        = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 
 [build-dependencies]
 rusty-figlet = { version = "0.3.5", default-features = false }

@@ -2,29 +2,40 @@
 
 use axum::Router;
 use axum::body::to_bytes;
-use canary_server::config::{FileBackendConfig, LocalFileConfig, StoragePath};
+use canary_server::config::{
+    S3AddressingStyle, S3Credentials, S3FileConfig, SecretString, TransportSecurity,
+};
 use canary_server::files::service::FileService;
 use canary_server::services::parser::ParserService;
 use canary_server::{AppState, LoadedConfig, ServerBuilder};
 use database::Database;
 use serde_json::Value;
-use tempfile::TempDir;
+use url::Url;
 
-pub fn config(dir: &TempDir) -> LoadedConfig {
+pub fn config() -> LoadedConfig {
     let mut cfg = LoadedConfig::default();
-    let root = dir.path().join("blobs");
-    cfg.settings.files.backend = FileBackendConfig::Local(LocalFileConfig {
-        root: StoragePath::new(&root).expect("temp path should be valid"),
-    });
+    cfg.settings.files.storage = S3FileConfig {
+        bucket: "canary-test".into(),
+        region: "us-east-1".into(),
+        endpoint: Some(Url::parse("http://127.0.0.1:1").expect("test endpoint should be valid")),
+        prefix: None,
+        addressing_style: S3AddressingStyle::PathStyle,
+        transport_security: TransportSecurity::AllowHttp,
+        credentials: S3Credentials::Static {
+            access_key_id: "test".into(),
+            secret_access_key: SecretString::from("test".to_owned()),
+            session_token: None,
+        },
+    };
     cfg
 }
 
-pub async fn app(dir: &TempDir) -> Router {
-    app_with(config(dir)).await
+pub async fn app() -> Router {
+    app_with(config()).await
 }
 
-pub async fn state(dir: &TempDir) -> AppState {
-    state_with(config(dir)).await
+pub async fn state() -> AppState {
+    state_with(config()).await
 }
 
 pub async fn app_with(cfg: LoadedConfig) -> Router {

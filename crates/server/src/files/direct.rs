@@ -30,12 +30,12 @@ use crate::files::upload::{
 };
 
 #[derive(Debug, Clone)]
-pub struct MultipartSession {
-    pub id: MultipartUploadId,
+pub(crate) struct MultipartSession {
+    pub(crate) id: MultipartUploadId,
 }
 
 #[derive(Debug, Clone)]
-pub struct S3RuntimeConfig {
+pub(crate) struct S3RuntimeConfig {
     bucket: String,
     endpoint: Option<Url>,
     prefix: Option<String>,
@@ -47,7 +47,7 @@ pub struct S3RuntimeConfig {
 
 impl S3RuntimeConfig {
     #[must_use]
-    pub fn from_file(cfg: &S3FileConfig) -> Self {
+    pub(crate) fn from_file(cfg: &S3FileConfig) -> Self {
         Self {
             bucket: cfg.bucket.as_str().to_owned(),
             endpoint: cfg.endpoint.clone(),
@@ -59,18 +59,20 @@ impl S3RuntimeConfig {
         }
     }
 
+    #[inline(always)]
     #[must_use]
-    pub fn bucket(&self) -> &str {
+    pub(crate) fn bucket(&self) -> &str {
         self.bucket.as_str()
     }
 
+    #[inline(always)]
     #[must_use]
-    pub fn prefix(&self) -> Option<&str> {
+    pub(crate) fn prefix(&self) -> Option<&str> {
         self.prefix.as_deref()
     }
 
     #[must_use]
-    pub fn object_store_builder(&self) -> AmazonS3Builder {
+    pub(crate) fn object_store_builder(&self) -> AmazonS3Builder {
         let mut builder = AmazonS3Builder::from_env()
             .with_bucket_name(self.bucket())
             .with_region(self.region.as_str())
@@ -95,7 +97,7 @@ impl S3RuntimeConfig {
         builder
     }
 
-    pub async fn sdk_client(&self) -> Result<Client, FileError> {
+    pub(crate) async fn sdk_client(&self) -> Result<Client, FileError> {
         let builder = match &self.credentials {
             S3Credentials::Ambient => {
                 let mut loader = aws_config::defaults(BehaviorVersion::latest())
@@ -137,17 +139,17 @@ impl S3RuntimeConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct S3DirectBackend {
+pub(crate) struct S3DirectBackend {
     bucket: String,
     cli: Client,
 }
 
 impl S3DirectBackend {
-    pub async fn new(cfg: &S3RuntimeConfig) -> Result<Self, FileError> {
+    pub(crate) async fn new(cfg: &S3RuntimeConfig) -> Result<Self, FileError> {
         Ok(Self { bucket: cfg.bucket().to_owned(), cli: cfg.sdk_client().await? })
     }
 
-    pub async fn sign_put(
+    pub(crate) async fn sign_put(
         &self,
         key: &str,
         ty: Option<&Mime>,
@@ -182,7 +184,7 @@ impl S3DirectBackend {
         })
     }
 
-    pub async fn sign_get(
+    pub(crate) async fn sign_get(
         &self,
         key: &str,
         ty: &str,
@@ -202,7 +204,7 @@ impl S3DirectBackend {
         Ok(req.uri().to_string())
     }
 
-    pub async fn head(&self, key: &str) -> Result<BlobHead, FileError> {
+    pub(crate) async fn head(&self, key: &str) -> Result<BlobHead, FileError> {
         let out = self
             .cli
             .head_object()
@@ -220,7 +222,7 @@ impl S3DirectBackend {
         })
     }
 
-    pub async fn create_multipart(
+    pub(crate) async fn create_multipart(
         &self,
         key: &str,
         ty: Option<&Mime>,
@@ -239,7 +241,7 @@ impl S3DirectBackend {
         Ok(MultipartSession { id: MultipartUploadId::new(upload_id)? })
     }
 
-    pub async fn sign_parts(
+    pub(crate) async fn sign_parts(
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
@@ -275,7 +277,7 @@ impl S3DirectBackend {
         Ok(out)
     }
 
-    pub async fn list_parts(
+    pub(crate) async fn list_parts(
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
@@ -301,7 +303,7 @@ impl S3DirectBackend {
         Ok(parts)
     }
 
-    pub async fn complete_multipart(
+    pub(crate) async fn complete_multipart(
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
@@ -335,7 +337,7 @@ impl S3DirectBackend {
         Ok(())
     }
 
-    pub async fn abort_multipart(
+    pub(crate) async fn abort_multipart(
         &self,
         key: &str,
         upload_id: &MultipartUploadId,
@@ -357,7 +359,7 @@ impl S3DirectBackend {
     /// promotion copies it into the ready namespace with the authoritative
     /// `Content-Type`, then deletes the staging object. This keeps staging
     /// private and ensures only ready keys are ever served.
-    pub async fn promote(&self, from: &str, to: &str, ty: &str) -> Result<(), FileError> {
+    pub(crate) async fn promote(&self, from: &str, to: &str, ty: &str) -> Result<(), FileError> {
         self.cli
             .copy_object()
             .bucket(&self.bucket)

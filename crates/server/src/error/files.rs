@@ -1,5 +1,3 @@
-use std::io;
-
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -64,21 +62,12 @@ pub enum FileError {
     #[error("upload size does not match the declared size")]
     #[diagnostic(code(canary_server::files::size_mismatch))]
     SizeMismatch,
-    #[error("direct upload is not available for this backend")]
-    #[diagnostic(code(canary_server::files::direct_upload_unavailable))]
-    DirectUploadUnavailable,
     #[error("upload size exceeds the declared limit")]
     #[diagnostic(code(canary_server::files::upload_too_large))]
     UploadTooLarge,
     #[error("stored upload metadata is incomplete")]
     #[diagnostic(code(canary_server::files::upload_incomplete))]
     UploadIncomplete,
-    #[error("failed to create staging directory")]
-    #[diagnostic(code(canary_server::files::create_dir))]
-    CreateDir {
-        #[source]
-        source: io::Error,
-    },
     #[error("object storage operation failed")]
     #[diagnostic(code(canary_server::files::store))]
     Store {

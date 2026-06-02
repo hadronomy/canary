@@ -1,10 +1,8 @@
-use std::path::PathBuf;
-
 use secrecy::SecretString;
 use serde::Deserialize;
 use url::Url;
 
-use super::defaults::{DEFAULT_BODY_LIMIT, DEFAULT_FILE_ROOT, DEFAULT_PAGE_LIMIT};
+use super::defaults::{DEFAULT_BODY_LIMIT, DEFAULT_PAGE_LIMIT};
 use super::types::{
     BlobConfig, McpConfig, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, ServerConfig,
     TransportSecurity,
@@ -23,29 +21,10 @@ pub(crate) struct RawAppConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub(crate) struct RawFilesConfig {
-    pub(crate) root: Option<PathBuf>,
-    pub(crate) backend: RawFileBackendConfig,
+    pub(crate) storage: RawS3FileConfig,
     pub(crate) uploads: BlobConfig,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum RawFileBackendConfig {
-    Local {
-        root: PathBuf,
-    },
-    S3 {
-        #[serde(flatten)]
-        cfg: Box<RawS3FileConfig>,
-    },
-}
-
-impl Default for RawFileBackendConfig {
-    fn default() -> Self {
-        Self::Local { root: PathBuf::from(DEFAULT_FILE_ROOT) }
-    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

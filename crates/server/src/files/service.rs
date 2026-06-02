@@ -14,7 +14,7 @@ use crate::files::list::ListBlobs;
 use crate::files::meta::{BlobRecord, BlobSize, SampleCompleteness, StoredBlob};
 use crate::files::repo::{BlobMetaRepo, InMemoryUploadRepo, SurrealBlobMetaRepo, UploadRepo};
 use crate::files::sniff::classify;
-use crate::files::store::{Backend, BlobHead};
+use crate::files::store::{BlobHead, ObjectStorage};
 use crate::files::upload::{
     ActorId, ChecksumEncoding, CompleteCmd, CompleteDirectPut, CompleteInput, CompleteMultipart,
     PartNumber, PartRequest, SignedUploadPart, UploadAccess, UploadChecksum, UploadDraft,
@@ -37,14 +37,14 @@ pub struct CreatedIntent {
 
 #[derive(Clone)]
 pub struct BlobService {
-    backend: Arc<Backend>,
+    storage: Arc<ObjectStorage>,
     blobs: Arc<dyn BlobMetaRepo>,
     ttl: Duration,
 }
 
 #[derive(Clone)]
 pub struct UploadService {
-    backend: Arc<Backend>,
+    storage: Arc<ObjectStorage>,
     blobs: Arc<dyn BlobMetaRepo>,
     cfg: BlobConfig,
     events: UploadHub,
@@ -58,16 +58,16 @@ pub struct DownloadAccess {
 
 impl FileService {
     pub async fn new(cfg: FilesConfig, db: Database) -> Result<Self, FileError> {
-        let backend = Arc::new(Backend::new(&cfg.backend, cfg.uploads.chunk_size_bytes).await?);
+        let storage = Arc::new(ObjectStorage::new(&cfg.storage).await?);
         let uploads_repo: Arc<dyn UploadRepo> = Arc::new(InMemoryUploadRepo::new());
         let blobs_repo: Arc<dyn BlobMetaRepo> = Arc::new(SurrealBlobMetaRepo::new(db));
         let blobs = BlobService {
-            backend: Arc::clone(&backend),
+            storage: Arc::clone(&storage),
             blobs: Arc::clone(&blobs_repo),
             ttl: cfg.uploads.presign_ttl,
         };
         let uploads = UploadService {
-            backend,
+            storage,
             blobs: blobs_repo,
             cfg: cfg.uploads,
             events: UploadHub::new(),
@@ -96,7 +96,7 @@ impl BlobService {
         let meta = self.blobs.head_ready(id).await?;
         Ok(DownloadAccess {
             url: self
-                .backend
+                .storage
                 .sign_get(
                     &meta.key,
                     meta.kind.serving().content_type(&meta.kind.effective),
@@ -127,9 +127,6 @@ impl UploadService {
     pub async fn create_intent(&self, draft: UploadDraft) -> Result<CreatedIntent, FileError> {
         let now = Utc::now();
         self.purge_expired(now).await?;
-        if !self.backend.supports_direct() {
-            return Err(FileError::DirectUploadUnavailable);
-        }
         self.validate_draft(&draft)?;
         let expires_at =
             now + TimeDelta::from_std(self.cfg.intent_ttl).expect("intent ttl is valid");
@@ -201,7 +198,7 @@ impl UploadService {
             session
         } else {
             let next = self
-                .backend
+                .storage
                 .create_multipart(
                     session.staging_key(),
                     session.declared_type(),
@@ -213,7 +210,7 @@ impl UploadService {
             session
         };
         let upload_id = session.multipart_upload_id().ok_or(FileError::UploadIncomplete)?.clone();
-        self.backend
+        self.storage
             .sign_parts(session.staging_key(), &upload_id, &input.parts, self.cfg.presign_ttl)
             .await
     }
@@ -291,7 +288,7 @@ impl UploadService {
     async fn access_for(&self, session: &UploadSession) -> Result<UploadAccess, FileError> {
         match session.mode() {
             UploadMode::DirectPut => Ok(UploadAccess::DirectPut(
-                self.backend
+                self.storage
                     .sign_put(
                         session.staging_key(),
                         session.declared_type(),
@@ -375,7 +372,7 @@ impl UploadService {
             return Ok(session);
         };
         let next = self
-            .backend
+            .storage
             .list_multipart_parts(session.staging_key(), &upload_id)
             .await?
             .into_iter()
@@ -451,7 +448,7 @@ impl UploadService {
             return Err(FileError::UploadIncomplete);
         }
         if let Err(err) = self
-            .backend
+            .storage
             .complete_multipart(
                 session.staging_key(),
                 &upload_id,
@@ -472,9 +469,9 @@ impl UploadService {
         session: &UploadSession,
         etag: Option<String>,
     ) -> Result<StoredBlob, FileError> {
-        let head = self.backend.head_staging(session.staging_key()).await?;
+        let head = self.storage.head_staging(session.staging_key()).await?;
         self.ensure_size(session, &head)?;
-        let sniff = self.backend.peek_staging(session.staging_key(), self.cfg.sniff_bytes).await?;
+        let sniff = self.storage.peek_staging(session.staging_key(), self.cfg.sniff_bytes).await?;
         Ok(StoredBlob {
             id: session.file_id(),
             key: session.ready_key().clone(),
@@ -506,7 +503,7 @@ impl UploadService {
         mut blob: StoredBlob,
     ) -> Result<StoredBlob, FileError> {
         let head = self
-            .backend
+            .storage
             .promote(session.staging_key(), session.ready_key(), blob.kind.effective.as_str())
             .await?;
         blob.etag = head.etag.or(blob.etag);
@@ -550,7 +547,7 @@ impl UploadService {
     ) -> Result<UploadSession, FileError> {
         if let Some(upload_id) = session.multipart_upload_id()
             && let Err(source) =
-                self.backend.abort_multipart(session.staging_key(), upload_id).await
+                self.storage.abort_multipart(session.staging_key(), upload_id).await
         {
             tracing::warn!(
                 %source,
@@ -559,7 +556,7 @@ impl UploadService {
                 "failed to abort multipart upload",
             );
         }
-        if let Err(source) = self.backend.delete_staging(session.staging_key()).await {
+        if let Err(source) = self.storage.delete_staging(session.staging_key()).await {
             tracing::warn!(%source, upload_id = %session.id(), "failed to clean object");
         }
         let _ = self.blobs.delete_ready(session.file_id()).await;

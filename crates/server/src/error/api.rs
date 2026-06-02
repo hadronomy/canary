@@ -170,10 +170,6 @@ impl From<FileError> for AppError {
                 "upload_size_mismatch",
                 "The uploaded file size does not match the expected size.",
             ),
-            FileError::DirectUploadUnavailable => Self::service_unavailable_code(
-                "direct_upload_unavailable",
-                "The upload backend cannot issue direct upload access right now.",
-            ),
             FileError::UploadTooLarge => Self::payload_too_large_code(
                 "upload_too_large",
                 "The upload exceeds the configured size limit.",
@@ -181,7 +177,7 @@ impl From<FileError> for AppError {
             FileError::UploadIncomplete => {
                 Self::bad_request_code("upload_incomplete", "The upload has not finished yet.")
             }
-            FileError::CreateDir { .. } | FileError::Store { .. } | FileError::Metadata { .. } => {
+            FileError::Store { .. } | FileError::Metadata { .. } => {
                 Self::internal("file_error", "The file operation failed.")
             }
         }

@@ -1,7 +1,7 @@
 mod common;
 
 use axum::http::{Request, StatusCode, header};
-use common::{actor, app, json, request_id};
+use common::{app, json, request_id};
 use serde_json::json as json_value;
 use tower::ServiceExt;
 
@@ -21,8 +21,7 @@ fn assert_problem(
 
 #[tokio::test]
 async fn upload_intent_requires_actor() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(
             Request::builder()
@@ -52,47 +51,6 @@ async fn upload_intent_requires_actor() {
         "upload_unauthorized",
         "Authentication is required for uploads.",
         401,
-        &rid,
-    );
-}
-
-#[tokio::test]
-async fn local_backend_rejects_direct_upload_intents() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let app = app(&dir).await;
-
-    let response = app
-        .oneshot(
-            actor(
-                Request::builder()
-                    .method("POST")
-                    .uri("/v1/uploads")
-                    .header(header::CONTENT_TYPE, "application/json"),
-                "alice",
-            )
-            .body(axum::body::Body::from(
-                json_value!({
-                    "name": "hello.txt",
-                    "content_type": "text/plain",
-                    "size_bytes": 5,
-                    "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
-                    "purpose": "attachment"
-                })
-                .to_string(),
-            ))
-            .unwrap(),
-        )
-        .await
-        .expect("router should respond");
-
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let rid = request_id(&response);
-    let body = json(response).await;
-    assert_problem(
-        &body,
-        "direct_upload_unavailable",
-        "The upload backend cannot issue direct upload access right now.",
-        503,
         &rid,
     );
 }

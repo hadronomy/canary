@@ -20,9 +20,8 @@ fn assert_common(body: &Value, code: &str, message: &str, status: u16, request_i
 
 #[tokio::test]
 async fn domain_errors_use_stable_error_shape() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
     let id = FileId::new();
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(
             Request::builder().uri(format!("/api/v1/files/{id}/meta")).body(Body::empty()).unwrap(),
@@ -50,8 +49,7 @@ async fn internal_errors_use_generic_error_shape() {
         ))
     }
 
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let state = state(&dir).await;
+    let state = state().await;
     let app =
         http::middleware::apply(Router::new().route("/boom", get(boom)), &state).with_state(state);
     let response = app
@@ -76,8 +74,7 @@ async fn internal_errors_use_generic_error_shape() {
 
 #[tokio::test]
 async fn unknown_routes_use_not_found_fallback() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(Request::builder().uri("/missing").body(Body::empty()).unwrap())
         .await
@@ -94,8 +91,7 @@ async fn unknown_routes_use_not_found_fallback() {
 
 #[tokio::test]
 async fn todo_routes_use_consistent_error_shape() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(Request::builder().uri("/v1/collections").body(Body::empty()).unwrap())
         .await
@@ -118,8 +114,7 @@ async fn todo_routes_use_consistent_error_shape() {
 
 #[tokio::test]
 async fn pagination_validation_uses_consistent_error_shape() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(Request::builder().uri("/api/v1/files?limit=1001").body(Body::empty()).unwrap())
         .await
@@ -143,8 +138,7 @@ async fn pagination_validation_uses_consistent_error_shape() {
 
 #[tokio::test]
 async fn method_not_allowed_uses_consistent_error_shape() {
-    let dir = tempfile::tempdir().expect("temp dir should create");
-    let response = app(&dir)
+    let response = app()
         .await
         .oneshot(
             Request::builder()

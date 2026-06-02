@@ -35,7 +35,7 @@
 //! | Upload model | [`upload::UploadSession`], [`upload::UploadMode`], [`upload::UploadAccess`] | Describes what a client may do next and which state an upload is in |
 //! | Identity | [`id::FileId`], [`id::UploadId`] | Keeps ready blobs and upload sessions distinct at the type level |
 //! | Blob model | [`meta::StoredBlob`], [`meta::BlobChecksum`], [`meta::ReadyKey`] | Defines the durable shape of a ready blob |
-//! | Storage boundary | [`store::Backend`], [`direct`] | Talks to the configured object store and signs direct access |
+//! | Storage boundary | [`store`], [`direct`] | Talks to the configured object store and signs direct access |
 //! | Metadata boundary | [`repo::UploadRepo`], [`repo::BlobMetaRepo`] | Separates upload-session state from durable ready-blob metadata |
 //! | Media policy | [`sniff`], [`meta::MediaProfile`] | Turns observed bytes into an explicit serving decision |
 //! | Eventing | [`events`] | Publishes keyed upload lifecycle updates for SSE and WebSocket consumers |
@@ -160,12 +160,11 @@
 //! Those are small distinctions, but they prevent the system from collapsing
 //! "bytes were written somewhere" into "a blob exists now."
 //!
-//! # Backend expectations
+//! # Storage expectations
 //!
-//! The production upload API assumes a direct-capable object store. In practice
-//! that means the S3-compatible path implemented in [`direct`]. The local
-//! backend remains useful for tests and development scaffolding, but it does not
-//! pretend to be a fully capable public upload target.
+//! The upload API requires S3-compatible object storage. There is no local
+//! filesystem fallback: development and tests use the same direct-storage
+//! contract as production.
 //!
 //! # Module guide
 //!

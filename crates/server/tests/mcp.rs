@@ -6,7 +6,6 @@ use axum::http::{Method, Request, StatusCode, header};
 use axum::response::Response;
 use canary_server::CollectionId;
 use serde_json::{Value, json};
-use tempfile::tempdir;
 use tower::ServiceExt;
 
 const ACCEPT: &str = "application/json, text/event-stream";
@@ -14,8 +13,7 @@ const VERSION: &str = "2025-11-25";
 
 #[tokio::test]
 async fn mcp_exposes_curated_surface_and_structured_stubs() {
-    let dir = tempdir().expect("temp dir should be created");
-    let app = common::app(&dir).await;
+    let app = common::app().await;
     let response = post(
         &app,
         json!({
@@ -120,8 +118,7 @@ async fn mcp_exposes_curated_surface_and_structured_stubs() {
 
 #[tokio::test]
 async fn mcp_rejects_untrusted_browser_origins() {
-    let dir = tempdir().expect("temp dir should be created");
-    let app = common::app(&dir).await;
+    let app = common::app().await;
     let response = app
         .oneshot(
             Request::builder()

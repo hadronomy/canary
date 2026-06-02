@@ -9,13 +9,12 @@
   - upload intent state machine
   - status endpoint
   - SSE events endpoint
-  - proxy content upload endpoint
   - explicit completion endpoint
   - legacy upload route removal
 - Phase 2 implemented:
-  - direct presigned `PUT` uploads for direct-capable backends
+  - direct presigned `PUT` uploads
   - direct multipart part signing, completion, and abort
-  - direct upload as the default for S3-compatible backends when server-side checksum verification is not required
+  - S3-compatible object storage as the only file backend
   - opportunistic cleanup for expired intents and abandoned objects during upload lifecycle operations
 - Phase 3 implemented:
   - durable ready-blob metadata persistence in SurrealDB
@@ -25,7 +24,6 @@
 - Still pending:
   - any protocol beyond storage-native multipart resumability
   - durable upload-session persistence
-  - backend-verified SHA-256 for direct uploads
 
 ## Decisions beyond the spec
 
@@ -44,35 +42,27 @@
 
 - Ready-blob metadata now persists into SurrealDB through `BlobMetaRepo`, while upload-session state remains in-memory.
 - This keeps the upload state machine fast and isolated for now while making reads, listing, and post-completion blob metadata durable across service reconstruction.
-- Multipart uploads now persist the incoming `NamedTempFile` into the server's own staging directory before hashing and promotion. This keeps the `tempfile` cleanup owner contained inside the staging layer and ensures the store only ever receives stable staged paths, just like the raw upload path.
 - The file subsystem now separates byte storage from metadata listing. Byte persistence, upload-session state, and durable blob metadata are independent collaborators instead of one storage-shaped map pretending to do every job.
-- The byte store now uses `object_store` for both local filesystem and S3-compatible backends. This keeps the service surface backend-agnostic and avoids letting `tokio::fs::File` become the public shape of file reads.
-- For local development compatibility, the old `files.root` setting still works and now acts as a shorthand for the local backend root. The typed backend model lives under `files.backend`, but the old single-path setup remains pleasant for tests and zero-infra development.
-- The `LoadedConfig::load_from_environment_map` test helper still validates the local compatibility path well, but it is not a perfect stand-in for every nested tagged-enum environment override shape. I kept the backend config typed instead of flattening it just to make that helper more permissive.
-- Staging is now an explicit file-storage concern in configuration. Local backends default staging to `<root>/.staging`, while S3-compatible backends default it to `data/files/.staging` because proxy uploads still need a local spool directory even when final bytes live in object storage.
-- The phase-1 byte store proxies uploads through the server for both local and S3-compatible backends. Presigned direct access is deliberately deferred until metadata persistence and upload-session state are in place.
-- Successful object-store writes now treat staged-file cleanup as best-effort. If cleanup fails after the final object has already been persisted, the server logs a warning instead of turning that success into a client-visible 500 and creating a confusing partially successful upload result.
-- Multipart staging now hashes and sniffs files with buffered reads instead of `fs::read`, which avoids loading the whole uploaded file into memory just to inspect it.
+- File storage now requires S3-compatible object storage. The local filesystem backend, `files.root` compatibility setting, and proxy upload path are gone.
+- Configuration names the required store directly under `files.storage`; there is no backend selector for a capability the service cannot use.
+- Successful promotion treats staged-object cleanup as best-effort. If cleanup fails after the ready object has been persisted, the server logs a warning instead of turning success into a confusing client-visible failure.
 - The old in-memory `BlobCatalog` has now been replaced by explicit `UploadRepo` and `BlobMetaRepo` boundaries. Upload sessions stay in-memory for now; ready blobs persist through SurrealDB.
 - Uploads now have an explicit state machine: `created`, `uploading`, `uploaded`, `ready`, `failed`, `expired`, and `deleted`.
 - The new phase-1 upload API is intent-first:
   - `POST /api/v1/files/uploads`
   - `GET /api/v1/files/uploads/{id}`
   - `GET /api/v1/files/uploads/{id}/events`
-  - `PUT /api/v1/files/uploads/{id}/content`
   - `POST /api/v1/files/uploads/{id}/complete`
-- The upload architecture now chooses between `proxy_put`, `direct_put`, and `direct_multipart` from one typed policy decision in `UploadService`.
-- Proxy uploads in the new intent flow stream straight from the Axum request body into the `object_store` writer while hashing and sniffing incrementally. That removes the staging tempfile from the new primary upload path.
+- The upload architecture chooses between `direct_put` and `direct_multipart` from one typed policy decision in `UploadService`.
 - The old `POST /api/v1/files` multipart upload route and `PUT /api/v1/files/raw` route are gone. Upload intents are now the only supported write path.
 - Upload events are delivered through a keyed `UploadHub`. SSE remains the primary live-update transport, and WebSockets now sit on top of the same per-upload watch stream for clients that prefer a socket transport.
 - Phase 1 introduces a tiny typed upload principal boundary using the `x-canary-actor-id` header. This is deliberately modest and is intended to be replaced by the real auth/session layer later, but it prevents the new upload intent API from being completely ownerless.
 - Upload mutation paths now rely on explicit repository transition methods instead of one coarse async mutex. That keeps the workflow honest about its state machine and leaves room for a later durable upload-session repo without rewriting the public upload API again.
-- Completion now covers proxied uploads, direct presigned uploads, and multipart flows, including multipart part signing and abort. The remaining integrity gap is backend-verified SHA-256 for direct uploads, which still falls back to `proxy_put` when the client declares a checksum.
+- Completion covers direct presigned uploads and multipart flows, including multipart part signing and abort.
 - Phase 2 creates S3-compatible multipart sessions lazily on the first `POST /files/uploads/{id}/parts` request instead of during intent creation. That keeps intent creation cheap, keeps the initial upload status honestly `created`, and avoids making the route depend on a live storage round trip before the client has actually decided to upload.
-- Direct uploads currently preserve strong checksum semantics by choosing `proxy_put` whenever the client declares a SHA-256 digest. The server does not yet re-download direct objects or use backend-native checksum APIs to verify SHA-256 after a direct upload, so falling back to proxying keeps the public integrity story honest.
-- Direct uploads finalize object metadata from object-store `head` plus a bounded `peek` for MIME sniffing. The server records `etag` and `version` when available, but it does not currently persist a verified `hash_sha256` for direct uploads.
+- Direct uploads bind checksums into the storage-native contract. Single-request uploads require SHA-256; multipart uploads use CRC64/NVME with full-object semantics.
+- Direct uploads finalize object metadata from object-store `head` plus a bounded `peek` for MIME sniffing. The server records `etag`, `version`, and storage-verified checksum metadata when available.
 - Upload completion now treats the sniffed/effective media type as authoritative for serving and storage metadata. The original declared type is still preserved for audit/debugging, but successful finalization rewrites S3-compatible object `Content-Type` metadata when the backend object would otherwise drift from Canary's authoritative type.
-- Proxy uploads now classify the file before opening the upstream object-store writer. That lets the server start the S3-compatible write with the authoritative `Content-Type` already attached, so the metadata-rewrite path is only needed for direct uploads where the backend object exists before Canary can inspect it.
 - The media policy is intentionally conservative for active/renderable content. Safe passive mismatches like `application/octet-stream` plus a sniffed PNG are normalized to the sniffed type, while suspicious mismatches involving HTML, XML, SVG, or script-like types are rejected with `upload_content_type_mismatch`.
 - The old one-shot MIME resolver has been split conceptually into two steps:
   - media inspection records what the client declared, what the server detected, where the detection came from, and how confident that detector was
@@ -150,10 +140,10 @@
   - `BlobService` owns ready-blob reads and listing.
 - The old single `BlobRepo` abstraction has been split conceptually into `UploadRepo` and `BlobMetaRepo`. The current in-memory implementation still shares one inner state container, but the service layer now talks to the two responsibilities separately.
 - The upload-session repo is now explicitly in-memory-only, while ready-blob metadata uses a dedicated Surreal-backed `BlobMetaRepo`. Reconstructing `FileService` against the same database preserves ready blob metadata without resurrecting stale upload sessions.
-- The old storage pairing of `BlobStore` plus optional `DirectStore` was replaced with a matched backend enum:
-  - `Backend::Local(LocalBackend)`
-  - `Backend::S3(S3Backend)`
-- That backend enum keeps byte persistence and direct-upload capability structurally aligned, so invalid combinations like “local bytes plus S3 direct upload” are no longer representable.
+- The old backend enum was replaced with one `ObjectStorage` collaborator. Byte
+  access and S3-compatible direct signing now arrive together, so a file
+  service without the capabilities required by its public API cannot be
+  constructed.
 - Upload sessions are now strategy-specific values instead of one broad struct with optional multipart fields. The current model uses `UploadSession::{DirectPut, Multipart}` with shared data extracted into `UploadCommon`.
 - Multipart session identity is now represented explicitly with `MultipartUploadId` and `PartNumber` newtypes instead of raw strings and integers at subsystem boundaries.
 - Route DTOs such as `CreatedUpload`, `UploadTarget`, and `UploadRecord` are now built in the HTTP route layer instead of inside the upload service. The service returns semantic access plans and session state, not route strings.

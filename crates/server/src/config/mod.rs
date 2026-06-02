@@ -11,7 +11,7 @@ pub use database::{
 pub use load::{ConfigOrigin, EnvironmentLayer, LoadedConfig};
 pub use secrecy::SecretString;
 pub use types::{
-    AppConfig, BlobConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, LogFormat,
-    McpConfig, ObjectPrefix, ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials,
-    S3FileConfig, ServerConfig, StoragePath, TransportSecurity,
+    AppConfig, BlobConfig, FilesConfig, HttpConfig, LogFormat, McpConfig, ObjectPrefix,
+    ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig,
+    ServerConfig, TransportSecurity,
 };

@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
 use std::thread::available_parallelism;
 use std::time::Duration;
 
@@ -11,11 +10,11 @@ use smol_str::SmolStr;
 use url::Url;
 
 use super::defaults::{
-    DEFAULT_BODY_LIMIT, DEFAULT_CHUNK_SIZE, DEFAULT_FILE_ROOT, DEFAULT_MCP_SSE_KEEP_ALIVE,
-    DEFAULT_MCP_SSE_RETRY, DEFAULT_MULTIPART_MAX_PARTS, DEFAULT_MULTIPART_PART_SIZE,
-    DEFAULT_MULTIPART_THRESHOLD, DEFAULT_PAGE_LIMIT, DEFAULT_REQUEST_TIMEOUT,
-    DEFAULT_SHUTDOWN_GRACE_PERIOD, DEFAULT_SNIFF_BYTES, DEFAULT_THREAD_KEEP_ALIVE,
-    DEFAULT_UPLOAD_INTENT_TTL, DEFAULT_UPLOAD_MAX_BYTES, DEFAULT_UPLOAD_PRESIGN_TTL,
+    DEFAULT_BODY_LIMIT, DEFAULT_MCP_SSE_KEEP_ALIVE, DEFAULT_MCP_SSE_RETRY,
+    DEFAULT_MULTIPART_MAX_PARTS, DEFAULT_MULTIPART_PART_SIZE, DEFAULT_MULTIPART_THRESHOLD,
+    DEFAULT_PAGE_LIMIT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_SHUTDOWN_GRACE_PERIOD,
+    DEFAULT_SNIFF_BYTES, DEFAULT_THREAD_KEEP_ALIVE, DEFAULT_UPLOAD_INTENT_TTL,
+    DEFAULT_UPLOAD_MAX_BYTES, DEFAULT_UPLOAD_PRESIGN_TTL,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -177,24 +176,6 @@ impl Default for HttpConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoragePath(PathBuf);
-
-impl StoragePath {
-    pub fn new(path: impl Into<PathBuf>) -> Result<Self, ConfigError> {
-        let path = path.into();
-        if path.as_os_str().is_empty() {
-            return Err(ConfigError::invalid("storage path cannot be empty"));
-        }
-        Ok(Self(path))
-    }
-
-    #[must_use]
-    pub fn as_path(&self) -> &Path {
-        self.0.as_path()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectPrefix(SmolStr);
 
 impl ObjectPrefix {
@@ -217,41 +198,41 @@ impl ObjectPrefix {
     }
 }
 
-#[derive(Debug, Clone)]
+/// File-service settings for S3-compatible object storage.
+///
+/// File uploads always use [`Self::storage`]. Canary does not provide a local
+/// filesystem fallback.
+#[derive(Debug, Clone, Default)]
 pub struct FilesConfig {
-    pub backend: FileBackendConfig,
+    /// S3-compatible storage used for staged and ready objects.
+    pub storage: S3FileConfig,
+
+    /// Upload limits, expiry windows, and multipart policy.
     pub uploads: BlobConfig,
 }
 
-impl Default for FilesConfig {
-    fn default() -> Self {
-        let root = StoragePath::new(DEFAULT_FILE_ROOT).expect("default blob root is valid");
-        Self {
-            backend: FileBackendConfig::Local(LocalFileConfig { root }),
-            uploads: BlobConfig::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum FileBackendConfig {
-    Local(LocalFileConfig),
-    S3(Box<S3FileConfig>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalFileConfig {
-    pub root: StoragePath,
-}
-
-#[derive(Debug, Clone)]
+/// Connection settings for the S3-compatible object store used by files.
+#[derive(Debug, Clone, Default)]
 pub struct S3FileConfig {
+    /// Bucket that owns staged and ready objects.
     pub bucket: SmolStr,
+
+    /// AWS-compatible region used for signing and storage requests.
     pub region: SmolStr,
+
+    /// Optional custom endpoint for services such as RustFS, R2, or MinIO.
     pub endpoint: Option<Url>,
+
+    /// Optional key prefix reserved for Canary objects.
     pub prefix: Option<ObjectPrefix>,
+
+    /// Whether requests use virtual-hosted or path-style bucket addressing.
     pub addressing_style: S3AddressingStyle,
+
+    /// Whether a custom endpoint may use plain HTTP.
     pub transport_security: TransportSecurity,
+
+    /// Credentials used for storage requests and presigning.
     pub credentials: S3Credentials,
 }
 
@@ -282,8 +263,9 @@ impl TransportSecurity {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum S3Credentials {
+    #[default]
     Ambient,
     Static {
         access_key_id: SmolStr,
@@ -295,7 +277,6 @@ pub enum S3Credentials {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BlobConfig {
-    pub chunk_size_bytes: usize,
     pub sniff_bytes: usize,
     pub max_bytes: u64,
     pub multipart_threshold_bytes: u64,
@@ -310,7 +291,6 @@ pub struct BlobConfig {
 impl Default for BlobConfig {
     fn default() -> Self {
         Self {
-            chunk_size_bytes: DEFAULT_CHUNK_SIZE,
             sniff_bytes: DEFAULT_SNIFF_BYTES,
             max_bytes: DEFAULT_UPLOAD_MAX_BYTES,
             multipart_threshold_bytes: DEFAULT_MULTIPART_THRESHOLD,

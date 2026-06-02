@@ -1,13 +1,9 @@
 use secrecy::{ExposeSecret, SecretString};
 use smol_str::SmolStr;
 
-use super::raw::{
-    RawAppConfig, RawFileBackendConfig, RawFilesConfig, RawHttpConfig, RawS3Credentials,
-    RawS3FileConfig,
-};
+use super::raw::{RawAppConfig, RawFilesConfig, RawHttpConfig, RawS3Credentials, RawS3FileConfig};
 use super::types::{
-    AppConfig, FileBackendConfig, FilesConfig, HttpConfig, LocalFileConfig, McpConfig,
-    ObjectPrefix, S3Credentials, S3FileConfig, StoragePath,
+    AppConfig, FilesConfig, HttpConfig, McpConfig, ObjectPrefix, S3Credentials, S3FileConfig,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -32,42 +28,26 @@ impl TryFrom<RawFilesConfig> for FilesConfig {
     type Error = ConfigError;
 
     fn try_from(value: RawFilesConfig) -> Result<Self, Self::Error> {
-        let backend = match value.backend {
-            RawFileBackendConfig::Local { root } => {
-                let root = StoragePath::new(value.root.unwrap_or(root))?;
-                FileBackendConfig::Local(LocalFileConfig { root })
-            }
-            RawFileBackendConfig::S3 { cfg } => {
-                let RawS3FileConfig {
-                    bucket,
-                    region,
-                    endpoint,
-                    prefix,
-                    addressing_style,
-                    transport_security,
-                    credentials,
-                } = *cfg;
-                if value.root.is_some() {
-                    return Err(ConfigError::invalid(
-                        "files.root is only valid with the local file backend",
-                    ));
-                }
-                if let Some(endpoint) = &endpoint {
-                    transport_security.validate_endpoint(endpoint)?;
-                }
-                FileBackendConfig::S3(Box::new(S3FileConfig {
-                    bucket: validate_text(bucket, "s3 bucket")?,
-                    region: validate_text(region, "s3 region")?,
-                    endpoint,
-                    prefix: prefix.map(ObjectPrefix::new).transpose()?,
-                    addressing_style,
-                    transport_security,
-                    credentials: S3Credentials::try_from(credentials)?,
-                }))
-            }
-        };
+        Ok(Self { storage: S3FileConfig::try_from(value.storage)?, uploads: value.uploads })
+    }
+}
 
-        Ok(Self { backend, uploads: value.uploads })
+impl TryFrom<RawS3FileConfig> for S3FileConfig {
+    type Error = ConfigError;
+
+    fn try_from(value: RawS3FileConfig) -> Result<Self, Self::Error> {
+        if let Some(endpoint) = &value.endpoint {
+            value.transport_security.validate_endpoint(endpoint)?;
+        }
+        Ok(Self {
+            bucket: validate_text(value.bucket, "s3 bucket")?,
+            region: validate_text(value.region, "s3 region")?,
+            endpoint: value.endpoint,
+            prefix: value.prefix.map(ObjectPrefix::new).transpose()?,
+            addressing_style: value.addressing_style,
+            transport_security: value.transport_security,
+            credentials: S3Credentials::try_from(value.credentials)?,
+        })
     }
 }
 
@@ -182,5 +162,15 @@ mod tests {
             AppConfig::try_from(cfg).unwrap_err().to_string(),
             "mcp.sse_keep_alive must be greater than zero"
         );
+    }
+
+    #[test]
+    fn files_require_object_storage_coordinates() {
+        let cfg = RawAppConfig::default();
+        assert_eq!(AppConfig::try_from(cfg).unwrap_err().to_string(), "s3 bucket cannot be empty");
+
+        let mut cfg = RawAppConfig::default();
+        cfg.files.storage.bucket = "canary-test".to_owned();
+        assert_eq!(AppConfig::try_from(cfg).unwrap_err().to_string(), "s3 region cannot be empty");
     }
 }

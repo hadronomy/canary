@@ -1,18 +1,15 @@
+mod common;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use canary_server::{LoadedConfig, ServerBuilder};
+use common::app;
 use tower::ServiceExt;
 
 #[tokio::test]
 async fn readyz_returns_deep_ready_status() {
-    let app = ServerBuilder::new()
-        .with_config(LoadedConfig::default())
-        .build()
-        .await
-        .expect("app should build");
+    let app = app().await;
 
     let response = app
-        .router()
         .oneshot(Request::builder().uri("/readyz").body(Body::empty()).unwrap())
         .await
         .expect("router should respond");
