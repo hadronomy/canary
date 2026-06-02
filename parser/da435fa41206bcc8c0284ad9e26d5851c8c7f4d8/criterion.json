@@ -1,0 +1,739 @@
+{
+  "benchmarks": {
+    "build_tree/boe-a-1978-31229": {
+      "id": "build_tree/boe-a-1978-31229",
+      "mean": {
+        "estimate": 415697.9354128032,
+        "lower_bound": 414049.24588955415,
+        "unit": "ns",
+        "upper_bound": 417424.78097230825
+      },
+      "median": {
+        "estimate": 415664.9760416667,
+        "lower_bound": 412223.2021577381,
+        "unit": "ns",
+        "upper_bound": 417895.2109375
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/build_tree/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 412921.49412456446,
+        "lower_bound": 412098.1934247806,
+        "unit": "ns",
+        "upper_bound": 414365.47904343583
+      },
+      "throughput": [
+        {
+          "per_iteration": 208356,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 412921.49412456446,
+        "lower_bound": 412098.1934247806,
+        "unit": "ns",
+        "upper_bound": 414365.47904343583
+      },
+      "unit": "ns"
+    },
+    "build_tree/boe-a-2021-13171": {
+      "id": "build_tree/boe-a-2021-13171",
+      "mean": {
+        "estimate": 565825.0958881256,
+        "lower_bound": 563222.7615363883,
+        "unit": "ns",
+        "upper_bound": 568621.4201790768
+      },
+      "median": {
+        "estimate": 564490.0913009405,
+        "lower_bound": 560598.8588259441,
+        "unit": "ns",
+        "upper_bound": 569589.899066092
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/build_tree/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 561486.4849573472,
+        "lower_bound": 560266.7335080855,
+        "unit": "ns",
+        "upper_bound": 563679.2321427445
+      },
+      "throughput": [
+        {
+          "per_iteration": 269143,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 561486.4849573472,
+        "lower_bound": 560266.7335080855,
+        "unit": "ns",
+        "upper_bound": 563679.2321427445
+      },
+      "unit": "ns"
+    },
+    "extract_text/boe-a-1978-31229": {
+      "id": "extract_text/boe-a-1978-31229",
+      "mean": {
+        "estimate": 3997.931939280423,
+        "lower_bound": 3954.6564338462285,
+        "unit": "ns",
+        "upper_bound": 4048.695252691221
+      },
+      "median": {
+        "estimate": 3959.1149747757354,
+        "lower_bound": 3955.179390518047,
+        "unit": "ns",
+        "upper_bound": 3984.2637000833524
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/extract_text/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 4042.832218440523,
+        "lower_bound": 3979.715426089566,
+        "unit": "ns",
+        "upper_bound": 4109.221921775533
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 4042.832218440523,
+        "lower_bound": 3979.715426089566,
+        "unit": "ns",
+        "upper_bound": 4109.221921775533
+      },
+      "unit": "ns"
+    },
+    "extract_text/boe-a-2021-13171": {
+      "id": "extract_text/boe-a-2021-13171",
+      "mean": {
+        "estimate": 4234.863963350635,
+        "lower_bound": 4164.512968884811,
+        "unit": "ns",
+        "upper_bound": 4282.691313769762
+      },
+      "median": {
+        "estimate": 4275.033216660833,
+        "lower_bound": 4267.788363862637,
+        "unit": "ns",
+        "upper_bound": 4285.395774997083
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/extract_text/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 4291.321574371402,
+        "lower_bound": 4276.031307012239,
+        "unit": "ns",
+        "upper_bound": 4305.2805061929785
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 4291.321574371402,
+        "lower_bound": 4276.031307012239,
+        "unit": "ns",
+        "upper_bound": 4305.2805061929785
+      },
+      "unit": "ns"
+    },
+    "lookup_anchor/boe-a-1978-31229": {
+      "id": "lookup_anchor/boe-a-1978-31229",
+      "mean": {
+        "estimate": 34.33135421461339,
+        "lower_bound": 34.29741941254284,
+        "unit": "ns",
+        "upper_bound": 34.36450870785804
+      },
+      "median": {
+        "estimate": 34.33676164556008,
+        "lower_bound": 34.314307573913446,
+        "unit": "ns",
+        "upper_bound": 34.35094145183986
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/lookup_anchor/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 34.34129447754016,
+        "lower_bound": 34.31950163771361,
+        "unit": "ns",
+        "upper_bound": 34.35918382276985
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 34.34129447754016,
+        "lower_bound": 34.31950163771361,
+        "unit": "ns",
+        "upper_bound": 34.35918382276985
+      },
+      "unit": "ns"
+    },
+    "lookup_anchor/boe-a-2021-13171": {
+      "id": "lookup_anchor/boe-a-2021-13171",
+      "mean": {
+        "estimate": 25.935389277000446,
+        "lower_bound": 25.812060661554224,
+        "unit": "ns",
+        "upper_bound": 26.104489710483517
+      },
+      "median": {
+        "estimate": 25.826266094865883,
+        "lower_bound": 25.782540158744567,
+        "unit": "ns",
+        "upper_bound": 25.853614483221186
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/lookup_anchor/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 25.850185637703014,
+        "lower_bound": 25.804484695633946,
+        "unit": "ns",
+        "upper_bound": 25.907204207747853
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 25.850185637703014,
+        "lower_bound": 25.804484695633946,
+        "unit": "ns",
+        "upper_bound": 25.907204207747853
+      },
+      "unit": "ns"
+    },
+    "lookup_path/boe-a-1978-31229": {
+      "id": "lookup_path/boe-a-1978-31229",
+      "mean": {
+        "estimate": 5.2790113796271125,
+        "lower_bound": 5.27623545444179,
+        "unit": "ns",
+        "upper_bound": 5.282453355761567
+      },
+      "median": {
+        "estimate": 5.27656792066872,
+        "lower_bound": 5.275535254087277,
+        "unit": "ns",
+        "upper_bound": 5.2778830954764695
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/lookup_path/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 5.279452534987869,
+        "lower_bound": 5.275321836435009,
+        "unit": "ns",
+        "upper_bound": 5.285035507595673
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 5.279452534987869,
+        "lower_bound": 5.275321836435009,
+        "unit": "ns",
+        "upper_bound": 5.285035507595673
+      },
+      "unit": "ns"
+    },
+    "lookup_path/boe-a-2021-13171": {
+      "id": "lookup_path/boe-a-2021-13171",
+      "mean": {
+        "estimate": 5.278337833722755,
+        "lower_bound": 5.276062244889756,
+        "unit": "ns",
+        "upper_bound": 5.281196175446208
+      },
+      "median": {
+        "estimate": 5.277007835096282,
+        "lower_bound": 5.275087315029397,
+        "unit": "ns",
+        "upper_bound": 5.278284769416274
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/lookup_path/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 5.278107731237803,
+        "lower_bound": 5.276044840918055,
+        "unit": "ns",
+        "upper_bound": 5.281264157841271
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 5.278107731237803,
+        "lower_bound": 5.276044840918055,
+        "unit": "ns",
+        "upper_bound": 5.281264157841271
+      },
+      "unit": "ns"
+    },
+    "parse_document/boe-a-1978-31229": {
+      "id": "parse_document/boe-a-1978-31229",
+      "mean": {
+        "estimate": 990700.3812089581,
+        "lower_bound": 986245.9619510843,
+        "unit": "ns",
+        "upper_bound": 996122.6916166814
+      },
+      "median": {
+        "estimate": 987848.7605080409,
+        "lower_bound": 983312.6923076923,
+        "unit": "ns",
+        "upper_bound": 989912.8310185185
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/parse_document/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 986071.6078687572,
+        "lower_bound": 983883.059799704,
+        "unit": "ns",
+        "upper_bound": 988967.0067481351
+      },
+      "throughput": [
+        {
+          "per_iteration": 208356,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 986071.6078687572,
+        "lower_bound": 983883.059799704,
+        "unit": "ns",
+        "upper_bound": 988967.0067481351
+      },
+      "unit": "ns"
+    },
+    "parse_document/boe-a-2021-13171": {
+      "id": "parse_document/boe-a-2021-13171",
+      "mean": {
+        "estimate": 1231668.5941291626,
+        "lower_bound": 1226763.3077471235,
+        "unit": "ns",
+        "upper_bound": 1237980.5549755853
+      },
+      "median": {
+        "estimate": 1225648.9536004057,
+        "lower_bound": 1224464.1798029556,
+        "unit": "ns",
+        "upper_bound": 1231885.3706896552
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/parse_document/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 1225553.9834674997,
+        "lower_bound": 1224171.2081341976,
+        "unit": "ns",
+        "upper_bound": 1227290.8321606908
+      },
+      "throughput": [
+        {
+          "per_iteration": 269143,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 1225553.9834674997,
+        "lower_bound": 1224171.2081341976,
+        "unit": "ns",
+        "upper_bound": 1227290.8321606908
+      },
+      "unit": "ns"
+    },
+    "parse_end_to_end/boe-a-1978-31229": {
+      "id": "parse_end_to_end/boe-a-1978-31229",
+      "mean": {
+        "estimate": 1524036.1875523406,
+        "lower_bound": 1521907.4104495735,
+        "unit": "ns",
+        "upper_bound": 1526284.791260396
+      },
+      "median": {
+        "estimate": 1523372.1805714285,
+        "lower_bound": 1521569.657840909,
+        "unit": "ns",
+        "upper_bound": 1524902.130882353
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/parse_end_to_end/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 1524025.4011707318,
+        "lower_bound": 1521818.630176798,
+        "unit": "ns",
+        "upper_bound": 1526508.6975916938
+      },
+      "throughput": [
+        {
+          "per_iteration": 208356,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 1524025.4011707318,
+        "lower_bound": 1521818.630176798,
+        "unit": "ns",
+        "upper_bound": 1526508.6975916938
+      },
+      "unit": "ns"
+    },
+    "parse_end_to_end/boe-a-2021-13171": {
+      "id": "parse_end_to_end/boe-a-2021-13171",
+      "mean": {
+        "estimate": 1920493.6134987674,
+        "lower_bound": 1914971.9511825016,
+        "unit": "ns",
+        "upper_bound": 1927165.7668482196
+      },
+      "median": {
+        "estimate": 1915113.2960526315,
+        "lower_bound": 1911778.1000797448,
+        "unit": "ns",
+        "upper_bound": 1921520.3771929825
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/parse_end_to_end/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 1922613.6448743811,
+        "lower_bound": 1912729.7110640889,
+        "unit": "ns",
+        "upper_bound": 1934344.4248516918
+      },
+      "throughput": [
+        {
+          "per_iteration": 269143,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 1922613.6448743811,
+        "lower_bound": 1912729.7110640889,
+        "unit": "ns",
+        "upper_bound": 1934344.4248516918
+      },
+      "unit": "ns"
+    },
+    "render_markdown/boe/boe-a-1978-31229": {
+      "id": "render_markdown/boe/boe-a-1978-31229",
+      "mean": {
+        "estimate": 72072.88813246968,
+        "lower_bound": 70990.70592967825,
+        "unit": "ns",
+        "upper_bound": 73021.80376330935
+      },
+      "median": {
+        "estimate": 72804.91398358587,
+        "lower_bound": 71810.68956838117,
+        "unit": "ns",
+        "upper_bound": 73334.72451599326
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/render_markdown_boe/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 73084.88332013515,
+        "lower_bound": 72304.33916006656,
+        "unit": "ns",
+        "upper_bound": 73909.87342595591
+      },
+      "throughput": [
+        {
+          "per_iteration": 208356,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 73084.88332013515,
+        "lower_bound": 72304.33916006656,
+        "unit": "ns",
+        "upper_bound": 73909.87342595591
+      },
+      "unit": "ns"
+    },
+    "render_markdown/boe/boe-a-2021-13171": {
+      "id": "render_markdown/boe/boe-a-2021-13171",
+      "mean": {
+        "estimate": 110114.73405607554,
+        "lower_bound": 109054.50132948422,
+        "unit": "ns",
+        "upper_bound": 111075.5009749233
+      },
+      "median": {
+        "estimate": 111270.5647515528,
+        "lower_bound": 109410.58865047996,
+        "unit": "ns",
+        "upper_bound": 111610.98015873015
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/render_markdown_boe/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 111530.23155798906,
+        "lower_bound": 110916.20610284498,
+        "unit": "ns",
+        "upper_bound": 112022.34500229187
+      },
+      "throughput": [
+        {
+          "per_iteration": 269143,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 111530.23155798906,
+        "lower_bound": 110916.20610284498,
+        "unit": "ns",
+        "upper_bound": 112022.34500229187
+      },
+      "unit": "ns"
+    },
+    "render_markdown/plain/boe-a-1978-31229": {
+      "id": "render_markdown/plain/boe-a-1978-31229",
+      "mean": {
+        "estimate": 46972.82711205553,
+        "lower_bound": 46798.741935717284,
+        "unit": "ns",
+        "upper_bound": 47129.679503654195
+      },
+      "median": {
+        "estimate": 46931.47033239038,
+        "lower_bound": 46864.4200220022,
+        "unit": "ns",
+        "upper_bound": 47137.232871287124
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/render_markdown_plain/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 47235.566494635525,
+        "lower_bound": 47058.60985245873,
+        "unit": "ns",
+        "upper_bound": 47375.864986374625
+      },
+      "throughput": [
+        {
+          "per_iteration": 208356,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 47235.566494635525,
+        "lower_bound": 47058.60985245873,
+        "unit": "ns",
+        "upper_bound": 47375.864986374625
+      },
+      "unit": "ns"
+    },
+    "render_markdown/plain/boe-a-2021-13171": {
+      "id": "render_markdown/plain/boe-a-2021-13171",
+      "mean": {
+        "estimate": 70874.99002753598,
+        "lower_bound": 70646.56370725644,
+        "unit": "ns",
+        "upper_bound": 71130.3384762154
+      },
+      "median": {
+        "estimate": 70816.46600274726,
+        "lower_bound": 70633.06106096285,
+        "unit": "ns",
+        "upper_bound": 70929.24241234956
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/render_markdown_plain/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 70827.87762089826,
+        "lower_bound": 70593.04422569407,
+        "unit": "ns",
+        "upper_bound": 71150.7360221989
+      },
+      "throughput": [
+        {
+          "per_iteration": 269143,
+          "unit": "bytes"
+        }
+      ],
+      "typical": {
+        "estimate": 70827.87762089826,
+        "lower_bound": 70593.04422569407,
+        "unit": "ns",
+        "upper_bound": 71150.7360221989
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/anchor/boe-a-1978-31229": {
+      "id": "resolve_reference/anchor/boe-a-1978-31229",
+      "mean": {
+        "estimate": 42.610926394175394,
+        "lower_bound": 42.53990042612024,
+        "unit": "ns",
+        "upper_bound": 42.720920256508016
+      },
+      "median": {
+        "estimate": 42.56600704185185,
+        "lower_bound": 42.51874209170693,
+        "unit": "ns",
+        "upper_bound": 42.59793311982952
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/anchor/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 42.598378326778366,
+        "lower_bound": 42.542921709675085,
+        "unit": "ns",
+        "upper_bound": 42.64339258764598
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 42.598378326778366,
+        "lower_bound": 42.542921709675085,
+        "unit": "ns",
+        "upper_bound": 42.64339258764598
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/anchor/boe-a-2021-13171": {
+      "id": "resolve_reference/anchor/boe-a-2021-13171",
+      "mean": {
+        "estimate": 33.83789798995299,
+        "lower_bound": 33.78967883832991,
+        "unit": "ns",
+        "upper_bound": 33.888234332976246
+      },
+      "median": {
+        "estimate": 33.84078198397266,
+        "lower_bound": 33.77310726719115,
+        "unit": "ns",
+        "upper_bound": 33.894085741034466
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/anchor/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 33.80800142003509,
+        "lower_bound": 33.759349778611586,
+        "unit": "ns",
+        "upper_bound": 33.86535491427434
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 33.80800142003509,
+        "lower_bound": 33.759349778611586,
+        "unit": "ns",
+        "upper_bound": 33.86535491427434
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/fuzzy/boe-a-1978-31229": {
+      "id": "resolve_reference/fuzzy/boe-a-1978-31229",
+      "mean": {
+        "estimate": 1099.226761988807,
+        "lower_bound": 1097.5111370472073,
+        "unit": "ns",
+        "upper_bound": 1101.1081383715461
+      },
+      "median": {
+        "estimate": 1097.9346283577001,
+        "lower_bound": 1096.107369534011,
+        "unit": "ns",
+        "upper_bound": 1101.0735734675047
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/fuzzy/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 1096.9273148649543,
+        "lower_bound": 1096.035697163237,
+        "unit": "ns",
+        "upper_bound": 1098.3789654486106
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 1096.9273148649543,
+        "lower_bound": 1096.035697163237,
+        "unit": "ns",
+        "upper_bound": 1098.3789654486106
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/fuzzy/boe-a-2021-13171": {
+      "id": "resolve_reference/fuzzy/boe-a-2021-13171",
+      "mean": {
+        "estimate": 385.6464543158493,
+        "lower_bound": 384.23423949759064,
+        "unit": "ns",
+        "upper_bound": 388.023788658924
+      },
+      "median": {
+        "estimate": 384.1844999697043,
+        "lower_bound": 383.9350627253574,
+        "unit": "ns",
+        "upper_bound": 384.74402821868233
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/fuzzy/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 384.49592096914665,
+        "lower_bound": 383.9112080786598,
+        "unit": "ns",
+        "upper_bound": 385.4743067405118
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 384.49592096914665,
+        "lower_bound": 383.9112080786598,
+        "unit": "ns",
+        "upper_bound": 385.4743067405118
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/section/boe-a-1978-31229": {
+      "id": "resolve_reference/section/boe-a-1978-31229",
+      "mean": {
+        "estimate": 45.16668029839228,
+        "lower_bound": 44.814311147354296,
+        "unit": "ns",
+        "upper_bound": 45.59929244914424
+      },
+      "median": {
+        "estimate": 44.736719359604976,
+        "lower_bound": 44.685233539129825,
+        "unit": "ns",
+        "upper_bound": 44.81514014522588
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/section/boe-a-1978-31229",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 45.62057927702044,
+        "lower_bound": 44.7182290090188,
+        "unit": "ns",
+        "upper_bound": 46.282107440177356
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 45.62057927702044,
+        "lower_bound": 44.7182290090188,
+        "unit": "ns",
+        "upper_bound": 46.282107440177356
+      },
+      "unit": "ns"
+    },
+    "resolve_reference/section/boe-a-2021-13171": {
+      "id": "resolve_reference/section/boe-a-2021-13171",
+      "mean": {
+        "estimate": 47.56964747142968,
+        "lower_bound": 47.220351029294754,
+        "unit": "ns",
+        "upper_bound": 47.97953792351948
+      },
+      "median": {
+        "estimate": 47.18380919579921,
+        "lower_bound": 47.13526555818716,
+        "unit": "ns",
+        "upper_bound": 47.33774432836
+      },
+      "report_directory": "/home/runner/work/canary/canary/target/criterion/reports/resolve_reference/section/boe-a-2021-13171",
+      "sample_count": 20,
+      "slope": {
+        "estimate": 48.12787128988478,
+        "lower_bound": 47.3303728776282,
+        "unit": "ns",
+        "upper_bound": 48.734463405255596
+      },
+      "throughput": [],
+      "typical": {
+        "estimate": 48.12787128988478,
+        "lower_bound": 47.3303728776282,
+        "unit": "ns",
+        "upper_bound": 48.734463405255596
+      },
+      "unit": "ns"
+    }
+  },
+  "generated_at": "2026-06-02T11:29:37Z",
+  "schema_version": 1,
+  "suite": "criterion"
+}
