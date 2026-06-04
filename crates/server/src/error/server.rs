@@ -57,6 +57,12 @@ pub enum ServerError {
         #[source]
         source: io::Error,
     },
+    #[error("failed to print startup banner")]
+    #[diagnostic(code(canary_server::server::banner))]
+    Banner {
+        #[source]
+        source: io::Error,
+    },
     #[error("HTTP server terminated unexpectedly")]
     #[diagnostic(code(canary_server::server::serve))]
     Serve {

@@ -16,14 +16,13 @@ use tower_http::normalize_path::NormalizePathLayer;
 use crate::config::LoadedConfig;
 use crate::error::{ServerError, ServerResult};
 use crate::files::service::FileService;
-use crate::http;
 use crate::services::parser::ParserService;
 use crate::shutdown::{ShutdownCoordinator, ShutdownReason, wait_for_shutdown_signal};
 use crate::state::{AppState, FileState};
+use crate::{BANNER, http};
 
 const AUTH_DISABLED: &str = include_str!("assets/warnings/authorization-disabled.md");
 const DANGER: anstyle::Style = AnsiColor::Red.on_default();
-const NOTE: anstyle::Style = AnsiColor::Yellow.on_default();
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MissingConfig;
@@ -112,6 +111,9 @@ impl ServerApplication {
             .local_addr()
             .map_err(|source| ServerError::ListenerIntrospection { source })?;
         state.update_http_ready();
+        BANNER
+            .print(loaded_config, local_address)
+            .map_err(|source| ServerError::Banner { source })?;
         log_http_listener_ready(
             bind_address,
             local_address,
@@ -201,9 +203,7 @@ fn log_http_listener_ready(
 }
 
 fn warn_authorization_disabled(origin: &crate::ConfigOrigin, local_address: SocketAddr) {
-    if let Err(err) =
-        write_authorization_disabled_warning(&mut anstream::stderr().lock(), origin, local_address)
-    {
+    if let Err(err) = write_authorization_disabled_warning(&mut anstream::stderr().lock()) {
         tracing::warn!(component = "security", error = %err, "failed to print authorization warning");
     }
     tracing::warn!(
@@ -220,15 +220,9 @@ fn warn_authorization_disabled(origin: &crate::ConfigOrigin, local_address: Sock
     );
 }
 
-fn write_authorization_disabled_warning(
-    out: &mut impl Write,
-    origin: &crate::ConfigOrigin,
-    local_address: SocketAddr,
-) -> io::Result<()> {
+fn write_authorization_disabled_warning(out: &mut impl Write) -> io::Result<()> {
     writeln!(out)?;
     writeln!(out, "{DANGER}{AUTH_DISABLED}{DANGER:#}")?;
-    writeln!(out, "{NOTE}config: {origin}{NOTE:#}")?;
-    writeln!(out, "{NOTE}listener: http://{local_address}{NOTE:#}")?;
     writeln!(out)?;
     out.flush()
 }
