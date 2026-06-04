@@ -7,15 +7,21 @@ publish = false
 
 [workspace]
 
+[workspace.dependencies]
+criterion          = { version = "0.8.2", features = ["html_reports"] }
+gungraun           = "0.19.0"
+
+document-hierarchy = { path = "../../../crates/parser" }
+
 [lib]
 bench = false
 
 [dependencies]
-document-hierarchy = { path = "/state/crates/parser" }
+document-hierarchy.workspace = true
 
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
-gungraun = "0.19.0"
+criterion.workspace = true
+gungraun.workspace  = true
 
 [[bench]]
 name = "criterion_compare"

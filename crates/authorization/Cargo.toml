@@ -20,7 +20,6 @@ jsonwebtoken.workspace    = true
 moka                      = { workspace = true, features = ["future"], optional = true }
 oauth2                    = { workspace = true, features = ["reqwest", "rustls-tls"], optional = true }
 openidconnect             = { workspace = true, optional = true }
-public-id.workspace       = true
 reqwest                   = { workspace = true, features = ["json", "rustls-tls"] }
 secrecy.workspace         = true
 serde.workspace           = true
@@ -30,6 +29,8 @@ smol_str.workspace        = true
 thiserror.workspace       = true
 tokio.workspace           = true
 url.workspace             = true
+
+public-id.workspace       = true
 
 [features]
 axum            = ["dep:axum"]

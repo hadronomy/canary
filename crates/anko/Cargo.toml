@@ -10,11 +10,12 @@ repository.workspace  = true
 version.workspace     = true
 
 [dependencies]
+thiserror.workspace = true
+
 anstream            = "1.0.0"
 anstyle             = "1.0.14"
 ariadne             = "0.6.0"
 fixedbitset         = "0.5.7"
 terminal_size       = "0.4"
 textwrap            = "0.16"
-thiserror.workspace = true
 unicode-width       = "0.2"

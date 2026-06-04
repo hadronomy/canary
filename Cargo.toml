@@ -25,7 +25,6 @@ bytes                 = "1.10.1"
 chrono                = "0.4.42"
 config                = "0.15.18"
 criterion             = { version = "0.8.2", features = ["html_reports"] }
-database              = { path = "crates/database", default-features = false }
 deunicode             = "1.6"
 gungraun              = "0.19.0"
 headers               = "0.4.1"
@@ -43,7 +42,6 @@ object_store          = { version = "0.12.5", default-features = false }
 oauth2                = { version = "5.0.0", default-features = false }
 openidconnect         = { version = "4.0.1", default-features = false }
 proc-macro2           = "1.0.106"
-public-id             = { path = "crates/public-id" }
 quick-xml             = "0.39.2"
 quote                 = "1.0.45"
 rayon                 = "1.10"
@@ -70,6 +68,12 @@ unicode-normalization = "0.1.24"
 url                   = { version = "2.5.7", features = ["serde"] }
 uuid                  = { version = "1.18.1", features = ["serde", "v4", "v7"] }
 zeroize               = "1.8.2"
+
+canary-authorization = { path = "crates/authorization" }
+database              = { path = "crates/database", default-features = false }
+document-hierarchy    = { path = "crates/parser" }
+parser-macros         = { path = "crates/parser-macros" }
+public-id             = { path = "crates/public-id" }
 
 
 [profile.release]

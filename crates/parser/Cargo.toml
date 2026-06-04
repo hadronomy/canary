@@ -16,9 +16,7 @@ bench = false
 [dependencies]
 chrono.workspace                = true
 deunicode.workspace             = true
-htmd                            = "0.5"
 indextree.workspace             = true
-parser-macros                   = { path = "../parser-macros" }
 quick-xml.workspace             = true
 rayon                           = { workspace = true, optional = true }
 serde.workspace                 = true
@@ -27,11 +25,16 @@ smol_str.workspace              = true
 thiserror.workspace             = true
 unicode-normalization.workspace = true
 
+htmd = "0.5"
+
+parser-macros.workspace         = true
+
 [dev-dependencies]
 criterion.workspace = true
 gungraun.workspace  = true
-insta               = { version = "1.40", features = ["yaml"] }
-tempfile            = "3"
+tempfile.workspace  = true
+
+insta = { version = "1.40", features = ["yaml"] }
 
 [[bench]]
 harness = false

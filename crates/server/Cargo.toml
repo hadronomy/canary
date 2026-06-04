@@ -9,50 +9,36 @@ repository.workspace = true
 version.workspace    = true
 
 [dependencies]
-anstream = "1.0.0"
-anstyle = "1.0.14"
-async-trait.workspace = true
-aws-config.workspace = true
+async-trait.workspace          = true
+aws-config.workspace           = true
 aws-credential-types.workspace = true
-aws-sdk-s3.workspace = true
-aws-types.workspace = true
-axum.workspace = true
-base64.workspace = true
-bytes.workspace = true
-canary-authorization = { path = "../authorization", features = ["axum", "better-auth"] }
-chrono.workspace = true
-config.workspace = true
-database = { workspace = true, default-features = false }
-document-hierarchy = { path = "../parser" }
-futures-util = "0.3.31"
-headers.workspace = true
-http.workspace = true
-human-panic.workspace = true
-humantime-serde.workspace = true
-infer.workspace = true
-miette = { workspace = true, features = ["fancy-no-backtrace"] }
-mime.workspace = true
-mime_guess.workspace = true
-object_store = { workspace = true, features = ["aws"] }
-public-id = { path = "../public-id" }
-rmcp = { version = "1.7.0", default-features = false, features = [
-  "server",
-  "macros",
-  "transport-streamable-http-server",
-] }
-schemars = "1.2.1"
-secrecy.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
-shadow-rs = { version = "2.0.0", default-features = false }
-smol_str.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tokio-util.workspace = true
-toml.workspace = true
-tower = { workspace = true, features = ["timeout", "util"] }
-tower-http = { workspace = true, features = [
+aws-sdk-s3.workspace           = true
+aws-types.workspace            = true
+axum.workspace                 = true
+base64.workspace               = true
+bytes.workspace                = true
+chrono.workspace               = true
+config.workspace               = true
+headers.workspace              = true
+http.workspace                 = true
+human-panic.workspace          = true
+humantime-serde.workspace      = true
+infer.workspace                = true
+miette                         = { workspace = true, features = ["fancy-no-backtrace"] }
+mime.workspace                 = true
+mime_guess.workspace           = true
+object_store                   = { workspace = true, features = ["aws"] }
+secrecy.workspace              = true
+serde.workspace                = true
+serde_json.workspace           = true
+sha2.workspace                 = true
+smol_str.workspace             = true
+thiserror.workspace            = true
+tokio-util.workspace           = true
+tokio.workspace                = true
+toml.workspace                 = true
+tower                          = { workspace = true, features = ["timeout", "util"] }
+tower-http                     = { workspace = true, features = [
   "catch-panic",
   "compression-full",
   "fs",
@@ -63,11 +49,27 @@ tower-http = { workspace = true, features = [
   "timeout",
   "trace",
 ] }
-tracing.workspace = true
-tracing-subscriber.workspace = true
-url.workspace = true
-uuid.workspace = true
-zeroize.workspace = true
+tracing-subscriber.workspace   = true
+tracing.workspace              = true
+url.workspace                  = true
+uuid.workspace                 = true
+zeroize.workspace              = true
+
+anstream = "1.0.0"
+anstyle = "1.0.14"
+futures-util = "0.3.31"
+rmcp = { version = "1.7.0", default-features = false, features = [
+  "server",
+  "macros",
+  "transport-streamable-http-server",
+] }
+schemars = "1.2.1"
+shadow-rs = { version = "2.0.0", default-features = false }
+
+canary-authorization         = { workspace = true, features = ["axum", "better-auth"] }
+database.workspace           = true
+document-hierarchy.workspace = true
+public-id.workspace          = true
 
 [features]
 default = ["surreal-embedded-mem", "surreal-remote-ws"]
@@ -85,9 +87,10 @@ surreal-remote-http = ["database/remote-http"]
 surreal-remote-ws = ["database/remote-ws"]
 
 [dev-dependencies]
+jsonwebtoken = { workspace = true, features = ["rust_crypto"] }
+reqwest      = { workspace = true, features = ["json", "rustls-tls"] }
+
 crc64fast-nvme = "1.2.1"
-jsonwebtoken   = { workspace = true, features = ["rust_crypto"] }
-reqwest        = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 
 [build-dependencies]
 rusty-figlet = { version = "0.3.5", default-features = false }
