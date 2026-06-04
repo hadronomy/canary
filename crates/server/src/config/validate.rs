@@ -16,6 +16,9 @@ impl TryFrom<RawAppConfig> for AppConfig {
             server: value.server,
             runtime: value.runtime,
             observability: value.observability,
+            auth: canary_authorization::Config::try_from(value.auth).map_err(|source| {
+                ConfigError::invalid("invalid auth configuration").with_source(source)
+            })?,
             http: HttpConfig::try_from(value.http)?,
             mcp: validate_mcp(value.mcp)?,
             db: value.db,
@@ -172,5 +175,38 @@ mod tests {
         let mut cfg = RawAppConfig::default();
         cfg.files.storage.bucket = "canary-test".to_owned();
         assert_eq!(AppConfig::try_from(cfg).unwrap_err().to_string(), "s3 region cannot be empty");
+    }
+
+    #[test]
+    fn auth_validates_resource_server_configuration() {
+        let mut cfg = RawAppConfig::default();
+        cfg.files.storage.bucket = "canary-test".to_owned();
+        cfg.files.storage.region = "us-east-1".to_owned();
+        cfg.auth.enabled = true;
+        cfg.auth.resources.api.resource =
+            Some("https://api.example.com/api".parse().expect("url should parse"));
+        cfg.auth.resources.mcp.resource =
+            Some("https://api.example.com/mcp".parse().expect("url should parse"));
+        cfg.auth.issuers.push(canary_authorization::RawIssuerConfig {
+            issuer: Some("https://issuer.example.com/".parse().expect("url should parse")),
+            jwks_uri: Some("https://issuer.example.com/jwks".parse().expect("url should parse")),
+            audiences: vec![
+                "https://api.example.com/api".to_owned(),
+                "https://api.example.com/mcp".to_owned(),
+            ],
+            ..Default::default()
+        });
+
+        assert!(AppConfig::try_from(cfg).expect("auth config should validate").auth.is_enabled());
+    }
+
+    #[test]
+    fn auth_requires_metadata_resources_when_enabled() {
+        let mut cfg = RawAppConfig::default();
+        cfg.files.storage.bucket = "canary-test".to_owned();
+        cfg.files.storage.region = "us-east-1".to_owned();
+        cfg.auth.enabled = true;
+
+        assert_eq!(AppConfig::try_from(cfg).unwrap_err().to_string(), "invalid auth configuration");
     }
 }

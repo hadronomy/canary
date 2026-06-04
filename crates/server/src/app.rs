@@ -1,9 +1,12 @@
 use std::fmt;
+use std::io::{self, Write};
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use anstyle::AnsiColor;
 use axum::Router;
 use axum::extract::{FromRef, Request};
+use canary_authorization::Authorizer;
 use database::Database;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
@@ -17,6 +20,10 @@ use crate::http;
 use crate::services::parser::ParserService;
 use crate::shutdown::{ShutdownCoordinator, ShutdownReason, wait_for_shutdown_signal};
 use crate::state::{AppState, FileState};
+
+const AUTH_DISABLED: &str = include_str!("assets/warnings/authorization-disabled.md");
+const DANGER: anstyle::Style = AnsiColor::Red.on_default();
+const NOTE: anstyle::Style = AnsiColor::Yellow.on_default();
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MissingConfig;
@@ -54,9 +61,17 @@ impl ServerBuilder<WithConfig> {
         let shutdown = ShutdownCoordinator::new(loaded.settings.server.shutdown_grace_period);
         let db = Database::connect(&loaded.settings.db).await?;
         db.health().await?;
+        let auth = match loaded.settings.auth.enabled() {
+            Some(cfg) => Some(
+                Authorizer::from_config(cfg.clone())
+                    .await
+                    .map_err(|source| ServerError::Authorization { source })?,
+            ),
+            None => None,
+        };
         let parser = ParserService::new();
         let files = FileService::new(loaded.settings.files.clone(), db.clone()).await?;
-        let state = AppState::new(loaded, db, parser, files);
+        let state = AppState::new(loaded, db, auth, parser, files);
         state.update_db_ready();
         let router = http::router(&state, shutdown.register()).with_state(state.clone());
         Ok(ServerApplication { state, router, shutdown })
@@ -103,6 +118,9 @@ impl ServerApplication {
             request_timeout,
             shutdown_grace_period,
         );
+        if !loaded_config.settings.auth.is_enabled() {
+            warn_authorization_disabled(&loaded_config.origin, local_address);
+        }
 
         let service =
             ServiceBuilder::new().layer(NormalizePathLayer::trim_trailing_slash()).service(router);
@@ -127,6 +145,23 @@ impl ServerApplication {
                 }
             }
         });
+        if let Some(auth) = state.authorizer() {
+            let auth_shutdown = shutdown.clone();
+            tasks.spawn(async move {
+                let mut tick = tokio::time::interval(auth.refresh_interval());
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        _ = auth_shutdown.wait_for_shutdown() => return Ok::<_, ServerError>(()),
+                        _ = tick.tick() => {
+                            if let Err(err) = auth.refresh().await {
+                                tracing::warn!(error = %err, "authorization JWKS refresh failed");
+                            }
+                        }
+                    }
+                }
+            });
+        }
         let signal_shutdown = shutdown.clone();
         tasks.spawn(async move {
             let reason = wait_for_shutdown_signal().await?;
@@ -163,6 +198,39 @@ fn log_http_listener_ready(
         shutdown_grace_period = ?shutdown_grace_period,
         "http listener ready"
     );
+}
+
+fn warn_authorization_disabled(origin: &crate::ConfigOrigin, local_address: SocketAddr) {
+    if let Err(err) =
+        write_authorization_disabled_warning(&mut anstream::stderr().lock(), origin, local_address)
+    {
+        tracing::warn!(component = "security", error = %err, "failed to print authorization warning");
+    }
+    tracing::warn!(
+        component = "security",
+        authorization_enabled = false,
+        config_origin = %origin,
+        local_address = %local_address,
+        "AUTHORIZATION DISABLED: protected REST and MCP routes will not require bearer tokens"
+    );
+    tracing::warn!(
+        component = "security",
+        authorization_enabled = false,
+        "use a local OAuth issuer with short-lived test tokens instead of disabling authorization"
+    );
+}
+
+fn write_authorization_disabled_warning(
+    out: &mut impl Write,
+    origin: &crate::ConfigOrigin,
+    local_address: SocketAddr,
+) -> io::Result<()> {
+    writeln!(out)?;
+    writeln!(out, "{DANGER}{AUTH_DISABLED}{DANGER:#}")?;
+    writeln!(out, "{NOTE}config: {origin}{NOTE:#}")?;
+    writeln!(out, "{NOTE}listener: http://{local_address}{NOTE:#}")?;
+    writeln!(out)?;
+    out.flush()
 }
 
 async fn supervise_tasks(

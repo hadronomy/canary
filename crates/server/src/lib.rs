@@ -22,10 +22,12 @@ pub mod state;
 pub use app::{ServerApplication, ServerBuilder};
 pub use banner::{BANNER, Banner};
 pub use config::{
-    AppConfig, BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir,
-    DatabaseEndpoint, DatabaseEngine, DatabaseName, EnvironmentLayer, FilesConfig, HttpConfig,
-    LoadedConfig, LogFormat, McpConfig, Namespace, ObjectPrefix, ObservabilityConfig,
-    RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, TransportSecurity,
+    AppConfig, AuthAlgorithm, AuthConfig, AuthEnabledConfig, AuthIssuerConfig,
+    AuthProtectedResourceConfig, AuthRefreshConfig, AuthResourceConfig, AuthResourceUri,
+    BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir, DatabaseEndpoint,
+    DatabaseEngine, DatabaseName, EnvironmentLayer, FilesConfig, HttpConfig, LoadedConfig,
+    LogFormat, McpConfig, Namespace, ObjectPrefix, ObservabilityConfig, RuntimeConfig,
+    S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, TransportSecurity,
 };
 pub use database::{ConfigError as DatabaseConfigError, Database, Error as DatabaseError, Session};
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};

@@ -8,6 +8,7 @@ use axum::extract::{FromRef, FromRequest, FromRequestParts, Query};
 use axum::http::HeaderMap;
 use axum::http::header::HeaderName;
 use axum::http::request::Parts;
+use canary_authorization::Principal;
 use public_id::{PublicId, ResourceId};
 use serde_json::json;
 
@@ -208,6 +209,14 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        if let Some(principal) = parts.extensions.get::<Principal>() {
+            return ActorId::new(principal.subject().as_str()).map(Self).map_err(|_| {
+                AppError::unauthorized_code(
+                    "upload_unauthorized",
+                    "Authentication is required for uploads.",
+                )
+            });
+        }
         let Some(value) = parts.headers.get(&ACTOR_HEADER) else {
             return Err(AppError::unauthorized_code(
                 "upload_unauthorized",

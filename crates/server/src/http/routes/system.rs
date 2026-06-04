@@ -11,6 +11,7 @@ use crate::state::{AppState, ReadinessSnapshot};
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .merge(super::auth::router())
         .route("/livez", get(liveness))
         .route("/readyz", get(readiness))
         .route("/healthz", get(health))

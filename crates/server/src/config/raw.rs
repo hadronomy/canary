@@ -14,6 +14,7 @@ pub(crate) struct RawAppConfig {
     pub(crate) server: ServerConfig,
     pub(crate) runtime: RuntimeConfig,
     pub(crate) observability: ObservabilityConfig,
+    pub(crate) auth: canary_authorization::RawConfig,
     pub(crate) http: RawHttpConfig,
     pub(crate) mcp: McpConfig,
     pub(crate) db: database::Config,

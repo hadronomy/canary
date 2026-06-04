@@ -17,8 +17,9 @@ aws-credential-types.workspace = true
 aws-sdk-s3.workspace = true
 aws-types.workspace = true
 axum.workspace = true
-base64 = "0.22.1"
+base64.workspace = true
 bytes.workspace = true
+canary-authorization = { path = "../authorization", features = ["axum", "better-auth"] }
 chrono.workspace = true
 config.workspace = true
 database = { workspace = true, default-features = false }
@@ -85,6 +86,7 @@ surreal-remote-ws = ["database/remote-ws"]
 
 [dev-dependencies]
 crc64fast-nvme = "1.2.1"
+jsonwebtoken   = { workspace = true, features = ["rust_crypto"] }
 reqwest        = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 
 [build-dependencies]

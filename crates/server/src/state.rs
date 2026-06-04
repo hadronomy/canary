@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::extract::FromRef;
+use canary_authorization::Authorizer;
 use chrono::{DateTime, Utc};
 use database::Database;
 use serde::Serialize;
@@ -23,6 +24,7 @@ struct AppStateInner {
     started_at_instant: Instant,
     readiness: Readiness,
     db: Database,
+    auth: Option<Authorizer>,
     parser: ParserService,
     files: FileService,
 }
@@ -41,6 +43,7 @@ impl AppState {
     pub fn new(
         loaded: LoadedConfig,
         db: Database,
+        auth: Option<Authorizer>,
         parser: ParserService,
         files: FileService,
     ) -> Self {
@@ -56,6 +59,7 @@ impl AppState {
                 started_at_instant: Instant::now(),
                 readiness,
                 db,
+                auth,
                 parser,
                 files,
             }),
@@ -88,6 +92,12 @@ impl AppState {
 
     pub fn update_db_ready(&self) {
         self.inner.readiness.update_db(ComponentReadiness::ready("connected"));
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn authorizer(&self) -> Option<Authorizer> {
+        self.inner.auth.clone()
     }
 }
 
@@ -190,6 +200,11 @@ pub struct DbState {
     pub db: Database,
 }
 
+#[derive(Clone)]
+pub struct AuthState {
+    pub auth: Option<Authorizer>,
+}
+
 impl FromRef<AppState> for ParserState {
     fn from_ref(state: &AppState) -> Self {
         Self { parser: state.inner.parser.clone() }
@@ -205,5 +220,11 @@ impl FromRef<AppState> for FileState {
 impl FromRef<AppState> for DbState {
     fn from_ref(state: &AppState) -> Self {
         Self { db: state.inner.db.clone() }
+    }
+}
+
+impl FromRef<AppState> for AuthState {
+    fn from_ref(state: &AppState) -> Self {
+        Self { auth: state.inner.auth.clone() }
     }
 }

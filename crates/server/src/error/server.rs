@@ -20,6 +20,15 @@ pub enum ServerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Files(#[from] FileError),
+    #[error("failed to initialize authorization")]
+    #[diagnostic(
+        code(canary_server::server::authorization),
+        help("Check auth issuer metadata and JWKS configuration.")
+    )]
+    Authorization {
+        #[source]
+        source: canary_authorization::AuthError,
+    },
     #[error("failed to install observability subscriber")]
     #[diagnostic(
         code(canary_server::server::observability),

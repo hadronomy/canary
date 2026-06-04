@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod context;
 pub mod extract;
 pub mod middleware;
@@ -20,12 +21,11 @@ async fn method_not_allowed() -> AppError {
 
 /// Builds the complete HTTP surface with streaming-safe middleware around MCP.
 pub fn router(state: &AppState, token: CancellationToken) -> Router<AppState> {
-    let rest = middleware::rest(
-        Router::new().merge(routes::system::router()).merge(routes::api::router(state)),
-        state,
-    );
+    let api = auth::protect_api(routes::api::router(state), state);
+    let rest = middleware::rest(Router::new().merge(routes::system::router()).merge(api), state);
+    let mcp = auth::protect_mcp(routes::mcp::router(state, token), state);
     let router = Router::new()
-        .merge(routes::mcp::router(state, token))
+        .merge(mcp)
         .merge(rest)
         .method_not_allowed_fallback(method_not_allowed)
         .fallback(not_found);

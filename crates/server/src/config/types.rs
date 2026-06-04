@@ -24,6 +24,7 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub runtime: RuntimeConfig,
     pub observability: ObservabilityConfig,
+    pub auth: canary_authorization::Config,
     pub http: HttpConfig,
     pub mcp: McpConfig,
     pub db: database::Config,

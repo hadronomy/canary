@@ -4,6 +4,12 @@ mod raw;
 mod types;
 mod validate;
 
+pub use canary_authorization::{
+    Algorithm as AuthAlgorithm, Config as AuthConfig, EnabledConfig as AuthEnabledConfig,
+    IssuerConfig as AuthIssuerConfig, ProtectedResourceConfig as AuthProtectedResourceConfig,
+    RefreshConfig as AuthRefreshConfig, ResourceConfig as AuthResourceConfig,
+    ResourceUri as AuthResourceUri,
+};
 pub use database::{
     Auth as DatabaseAuth, Config as DatabaseConfig, DataDir as DatabaseDataDir, DatabaseName,
     Endpoint as DatabaseEndpoint, Engine as DatabaseEngine, Namespace,

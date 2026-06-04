@@ -48,7 +48,7 @@ pub async fn state_with(cfg: LoadedConfig) -> AppState {
     let files = FileService::new(cfg.settings.files.clone(), db.clone())
         .await
         .expect("files should initialize");
-    let state = AppState::new(cfg, db, ParserService::new(), files);
+    let state = AppState::new(cfg, db, None, ParserService::new(), files);
     state.update_db_ready();
     state.update_http_ready();
     state
