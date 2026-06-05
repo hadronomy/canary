@@ -6,8 +6,7 @@ use crate::config::{LogFormat, ObservabilityConfig};
 use crate::error::{ServerError, ServerResult};
 
 pub fn init(config: &ObservabilityConfig) -> ServerResult<()> {
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new(&config.filter))
+    let filter = EnvFilter::try_new(&config.filter)
         .map_err(|source| ServerError::Observability { source: Box::new(source) })?;
 
     match config.format {

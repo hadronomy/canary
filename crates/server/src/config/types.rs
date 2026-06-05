@@ -3,6 +3,7 @@ use std::num::NonZeroUsize;
 use std::thread::available_parallelism;
 use std::time::Duration;
 
+use canary_report::{Doc, Field, Record, Report, Value};
 use object_store::path::Path as ObjectPath;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,21 @@ pub struct AppConfig {
     pub files: FilesConfig,
 }
 
+impl Report for AppConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .extend(&self.server)
+            .extend(&self.auth)
+            .extend(&self.files)
+            .extend(&self.db)
+            .extend(&self.http)
+            .extend(&self.mcp)
+            .extend(&self.observability)
+            .extend(&self.runtime)
+            .build()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerConfig {
@@ -50,6 +66,22 @@ impl Default for ServerConfig {
             shutdown_grace_period: DEFAULT_SHUTDOWN_GRACE_PERIOD,
             max_body_size_bytes: DEFAULT_BODY_LIMIT,
         }
+    }
+}
+
+impl Report for ServerConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("server", "Server")
+            .field("listener", "listener", format!("http://{}", self.bind))
+            .field("request_timeout", "request timeout", Value::duration(self.request_timeout))
+            .field(
+                "shutdown_grace_period",
+                "shutdown grace",
+                Value::duration(self.shutdown_grace_period),
+            )
+            .field("max_body_size_bytes", "max body", Value::bytes(self.max_body_size_bytes as u64))
+            .build()
     }
 }
 
@@ -92,6 +124,18 @@ impl Default for McpConfig {
     }
 }
 
+impl Report for McpConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("mcp", "MCP")
+            .field("allowed_hosts", "allowed hosts", strings(&self.allowed_hosts))
+            .field("allowed_origins", "allowed origins", strings(&self.allowed_origins))
+            .field("sse_keep_alive", "sse keep alive", Value::duration(self.sse_keep_alive))
+            .field("sse_retry", "sse retry", Value::duration(self.sse_retry))
+            .build()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RuntimeConfig {
@@ -127,6 +171,33 @@ impl RuntimeConfig {
     }
 }
 
+impl Report for RuntimeConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("runtime", "Runtime")
+            .field("worker_threads", "worker threads", self.worker_threads.map(NonZeroUsize::get))
+            .field("resolved_worker_threads", "resolved worker threads", self.worker_threads())
+            .field("max_blocking_threads", "max blocking threads", self.max_blocking_threads)
+            .field(
+                "thread_stack_size_bytes",
+                "thread stack",
+                Value::bytes(self.thread_stack_size_bytes as u64),
+            )
+            .field("event_interval", "event interval", u64::from(self.event_interval))
+            .field(
+                "global_queue_interval",
+                "global queue interval",
+                u64::from(self.global_queue_interval),
+            )
+            .field(
+                "thread_keep_alive",
+                "thread keep alive",
+                Value::duration(self.thread_keep_alive),
+            )
+            .build()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ObservabilityConfig {
@@ -151,12 +222,38 @@ impl Default for ObservabilityConfig {
     }
 }
 
+impl Report for ObservabilityConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("observability", "Observability")
+            .field("service_name", "service", self.service_name.clone())
+            .field("filter", "filter", self.filter.clone())
+            .field("format", "format", self.format.as_str())
+            .field("include_targets", "targets", self.include_targets)
+            .field("include_thread_ids", "thread ids", self.include_thread_ids)
+            .field("include_thread_names", "thread names", self.include_thread_names)
+            .build()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormat {
     #[default]
     Pretty,
     Json,
+}
+
+impl LogFormat {
+    /// Returns the config spelling for this log output format.
+    #[inline(always)]
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pretty => "pretty",
+            Self::Json => "json",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,7 +273,23 @@ impl Default for HttpConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl Report for HttpConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("http", "HTTP")
+            .field("parser_max_bytes", "parser max", Value::bytes(self.parser_max_bytes as u64))
+            .field(
+                "default_page_limit",
+                "default page limit",
+                self.pagination.default_limit().get(),
+            )
+            .field("max_page_limit", "max page limit", self.pagination.max_limit().map(Limit::get))
+            .build()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct ObjectPrefix(SmolStr);
 
 impl ObjectPrefix {
@@ -194,6 +307,7 @@ impl ObjectPrefix {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -210,6 +324,41 @@ pub struct FilesConfig {
 
     /// Upload limits, expiry windows, and multipart policy.
     pub uploads: BlobConfig,
+}
+
+impl Report for FilesConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("files", "Storage")
+            .field("backend", "backend", "S3-compatible object storage")
+            .field("bucket", "bucket", self.storage.bucket.to_string())
+            .field("region", "region", self.storage.region.to_string())
+            .field("endpoint", "endpoint", self.storage.endpoint.as_ref().map(Url::to_string))
+            .field(
+                "prefix",
+                "prefix",
+                self.storage.prefix.as_ref().map(|prefix| prefix.as_str().to_owned()),
+            )
+            .field("addressing_style", "addressing", addressing(self.storage.addressing_style))
+            .field("transport_security", "transport", transport(self.storage.transport_security))
+            .field("credentials", "credentials", self.storage.credentials.report_record())
+            .field("sniff_bytes", "sniff bytes", Value::bytes(self.uploads.sniff_bytes as u64))
+            .field("max_bytes", "max upload", Value::bytes(self.uploads.max_bytes))
+            .field(
+                "multipart_threshold_bytes",
+                "multipart threshold",
+                Value::bytes(self.uploads.multipart_threshold_bytes),
+            )
+            .field(
+                "multipart_part_size_bytes",
+                "multipart part",
+                Value::bytes(self.uploads.multipart_part_size_bytes),
+            )
+            .field("multipart_max_parts", "multipart max parts", self.uploads.multipart_max_parts)
+            .field("intent_ttl", "intent ttl", Value::duration(self.uploads.intent_ttl))
+            .field("presign_ttl", "presign ttl", Value::duration(self.uploads.presign_ttl))
+            .build()
+    }
 }
 
 /// Connection settings for the S3-compatible object store used by files.
@@ -275,6 +424,30 @@ pub enum S3Credentials {
     },
 }
 
+impl S3Credentials {
+    fn report_record(&self) -> Record {
+        match self {
+            Self::Ambient => {
+                Record::new().summary("ambient").field(Field::new("kind", "kind", "ambient"))
+            }
+            Self::Static { session_token, .. } => Record::new()
+                .summary(if session_token.is_some() {
+                    "static, session token redacted"
+                } else {
+                    "static, redacted"
+                })
+                .field(Field::new("kind", "kind", "static"))
+                .field(Field::new("access_key_id", "access key id", Value::Redacted))
+                .field(Field::new("secret_access_key", "secret access key", Value::Redacted))
+                .field(Field::new(
+                    "session_token",
+                    "session token",
+                    if session_token.is_some() { Value::Redacted } else { Value::Null },
+                )),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BlobConfig {
@@ -300,5 +473,26 @@ impl Default for BlobConfig {
             intent_ttl: DEFAULT_UPLOAD_INTENT_TTL,
             presign_ttl: DEFAULT_UPLOAD_PRESIGN_TTL,
         }
+    }
+}
+
+#[inline(always)]
+fn strings(values: &[String]) -> Vec<Value> {
+    values.iter().map(Value::from).collect()
+}
+
+#[inline(always)]
+fn addressing(value: S3AddressingStyle) -> &'static str {
+    match value {
+        S3AddressingStyle::VirtualHosted => "virtual_hosted",
+        S3AddressingStyle::PathStyle => "path_style",
+    }
+}
+
+#[inline(always)]
+fn transport(value: TransportSecurity) -> &'static str {
+    match value {
+        TransportSecurity::HttpsOnly => "https_only",
+        TransportSecurity::AllowHttp => "allow_http",
     }
 }

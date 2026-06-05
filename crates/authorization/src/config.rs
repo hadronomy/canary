@@ -1,8 +1,9 @@
 use std::time::Duration;
 
+use canary_report::{Doc, Field, Record, Report, Value};
 use jsonwebtoken::jwk::KeyAlgorithm;
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::metadata::ResourceUri;
@@ -15,7 +16,7 @@ const DEFAULT_INTROSPECTION_CACHE_TTL: Duration = Duration::from_secs(30);
 const DEFAULT_INTROSPECTION_CACHE_CAPACITY: u64 = 10_000;
 
 /// JWS algorithm accepted for JWT access tokens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Algorithm {
     /// RSA SHA-256. This is the default production algorithm.
     #[serde(rename = "RS256")]
@@ -82,7 +83,7 @@ impl Default for Algorithm {
 }
 
 /// Access-token formats accepted from one issuer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TokenFormat {
     /// JWT access tokens validated locally with JWKS.
@@ -185,7 +186,7 @@ impl Default for AccessTokenConfig {
 }
 
 /// Metadata discovery mode for one trusted issuer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscoveryMode {
     /// Try OAuth Authorization Server Metadata, then OIDC metadata when enabled.
@@ -237,7 +238,7 @@ impl DiscoveryConfig {
 }
 
 /// Client authentication method for RFC 7662 introspection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IntrospectionAuthMethod {
     /// Send client credentials with HTTP Basic authentication.
@@ -360,6 +361,26 @@ impl Config {
             Self::Disabled => None,
             Self::Enabled(cfg) => Some(cfg.as_ref()),
         }
+    }
+}
+
+impl Report for Config {
+    fn report(&self) -> Doc {
+        let Some(cfg) = self.enabled() else {
+            return Doc::builder()
+                .section("auth", "Authorization")
+                .field("state", "state", "disabled")
+                .field("issuer_count", "issuer count", 0usize)
+                .build();
+        };
+        Doc::builder()
+            .section("auth", "Authorization")
+            .field("state", "state", "enabled")
+            .field("issuer_count", "issuer count", cfg.issuers().len())
+            .field("api_resource", "api resource", resource(&cfg.resources().api))
+            .field("mcp_resource", "mcp resource", resource(&cfg.resources().mcp))
+            .field("issuers", "issuer", issuers(cfg.issuers()))
+            .build()
     }
 }
 
@@ -788,6 +809,160 @@ impl TryFrom<RawIssuerConfig> for IssuerConfig {
 
 fn required_resource(value: Option<Url>, key: &str) -> Result<ResourceUri, ConfigError> {
     value.ok_or_else(|| ConfigError::invalid(format!("{key} is required")))?.try_into()
+}
+
+fn resource(value: &ProtectedResourceConfig) -> Record {
+    Record::new()
+        .summary(value.resource.to_string())
+        .field(Field::new("resource", "resource", value.resource.to_string()))
+        .field(Field::new(
+            "scopes_supported",
+            "scopes supported",
+            values(value.scopes_supported.iter()),
+        ))
+}
+
+fn issuers(values: &[IssuerConfig]) -> Vec<Record> {
+    values.iter().map(issuer).collect()
+}
+
+fn issuer(value: &IssuerConfig) -> Record {
+    Record::new()
+        .summary(format!(
+            "{} · {} · {}",
+            value.issuer,
+            token_formats(value.token_formats.as_slice()),
+            algorithms(value.algorithms.as_slice())
+        ))
+        .field(Field::new("issuer", "issuer", value.issuer.to_string()))
+        .field(Field::new("jwks_uri", "jwks uri", value.jwks_uri.as_ref().map(Url::to_string)))
+        .field(Field::new("discovery", "discovery", discovery(&value.discovery)))
+        .field(Field::new(
+            "token_formats",
+            "token formats",
+            token_format_values(value.token_formats.as_slice()),
+        ))
+        .field(Field::new(
+            "algorithms",
+            "algorithms",
+            algorithm_values(value.algorithms.as_slice()),
+        ))
+        .field(Field::new(
+            "audiences",
+            "audiences",
+            values(value.audiences.iter().map(Audience::as_str)),
+        ))
+        .field(Field::new("clock_skew", "clock skew", Value::duration(value.clock_skew)))
+        .field(Field::new("access_token", "access token", access_token(&value.access_token)))
+        .field(Field::new("refresh", "refresh", refresh(&value.refresh)))
+        .field(Field::new(
+            "introspection",
+            "introspection",
+            value.introspection.as_ref().map(introspection),
+        ))
+}
+
+fn discovery(value: &DiscoveryConfig) -> Record {
+    Record::new()
+        .summary(discovery_mode(value.mode))
+        .field(Field::new("mode", "mode", discovery_mode(value.mode)))
+        .field(Field::new(
+            "oauth_authorization_server",
+            "oauth authorization server",
+            value.oauth_authorization_server.as_ref().map(Url::to_string),
+        ))
+        .field(Field::new(
+            "openid_configuration",
+            "openid configuration",
+            value.openid_configuration.as_ref().map(Url::to_string),
+        ))
+}
+
+fn access_token(value: &AccessTokenConfig) -> Record {
+    Record::new()
+        .summary(format!("max lifetime {}", Value::duration(value.max_lifetime)))
+        .field(Field::new("max_lifetime", "max lifetime", Value::duration(value.max_lifetime)))
+}
+
+fn refresh(value: &RefreshConfig) -> Record {
+    Record::new().summary(format!("every {}", Value::duration(value.interval))).field(Field::new(
+        "interval",
+        "interval",
+        Value::duration(value.interval),
+    ))
+}
+
+fn introspection(value: &IntrospectionConfig) -> Record {
+    Record::new()
+        .summary("enabled")
+        .field(Field::new("endpoint", "endpoint", value.endpoint.as_ref().map(Url::to_string)))
+        .field(Field::new("client_id", "client id", value.client_id.to_string()))
+        .field(Field::new("client_secret", "client secret", Value::Redacted))
+        .field(Field::new("auth_method", "auth method", auth_method(value.auth_method)))
+        .field(Field::new("cache", "cache", introspection_cache(&value.cache)))
+}
+
+fn introspection_cache(value: &IntrospectionCacheConfig) -> Record {
+    Record::new()
+        .summary(format!("{} / {} entries", Value::duration(value.ttl), value.max_capacity))
+        .field(Field::new("ttl", "ttl", Value::duration(value.ttl)))
+        .field(Field::new("max_capacity", "max capacity", value.max_capacity))
+}
+
+fn values<'a>(values: impl IntoIterator<Item = &'a str>) -> Vec<Value> {
+    values.into_iter().map(Value::from).collect()
+}
+
+fn token_format_values(values: &[TokenFormat]) -> Vec<Value> {
+    values.iter().map(|value| Value::from(token_format(*value))).collect()
+}
+
+fn algorithm_values(values: &[Algorithm]) -> Vec<Value> {
+    values.iter().map(|value| Value::from(algorithm(*value))).collect()
+}
+
+fn token_formats(values: &[TokenFormat]) -> String {
+    values.iter().map(|value| token_format(*value)).collect::<Vec<_>>().join(", ")
+}
+
+fn algorithms(values: &[Algorithm]) -> String {
+    values.iter().map(|value| algorithm(*value)).collect::<Vec<_>>().join(", ")
+}
+
+#[inline(always)]
+fn token_format(value: TokenFormat) -> &'static str {
+    match value {
+        TokenFormat::Jwt => "jwt",
+        TokenFormat::Opaque => "opaque",
+    }
+}
+
+#[inline(always)]
+fn algorithm(value: Algorithm) -> &'static str {
+    match value {
+        Algorithm::Rs256 => "RS256",
+        Algorithm::Ps256 => "PS256",
+        Algorithm::Es256 => "ES256",
+        Algorithm::EdDsa => "EdDSA",
+        Algorithm::Hs256 => "HS256",
+    }
+}
+
+#[inline(always)]
+fn discovery_mode(value: DiscoveryMode) -> &'static str {
+    match value {
+        DiscoveryMode::Auto => "auto",
+        DiscoveryMode::OAuthAuthorizationServer => "oauth_authorization_server",
+        DiscoveryMode::OpenIdConfiguration => "open_id_configuration",
+    }
+}
+
+#[inline(always)]
+fn auth_method(value: IntrospectionAuthMethod) -> &'static str {
+    match value {
+        IntrospectionAuthMethod::ClientSecretBasic => "client_secret_basic",
+        IntrospectionAuthMethod::ClientSecretPost => "client_secret_post",
+    }
 }
 
 impl TryFrom<Url> for ResourceUri {

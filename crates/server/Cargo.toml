@@ -1,5 +1,7 @@
 [package]
 name              = "canary-server"
+autobins          = false
+default-run       = "canary"
 publish.workspace = true
 
 authors.workspace    = true
@@ -7,6 +9,10 @@ edition.workspace    = true
 license.workspace    = true
 repository.workspace = true
 version.workspace    = true
+
+[[bin]]
+name = "canary"
+path = "src/main.rs"
 
 [dependencies]
 async-trait.workspace          = true
@@ -18,10 +24,14 @@ axum.workspace                 = true
 base64.workspace               = true
 bytes.workspace                = true
 chrono.workspace               = true
+clap.workspace                 = true
+clap_complete.workspace        = true
+clap_mangen.workspace          = true
 config.workspace               = true
 headers.workspace              = true
 http.workspace                 = true
 human-panic.workspace          = true
+humantime.workspace            = true
 humantime-serde.workspace      = true
 infer.workspace                = true
 miette                         = { workspace = true, features = ["fancy-no-backtrace"] }
@@ -51,6 +61,7 @@ tower-http                     = { workspace = true, features = [
 ] }
 tracing-subscriber.workspace   = true
 tracing.workspace              = true
+unicode-width.workspace        = true
 url.workspace                  = true
 uuid.workspace                 = true
 zeroize.workspace              = true
@@ -67,6 +78,7 @@ schemars = "1.2.1"
 shadow-rs = { version = "2.0.0", default-features = false }
 
 canary-authorization         = { workspace = true, features = ["axum", "better-auth"] }
+canary-report.workspace      = true
 database.workspace           = true
 document-hierarchy.workspace = true
 public-id.workspace          = true
@@ -89,6 +101,7 @@ surreal-remote-ws = ["database/remote-ws"]
 [dev-dependencies]
 jsonwebtoken = { workspace = true, features = ["rust_crypto"] }
 reqwest      = { workspace = true, features = ["json", "rustls-tls"] }
+trycmd       = "1.2"
 
 crc64fast-nvme = "1.2.1"
 

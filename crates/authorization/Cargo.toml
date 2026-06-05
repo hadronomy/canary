@@ -30,6 +30,7 @@ thiserror.workspace       = true
 tokio.workspace           = true
 url.workspace             = true
 
+canary-report.workspace   = true
 public-id.workspace       = true
 
 [features]

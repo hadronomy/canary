@@ -1,8 +1,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use canary_report::{Doc, Field, Record, Report};
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use url::Url;
 
@@ -38,26 +39,42 @@ impl Default for Config {
 impl Config {
     /// Returns the configured namespace.
     #[must_use]
+    #[inline(always)]
     pub fn namespace(&self) -> &Namespace {
         &self.namespace
     }
 
     /// Returns the configured database name.
     #[must_use]
+    #[inline(always)]
     pub fn database(&self) -> &DatabaseName {
         &self.database
     }
 
     /// Returns the configured authentication strategy.
     #[must_use]
+    #[inline(always)]
     pub fn auth(&self) -> &Auth {
         &self.auth
     }
 
     /// Returns the configured engine.
     #[must_use]
+    #[inline(always)]
     pub fn engine(&self) -> &Engine {
         &self.engine
+    }
+}
+
+impl Report for Config {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .section("db", "Database")
+            .field("engine", "engine", engine(&self.engine))
+            .field("namespace", "namespace", self.namespace.as_str())
+            .field("database", "database", self.database.as_str())
+            .field("auth", "auth", auth(&self.auth))
+            .build()
     }
 }
 
@@ -81,7 +98,8 @@ pub enum Auth {
 
 /// A validated SurrealDB namespace.
 #[doc(alias = "ns")]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct Namespace(SmolStr);
 
 impl Namespace {
@@ -94,6 +112,7 @@ impl Namespace {
 
     /// Returns the namespace as a borrowed string slice.
     #[must_use]
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -101,7 +120,8 @@ impl Namespace {
 
 /// A validated SurrealDB database name.
 #[doc(alias = "db")]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct DatabaseName(SmolStr);
 
 impl DatabaseName {
@@ -114,6 +134,7 @@ impl DatabaseName {
 
     /// Returns the database name as a borrowed string slice.
     #[must_use]
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -135,6 +156,7 @@ impl DataDir {
 
     /// Returns the underlying filesystem path.
     #[must_use]
+    #[inline(always)]
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
     }
@@ -162,6 +184,7 @@ impl Endpoint {
 
     /// Returns the endpoint as a borrowed string slice.
     #[must_use]
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         match self {
             Self::Ws(url) | Self::Wss(url) | Self::Http(url) | Self::Https(url) => url.as_str(),
@@ -308,4 +331,42 @@ fn validate_secret(value: SecretString, kind: &str) -> Result<SecretString, Conf
         return Err(ConfigError::invalid(format!("{kind} cannot be empty")));
     }
     Ok(value)
+}
+
+fn engine(value: &Engine) -> Record {
+    match value {
+        Engine::Remote { endpoint } => Record::new()
+            .summary(format!("remote {}", endpoint.as_str()))
+            .field(Field::new("kind", "kind", "remote"))
+            .field(Field::new("endpoint", "endpoint", endpoint.as_str())),
+        Engine::Memory => {
+            Record::new().summary("memory").field(Field::new("kind", "kind", "memory"))
+        }
+        Engine::RocksDb { dir } => Record::new()
+            .summary(format!("rocksdb {}", dir.as_path().display()))
+            .field(Field::new("kind", "kind", "rocks_db"))
+            .field(Field::new("dir", "dir", dir.as_path().display().to_string())),
+        Engine::SurrealKv { dir } => Record::new()
+            .summary(format!("surrealkv {}", dir.as_path().display()))
+            .field(Field::new("kind", "kind", "surreal_kv"))
+            .field(Field::new("dir", "dir", dir.as_path().display().to_string())),
+    }
+}
+
+fn auth(value: &Auth) -> Record {
+    match value {
+        Auth::None => Record::new().summary("none").field(Field::new("kind", "kind", "none")),
+        Auth::Root { .. } => Record::new()
+            .summary("root, password redacted")
+            .field(Field::new("kind", "kind", "root"))
+            .field(Field::new("password", "password", canary_report::Value::Redacted)),
+        Auth::Namespace { .. } => Record::new()
+            .summary("namespace, password redacted")
+            .field(Field::new("kind", "kind", "namespace"))
+            .field(Field::new("password", "password", canary_report::Value::Redacted)),
+        Auth::Database { .. } => Record::new()
+            .summary("database, password redacted")
+            .field(Field::new("kind", "kind", "database"))
+            .field(Field::new("password", "password", canary_report::Value::Redacted)),
+    }
 }

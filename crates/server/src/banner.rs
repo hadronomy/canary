@@ -8,18 +8,13 @@ use std::fmt;
 use std::io::{self, Write};
 use std::net::SocketAddr;
 
-use anstyle::{AnsiColor, Effects};
+use anstyle::AnsiColor;
 
-use crate::{ConfigOrigin, EnvironmentLayer, LoadedConfig, build};
+use crate::terminal::{Card, Columns, Component, Mode};
+use crate::{ConfigOrigin, LoadedConfig, VERSION, Version};
 
 const LAYOUT: (usize, usize) = include!(concat!(env!("OUT_DIR"), "/banner-layout.rs"));
 const ACCENT: anstyle::Style = AnsiColor::Green.on_default();
-const BORDER: anstyle::Style = AnsiColor::Green.on_default().effects(Effects::DIMMED);
-const LABEL: anstyle::Style = AnsiColor::BrightBlack.on_default();
-const READY: anstyle::Style = AnsiColor::BrightGreen.on_default().effects(Effects::BOLD);
-const VALUE: anstyle::Style = anstyle::Style::new();
-const LABEL_WIDTH: usize = 8;
-const MIN_CARD_WIDTH: usize = 46;
 
 /// A compile-time embedded terminal banner.
 ///
@@ -42,14 +37,14 @@ const MIN_CARD_WIDTH: usize = 46;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Banner {
     art: &'static str,
-    version: &'static str,
+    version: Version,
     width: usize,
     row: usize,
 }
 
 impl Banner {
     #[inline(always)]
-    const fn new(art: &'static str, version: &'static str, width: usize, row: usize) -> Self {
+    const fn new(art: &'static str, version: Version, width: usize, row: usize) -> Self {
         Self { art, version, width, row }
     }
 
@@ -60,10 +55,10 @@ impl Banner {
         self.art
     }
 
-    /// Returns the package version displayed inside the FIGlet art.
+    /// Returns the build version displayed inside the FIGlet art.
     #[inline(always)]
     #[must_use]
-    pub const fn version(&self) -> &'static str {
+    pub const fn version(&self) -> Version {
         self.version
     }
 
@@ -113,7 +108,7 @@ impl Banner {
 
     #[inline(always)]
     fn padding(&self) -> usize {
-        self.width().saturating_sub(self.version().len() + 1)
+        self.width().saturating_sub(self.version().banner_label().len())
     }
 
     #[inline(always)]
@@ -134,7 +129,12 @@ impl Banner {
     ) -> io::Result<()> {
         for (row, line) in self.art().lines().enumerate() {
             if row == self.row {
-                writeln!(out, "{}{ACCENT}v{}{ACCENT:#}", self.prefix(line), self.version())?;
+                writeln!(
+                    out,
+                    "{}{ACCENT}{}{ACCENT:#}",
+                    self.prefix(line),
+                    self.version().banner_label()
+                )?;
                 continue;
             }
             writeln!(out, "{line}")?;
@@ -147,7 +147,7 @@ impl fmt::Display for Banner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (row, line) in self.art().lines().enumerate() {
             if row == self.row {
-                writeln!(f, "{}v{}", self.prefix(line), self.version())?;
+                writeln!(f, "{}{}", self.prefix(line), self.version().banner_label())?;
                 continue;
             }
             writeln!(f, "{line}")?;
@@ -175,51 +175,30 @@ impl<'a> BannerStatus<'a> {
     }
 
     fn write_plain_to(&self, out: &mut impl Write, width: usize) -> io::Result<()> {
-        let config = self.config();
-        let overlay = self.overlay();
-        let listener = self.listener();
-        let width = card_width(width, [&config, overlay, &listener]);
         writeln!(out)?;
-        write_top(out, width, false)?;
-        write_empty(out, width, false)?;
-        write_row(out, width, "◇", "config", &config, false)?;
-        write_row(out, width, "└", "overlay", overlay, false)?;
-        write_row(out, width, "⊙", "listener", &listener, false)?;
-        write_empty(out, width, false)?;
-        write_bottom(out, width, false)
+        self.card(Columns::new(width)).render(out, Mode::Plain)
     }
 
     fn write_styled_to(&self, out: &mut impl Write, width: usize) -> io::Result<()> {
-        let config = self.config();
-        let overlay = self.overlay();
-        let listener = self.listener();
-        let width = card_width(width, [&config, overlay, &listener]);
         writeln!(out)?;
-        write_top(out, width, true)?;
-        write_empty(out, width, true)?;
-        write_row(out, width, "◇", "config", &config, true)?;
-        write_row(out, width, "└", "overlay", overlay, true)?;
-        write_row(out, width, "⊙", "listener", &listener, true)?;
-        write_empty(out, width, true)?;
-        write_bottom(out, width, true)
+        self.card(Columns::new(width)).render(out, Mode::Styled)
+    }
+
+    fn card(&self, width: Columns) -> Card<'static> {
+        Card::new("canary", "ready")
+            .min(width)
+            .row("◇", "config", self.config())
+            .row("└", "overlay", self.overlay())
+            .row("⊙", "listener", self.listener())
     }
 
     fn config(&self) -> String {
-        match self.origin.files.as_slice() {
-            [] => "defaults".into(),
-            [file] => file.display().to_string(),
-            files => {
-                files.iter().map(|file| file.display().to_string()).collect::<Vec<_>>().join(", ")
-            }
-        }
+        self.origin.selected_label()
     }
 
     #[inline(always)]
-    fn overlay(&self) -> &'static str {
-        match self.origin.environment {
-            EnvironmentLayer::Present => "environment",
-            EnvironmentLayer::Absent => "none",
-        }
+    fn overlay(&self) -> String {
+        self.origin.overlay_label().into()
     }
 
     #[inline(always)]
@@ -228,95 +207,26 @@ impl<'a> BannerStatus<'a> {
     }
 }
 
-fn write_top(out: &mut impl Write, width: usize, styled: bool) -> io::Result<()> {
-    let left = "╭─ canary ";
-    let right = " ready ─╮";
-    let fill = "─".repeat((width + 2).saturating_sub(chars(left) + chars(right)));
-    if styled {
-        writeln!(
-            out,
-            "{BORDER}╭─ {READY}canary{READY:#}{BORDER} {fill} {READY}ready{READY:#}{BORDER} ─╮{BORDER:#}"
-        )?;
-        return Ok(());
-    }
-    writeln!(out, "{left}{fill}{right}")
-}
-
-fn write_empty(out: &mut impl Write, width: usize, styled: bool) -> io::Result<()> {
-    let pad = " ".repeat(width);
-    if styled {
-        writeln!(out, "{BORDER}│{BORDER:#}{pad}{BORDER}│{BORDER:#}")?;
-        return Ok(());
-    }
-    writeln!(out, "│{pad}│")
-}
-
-fn write_row(
-    out: &mut impl Write,
-    width: usize,
-    symbol: &str,
-    label: &str,
-    value: &str,
-    styled: bool,
-) -> io::Result<()> {
-    let label_pad = " ".repeat(LABEL_WIDTH.saturating_sub(label.len()));
-    let content = format!("  {symbol} {label}{label_pad} {value}");
-    let pad = " ".repeat(width.saturating_sub(chars(&content)));
-    if styled {
-        writeln!(
-            out,
-            "{BORDER}│{BORDER:#}  {ACCENT}{symbol}{ACCENT:#} {LABEL}{label}{LABEL:#}{label_pad} {VALUE}{value}{VALUE:#}{pad}{BORDER}│{BORDER:#}"
-        )?;
-        return Ok(());
-    }
-    writeln!(out, "│{content}{pad}│")
-}
-
-fn write_bottom(out: &mut impl Write, width: usize, styled: bool) -> io::Result<()> {
-    let fill = "─".repeat(width);
-    if styled {
-        writeln!(out, "{BORDER}╰{fill}╯{BORDER:#}")?;
-        return Ok(());
-    }
-    writeln!(out, "╰{fill}╯")
-}
-
-#[inline(always)]
-fn card_width(wordmark: usize, values: [&str; 3]) -> usize {
-    values.into_iter().map(row_width).fold(wordmark.max(MIN_CARD_WIDTH), usize::max)
-}
-
-#[inline(always)]
-fn row_width(value: &str) -> usize {
-    2 + 1 + 1 + LABEL_WIDTH + 1 + chars(value)
-}
-
-#[inline(always)]
-fn chars(value: &str) -> usize {
-    value.chars().count()
-}
-
 /// The Canary server wordmark generated during compilation.
 ///
 /// The server binary embeds the generated text directly. Printing this value
 /// performs no font parsing and reads no files at startup.
-pub const BANNER: Banner = Banner::new(
-    include_str!(concat!(env!("OUT_DIR"), "/banner.txt")),
-    build::info::PKG_VERSION,
-    LAYOUT.0,
-    LAYOUT.1,
-);
+pub const BANNER: Banner =
+    Banner::new(include_str!(concat!(env!("OUT_DIR"), "/banner.txt")), VERSION, LAYOUT.0, LAYOUT.1);
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use super::Banner;
-    use crate::{ConfigOrigin, EnvironmentLayer, LoadedConfig};
+    use crate::{ConfigOrigin, EnvironmentLayer, LoadedConfig, VERSION};
 
     #[test]
     fn overlays_version_inside_requested_row() {
-        assert_eq!(Banner::new("----\ntail\n", "1", 4, 0).to_string(), "--v1\ntail\n");
+        assert_eq!(
+            Banner::new("----\ntail\n", VERSION, 4, 0).to_string(),
+            format!("{}\ntail\n", VERSION.banner_label())
+        );
     }
 
     #[test]
@@ -325,11 +235,12 @@ mod tests {
             origin: ConfigOrigin {
                 files: vec![PathBuf::from("./.tmp/canary-rustfs.toml")],
                 environment: EnvironmentLayer::Present,
+                ..ConfigOrigin::default()
             },
             ..LoadedConfig::default()
         };
         let mut out = Vec::new();
-        Banner::new("----\ntail\n", "1", 4, 0)
+        Banner::new("----\ntail\n", VERSION, 4, 0)
             .write_to(&mut out, &config, ([127, 0, 0, 1], 8080).into())
             .unwrap();
         let out = String::from_utf8(out).unwrap();

@@ -10,6 +10,7 @@ use rmcp::model::{
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, prompt_handler, tool_handler};
 
+use crate::VERSION;
 use crate::mcp::resources;
 use crate::state::AppState;
 
@@ -48,7 +49,7 @@ impl ServerHandler for Mcp {
                 .build(),
         )
         .with_server_info(
-            Implementation::new("canary", env!("CARGO_PKG_VERSION"))
+            Implementation::new("canary", VERSION.package())
                 .with_title("Canary Knowledge Server")
                 .with_description("Curated private-knowledge retrieval and ingestion for agents"),
         )

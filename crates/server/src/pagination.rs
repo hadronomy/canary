@@ -55,6 +55,7 @@ impl Limit {
 
     /// Returns the validated limit as a plain `usize`.
     #[must_use]
+    #[inline(always)]
     pub const fn get(self) -> usize {
         self.0.get()
     }
@@ -138,12 +139,14 @@ impl<C> PageQuery<C> {
 
     /// Returns the raw `after` cursor from the query.
     #[must_use]
+    #[inline(always)]
     pub fn after(&self) -> Option<&C> {
         self.after.as_ref()
     }
 
     /// Returns the raw `limit` from the query.
     #[must_use]
+    #[inline(always)]
     pub fn limit(&self) -> Option<Limit> {
         self.limit
     }
@@ -191,12 +194,14 @@ impl<C> PageWindow<C> {
 
     /// Returns the cursor after which the next page should start.
     #[must_use]
+    #[inline(always)]
     pub fn after(&self) -> Option<&C> {
         self.after.as_ref()
     }
 
     /// Returns the requested page size.
     #[must_use]
+    #[inline(always)]
     pub fn limit(&self) -> Limit {
         self.limit
     }
@@ -253,12 +258,14 @@ impl PagePolicy {
 
     /// Returns the configured default page limit.
     #[must_use]
+    #[inline(always)]
     pub fn default_limit(&self) -> Limit {
         self.default
     }
 
     /// Returns the configured maximum page limit, if one exists.
     #[must_use]
+    #[inline(always)]
     pub fn max_limit(&self) -> Option<Limit> {
         self.max
     }

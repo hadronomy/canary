@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod banner;
+pub mod cli;
 mod build {
     shadow_rs::shadow!(info);
 }
@@ -18,16 +19,19 @@ pub mod runtime;
 pub mod services;
 pub mod shutdown;
 pub mod state;
+pub(crate) mod terminal;
+pub mod version;
 
 pub use app::{ServerApplication, ServerBuilder};
 pub use banner::{BANNER, Banner};
 pub use config::{
     AppConfig, AuthAlgorithm, AuthConfig, AuthEnabledConfig, AuthIssuerConfig,
     AuthProtectedResourceConfig, AuthRefreshConfig, AuthResourceConfig, AuthResourceUri,
-    BlobConfig, ConfigOrigin, DatabaseAuth, DatabaseConfig, DatabaseDataDir, DatabaseEndpoint,
-    DatabaseEngine, DatabaseName, EnvironmentLayer, FilesConfig, HttpConfig, LoadedConfig,
-    LogFormat, McpConfig, Namespace, ObjectPrefix, ObservabilityConfig, RuntimeConfig,
-    S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, TransportSecurity,
+    BlobConfig, CliLayer, ConfigInput, ConfigOrigin, ConfigOverrides, ConfigPath, ConfigPathSource,
+    DatabaseAuth, DatabaseConfig, DatabaseDataDir, DatabaseEndpoint, DatabaseEngine, DatabaseName,
+    EnvironmentLayer, FilesConfig, HttpConfig, LoadedConfig, LogFormat, McpConfig, Namespace,
+    ObjectPrefix, ObservabilityConfig, ObservabilityOverrides, RuntimeConfig, S3AddressingStyle,
+    S3Credentials, S3FileConfig, ServerConfig, ServerOverrides, TransportSecurity,
 };
 pub use database::{ConfigError as DatabaseConfigError, Database, Error as DatabaseError, Session};
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};
@@ -61,3 +65,4 @@ pub use runtime::build_runtime;
 pub use services::parser::{ParseSummary, ParserService};
 pub use shutdown::{ShutdownCoordinator, ShutdownReason};
 pub use state::{AppState, DbState, FileState, ParserState, ReadinessLevel, ReadinessSnapshot};
+pub use version::{BuildMetadata, GitRevision, VERSION, Version, VersionLabels, VersionReport};

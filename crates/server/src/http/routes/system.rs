@@ -6,6 +6,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 
+use crate::VERSION;
 use crate::http::routes::todo::todo;
 use crate::state::{AppState, ReadinessSnapshot};
 
@@ -24,6 +25,8 @@ pub fn router() -> Router<AppState> {
 struct HealthResponse {
     service: &'static str,
     version: &'static str,
+    revision: &'static str,
+    dirty: bool,
     started_at: chrono::DateTime<chrono::Utc>,
     #[serde(with = "humantime_serde")]
     uptime: Duration,
@@ -33,6 +36,8 @@ struct HealthResponse {
 struct ReadinessResponse {
     service: &'static str,
     version: &'static str,
+    revision: &'static str,
+    dirty: bool,
     readiness: ReadinessSnapshot,
 }
 
@@ -44,7 +49,9 @@ async fn liveness() -> StatusCode {
 async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         service: env!("CARGO_PKG_NAME"),
-        version: env!("CARGO_PKG_VERSION"),
+        version: VERSION.package(),
+        revision: VERSION.revision().short(),
+        dirty: VERSION.revision().is_dirty(),
         started_at: state.started_at(),
         uptime: state.uptime(),
     })
@@ -58,7 +65,9 @@ async fn readiness(State(state): State<AppState>) -> (StatusCode, Json<Readiness
         status,
         Json(ReadinessResponse {
             service: env!("CARGO_PKG_NAME"),
-            version: env!("CARGO_PKG_VERSION"),
+            version: VERSION.package(),
+            revision: VERSION.revision().short(),
+            dirty: VERSION.revision().is_dirty(),
             readiness,
         }),
     )
