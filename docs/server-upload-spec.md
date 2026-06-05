@@ -24,9 +24,10 @@ There is no `files.root` compatibility setting and no backend selector.
 
 ```toml
 [files.storage]
-bucket = "canary-dev"
+bucket = "canary-files-dev"
 region = "us-east-1"
 endpoint = "http://127.0.0.1:9000"
+prefix = "files"
 addressing_style = "path_style"
 transport_security = "allow_http"
 

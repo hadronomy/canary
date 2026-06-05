@@ -26,7 +26,7 @@ services:
     entrypoint:
       - /bin/sh
       - -euxc
-      - until aws --endpoint-url http://rustfs:9000 s3api list-buckets >/dev/null 2>&1; do sleep 1; done; aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket canary-dev >/dev/null 2>&1 || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket canary-dev
+      - until aws --endpoint-url http://rustfs:9000 s3api list-buckets >/dev/null 2>&1; do sleep 1; done; aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket canary-files-dev >/dev/null 2>&1 || aws --endpoint-url http://rustfs:9000 s3api create-bucket --bucket canary-files-dev
 
 volumes:
   rustfs-data:
