@@ -19,6 +19,7 @@ pub(crate) struct RawAppConfig {
     pub(crate) mcp: McpConfig,
     pub(crate) db: database::Config,
     pub(crate) files: RawFilesConfig,
+    pub(crate) workers: canary_workers::WorkerConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

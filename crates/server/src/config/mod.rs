@@ -10,6 +10,11 @@ pub use canary_authorization::{
     RefreshConfig as AuthRefreshConfig, ResourceConfig as AuthResourceConfig,
     ResourceUri as AuthResourceUri,
 };
+pub use canary_workers::{
+    CodecConfig as WorkerCodecConfig, NatsConfig as WorkerNatsConfig,
+    TaskQueues as WorkerTaskQueues, TemporalConfig as WorkerTemporalConfig, WorkerConfig,
+    WorkerKind,
+};
 pub use database::{
     Auth as DatabaseAuth, Config as DatabaseConfig, DataDir as DatabaseDataDir, DatabaseName,
     Endpoint as DatabaseEndpoint, Engine as DatabaseEngine, Namespace,

@@ -27,7 +27,7 @@ impl Cli {
             Command::Serve(args) => commands::serve::run(self.global, args),
             Command::Version(args) => commands::version::run(args),
             Command::Config(args) => commands::config::run(self.global, args),
-            Command::Worker(args) => commands::worker::run(args),
+            Command::Worker(args) => commands::worker::run(self.global, args),
             Command::Dev(args) => commands::dev::run(args),
             Command::Generate(args) => commands::generate::run(args),
         }

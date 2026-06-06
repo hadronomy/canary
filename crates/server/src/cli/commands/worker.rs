@@ -1,5 +1,11 @@
 use clap::{Args as ClapArgs, Subcommand, ValueEnum};
-use miette::Result;
+use futures_util::pin_mut;
+use miette::{IntoDiagnostic, Result, WrapErr};
+
+use crate::cli::args::GlobalArgs;
+use crate::cli::layer::{self, ConfigArgs};
+use crate::shutdown::{ShutdownCoordinator, wait_for_shutdown_signal};
+use crate::{LoadedConfig, build_runtime, init_observability};
 
 /// Arguments for `canary worker`.
 #[derive(Debug, Clone, ClapArgs)]
@@ -37,23 +43,86 @@ pub(in crate::cli) struct RunArgs {
 enum Kind {
     #[default]
     All,
+    Workflow,
+    RustActivities,
     Parser,
     Ingestion,
     Source,
     Embedding,
 }
 
-pub(in crate::cli) fn run(args: Args) -> Result<()> {
+impl ConfigArgs for Args {
+    #[inline(always)]
+    fn apply(&self, _: &mut layer::Layer) {}
+}
+
+pub(in crate::cli) fn run(global: GlobalArgs, args: Args) -> Result<()> {
     match args.command {
-        Command::Run(_) => todo("canary worker run"),
-        Command::Inspect => todo("canary worker inspect"),
+        Command::Run(args) => run_worker(global, args),
+        Command::Inspect => inspect(global),
     }
 }
 
-pub(in crate::cli) fn todo(command: &'static str) -> Result<()> {
-    Err(miette::miette!(
-        code = "canary_server::cli::todo",
-        help = "Worker execution is not wired yet; this command is here so the CLI shape can be exercised.",
-        "{command} is not implemented yet"
-    ))
+fn run_worker(global: GlobalArgs, args: RunArgs) -> Result<()> {
+    let loaded =
+        LoadedConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
+            .wrap_err("Failed to load worker configuration.")?;
+    init_observability(&loaded.settings.observability)
+        .into_diagnostic()
+        .wrap_err("Failed to initialize observability.")?;
+
+    let runtime = build_runtime(&loaded.settings.runtime)
+        .into_diagnostic()
+        .wrap_err("Failed to build the Tokio runtime.")?;
+
+    runtime.block_on(async move {
+        let shutdown = ShutdownCoordinator::new(loaded.settings.server.shutdown_grace_period);
+        let worker = canary_workers::WorkerRuntime::build_with(
+            loaded.settings.workers,
+            canary_workers::WorkerRuntimeOptions {
+                kind: args.kind.unwrap_or_default().into(),
+                task_queue: args
+                    .task_queue
+                    .map(canary_workers::TaskQueue::new)
+                    .transpose()
+                    .into_diagnostic()?,
+                concurrency: args.concurrency,
+            },
+        )
+        .await
+        .into_diagnostic()?;
+        let run = worker.run(shutdown.register());
+        pin_mut!(run);
+
+        tokio::select! {
+            result = &mut run => result.into_diagnostic(),
+            reason = wait_for_shutdown_signal() => {
+                shutdown.request(reason?);
+                run.await.into_diagnostic()
+            }
+        }
+    })
+}
+
+fn inspect(global: GlobalArgs) -> Result<()> {
+    let loaded =
+        LoadedConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
+            .wrap_err("Failed to load worker configuration.")?;
+    println!("{}", serde_json::to_string_pretty(&loaded.settings.workers).into_diagnostic()?);
+    Ok(())
+}
+
+impl From<Kind> for canary_workers::WorkerKind {
+    #[inline(always)]
+    fn from(value: Kind) -> Self {
+        match value {
+            Kind::All => Self::All,
+            Kind::Workflow => Self::Workflow,
+            Kind::RustActivities => Self::RustActivities,
+            Kind::Parser => Self::Parser,
+            Kind::Ingestion => Self::Ingestion,
+            Kind::Source => Self::Source,
+            Kind::Embedding => Self::Embedding,
+        }
+    }
 }

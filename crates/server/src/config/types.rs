@@ -30,6 +30,7 @@ pub struct AppConfig {
     pub mcp: McpConfig,
     pub db: database::Config,
     pub files: FilesConfig,
+    pub workers: canary_workers::WorkerConfig,
 }
 
 impl Report for AppConfig {
@@ -41,6 +42,7 @@ impl Report for AppConfig {
             .extend(&self.db)
             .extend(&self.http)
             .extend(&self.mcp)
+            .extend(&self.workers)
             .extend(&self.observability)
             .extend(&self.runtime)
             .build()

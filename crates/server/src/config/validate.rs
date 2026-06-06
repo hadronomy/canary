@@ -23,6 +23,7 @@ impl TryFrom<RawAppConfig> for AppConfig {
             mcp: validate_mcp(value.mcp)?,
             db: value.db,
             files: FilesConfig::try_from(value.files)?,
+            workers: validate_workers(value.workers)?,
         })
     }
 }
@@ -110,6 +111,15 @@ fn validate_mcp(value: McpConfig) -> Result<McpConfig, ConfigError> {
     if value.sse_retry.is_zero() {
         return Err(ConfigError::invalid("mcp.sse_retry must be greater than zero"));
     }
+    Ok(value)
+}
+
+fn validate_workers(
+    value: canary_workers::WorkerConfig,
+) -> Result<canary_workers::WorkerConfig, ConfigError> {
+    value.validate().map_err(|source| {
+        ConfigError::invalid("invalid worker configuration").with_source(source)
+    })?;
     Ok(value)
 }
 

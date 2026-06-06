@@ -1,0 +1,45 @@
+[package]
+authors.workspace     = true
+description.workspace = true
+edition.workspace     = true
+license.workspace     = true
+name                  = "canary-workers"
+publish.workspace     = true
+repository.workspace  = true
+version.workspace     = true
+
+[features]
+default              = []
+temporal-integration = []
+
+[dependencies]
+anyhow.workspace              = true
+async-nats.workspace          = true
+async-trait.workspace         = true
+bytes.workspace               = true
+flatbuffers.workspace         = true
+futures.workspace             = true
+futures-util.workspace        = true
+humantime-serde.workspace     = true
+miette.workspace              = true
+pin-project-lite.workspace    = true
+prost.workspace               = true
+serde.workspace               = true
+serde_json.workspace          = true
+sha2.workspace                = true
+smol_str.workspace            = true
+temporalio-client.workspace   = true
+temporalio-common.workspace   = true
+temporalio-macros.workspace   = true
+temporalio-sdk.workspace      = true
+temporalio-sdk-core.workspace = true
+thiserror.workspace           = true
+tokio.workspace               = true
+tokio-util.workspace          = true
+tracing.workspace             = true
+url.workspace                 = true
+
+canary-report.workspace = true
+
+[build-dependencies]
+flatc-rust.workspace = true

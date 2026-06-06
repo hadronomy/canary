@@ -1,0 +1,12 @@
+namespace canary.temporal.codec;
+
+table ClaimEnvelope {
+  version:ushort;
+  bucket:string;
+  key:string;
+  sha256:[ubyte];
+  size:ulong;
+  created_unix_ms:ulong;
+}
+
+root_type ClaimEnvelope;
