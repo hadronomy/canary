@@ -9,8 +9,8 @@ use config::builder::{ConfigBuilder, DefaultState};
 use config::{Config, Environment, File};
 
 use super::defaults::{CONFIG_PATH_ENV, DEFAULT_CONFIG_CANDIDATES, ENV_PREFIX, ENV_SEPARATOR};
-use super::raw::RawAppConfig;
-use super::types::{AppConfig, LogFormat};
+use super::raw::{RawAppConfig, RawWorkerProcessConfig};
+use super::types::{AppConfig, LogFormat, WorkerProcessConfig};
 use crate::error::ConfigError;
 
 const CLI_CONFIG_KEY: &str = "--config";
@@ -21,6 +21,13 @@ const OBSERVABILITY_FILTER_ENV: &str = "CANARY_SERVER__OBSERVABILITY__FILTER";
 #[derive(Debug, Clone, Default)]
 pub struct LoadedConfig {
     pub settings: AppConfig,
+    pub origin: ConfigOrigin,
+}
+
+/// Fully resolved worker process configuration and where it came from.
+#[derive(Debug, Clone, Default)]
+pub struct LoadedWorkerConfig {
+    pub settings: WorkerProcessConfig,
     pub origin: ConfigOrigin,
 }
 
@@ -69,7 +76,39 @@ impl LoadedConfig {
     }
 }
 
+impl LoadedWorkerConfig {
+    /// Loads worker configuration from defaults, file, environment, and CLI overrides.
+    ///
+    /// This resolves only the settings a worker process uses: runtime,
+    /// observability, and `workers`. Server-only settings such as object
+    /// storage, database, HTTP, MCP, and authorization are left alone.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] when a selected file is missing, the layered
+    /// configuration cannot be built, or worker validation fails.
+    #[inline(always)]
+    pub fn load_with(input: ConfigInput) -> Result<Self, ConfigError> {
+        load_worker_with_source(input, None)
+    }
+
+    #[doc(hidden)]
+    #[inline(always)]
+    pub fn load_with_environment_map(
+        input: ConfigInput,
+        source: HashMap<String, String>,
+    ) -> Result<Self, ConfigError> {
+        load_worker_with_source(input, Some(source))
+    }
+}
+
 impl Report for LoadedConfig {
+    fn report(&self) -> Doc {
+        Doc::builder().extend(&self.origin).extend(&self.settings).build()
+    }
+}
+
+impl Report for LoadedWorkerConfig {
     fn report(&self) -> Doc {
         Doc::builder().extend(&self.origin).extend(&self.settings).build()
     }
@@ -395,11 +434,44 @@ fn load_with_source(
     Ok(LoadedConfig { settings, origin })
 }
 
+fn load_worker_with_source(
+    input: ConfigInput,
+    source: Option<HashMap<String, String>>,
+) -> Result<LoadedWorkerConfig, ConfigError> {
+    let origin = ConfigOrigin::discover(&input, source.as_ref())?;
+    let settings = build_worker_settings(&origin.files, source, &input.overrides)?;
+    Ok(LoadedWorkerConfig { settings, origin })
+}
+
 fn build_settings(
     files: &[PathBuf],
     source: Option<HashMap<String, String>>,
     overrides: &ConfigOverrides,
 ) -> Result<AppConfig, ConfigError> {
+    let raw = layered_config(files, source, overrides)?
+        .try_deserialize::<RawAppConfig>()
+        .map_err(|source| ConfigError::Deserialize { source })?;
+
+    AppConfig::try_from(raw)
+}
+
+fn build_worker_settings(
+    files: &[PathBuf],
+    source: Option<HashMap<String, String>>,
+    overrides: &ConfigOverrides,
+) -> Result<WorkerProcessConfig, ConfigError> {
+    let raw = layered_config(files, source, overrides)?
+        .try_deserialize::<RawWorkerProcessConfig>()
+        .map_err(|source| ConfigError::Deserialize { source })?;
+
+    WorkerProcessConfig::try_from(raw)
+}
+
+fn layered_config(
+    files: &[PathBuf],
+    source: Option<HashMap<String, String>>,
+    overrides: &ConfigOverrides,
+) -> Result<Config, ConfigError> {
     let mut builder = Config::builder();
 
     for path in files {
@@ -418,13 +490,7 @@ fn build_settings(
 
     builder = overrides.apply(builder)?;
 
-    let raw = builder
-        .build()
-        .map_err(|source| ConfigError::Build { source })?
-        .try_deserialize::<RawAppConfig>()
-        .map_err(|source| ConfigError::Deserialize { source })?;
-
-    AppConfig::try_from(raw)
+    builder.build().map_err(|source| ConfigError::Build { source })
 }
 
 fn config_files(explicit: Option<ExplicitPath>) -> Result<Vec<PathBuf>, ConfigError> {

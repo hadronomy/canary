@@ -21,11 +21,11 @@ pub use database::{
 };
 pub use load::{
     CliLayer, ConfigInput, ConfigOrigin, ConfigOverrides, ConfigPath, ConfigPathSource,
-    EnvironmentLayer, LoadedConfig, ObservabilityOverrides, ServerOverrides,
+    EnvironmentLayer, LoadedConfig, LoadedWorkerConfig, ObservabilityOverrides, ServerOverrides,
 };
 pub use secrecy::SecretString;
 pub use types::{
     AppConfig, BlobConfig, FilesConfig, HttpConfig, LogFormat, McpConfig, ObjectPrefix,
     ObservabilityConfig, RuntimeConfig, S3AddressingStyle, S3Credentials, S3FileConfig,
-    ServerConfig, TransportSecurity,
+    ServerConfig, TransportSecurity, WorkerProcessConfig,
 };

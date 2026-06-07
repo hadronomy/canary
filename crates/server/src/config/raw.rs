@@ -23,6 +23,14 @@ pub(crate) struct RawAppConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct RawWorkerProcessConfig {
+    pub(crate) runtime: RuntimeConfig,
+    pub(crate) observability: ObservabilityConfig,
+    pub(crate) workers: canary_workers::WorkerConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct RawFilesConfig {
     pub(crate) storage: RawS3FileConfig,

@@ -1,9 +1,13 @@
 use secrecy::{ExposeSecret, SecretString};
 use smol_str::SmolStr;
 
-use super::raw::{RawAppConfig, RawFilesConfig, RawHttpConfig, RawS3Credentials, RawS3FileConfig};
+use super::raw::{
+    RawAppConfig, RawFilesConfig, RawHttpConfig, RawS3Credentials, RawS3FileConfig,
+    RawWorkerProcessConfig,
+};
 use super::types::{
     AppConfig, FilesConfig, HttpConfig, McpConfig, ObjectPrefix, S3Credentials, S3FileConfig,
+    WorkerProcessConfig,
 };
 use crate::error::ConfigError;
 use crate::pagination::{Limit, PagePolicy};
@@ -23,6 +27,18 @@ impl TryFrom<RawAppConfig> for AppConfig {
             mcp: validate_mcp(value.mcp)?,
             db: value.db,
             files: FilesConfig::try_from(value.files)?,
+            workers: validate_workers(value.workers)?,
+        })
+    }
+}
+
+impl TryFrom<RawWorkerProcessConfig> for WorkerProcessConfig {
+    type Error = ConfigError;
+
+    fn try_from(value: RawWorkerProcessConfig) -> Result<Self, Self::Error> {
+        Ok(Self {
+            runtime: value.runtime,
+            observability: value.observability,
             workers: validate_workers(value.workers)?,
         })
     }

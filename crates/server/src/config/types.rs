@@ -33,6 +33,28 @@ pub struct AppConfig {
     pub workers: canary_workers::WorkerConfig,
 }
 
+/// Settings needed to run a worker process.
+///
+/// Workers do not bind HTTP routes, open the file service, or validate
+/// resource-server authorization. They need process runtime settings,
+/// observability, and the Temporal/NATS worker configuration.
+#[derive(Debug, Clone, Default)]
+pub struct WorkerProcessConfig {
+    pub runtime: RuntimeConfig,
+    pub observability: ObservabilityConfig,
+    pub workers: canary_workers::WorkerConfig,
+}
+
+impl Report for WorkerProcessConfig {
+    fn report(&self) -> Doc {
+        Doc::builder()
+            .extend(&self.workers)
+            .extend(&self.observability)
+            .extend(&self.runtime)
+            .build()
+    }
+}
+
 impl Report for AppConfig {
     fn report(&self) -> Doc {
         Doc::builder()

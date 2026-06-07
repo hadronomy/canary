@@ -29,9 +29,10 @@ pub use config::{
     AuthProtectedResourceConfig, AuthRefreshConfig, AuthResourceConfig, AuthResourceUri,
     BlobConfig, CliLayer, ConfigInput, ConfigOrigin, ConfigOverrides, ConfigPath, ConfigPathSource,
     DatabaseAuth, DatabaseConfig, DatabaseDataDir, DatabaseEndpoint, DatabaseEngine, DatabaseName,
-    EnvironmentLayer, FilesConfig, HttpConfig, LoadedConfig, LogFormat, McpConfig, Namespace,
-    ObjectPrefix, ObservabilityConfig, ObservabilityOverrides, RuntimeConfig, S3AddressingStyle,
-    S3Credentials, S3FileConfig, ServerConfig, ServerOverrides, TransportSecurity,
+    EnvironmentLayer, FilesConfig, HttpConfig, LoadedConfig, LoadedWorkerConfig, LogFormat,
+    McpConfig, Namespace, ObjectPrefix, ObservabilityConfig, ObservabilityOverrides, RuntimeConfig,
+    S3AddressingStyle, S3Credentials, S3FileConfig, ServerConfig, ServerOverrides,
+    TransportSecurity, WorkerProcessConfig,
 };
 pub use database::{ConfigError as DatabaseConfigError, Database, Error as DatabaseError, Session};
 pub use error::{AppError, AppResult, ConfigError, DbError, FileError, ServerError, ServerResult};

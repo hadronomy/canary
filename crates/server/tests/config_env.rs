@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use canary_server::{
-    ConfigInput, ConfigOverrides, ConfigPath, ConfigPathSource, LoadedConfig,
+    ConfigInput, ConfigOverrides, ConfigPath, ConfigPathSource, LoadedConfig, LoadedWorkerConfig,
     ObservabilityOverrides, ServerOverrides,
 };
 
@@ -30,6 +30,20 @@ fn rejects_removed_local_storage_setting() {
     .expect_err("local storage setting should be rejected");
 
     assert!(matches!(err, canary_server::ConfigError::Deserialize { .. }));
+}
+
+#[test]
+fn worker_config_does_not_validate_server_storage() {
+    let settings =
+        LoadedWorkerConfig::load_with_environment_map(ConfigInput::default(), HashMap::new())
+            .expect("worker config should load from worker defaults");
+
+    assert_eq!(settings.settings.workers.task_queues.workflow.as_str(), "canary-workflows");
+
+    let err = LoadedConfig::load_from_environment_map(HashMap::new())
+        .expect_err("server config should still require object storage");
+
+    assert_eq!(err.to_string(), "s3 bucket cannot be empty");
 }
 
 #[test]

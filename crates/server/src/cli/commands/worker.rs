@@ -5,7 +5,7 @@ use miette::{IntoDiagnostic, Result, WrapErr};
 use crate::cli::args::GlobalArgs;
 use crate::cli::layer::{self, ConfigArgs};
 use crate::shutdown::{ShutdownCoordinator, wait_for_shutdown_signal};
-use crate::{LoadedConfig, build_runtime, init_observability};
+use crate::{LoadedWorkerConfig, build_runtime, init_observability};
 
 /// Arguments for `canary worker`.
 #[derive(Debug, Clone, ClapArgs)]
@@ -65,7 +65,7 @@ pub(in crate::cli) fn run(global: GlobalArgs, args: Args) -> Result<()> {
 
 fn run_worker(global: GlobalArgs, args: RunArgs) -> Result<()> {
     let loaded =
-        LoadedConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
+        LoadedWorkerConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
             .wrap_err("Failed to load worker configuration.")?;
     init_observability(&loaded.settings.observability)
         .into_diagnostic()
@@ -76,7 +76,7 @@ fn run_worker(global: GlobalArgs, args: RunArgs) -> Result<()> {
         .wrap_err("Failed to build the Tokio runtime.")?;
 
     runtime.block_on(async move {
-        let shutdown = ShutdownCoordinator::new(loaded.settings.server.shutdown_grace_period);
+        let shutdown = ShutdownCoordinator::new(loaded.settings.workers.shutdown_grace_period);
         let worker = canary_workers::WorkerRuntime::build_with(
             loaded.settings.workers,
             canary_workers::WorkerRuntimeOptions {
@@ -106,7 +106,7 @@ fn run_worker(global: GlobalArgs, args: RunArgs) -> Result<()> {
 
 fn inspect(global: GlobalArgs) -> Result<()> {
     let loaded =
-        LoadedConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
+        LoadedWorkerConfig::load_with(layer::input(&global, &Args { command: Command::Inspect }))
             .wrap_err("Failed to load worker configuration.")?;
     println!("{}", serde_json::to_string_pretty(&loaded.settings.workers).into_diagnostic()?);
     Ok(())

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::ops::RangeInclusive;
+use std::time::Duration;
 
 use canary_report::{Doc, Report, Value};
 use serde::{Deserialize, Serialize};
@@ -9,10 +10,15 @@ use url::Url;
 
 use crate::{Result, WorkerError};
 
+const DEFAULT_SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(30);
+
 /// Configuration for Canary's worker runtime.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct WorkerConfig {
+    /// Grace period used after the worker receives a shutdown signal.
+    #[serde(with = "humantime_serde")]
+    pub shutdown_grace_period: Duration,
     /// Temporal connection settings.
     pub temporal: TemporalConfig,
     /// Task queues used by each worker family.
@@ -27,6 +33,7 @@ impl Default for WorkerConfig {
     #[inline(always)]
     fn default() -> Self {
         Self {
+            shutdown_grace_period: DEFAULT_SHUTDOWN_GRACE_PERIOD,
             temporal: TemporalConfig::default(),
             task_queues: TaskQueues::default(),
             nats: NatsConfig::default(),
@@ -41,6 +48,11 @@ impl WorkerConfig {
     /// This is intentionally light: commands may inspect configuration without
     /// connecting to Temporal or NATS.
     pub fn validate(&self) -> Result<()> {
+        if self.shutdown_grace_period.is_zero() {
+            return Err(WorkerError::Config(
+                "workers.shutdown_grace_period must be greater than zero".to_owned(),
+            ));
+        }
         self.temporal.validate()?;
         self.task_queues.validate()?;
         self.nats.validate()?;
@@ -52,6 +64,11 @@ impl Report for WorkerConfig {
     fn report(&self) -> Doc {
         Doc::builder()
             .section("workers", "Workers")
+            .field(
+                "shutdown_grace_period",
+                "shutdown grace",
+                Value::duration(self.shutdown_grace_period),
+            )
             .field("temporal", "temporal", self.temporal.target_url.as_str().to_owned())
             .field("namespace", "namespace", self.temporal.namespace.as_str().to_owned())
             .field(
@@ -536,6 +553,17 @@ mod tests {
                 BatchRange::new(5, 8).unwrap(),
                 BatchRange::new(9, 10).unwrap(),
             ]
+        );
+    }
+
+    #[test]
+    fn shutdown_grace_period_must_be_non_zero() {
+        let cfg =
+            WorkerConfig { shutdown_grace_period: std::time::Duration::ZERO, ..Default::default() };
+
+        assert_eq!(
+            cfg.validate().unwrap_err().to_string(),
+            "invalid worker configuration: workers.shutdown_grace_period must be greater than zero"
         );
     }
 
