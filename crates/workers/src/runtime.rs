@@ -17,9 +17,11 @@ use temporalio_sdk_core::{CoreRuntime, RuntimeOptions};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::activities::DocumentActivities;
+use crate::activities::{DocumentActivities, MathActivities};
 use crate::codec::{ClaimCheckCodec, NatsClaimStore};
-use crate::workflows::{DocumentBatchWorkflow, DocumentFanoutWorkflow};
+use crate::workflows::{
+    DistributedPiWorkflow, DocumentBatchWorkflow, DocumentFanoutWorkflow, PiShardWorkflow,
+};
 use crate::{Result, TaskQueue, WorkerConfig, WorkerError, WorkerKind};
 
 /// Runtime options provided by the CLI or supervising process.
@@ -112,6 +114,8 @@ impl WorkerRuntime {
         let opts = WorkerOptions::new(queue.as_str().to_owned())
             .register_workflow::<DocumentFanoutWorkflow>()
             .register_workflow::<DocumentBatchWorkflow>()
+            .register_workflow::<DistributedPiWorkflow>()
+            .register_workflow::<PiShardWorkflow>()
             .task_types(WorkerTaskTypes::workflow_only())
             .graceful_shutdown_period(Duration::from_secs(30))
             .build();
@@ -123,6 +127,7 @@ impl WorkerRuntime {
         let queue = self.opts.task_queue.as_ref().unwrap_or(&self.cfg.task_queues.rust_activities);
         let opts = WorkerOptions::new(queue.as_str().to_owned())
             .register_activities(DocumentActivities)
+            .register_activities(MathActivities)
             .task_types(WorkerTaskTypes::activity_only())
             .graceful_shutdown_period(Duration::from_secs(30))
             .build();
