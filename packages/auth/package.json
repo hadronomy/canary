@@ -1,0 +1,29 @@
+{
+  "name": "@canary/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@better-auth/oauth-provider": "^1.6.20",
+    "@canary/db": "workspace:*",
+    "@canary/env": "workspace:*",
+    "better-auth": "^1.6.20",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@canary/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

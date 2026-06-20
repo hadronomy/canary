@@ -1,0 +1,27 @@
+{
+  "name": "@canary/sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/client": "^1.5.21",
+    "@tanstack/electric-db-collection": "^0.3.7",
+    "@tanstack/react-db": "^0.1.87",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@canary/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

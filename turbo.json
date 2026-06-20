@@ -1,5 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "AGENT_MODEL",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "CANARY_MCP_URL",
+    "CORS_ORIGIN",
+    "DATABASE_URL",
+    "ELECTRIC_SECRET",
+    "ELECTRIC_URL",
+    "OPENAI_API_KEY",
+    "SKIP_ENV_VALIDATION"
+  ],
   "ui": "tui",
   "tasks": {
     "build": {
@@ -12,6 +24,19 @@
     },
     "check-types": {
       "dependsOn": ["^check-types"]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:studio": {
+      "cache": false,
+      "persistent": true
     },
     "dev": {
       "cache": false,

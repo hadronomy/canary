@@ -1,0 +1,65 @@
+name: canary
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    init: true
+    ports:
+      - "3001:3001"
+    env_file:
+      - path: apps/web/.env
+        required: false
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me-change-me-change-me}
+      BETTER_AUTH_URL: http://localhost:3001
+      CANARY_MCP_URL: ${CANARY_MCP_URL:-http://host.docker.internal:3000}
+      CORS_ORIGIN: http://localhost:3001
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/canary
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-dev-electric-secret}
+      ELECTRIC_URL: http://electric:3000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VITE_SERVER_URL: http://localhost:3001
+    depends_on:
+      electric:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    command: ["postgres", "-c", "wal_level=logical"]
+    image: postgres:18
+    container_name: canary-postgres
+    environment:
+      POSTGRES_DB: canary
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_USER: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d canary"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - canary_postgres_data:/var/lib/postgresql/data
+
+  electric:
+    image: electricsql/electric:latest
+    container_name: canary-electric
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/canary
+      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:-dev-electric-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+
+volumes:
+  canary_postgres_data:
