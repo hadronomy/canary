@@ -1,7 +1,6 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 
-import Loader from '~/components/loader';
 import { routeTree } from '~/routeTree.gen';
 import { createQueryClient, orpc } from '~/utils/orpc';
 
@@ -11,9 +10,11 @@ export function getRouter() {
   const router = createTanStackRouter({
     routeTree,
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    defaultPreload: 'intent',
+    defaultPreloadDelay: 0,
+    defaultPreloadIntentProximity: 96,
+    defaultPreloadStaleTime: 30_000,
     context: { orpc, queryClient },
-    defaultPendingComponent: () => <Loader />,
     defaultNotFoundComponent: () => <div>Not Found</div>,
   });
 

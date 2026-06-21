@@ -1,9 +1,21 @@
-import { snakeCamelMapper } from '@electric-sql/client';
+import type { PersistedCollectionPersistence } from '@tanstack/browser-db-sqlite-persistence';
+import type { ElectricCollectionUtils } from '@tanstack/electric-db-collection';
+
+import { FetchError, snakeCamelMapper } from '@electric-sql/client';
+import {
+  createBrowserWASQLitePersistence,
+  openBrowserWASQLiteOPFSDatabase,
+  persistedCollectionOptions,
+} from '@tanstack/browser-db-sqlite-persistence';
+import { BasicIndex, createCollection } from '@tanstack/db';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
-import { createCollection } from '@tanstack/react-db';
 import { z } from 'zod';
 
-const stamp = z.string().or(z.date());
+const stamp = z.iso.datetime({ offset: true });
+const pg = {
+  timestamp: time,
+  timestamptz: time,
+};
 
 export const threadSchema = z.object({
   id: z.string(),
@@ -55,97 +67,407 @@ export type Message = z.infer<typeof messageSchema>;
 export type Run = z.infer<typeof runSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type Tx = { txid: number };
+type Base = { base: string };
+type Scope = Base & { ownerId: string };
 
-export function threads(opts: { base?: string; archive: (input: { id: string }) => Promise<Tx> }) {
-  const base = opts.base ?? '/api/sync';
+const lists = new Map<string, ReturnType<typeof makeThreads>>();
+const texts = new Map<string, ReturnType<typeof makeMessages>>();
+const rns = new Map<string, ReturnType<typeof makeRuns>>();
+const evs = new Map<string, ReturnType<typeof makeEvents>>();
+const version = 3;
+const ns = `canary-sync-v${version}`;
+let disk: PersistedCollectionPersistence | null | undefined;
+let boot: Promise<void> | undefined;
 
-  return createCollection(
-    electricCollectionOptions({
-      id: 'threads',
+export function setup() {
+  if (disk || boot) {
+    return boot ?? Promise.resolve();
+  }
+
+  boot = openBrowserWASQLiteOPFSDatabase({
+    databaseName: `${ns}.sqlite`,
+  })
+    .then((db) => {
+      disk = createBrowserWASQLitePersistence({ database: db });
+    })
+    .catch((err: unknown) => {
+      console.warn('TanStack DB persistence unavailable; using memory collections.', err);
+      disk = null;
+    });
+
+  return boot;
+}
+
+export function threads(
+  opts: Scope & {
+    archive: (input: { id: string }) => Promise<Tx>;
+    create: (input: { id: string; title: string }) => Promise<Tx>;
+  },
+) {
+  const key = scope(opts);
+  const hit = lists.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeThreads(opts);
+  lists.set(key, col);
+
+  return col;
+}
+
+function makeThreads(
+  opts: Scope & {
+    archive: (input: { id: string }) => Promise<Tx>;
+    create: (input: { id: string; title: string }) => Promise<Tx>;
+  },
+) {
+  const cfg = electricCollectionOptions({
+    id: `${ns}:${scope(opts)}:threads`,
+    schema: threadSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: url(opts.base, 'threads'),
+      columnMapper: snakeCamelMapper(),
+      parser: pg,
+      liveSse: true,
+      onError: retry,
+    },
+    syncMode: 'eager',
+    onInsert: async ({ transaction }) => {
+      const rows = transaction.mutations
+        .map((item) => item.modified)
+        .filter((item) => item.ownerId === opts.ownerId && item.archivedAt == null);
+
+      if (!rows.length) {
+        return;
+      }
+
+      const res = await Promise.all(
+        rows.map((item) => opts.create({ id: item.id, title: item.title })),
+      );
+
+      return {
+        txid: res.map((item) => item.txid),
+      };
+    },
+    onUpdate: async ({ transaction }) => {
+      const rows = transaction.mutations.filter((item) => item.changes.archivedAt != null);
+
+      if (!rows.length) {
+        return;
+      }
+
+      const res = await Promise.all(rows.map((item) => opts.archive({ id: item.original.id })));
+
+      return {
+        txid: res.map((item) => item.txid),
+      };
+    },
+  });
+
+  const store = storage();
+
+  if (store) {
+    const res = persistedCollectionOptions<
+      Thread,
+      string | number,
+      typeof threadSchema,
+      ElectricCollectionUtils<Thread>
+    >({
+      ...cfg,
+      persistence: store,
+      schemaVersion: version,
+    });
+
+    const col = createCollection({
+      ...res,
       schema: threadSchema,
-      getKey: (row) => row.id,
-      shapeOptions: {
-        url: `${base}/threads`,
-        columnMapper: snakeCamelMapper(),
-      },
-      syncMode: 'eager',
-      onUpdate: async ({ transaction }) => {
-        const item = transaction.mutations[0]?.original;
+    });
 
-        if (!item) {
-          return;
-        }
+    col.createIndex((row) => row.updatedAt, { indexType: BasicIndex });
 
-        return await opts.archive({ id: item.id });
-      },
-    }),
-  );
+    return col;
+  }
+
+  const col = createCollection(cfg);
+
+  col.createIndex((row) => row.updatedAt, { indexType: BasicIndex });
+
+  return col;
 }
 
 export function messages(opts: {
-  base?: string;
-  threadId: string;
+  base: string;
+  ownerId: string;
   send: (input: { content: string; id: string; threadId: string }) => Promise<Tx>;
 }) {
-  const base = opts.base ?? '/api/sync';
+  const key = scope(opts);
+  const hit = texts.get(key);
 
-  return createCollection(
-    electricCollectionOptions({
-      id: `messages:${opts.threadId}`,
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeMessages(opts);
+  texts.set(key, col);
+
+  return col;
+}
+
+function makeMessages(opts: {
+  base: string;
+  ownerId: string;
+  send: (input: { content: string; id: string; threadId: string }) => Promise<Tx>;
+}) {
+  const cfg = electricCollectionOptions({
+    id: `${ns}:${scope(opts)}:messages`,
+    schema: messageSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: url(opts.base, 'messages'),
+      columnMapper: snakeCamelMapper(),
+      parser: pg,
+      liveSse: true,
+      onError: retry,
+    },
+    syncMode: 'eager',
+    onInsert: async ({ transaction }) => {
+      const rows = transaction.mutations
+        .map((item) => item.modified)
+        .filter(
+          (item) => item.ownerId === opts.ownerId && item.role === 'user' && item.runId == null,
+        );
+
+      if (!rows.length) {
+        return;
+      }
+
+      const res = await Promise.all(
+        rows.map((item) =>
+          opts.send({
+            id: item.id,
+            threadId: item.threadId,
+            content: item.content,
+          }),
+        ),
+      );
+
+      return {
+        txid: res.map((item) => item.txid),
+      };
+    },
+  });
+
+  const store = storage();
+
+  if (store) {
+    const res = persistedCollectionOptions<
+      Message,
+      string | number,
+      typeof messageSchema,
+      ElectricCollectionUtils<Message>
+    >({
+      ...cfg,
+      persistence: store,
+      schemaVersion: version,
+    });
+
+    const col = createCollection({
+      ...res,
       schema: messageSchema,
-      getKey: (row) => row.id,
-      shapeOptions: {
-        url: `${base}/messages?threadId=${encodeURIComponent(opts.threadId)}`,
-        columnMapper: snakeCamelMapper(),
-      },
-      syncMode: 'eager',
-      onInsert: async ({ transaction }) => {
-        const item = transaction.mutations[0]?.modified;
+    });
 
-        if (!item) {
-          return;
-        }
+    col.createIndex((row) => row.createdAt, { indexType: BasicIndex });
 
-        return await opts.send({
-          id: item.id,
-          threadId: item.threadId,
-          content: item.content,
-        });
-      },
-    }),
-  );
+    return col;
+  }
+
+  const col = createCollection(cfg);
+
+  col.createIndex((row) => row.createdAt, { indexType: BasicIndex });
+  col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+
+  return col;
 }
 
-export function runs(opts: { base?: string; threadId: string }) {
-  const base = opts.base ?? '/api/sync';
+export function runs(opts: Scope) {
+  const key = scope(opts);
+  const hit = rns.get(key);
 
-  return createCollection(
-    electricCollectionOptions({
-      id: `runs:${opts.threadId}`,
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeRuns(opts);
+  rns.set(key, col);
+
+  return col;
+}
+
+function makeRuns(opts: Scope) {
+  const cfg = electricCollectionOptions({
+    id: `${ns}:${scope(opts)}:runs`,
+    schema: runSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: url(opts.base, 'runs'),
+      columnMapper: snakeCamelMapper(),
+      parser: pg,
+      liveSse: true,
+      onError: retry,
+    },
+    syncMode: 'eager',
+  });
+
+  const store = storage();
+
+  if (store) {
+    const res = persistedCollectionOptions<
+      Run,
+      string | number,
+      typeof runSchema,
+      ElectricCollectionUtils<Run>
+    >({
+      ...cfg,
+      persistence: store,
+      schemaVersion: version,
+    });
+
+    const col = createCollection({
+      ...res,
       schema: runSchema,
-      getKey: (row) => row.id,
-      shapeOptions: {
-        url: `${base}/runs?threadId=${encodeURIComponent(opts.threadId)}`,
-        columnMapper: snakeCamelMapper(),
-      },
-      syncMode: 'eager',
-    }),
-  );
+    });
+
+    col.createIndex((row) => row.updatedAt, { indexType: BasicIndex });
+
+    return col;
+  }
+
+  const col = createCollection(cfg);
+
+  col.createIndex((row) => row.updatedAt, { indexType: BasicIndex });
+  col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+
+  return col;
 }
 
-export function events(opts: { base?: string; threadId: string }) {
-  const base = opts.base ?? '/api/sync';
+export function events(opts: Scope) {
+  const key = scope(opts);
+  const hit = evs.get(key);
 
-  return createCollection(
-    electricCollectionOptions({
-      id: `events:${opts.threadId}`,
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeEvents(opts);
+  evs.set(key, col);
+
+  return col;
+}
+
+function makeEvents(opts: Scope) {
+  const cfg = electricCollectionOptions({
+    id: `${ns}:${scope(opts)}:events`,
+    schema: eventSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: url(opts.base, 'events'),
+      columnMapper: snakeCamelMapper(),
+      parser: pg,
+      liveSse: true,
+      onError: retry,
+    },
+    syncMode: 'eager',
+  });
+
+  const store = storage();
+
+  if (store) {
+    const res = persistedCollectionOptions<
+      Event,
+      string | number,
+      typeof eventSchema,
+      ElectricCollectionUtils<Event>
+    >({
+      ...cfg,
+      persistence: store,
+      schemaVersion: version,
+    });
+
+    const col = createCollection({
+      ...res,
       schema: eventSchema,
-      getKey: (row) => row.id,
-      shapeOptions: {
-        url: `${base}/events?threadId=${encodeURIComponent(opts.threadId)}`,
-        columnMapper: snakeCamelMapper(),
-      },
-      syncMode: 'eager',
-    }),
-  );
+    });
+
+    col.createIndex((row) => row.seq, { indexType: BasicIndex });
+    col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+
+    return col;
+  }
+
+  const col = createCollection(cfg);
+
+  col.createIndex((row) => row.seq, { indexType: BasicIndex });
+  col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+
+  return col;
+}
+
+function storage() {
+  if (disk === undefined) {
+    throw new Error('TanStack DB persistence has not been initialized. Await setup() first.');
+  }
+
+  return disk;
+}
+
+function scope(opts: Scope) {
+  return `${hash(opts.base)}:${opts.ownerId}`;
+}
+
+function hash(value: string) {
+  return [...value]
+    .reduce((sum, char) => {
+      return Math.imul(sum ^ char.charCodeAt(0), 16_777_619) >>> 0;
+    }, 2_166_136_261)
+    .toString(36);
+}
+
+function url(base: string, path: string) {
+  return new URL(path, base.endsWith('/') ? base : `${base}/`).toString();
+}
+
+function time(value: string) {
+  const text = value.replace(' ', 'T');
+
+  if (/[+-]\d{2}$/.test(text)) {
+    return `${text}:00`;
+  }
+
+  if (/[+-]\d{4}$/.test(text)) {
+    return `${text.slice(0, -2)}:${text.slice(-2)}`;
+  }
+
+  if (/(Z|[+-]\d{2}:\d{2})$/.test(text)) {
+    return text;
+  }
+
+  return `${text}Z`;
+}
+
+function retry(err: Error) {
+  if (err instanceof FetchError && err.status >= 400 && err.status < 500) {
+    console.error('Electric sync stopped.', err);
+    return;
+  }
+
+  if (err.name.includes('Parser') || err.name.includes('Schema')) {
+    console.error('Electric sync stopped.', err);
+    return;
+  }
+
+  console.warn('Electric sync retrying.', err);
+  return {};
 }

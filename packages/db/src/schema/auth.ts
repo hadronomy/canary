@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, jsonb, index } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -7,9 +7,8 @@ export const user = pgTable('user', {
   email: text('email').notNull().unique(),
   emailVerified: boolean('email_verified').default(false).notNull(),
   image: text('image'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at')
-    .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 });
@@ -20,9 +19,8 @@ export const session = pgTable(
     id: text('id').primaryKey(),
     expiresAt: timestamp('expires_at').notNull(),
     token: text('token').notNull().unique(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at')
-      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
     ipAddress: text('ip_address'),
@@ -31,7 +29,7 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  (table) => [index('session_user_id_idx').on(table.userId)],
+  (table) => [index('session_userId_idx').on(table.userId)],
 );
 
 export const account = pgTable(
@@ -50,13 +48,12 @@ export const account = pgTable(
     refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
     scope: text('scope'),
     password: text('password'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at')
-      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index('account_user_id_idx').on(table.userId)],
+  (table) => [index('account_userId_idx').on(table.userId)],
 );
 
 export const verification = pgTable(
@@ -66,17 +63,24 @@ export const verification = pgTable(
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
     expiresAt: timestamp('expires_at').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at')
-      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
   (table) => [index('verification_identifier_idx').on(table.identifier)],
 );
 
+export const jwks = pgTable('jwks', {
+  id: text('id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  privateKey: text('private_key').notNull(),
+  createdAt: timestamp('created_at').notNull(),
+  expiresAt: timestamp('expires_at'),
+});
+
 export const oauthClient = pgTable(
-  'oauthClient',
+  'oauth_client',
   {
     id: text('id').primaryKey(),
     clientId: text('client_id').notNull().unique(),
@@ -86,9 +90,9 @@ export const oauthClient = pgTable(
     enableEndSession: boolean('enable_end_session'),
     subjectType: text('subject_type'),
     scopes: text('scopes').array(),
-    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').$onUpdate(() => new Date()),
+    userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at'),
+    updatedAt: timestamp('updated_at'),
     name: text('name'),
     uri: text('uri'),
     icon: text('icon'),
@@ -107,63 +111,69 @@ export const oauthClient = pgTable(
     type: text('type'),
     requirePKCE: boolean('require_pkce'),
     referenceId: text('reference_id'),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    metadata: jsonb('metadata'),
   },
-  (table) => [index('oauth_client_user_id_idx').on(table.userId)],
+  (table) => [index('oauthClient_userId_idx').on(table.userId)],
 );
 
 export const oauthRefreshToken = pgTable(
-  'oauthRefreshToken',
+  'oauth_refresh_token',
   {
     id: text('id').primaryKey(),
     token: text('token').notNull().unique(),
     clientId: text('client_id')
       .notNull()
       .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    sessionId: text('session_id').references(() => session.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => session.id, {
+      onDelete: 'set null',
+    }),
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     referenceId: text('reference_id'),
-    expiresAt: timestamp('expires_at'),
-    createdAt: timestamp('created_at').defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull(),
     revoked: timestamp('revoked'),
     authTime: timestamp('auth_time'),
     scopes: text('scopes').array().notNull(),
   },
   (table) => [
-    index('oauth_refresh_client_id_idx').on(table.clientId),
-    index('oauth_refresh_session_id_idx').on(table.sessionId),
-    index('oauth_refresh_user_id_idx').on(table.userId),
+    index('oauthRefreshToken_clientId_idx').on(table.clientId),
+    index('oauthRefreshToken_sessionId_idx').on(table.sessionId),
+    index('oauthRefreshToken_userId_idx').on(table.userId),
   ],
 );
 
 export const oauthAccessToken = pgTable(
-  'oauthAccessToken',
+  'oauth_access_token',
   {
     id: text('id').primaryKey(),
-    token: text('token').unique(),
+    token: text('token').notNull().unique(),
     clientId: text('client_id')
       .notNull()
       .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
-    sessionId: text('session_id').references(() => session.id, { onDelete: 'set null' }),
+    sessionId: text('session_id').references(() => session.id, {
+      onDelete: 'set null',
+    }),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
     referenceId: text('reference_id'),
-    refreshId: text('refresh_id').references(() => oauthRefreshToken.id, { onDelete: 'set null' }),
-    expiresAt: timestamp('expires_at'),
-    createdAt: timestamp('created_at').defaultNow(),
+    refreshId: text('refresh_id').references(() => oauthRefreshToken.id, {
+      onDelete: 'cascade',
+    }),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull(),
     scopes: text('scopes').array().notNull(),
   },
   (table) => [
-    index('oauth_access_client_id_idx').on(table.clientId),
-    index('oauth_access_session_id_idx').on(table.sessionId),
-    index('oauth_access_user_id_idx').on(table.userId),
-    index('oauth_access_refresh_id_idx').on(table.refreshId),
+    index('oauthAccessToken_clientId_idx').on(table.clientId),
+    index('oauthAccessToken_sessionId_idx').on(table.sessionId),
+    index('oauthAccessToken_userId_idx').on(table.userId),
+    index('oauthAccessToken_refreshId_idx').on(table.refreshId),
   ],
 );
 
 export const oauthConsent = pgTable(
-  'oauthConsent',
+  'oauth_consent',
   {
     id: text('id').primaryKey(),
     clientId: text('client_id')
@@ -172,30 +182,92 @@ export const oauthConsent = pgTable(
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
     referenceId: text('reference_id'),
     scopes: text('scopes').array().notNull(),
-    createdAt: timestamp('created_at').defaultNow(),
-    updatedAt: timestamp('updated_at').$onUpdate(() => new Date()),
+    createdAt: timestamp('created_at').notNull(),
+    updatedAt: timestamp('updated_at').notNull(),
   },
   (table) => [
-    index('oauth_consent_client_id_idx').on(table.clientId),
-    index('oauth_consent_user_id_idx').on(table.userId),
+    index('oauthConsent_clientId_idx').on(table.clientId),
+    index('oauthConsent_userId_idx').on(table.userId),
   ],
 );
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  oauthClients: many(oauthClient),
+  oauthRefreshTokens: many(oauthRefreshToken),
+  oauthAccessTokens: many(oauthAccessToken),
+  oauthConsents: many(oauthConsent),
 }));
 
-export const sessionRelations = relations(session, ({ one }) => ({
+export const sessionRelations = relations(session, ({ one, many }) => ({
   user: one(user, {
     fields: [session.userId],
     references: [user.id],
   }),
+  oauthRefreshTokens: many(oauthRefreshToken),
+  oauthAccessTokens: many(oauthAccessToken),
 }));
 
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, {
     fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
+export const oauthClientRelations = relations(oauthClient, ({ one, many }) => ({
+  user: one(user, {
+    fields: [oauthClient.userId],
+    references: [user.id],
+  }),
+  oauthRefreshTokens: many(oauthRefreshToken),
+  oauthAccessTokens: many(oauthAccessToken),
+  oauthConsents: many(oauthConsent),
+}));
+
+export const oauthRefreshTokenRelations = relations(oauthRefreshToken, ({ one, many }) => ({
+  oauthClient: one(oauthClient, {
+    fields: [oauthRefreshToken.clientId],
+    references: [oauthClient.clientId],
+  }),
+  session: one(session, {
+    fields: [oauthRefreshToken.sessionId],
+    references: [session.id],
+  }),
+  user: one(user, {
+    fields: [oauthRefreshToken.userId],
+    references: [user.id],
+  }),
+  oauthAccessTokens: many(oauthAccessToken),
+}));
+
+export const oauthAccessTokenRelations = relations(oauthAccessToken, ({ one }) => ({
+  oauthClient: one(oauthClient, {
+    fields: [oauthAccessToken.clientId],
+    references: [oauthClient.clientId],
+  }),
+  session: one(session, {
+    fields: [oauthAccessToken.sessionId],
+    references: [session.id],
+  }),
+  user: one(user, {
+    fields: [oauthAccessToken.userId],
+    references: [user.id],
+  }),
+  oauthRefreshToken: one(oauthRefreshToken, {
+    fields: [oauthAccessToken.refreshId],
+    references: [oauthRefreshToken.id],
+  }),
+}));
+
+export const oauthConsentRelations = relations(oauthConsent, ({ one }) => ({
+  oauthClient: one(oauthClient, {
+    fields: [oauthConsent.clientId],
+    references: [oauthClient.clientId],
+  }),
+  user: one(user, {
+    fields: [oauthConsent.userId],
     references: [user.id],
   }),
 }));

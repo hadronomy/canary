@@ -1,5 +1,3 @@
-import { createContext } from '@canary/api/context';
-import { appRouter } from '@canary/api/routers/index';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import { createRouterClient, type RouterClient } from '@orpc/server';
@@ -8,6 +6,9 @@ import { QueryCache, QueryClient } from '@tanstack/react-query';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { toast } from 'sonner';
+
+import { createContext } from '@canary/api/context';
+import { appRouter } from '@canary/api/routers/index';
 
 export function createQueryClient() {
   return new QueryClient({

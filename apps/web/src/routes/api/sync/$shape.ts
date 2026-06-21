@@ -5,6 +5,8 @@ import { auth } from '@canary/auth';
 import { env } from '@canary/env/server';
 
 const pass = new Set(ELECTRIC_PROTOCOL_QUERY_PARAMS);
+const ping = new TextEncoder().encode(': keep-alive\n\n');
+const utf8 = new TextDecoder();
 
 type Shape = {
   columns: string[];
@@ -13,7 +15,7 @@ type Shape = {
   where: string;
 };
 
-function shape(name: string, url: URL, uid: string): Shape | null {
+function shape(name: string, uid: string): Shape | null {
   if (name === 'threads') {
     return {
       table: 'thread',
@@ -23,17 +25,11 @@ function shape(name: string, url: URL, uid: string): Shape | null {
     };
   }
 
-  const tid = url.searchParams.get('threadId');
-
-  if (!tid) {
-    return null;
-  }
-
   if (name === 'messages') {
     return {
       table: 'message',
-      where: 'owner_id = $1 and thread_id = $2',
-      params: [uid, tid],
+      where: 'owner_id = $1',
+      params: [uid],
       columns: [
         'id',
         'thread_id',
@@ -51,8 +47,8 @@ function shape(name: string, url: URL, uid: string): Shape | null {
   if (name === 'runs') {
     return {
       table: 'run',
-      where: 'owner_id = $1 and thread_id = $2',
-      params: [uid, tid],
+      where: 'owner_id = $1',
+      params: [uid],
       columns: [
         'id',
         'thread_id',
@@ -71,8 +67,8 @@ function shape(name: string, url: URL, uid: string): Shape | null {
   if (name === 'events') {
     return {
       table: 'run_event',
-      where: 'owner_id = $1 and thread_id = $2',
-      params: [uid, tid],
+      where: 'owner_id = $1',
+      params: [uid],
       columns: ['id', 'run_id', 'thread_id', 'owner_id', 'seq', 'type', 'data', 'created_at'],
     };
   }
@@ -90,7 +86,7 @@ async function handle({ params, request }: { params: { shape: string }; request:
   }
 
   const src = new URL(request.url);
-  const spec = shape(params.shape, src, session.user.id);
+  const spec = shape(params.shape, session.user.id);
 
   if (!spec) {
     return new Response('Shape not found', { status: 404 });
@@ -120,6 +116,7 @@ async function handle({ params, request }: { params: { shape: string }; request:
     body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
   });
   const headers = new Headers(res.headers);
+  const sse = headers.get('content-type')?.includes('text/event-stream') ?? false;
 
   headers.delete('content-encoding');
   headers.delete('content-length');
@@ -127,12 +124,85 @@ async function handle({ params, request }: { params: { shape: string }; request:
     'Access-Control-Expose-Headers',
     'electric-offset, electric-handle, electric-schema, electric-cursor',
   );
+  if (sse) {
+    headers.set('X-Accel-Buffering', 'no');
+  }
 
-  return new Response(res.body, {
+  return new Response(sse ? live(res.body) : res.body, {
     status: res.status,
     statusText: res.statusText,
     headers,
   });
+}
+
+function live(body: ReadableStream<Uint8Array> | null) {
+  if (!body) {
+    return body;
+  }
+
+  const reader = body.getReader();
+  let tick: ReturnType<typeof setInterval> | undefined;
+  let ready = true;
+  const stop = () => {
+    if (tick) {
+      clearInterval(tick);
+    }
+    tick = undefined;
+  };
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      tick = setInterval(() => {
+        if (ready) {
+          controller.enqueue(ping);
+        }
+      }, 5_000);
+      pipe(
+        reader,
+        controller,
+        (state) => {
+          ready = state;
+        },
+        stop,
+      ).catch((err: unknown) => {
+        stop();
+        controller.error(err);
+      });
+    },
+    cancel(reason) {
+      stop();
+      return reader.cancel(reason);
+    },
+  });
+}
+
+async function pipe(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  set: (ready: boolean) => void,
+  stop: () => void,
+  prev = '',
+) {
+  const chunk = await reader.read();
+
+  if (chunk.done) {
+    stop();
+    controller.close();
+    return;
+  }
+
+  controller.enqueue(chunk.value);
+  const tail = edge(prev, chunk.value);
+  set(done(tail));
+  await pipe(reader, controller, set, stop, tail);
+}
+
+function edge(prev: string, value: Uint8Array) {
+  return `${prev}${utf8.decode(value.slice(-4))}`.slice(-4);
+}
+
+function done(text: string) {
+  return text.endsWith('\n\n') || text.endsWith('\r\n\r\n');
 }
 
 export const Route = createFileRoute('/api/sync/$shape')({

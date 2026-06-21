@@ -159,16 +159,16 @@ maximum lifetime Canary accepts from an issuer.
 
 ## Feature Flags
 
-| Feature | What it enables |
-| --- | --- |
-| `default` | The `jwt-rust-crypto` backend. |
-| `jwt-rust-crypto` | `jsonwebtoken` with the RustCrypto backend. |
-| `jwt-aws-lc-rs` | `jsonwebtoken` with the AWS-LC backend. |
-| `axum` | Axum integration helpers. |
-| `introspection` | RFC 7662 opaque-token verification and digest-keyed caching. |
-| `oidc-discovery` | Typed OpenID Connect discovery parsing. |
-| `better-auth` | `introspection` and `oidc-discovery` together. |
-| `ec` | Reserved. Do not advertise behavior here until it does something real. |
+| Feature           | What it enables                                                        |
+| ----------------- | ---------------------------------------------------------------------- |
+| `default`         | The `jwt-rust-crypto` backend.                                         |
+| `jwt-rust-crypto` | `jsonwebtoken` with the RustCrypto backend.                            |
+| `jwt-aws-lc-rs`   | `jsonwebtoken` with the AWS-LC backend.                                |
+| `axum`            | Axum integration helpers.                                              |
+| `introspection`   | RFC 7662 opaque-token verification and digest-keyed caching.           |
+| `oidc-discovery`  | Typed OpenID Connect discovery parsing.                                |
+| `better-auth`     | `introspection` and `oidc-discovery` together.                         |
+| `ec`              | Reserved. Do not advertise behavior here until it does something real. |
 
 Do not add placeholder features that sound production-ready. If a feature exists,
 it should either work end to end or be plainly reserved.
@@ -246,15 +246,15 @@ crate only exposes `Authorizer::refresh` and `Authorizer::refresh_interval`.
 
 The code follows these documents:
 
-| Area | Source |
-| --- | --- |
-| Bearer token transport and `WWW-Authenticate` errors | RFC 6750 |
-| Token introspection for opaque tokens | RFC 7662 |
-| Authorization-server metadata | RFC 8414 |
-| Resource indicators and audience binding | RFC 8707 |
-| JWT access-token profile | RFC 9068 |
-| Protected resource metadata | RFC 9728 |
-| MCP HTTP authorization behavior | MCP authorization spec |
+| Area                                                 | Source                 |
+| ---------------------------------------------------- | ---------------------- |
+| Bearer token transport and `WWW-Authenticate` errors | RFC 6750               |
+| Token introspection for opaque tokens                | RFC 7662               |
+| Authorization-server metadata                        | RFC 8414               |
+| Resource indicators and audience binding             | RFC 8707               |
+| JWT access-token profile                             | RFC 9068               |
+| Protected resource metadata                          | RFC 9728               |
+| MCP HTTP authorization behavior                      | MCP authorization spec |
 
 When behavior changes, keep the resource-server line clear: Canary validates
 bearer tokens and applies local resource policy. It does not become the

@@ -1,16 +1,17 @@
 import type { QueryClient } from '@tanstack/react-query';
+
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { createMiddleware } from '@tanstack/react-start';
 import { evlogErrorHandler } from 'evlog/nitro/v3';
 
+import type { orpc } from '~/utils/orpc';
+
 import Header from '~/components/header';
 import { ThemeProvider } from '~/components/theme-provider';
 import { Toaster } from '~/components/ui/sonner';
-import type { orpc } from '~/utils/orpc';
-
-import appCss from '../index.css?url';
+import appCss from '~/index.css?url';
 
 export interface RouterAppContext {
   orpc: typeof orpc;

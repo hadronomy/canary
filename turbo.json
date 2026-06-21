@@ -9,7 +9,7 @@
     "DATABASE_URL",
     "ELECTRIC_SECRET",
     "ELECTRIC_URL",
-    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
     "SKIP_ENV_VALIDATION"
   ],
   "ui": "tui",

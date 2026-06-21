@@ -1,5 +1,6 @@
-import { auth } from '@canary/auth';
 import { createFileRoute } from '@tanstack/react-router';
+
+import { auth } from '@canary/auth';
 
 export const Route = createFileRoute('/api/auth/$')({
   server: {

@@ -1,7 +1,8 @@
+import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
+
 import { db, txid } from '@canary/db';
 import { message, thread } from '@canary/db/schema/app';
-import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
 
 import { protectedProcedure } from '../index';
 
@@ -19,7 +20,13 @@ export const messageRouter = {
         const rows = await client
           .select({ id: thread.id })
           .from(thread)
-          .where(and(eq(thread.id, input.threadId), eq(thread.ownerId, context.session.user.id)))
+          .where(
+            and(
+              eq(thread.id, input.threadId),
+              eq(thread.ownerId, context.session.user.id),
+              isNull(thread.archivedAt),
+            ),
+          )
           .limit(1);
 
         if (!rows[0]) {

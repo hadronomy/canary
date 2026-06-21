@@ -297,19 +297,19 @@ Do not return:
 
 ### 8.1 Initial Tool Catalog
 
-| Tool | Purpose | Annotation profile |
-| --- | --- | --- |
-| `list_collections` | Discover knowledge collections the principal may read. | read-only, closed-world |
-| `search_collection` | Search private indexed knowledge and return grounded evidence. | read-only, closed-world |
-| `list_documents` | Browse compact document summaries within a collection. | read-only, closed-world |
-| `get_document` | Read compact document metadata and return resource links for deeper content. | read-only, closed-world |
-| `ingest_text` | Add text knowledge and begin ingestion. | additive, idempotent with key, closed-world |
-| `ingest_url` | Fetch a URL and begin ingestion. | additive, idempotent with key, open-world |
-| `reprocess_documents` | Re-run ingestion for existing documents. | additive derived-state update, idempotent with key, closed-world |
-| `get_ingestion_status` | Inspect ingestion state, progress, and event links. | read-only, closed-world |
-| `list_sources` | Discover configured connector sources. | read-only, closed-world |
-| `run_source_sync` | Start an incremental connector synchronization. | additive, idempotent with key, open-world |
-| `get_source_run_status` | Inspect connector synchronization progress and results. | read-only, closed-world |
+| Tool                    | Purpose                                                                      | Annotation profile                                               |
+| ----------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `list_collections`      | Discover knowledge collections the principal may read.                       | read-only, closed-world                                          |
+| `search_collection`     | Search private indexed knowledge and return grounded evidence.               | read-only, closed-world                                          |
+| `list_documents`        | Browse compact document summaries within a collection.                       | read-only, closed-world                                          |
+| `get_document`          | Read compact document metadata and return resource links for deeper content. | read-only, closed-world                                          |
+| `ingest_text`           | Add text knowledge and begin ingestion.                                      | additive, idempotent with key, closed-world                      |
+| `ingest_url`            | Fetch a URL and begin ingestion.                                             | additive, idempotent with key, open-world                        |
+| `reprocess_documents`   | Re-run ingestion for existing documents.                                     | additive derived-state update, idempotent with key, closed-world |
+| `get_ingestion_status`  | Inspect ingestion state, progress, and event links.                          | read-only, closed-world                                          |
+| `list_sources`          | Discover configured connector sources.                                       | read-only, closed-world                                          |
+| `run_source_sync`       | Start an incremental connector synchronization.                              | additive, idempotent with key, open-world                        |
+| `get_source_run_status` | Inspect connector synchronization progress and results.                      | read-only, closed-world                                          |
 
 `list_collections` is intentionally added to the original spec catalog. Agents
 need a small discovery capability before they can search responsibly.
@@ -425,12 +425,12 @@ workflow instructions rather than hidden behavioral patches.
 
 Initial prompts:
 
-| Prompt | Purpose |
-| --- | --- |
-| `answer_with_sources` | Search private knowledge, follow evidence links when needed, cite documents and locations, and state when the corpus does not support an answer. |
-| `ingest_and_verify` | Select text or URL ingestion, start ingestion, inspect its status, and summarize acceptance or failure. |
-| `investigate_ingestion_failure` | Read ingestion status and event resources, explain the likely failure, and recommend remediation without retrying automatically. |
-| `sync_source_and_review` | Start an explicitly requested connector sync, inspect the resulting run, and summarize changed documents and failures. |
+| Prompt                          | Purpose                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `answer_with_sources`           | Search private knowledge, follow evidence links when needed, cite documents and locations, and state when the corpus does not support an answer. |
+| `ingest_and_verify`             | Select text or URL ingestion, start ingestion, inspect its status, and summarize acceptance or failure.                                          |
+| `investigate_ingestion_failure` | Read ingestion status and event resources, explain the likely failure, and recommend remediation without retrying automatically.                 |
+| `sync_source_and_review`        | Start an explicitly requested connector sync, inspect the resulting run, and summarize changed documents and failures.                           |
 
 Prompt descriptions should make side effects visible. For example,
 `sync_source_and_review` must say that it starts external connector work and
@@ -461,16 +461,16 @@ crates/server/src/mcp/
 
 Responsibilities:
 
-| Module | Responsibility |
-| --- | --- |
-| `assets/*` | Embedded server instructions and prompt-backed skill prose |
-| `error.rs` | Structured MCP `not_implemented` errors and later domain-error translation |
-| `model.rs` | Semantic state enums and bounded progress values |
-| `prompts.rs` | Typed user-selectable prompt-backed skills |
-| `resources.rs` | Resource listing, templates, reads, and later subscriptions |
-| `server.rs` | `Mcp` handler, capabilities, embedded instructions, and SDK routers |
-| `tools.rs` | Typed curated tool contracts and service-backed handlers |
-| `transport.rs` | Stateful Streamable HTTP adapter and transport security configuration |
+| Module         | Responsibility                                                             |
+| -------------- | -------------------------------------------------------------------------- |
+| `assets/*`     | Embedded server instructions and prompt-backed skill prose                 |
+| `error.rs`     | Structured MCP `not_implemented` errors and later domain-error translation |
+| `model.rs`     | Semantic state enums and bounded progress values                           |
+| `prompts.rs`   | Typed user-selectable prompt-backed skills                                 |
+| `resources.rs` | Resource listing, templates, reads, and later subscriptions                |
+| `server.rs`    | `Mcp` handler, capabilities, embedded instructions, and SDK routers        |
+| `tools.rs`     | Typed curated tool contracts and service-backed handlers                   |
+| `transport.rs` | Stateful Streamable HTTP adapter and transport security configuration      |
 
 Typed parsing for `canary://` resource URIs and per-call MCP policy helpers
 should become dedicated modules when storage-backed handlers are added.

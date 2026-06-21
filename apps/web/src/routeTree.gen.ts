@@ -13,10 +13,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthThreadsRouteImport } from './routes/_auth/threads'
+import { Route as AuthThreadsRouteRouteImport } from './routes/_auth/threads/route'
+import { Route as AuthThreadsIndexRouteImport } from './routes/_auth/threads/index'
 import { Route as ApiSyncShapeRouteImport } from './routes/api/sync/$shape'
 import { Route as ApiRpcSplatRouteImport } from './routes/api/rpc/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthThreadsThreadIdRouteImport } from './routes/_auth/threads/$threadId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -37,10 +39,15 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthThreadsRoute = AuthThreadsRouteImport.update({
+const AuthThreadsRouteRoute = AuthThreadsRouteRouteImport.update({
   id: '/threads',
   path: '/threads',
   getParentRoute: () => AuthRoute,
+} as any)
+const AuthThreadsIndexRoute = AuthThreadsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthThreadsRouteRoute,
 } as any)
 const ApiSyncShapeRoute = ApiSyncShapeRouteImport.update({
   id: '/api/sync/$shape',
@@ -57,24 +64,32 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthThreadsThreadIdRoute = AuthThreadsThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => AuthThreadsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
-  '/threads': typeof AuthThreadsRoute
+  '/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/api/sync/$shape': typeof ApiSyncShapeRoute
+  '/threads/': typeof AuthThreadsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
-  '/threads': typeof AuthThreadsRoute
+  '/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/api/sync/$shape': typeof ApiSyncShapeRoute
+  '/threads': typeof AuthThreadsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -82,10 +97,12 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
-  '/_auth/threads': typeof AuthThreadsRoute
+  '/_auth/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/_auth/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
   '/api/sync/$shape': typeof ApiSyncShapeRoute
+  '/_auth/threads/': typeof AuthThreadsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -94,18 +111,21 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/threads'
+    | '/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
     | '/api/sync/$shape'
+    | '/threads/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/consent'
     | '/login'
-    | '/threads'
+    | '/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
     | '/api/sync/$shape'
+    | '/threads'
   id:
     | '__root__'
     | '/'
@@ -113,9 +133,11 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/_auth/threads'
+    | '/_auth/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
     | '/api/sync/$shape'
+    | '/_auth/threads/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -162,8 +184,15 @@ declare module '@tanstack/react-router' {
       id: '/_auth/threads'
       path: '/threads'
       fullPath: '/threads'
-      preLoaderRoute: typeof AuthThreadsRouteImport
+      preLoaderRoute: typeof AuthThreadsRouteRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/_auth/threads/': {
+      id: '/_auth/threads/'
+      path: '/'
+      fullPath: '/threads/'
+      preLoaderRoute: typeof AuthThreadsIndexRouteImport
+      parentRoute: typeof AuthThreadsRouteRoute
     }
     '/api/sync/$shape': {
       id: '/api/sync/$shape'
@@ -186,15 +215,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_auth/threads/$threadId': {
+      id: '/_auth/threads/$threadId'
+      path: '/$threadId'
+      fullPath: '/threads/$threadId'
+      preLoaderRoute: typeof AuthThreadsThreadIdRouteImport
+      parentRoute: typeof AuthThreadsRouteRoute
+    }
   }
 }
 
+interface AuthThreadsRouteRouteChildren {
+  AuthThreadsThreadIdRoute: typeof AuthThreadsThreadIdRoute
+  AuthThreadsIndexRoute: typeof AuthThreadsIndexRoute
+}
+
+const AuthThreadsRouteRouteChildren: AuthThreadsRouteRouteChildren = {
+  AuthThreadsThreadIdRoute: AuthThreadsThreadIdRoute,
+  AuthThreadsIndexRoute: AuthThreadsIndexRoute,
+}
+
+const AuthThreadsRouteRouteWithChildren =
+  AuthThreadsRouteRoute._addFileChildren(AuthThreadsRouteRouteChildren)
+
 interface AuthRouteChildren {
-  AuthThreadsRoute: typeof AuthThreadsRoute
+  AuthThreadsRouteRoute: typeof AuthThreadsRouteRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
-  AuthThreadsRoute: AuthThreadsRoute,
+  AuthThreadsRouteRoute: AuthThreadsRouteRouteWithChildren,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

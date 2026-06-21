@@ -4,19 +4,19 @@
 
 type StepOptions = {
   ok?: number[];
-  stdout?: "inherit" | "piped";
-  stderr?: "inherit" | "piped";
+  stdout?: 'inherit' | 'piped';
+  stderr?: 'inherit' | 'piped';
 };
 
-const root = file(new URL("../", import.meta.url));
-const tmp = join(".tmp", "demo");
-const session = "canary-demo";
-const bin = "/Volumes/Yggdrasil/Projects/canary/rust/target/debug/canary";
-const cfg = join(".tmp", "canary-rustfs.toml");
-const server = join(tmp, "server.sh");
-const worker = join(tmp, "worker.sh");
-const showcase = join(tmp, "showcase.sh");
-const attach = join(tmp, "attach.sh");
+const root = file(new URL('../', import.meta.url));
+const tmp = join('.tmp', 'demo');
+const session = 'canary-demo';
+const bin = '/Volumes/Yggdrasil/Projects/canary/rust/target/debug/canary';
+const cfg = join('.tmp', 'canary-rustfs.toml');
+const server = join(tmp, 'server.sh');
+const worker = join(tmp, 'worker.sh');
+const showcase = join(tmp, 'showcase.sh');
+const attach = join(tmp, 'attach.sh');
 
 const usage = `
 Canary demo
@@ -29,7 +29,7 @@ Options:
   --prepare-only Generate demo helper scripts and exit without opening Ghostty.
 `.trim();
 
-if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
+if (Deno.args.includes('--help') || Deno.args.includes('-h')) {
   console.log(usage);
   Deno.exit(0);
 }
@@ -40,105 +40,53 @@ async function main() {
   await ensure();
   await write();
 
-  if (Deno.args.includes("--prepare-only")) {
+  if (Deno.args.includes('--prepare-only')) {
     console.log(`Demo helpers written to ${tmp}`);
     return;
   }
 
-  if (!Deno.args.includes("--no-dev-up")) {
-    await step(["just", "dev-up"]);
+  if (!Deno.args.includes('--no-dev-up')) {
+    await step(['just', 'dev-up']);
   }
 
-  await step(["tmux", "kill-session", "-t", session], {
+  await step(['tmux', 'kill-session', '-t', session], {
     ok: [0, 1],
-    stderr: "piped",
+    stderr: 'piped',
   });
+  await step(['tmux', 'new-session', '-d', '-s', session, '-n', 'runtime', '-c', root, server]);
+  await step(['tmux', 'split-window', '-h', '-t', `${session}:runtime`, '-c', root, worker]);
+  await step(['tmux', 'select-layout', '-t', `${session}:runtime`, 'even-horizontal']);
+  await step(['tmux', 'set-option', '-t', session, 'status-left', ' Canary demo ']);
+  await step(['tmux', 'set-option', '-t', session, 'status-style', 'bg=colour235,fg=colour178']);
   await step([
-    "tmux",
-    "new-session",
-    "-d",
-    "-s",
-    session,
-    "-n",
-    "runtime",
-    "-c",
-    root,
-    server,
-  ]);
-  await step([
-    "tmux",
-    "split-window",
-    "-h",
-    "-t",
+    'tmux',
+    'set-window-option',
+    '-t',
     `${session}:runtime`,
-    "-c",
-    root,
-    worker,
+    'pane-border-status',
+    'top',
   ]);
-  await step([
-    "tmux",
-    "select-layout",
-    "-t",
-    `${session}:runtime`,
-    "even-horizontal",
-  ]);
-  await step([
-    "tmux",
-    "set-option",
-    "-t",
-    session,
-    "status-left",
-    " Canary demo ",
-  ]);
-  await step([
-    "tmux",
-    "set-option",
-    "-t",
-    session,
-    "status-style",
-    "bg=colour235,fg=colour178",
-  ]);
-  await step([
-    "tmux",
-    "set-window-option",
-    "-t",
-    `${session}:runtime`,
-    "pane-border-status",
-    "top",
-  ]);
-  await step([
-    "tmux",
-    "new-window",
-    "-t",
-    session,
-    "-n",
-    "showcase",
-    "-c",
-    root,
-    showcase,
-  ]);
-  await step(["tmux", "select-window", "-t", `${session}:showcase`]);
+  await step(['tmux', 'new-window', '-t', session, '-n', 'showcase', '-c', root, showcase]);
+  await step(['tmux', 'select-window', '-t', `${session}:showcase`]);
 
   await ghostty();
 
-  console.log("");
-  console.log("Canary demo opened in Ghostty.");
+  console.log('');
+  console.log('Canary demo opened in Ghostty.');
   console.log(`tmux session: ${session}`);
-  console.log("Stop the demo panes with:");
+  console.log('Stop the demo panes with:');
   console.log(`  tmux kill-session -t ${session}`);
-  console.log("Stop local dev services with:");
-  console.log("  just dev-stop");
+  console.log('Stop local dev services with:');
+  console.log('  just dev-stop');
 }
 
 async function ensure() {
   await Deno.mkdir(tmp, { recursive: true });
   await ensureConfig();
 
-  for (
-    const tool of ["ghostty", "tmux", "deno", "curl", "jq", "temporal", "just"]
-  ) {
-    await step(["bash", "-lc", `command -v ${quote(tool)} >/dev/null`], {
-      stderr: "piped",
+  for (const tool of ['ghostty', 'tmux', 'deno', 'curl', 'jq', 'temporal', 'just']) {
+    await step(['bash', '-lc', `command -v ${quote(tool)} >/dev/null`], {
+      stderr: 'piped',
     });
   }
 
@@ -158,7 +106,7 @@ async function ensureConfig() {
     // makes it disposable and avoids turning developer credentials into docs.
   }
 
-  await Deno.mkdir(join(".tmp"), { recursive: true });
+  await Deno.mkdir(join('.tmp'), { recursive: true });
   await Deno.writeTextFile(
     cfg,
     `[files.storage]
@@ -234,31 +182,31 @@ async function script(path: string, text: string) {
 }
 
 async function ghostty() {
-  const args = ["-na", "Ghostty.app", "--args", `--command=${attach}`];
-  const out = await new Deno.Command("open", {
+  const args = ['-na', 'Ghostty.app', '--args', `--command=${attach}`];
+  const out = await new Deno.Command('open', {
     args,
     cwd: root,
-    stdout: "piped",
-    stderr: "piped",
+    stdout: 'piped',
+    stderr: 'piped',
   }).output();
 
   if (out.code === 0) {
     return;
   }
 
-  await step(["open", "-na", "Ghostty", "--args", `--command=${attach}`]);
+  await step(['open', '-na', 'Ghostty', '--args', `--command=${attach}`]);
 }
 
 async function step(cmd: string[], opts: StepOptions = {}) {
   const exe = cmd[0];
   if (!exe) {
-    throw new Error("Empty command.");
+    throw new Error('Empty command.');
   }
   const proc = new Deno.Command(exe, {
     args: cmd.slice(1),
     cwd: root,
-    stdout: opts.stdout ?? "inherit",
-    stderr: opts.stderr ?? "inherit",
+    stdout: opts.stdout ?? 'inherit',
+    stderr: opts.stderr ?? 'inherit',
   }).spawn();
   const out = await proc.status;
   const ok = opts.ok ?? [0];
@@ -267,7 +215,7 @@ async function step(cmd: string[], opts: StepOptions = {}) {
     return out;
   }
 
-  throw new Error(`Command failed: ${cmd.map(quote).join(" ")}`);
+  throw new Error(`Command failed: ${cmd.map(quote).join(' ')}`);
 }
 
 function quote(value: string) {
@@ -275,21 +223,19 @@ function quote(value: string) {
 }
 
 function file(url: URL) {
-  if (url.protocol !== "file:") {
+  if (url.protocol !== 'file:') {
     throw new Error(`Expected a file URL, got ${url.href}`);
   }
-  return decodeURIComponent(url.pathname).replace(/\/$/, "");
+  return decodeURIComponent(url.pathname).replace(/\/$/, '');
 }
 
 function join(...parts: string[]) {
-  const head = parts[0] ?? "";
-  const path = head.startsWith("/") ? parts : [root, ...parts];
+  const head = parts[0] ?? '';
+  const path = head.startsWith('/') ? parts : [root, ...parts];
   return path
-    .map((part, idx) =>
-      idx === 0 ? part.replace(/\/+$/g, "") : part.replace(/^\/+|\/+$/g, "")
-    )
+    .map((part, idx) => (idx === 0 ? part.replace(/\/+$/g, '') : part.replace(/^\/+|\/+$/g, '')))
     .filter((part) => part.length > 0)
-    .join("/");
+    .join('/');
 }
 
 function showcaseScript() {

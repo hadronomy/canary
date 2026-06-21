@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { z } from 'zod';
 
@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import { userKey, userOptions } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 
 const search = z.object({
@@ -18,8 +19,10 @@ export const Route = createFileRoute('/login')({
 });
 
 function LoginComponent() {
+  const ctx = Route.useRouteContext();
   const nav = useNavigate();
   const params = Route.useSearch();
+  const router = useRouter();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,13 +41,24 @@ function LoginComponent() {
         ? await authClient.signIn.email({ email, password })
         : await authClient.signUp.email({ email, password, name });
 
-    setBusy(false);
-
     if (res.error) {
+      setBusy(false);
       setErr(res.error.message ?? 'Authentication failed');
       return;
     }
 
+    await ctx.queryClient.invalidateQueries({ queryKey: userKey });
+    const user = await ctx.queryClient.fetchQuery(userOptions());
+
+    if (!user) {
+      setBusy(false);
+      setErr('Authentication session was not created');
+      return;
+    }
+
+    ctx.queryClient.setQueryData(userKey, user);
+    await router.invalidate();
+    setBusy(false);
     await nav({ to: params.redirect ?? '/threads' });
   }
 

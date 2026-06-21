@@ -47,8 +47,8 @@ keyword search over legal text.
 
 Canary treats law as structured material.
 
-It parses BOE documents into legal fragments such as *libros*, *títulos*,
-*capítulos*, *secciones*, *artículos*, and *párrafos*. Those fragments keep
+It parses BOE documents into legal fragments such as _libros_, _títulos_,
+_capítulos_, _secciones_, _artículos_, and _párrafos_. Those fragments keep
 their place in the hierarchy, so the system can move up, down, and sideways
 through the document instead of treating every paragraph as an isolated chunk.
 

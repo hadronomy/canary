@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { reply } from '@canary/agents';
@@ -16,7 +16,13 @@ export const runRouter = {
       const rows = await client
         .select({ id: thread.id })
         .from(thread)
-        .where(and(eq(thread.id, input.threadId), eq(thread.ownerId, context.session.user.id)))
+        .where(
+          and(
+            eq(thread.id, input.threadId),
+            eq(thread.ownerId, context.session.user.id),
+            isNull(thread.archivedAt),
+          ),
+        )
         .limit(1);
 
       if (!rows[0]) {
@@ -55,12 +61,12 @@ export const runRouter = {
       };
     });
 
-    void complete({
+    complete({
       ownerId: context.session.user.id,
       runId: res.run.id,
       threadId: input.threadId,
     }).catch((err: unknown) => {
-      void fail({
+      return fail({
         err,
         ownerId: context.session.user.id,
         runId: res.run.id,
@@ -169,7 +175,13 @@ async function complete(opts: { ownerId: string; runId: string; threadId: string
     await client
       .update(thread)
       .set({ updatedAt: new Date() })
-      .where(and(eq(thread.id, opts.threadId), eq(thread.ownerId, opts.ownerId)));
+      .where(
+        and(
+          eq(thread.id, opts.threadId),
+          eq(thread.ownerId, opts.ownerId),
+          isNull(thread.archivedAt),
+        ),
+      );
 
     await client.insert(event).values({
       runId: opts.runId,

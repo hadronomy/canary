@@ -1,14 +1,23 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
 
 import { ModeToggle } from '~/components/mode-toggle';
+import { Button } from '~/components/ui/button';
+import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 
 export default function Header() {
+  const router = useRouter();
   const session = authClient.useSession();
   const links = [
     { to: '/', label: 'Home' },
     { to: '/threads', label: 'Threads' },
   ] as const;
+
+  async function signout() {
+    await authClient.signOut();
+    router.options.context.queryClient.setQueryData(userKey, null);
+    await router.invalidate();
+  }
 
   return (
     <div>
@@ -24,9 +33,14 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-2">
           {session.data?.user ? (
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              {session.data.user.email}
-            </span>
+            <>
+              <span className="hidden text-sm text-muted-foreground sm:inline">
+                {session.data.user.email}
+              </span>
+              <Button size="sm" type="button" variant="ghost" onClick={signout}>
+                Sign out
+              </Button>
+            </>
           ) : (
             <Link className="text-sm" to="/login">
               Login

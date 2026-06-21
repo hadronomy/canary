@@ -3,7 +3,13 @@ import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'd
 import { user } from './auth';
 
 export const role = pgEnum('message_role', ['user', 'assistant', 'system', 'tool']);
-export const status = pgEnum('run_status', ['queued', 'running', 'completed', 'cancelled', 'failed']);
+export const status = pgEnum('run_status', [
+  'queued',
+  'running',
+  'completed',
+  'cancelled',
+  'failed',
+]);
 
 export const thread = pgTable(
   'thread',
@@ -13,12 +19,12 @@ export const thread = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    archivedAt: timestamp('archived_at'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (table) => [
     index('thread_owner_updated_idx').on(table.ownerId, table.updatedAt),
@@ -37,7 +43,7 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     role: text('role').default('owner').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('thread_member_thread_idx').on(table.threadId),
@@ -59,8 +65,8 @@ export const message = pgTable(
     role: role('role').notNull(),
     content: text('content').notNull(),
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -84,10 +90,10 @@ export const run = pgTable(
     status: status('status').default('queued').notNull(),
     model: text('model').notNull(),
     error: text('error'),
-    startedAt: timestamp('started_at'),
-    completedAt: timestamp('completed_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at')
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -114,7 +120,7 @@ export const event = pgTable(
     seq: integer('seq').notNull(),
     type: text('type').notNull(),
     data: jsonb('data').$type<Record<string, unknown>>(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('run_event_run_seq_idx').on(table.runId, table.seq),
@@ -136,8 +142,8 @@ export const artifact = pgTable(
     kind: text('kind').notNull(),
     title: text('title').notNull(),
     data: jsonb('data').$type<Record<string, unknown>>().notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at')
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),

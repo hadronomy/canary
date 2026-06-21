@@ -1,5 +1,5 @@
 {
-  "id": "9317a122-77d1-4586-99a0-eda65fb114c6",
+  "id": "20c061d3-c910-49d0-966f-6eb9709dc576",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -53,14 +53,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -115,12 +115,8 @@
           "name": "artifact_thread_id_thread_id_fk",
           "tableFrom": "artifact",
           "tableTo": "thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -128,12 +124,8 @@
           "name": "artifact_owner_id_user_id_fk",
           "tableFrom": "artifact",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -141,12 +133,8 @@
           "name": "artifact_run_id_run_id_fk",
           "tableFrom": "artifact",
           "tableTo": "run",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -206,7 +194,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -261,12 +249,8 @@
           "name": "run_event_run_id_run_id_fk",
           "tableFrom": "run_event",
           "tableTo": "run",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -274,12 +258,8 @@
           "name": "run_event_thread_id_thread_id_fk",
           "tableFrom": "run_event",
           "tableTo": "thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -287,12 +267,8 @@
           "name": "run_event_owner_id_user_id_fk",
           "tableFrom": "run_event",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -335,7 +311,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -378,12 +354,8 @@
           "name": "thread_member_thread_id_thread_id_fk",
           "tableFrom": "thread_member",
           "tableTo": "thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -391,12 +363,8 @@
           "name": "thread_member_user_id_user_id_fk",
           "tableFrom": "thread_member",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -457,14 +425,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -519,12 +487,8 @@
           "name": "message_thread_id_thread_id_fk",
           "tableFrom": "message",
           "tableTo": "thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -532,12 +496,8 @@
           "name": "message_owner_id_user_id_fk",
           "tableFrom": "message",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -593,26 +553,26 @@
         },
         "started_at": {
           "name": "started_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "completed_at": {
           "name": "completed_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -667,12 +627,8 @@
           "name": "run_thread_id_thread_id_fk",
           "tableFrom": "run",
           "tableTo": "thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["thread_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -680,12 +636,8 @@
           "name": "run_owner_id_user_id_fk",
           "tableFrom": "run",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -721,21 +673,21 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "archived_at": {
           "name": "archived_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }
@@ -789,12 +741,8 @@
           "name": "thread_owner_id_user_id_fk",
           "tableFrom": "thread",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -879,20 +827,18 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         }
       },
       "indexes": {
-        "account_user_id_idx": {
-          "name": "account_user_id_idx",
+        "account_userId_idx": {
+          "name": "account_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -912,12 +858,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -928,8 +870,51 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.oauthAccessToken": {
-      "name": "oauthAccessToken",
+    "public.jwks": {
+      "name": "jwks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "public_key": {
+          "name": "public_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "private_key": {
+          "name": "private_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_access_token": {
+      "name": "oauth_access_token",
       "schema": "",
       "columns": {
         "id": {
@@ -942,7 +927,7 @@
           "name": "token",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "client_id": {
           "name": "client_id",
@@ -978,14 +963,13 @@
           "name": "expires_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": true
         },
         "scopes": {
           "name": "scopes",
@@ -995,8 +979,8 @@
         }
       },
       "indexes": {
-        "oauth_access_client_id_idx": {
-          "name": "oauth_access_client_id_idx",
+        "oauthAccessToken_clientId_idx": {
+          "name": "oauthAccessToken_clientId_idx",
           "columns": [
             {
               "expression": "client_id",
@@ -1010,8 +994,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_access_session_id_idx": {
-          "name": "oauth_access_session_id_idx",
+        "oauthAccessToken_sessionId_idx": {
+          "name": "oauthAccessToken_sessionId_idx",
           "columns": [
             {
               "expression": "session_id",
@@ -1025,8 +1009,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_access_user_id_idx": {
-          "name": "oauth_access_user_id_idx",
+        "oauthAccessToken_userId_idx": {
+          "name": "oauthAccessToken_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -1040,8 +1024,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_access_refresh_id_idx": {
-          "name": "oauth_access_refresh_id_idx",
+        "oauthAccessToken_refreshId_idx": {
+          "name": "oauthAccessToken_refreshId_idx",
           "columns": [
             {
               "expression": "refresh_id",
@@ -1057,75 +1041,57 @@
         }
       },
       "foreignKeys": {
-        "oauthAccessToken_client_id_oauthClient_client_id_fk": {
-          "name": "oauthAccessToken_client_id_oauthClient_client_id_fk",
-          "tableFrom": "oauthAccessToken",
-          "tableTo": "oauthClient",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "client_id"
-          ],
+        "oauth_access_token_client_id_oauth_client_client_id_fk": {
+          "name": "oauth_access_token_client_id_oauth_client_client_id_fk",
+          "tableFrom": "oauth_access_token",
+          "tableTo": "oauth_client",
+          "columnsFrom": ["client_id"],
+          "columnsTo": ["client_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "oauthAccessToken_session_id_session_id_fk": {
-          "name": "oauthAccessToken_session_id_session_id_fk",
-          "tableFrom": "oauthAccessToken",
+        "oauth_access_token_session_id_session_id_fk": {
+          "name": "oauth_access_token_session_id_session_id_fk",
+          "tableFrom": "oauth_access_token",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "oauthAccessToken_user_id_user_id_fk": {
-          "name": "oauthAccessToken_user_id_user_id_fk",
-          "tableFrom": "oauthAccessToken",
+        "oauth_access_token_user_id_user_id_fk": {
+          "name": "oauth_access_token_user_id_user_id_fk",
+          "tableFrom": "oauth_access_token",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "oauthAccessToken_refresh_id_oauthRefreshToken_id_fk": {
-          "name": "oauthAccessToken_refresh_id_oauthRefreshToken_id_fk",
-          "tableFrom": "oauthAccessToken",
-          "tableTo": "oauthRefreshToken",
-          "columnsFrom": [
-            "refresh_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
+        "oauth_access_token_refresh_id_oauth_refresh_token_id_fk": {
+          "name": "oauth_access_token_refresh_id_oauth_refresh_token_id_fk",
+          "tableFrom": "oauth_access_token",
+          "tableTo": "oauth_refresh_token",
+          "columnsFrom": ["refresh_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "oauthAccessToken_token_unique": {
-          "name": "oauthAccessToken_token_unique",
+        "oauth_access_token_token_unique": {
+          "name": "oauth_access_token_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.oauthClient": {
-      "name": "oauthClient",
+    "public.oauth_client": {
+      "name": "oauth_client",
       "schema": "",
       "columns": {
         "id": {
@@ -1187,8 +1153,7 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -1312,8 +1277,8 @@
         }
       },
       "indexes": {
-        "oauth_client_user_id_idx": {
-          "name": "oauth_client_user_id_idx",
+        "oauthClient_userId_idx": {
+          "name": "oauthClient_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -1329,36 +1294,30 @@
         }
       },
       "foreignKeys": {
-        "oauthClient_user_id_user_id_fk": {
-          "name": "oauthClient_user_id_user_id_fk",
-          "tableFrom": "oauthClient",
+        "oauth_client_user_id_user_id_fk": {
+          "name": "oauth_client_user_id_user_id_fk",
+          "tableFrom": "oauth_client",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "oauthClient_client_id_unique": {
-          "name": "oauthClient_client_id_unique",
+        "oauth_client_client_id_unique": {
+          "name": "oauth_client_client_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "client_id"
-          ]
+          "columns": ["client_id"]
         }
       },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.oauthConsent": {
-      "name": "oauthConsent",
+    "public.oauth_consent": {
+      "name": "oauth_consent",
       "schema": "",
       "columns": {
         "id": {
@@ -1395,19 +1354,18 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         }
       },
       "indexes": {
-        "oauth_consent_client_id_idx": {
-          "name": "oauth_consent_client_id_idx",
+        "oauthConsent_clientId_idx": {
+          "name": "oauthConsent_clientId_idx",
           "columns": [
             {
               "expression": "client_id",
@@ -1421,8 +1379,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_consent_user_id_idx": {
-          "name": "oauth_consent_user_id_idx",
+        "oauthConsent_userId_idx": {
+          "name": "oauthConsent_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -1438,29 +1396,21 @@
         }
       },
       "foreignKeys": {
-        "oauthConsent_client_id_oauthClient_client_id_fk": {
-          "name": "oauthConsent_client_id_oauthClient_client_id_fk",
-          "tableFrom": "oauthConsent",
-          "tableTo": "oauthClient",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "client_id"
-          ],
+        "oauth_consent_client_id_oauth_client_client_id_fk": {
+          "name": "oauth_consent_client_id_oauth_client_client_id_fk",
+          "tableFrom": "oauth_consent",
+          "tableTo": "oauth_client",
+          "columnsFrom": ["client_id"],
+          "columnsTo": ["client_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "oauthConsent_user_id_user_id_fk": {
-          "name": "oauthConsent_user_id_user_id_fk",
-          "tableFrom": "oauthConsent",
+        "oauth_consent_user_id_user_id_fk": {
+          "name": "oauth_consent_user_id_user_id_fk",
+          "tableFrom": "oauth_consent",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1471,8 +1421,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.oauthRefreshToken": {
-      "name": "oauthRefreshToken",
+    "public.oauth_refresh_token": {
+      "name": "oauth_refresh_token",
       "schema": "",
       "columns": {
         "id": {
@@ -1515,14 +1465,13 @@
           "name": "expires_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
+          "notNull": true
         },
         "revoked": {
           "name": "revoked",
@@ -1544,8 +1493,8 @@
         }
       },
       "indexes": {
-        "oauth_refresh_client_id_idx": {
-          "name": "oauth_refresh_client_id_idx",
+        "oauthRefreshToken_clientId_idx": {
+          "name": "oauthRefreshToken_clientId_idx",
           "columns": [
             {
               "expression": "client_id",
@@ -1559,8 +1508,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_refresh_session_id_idx": {
-          "name": "oauth_refresh_session_id_idx",
+        "oauthRefreshToken_sessionId_idx": {
+          "name": "oauthRefreshToken_sessionId_idx",
           "columns": [
             {
               "expression": "session_id",
@@ -1574,8 +1523,8 @@
           "method": "btree",
           "with": {}
         },
-        "oauth_refresh_user_id_idx": {
-          "name": "oauth_refresh_user_id_idx",
+        "oauthRefreshToken_userId_idx": {
+          "name": "oauthRefreshToken_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -1591,54 +1540,40 @@
         }
       },
       "foreignKeys": {
-        "oauthRefreshToken_client_id_oauthClient_client_id_fk": {
-          "name": "oauthRefreshToken_client_id_oauthClient_client_id_fk",
-          "tableFrom": "oauthRefreshToken",
-          "tableTo": "oauthClient",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "client_id"
-          ],
+        "oauth_refresh_token_client_id_oauth_client_client_id_fk": {
+          "name": "oauth_refresh_token_client_id_oauth_client_client_id_fk",
+          "tableFrom": "oauth_refresh_token",
+          "tableTo": "oauth_client",
+          "columnsFrom": ["client_id"],
+          "columnsTo": ["client_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "oauthRefreshToken_session_id_session_id_fk": {
-          "name": "oauthRefreshToken_session_id_session_id_fk",
-          "tableFrom": "oauthRefreshToken",
+        "oauth_refresh_token_session_id_session_id_fk": {
+          "name": "oauth_refresh_token_session_id_session_id_fk",
+          "tableFrom": "oauth_refresh_token",
           "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "oauthRefreshToken_user_id_user_id_fk": {
-          "name": "oauthRefreshToken_user_id_user_id_fk",
-          "tableFrom": "oauthRefreshToken",
+        "oauth_refresh_token_user_id_user_id_fk": {
+          "name": "oauth_refresh_token_user_id_user_id_fk",
+          "tableFrom": "oauth_refresh_token",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "oauthRefreshToken_token_unique": {
-          "name": "oauthRefreshToken_token_unique",
+        "oauth_refresh_token_token_unique": {
+          "name": "oauth_refresh_token_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1671,15 +1606,13 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         },
         "ip_address": {
           "name": "ip_address",
@@ -1701,8 +1634,8 @@
         }
       },
       "indexes": {
-        "session_user_id_idx": {
-          "name": "session_user_id_idx",
+        "session_userId_idx": {
+          "name": "session_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -1722,12 +1655,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1737,9 +1666,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1785,15 +1712,13 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         }
       },
       "indexes": {},
@@ -1803,9 +1728,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1844,15 +1767,13 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": true
         }
       },
       "indexes": {
@@ -1884,23 +1805,12 @@
     "public.message_role": {
       "name": "message_role",
       "schema": "public",
-      "values": [
-        "user",
-        "assistant",
-        "system",
-        "tool"
-      ]
+      "values": ["user", "assistant", "system", "tool"]
     },
     "public.run_status": {
       "name": "run_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "running",
-        "completed",
-        "cancelled",
-        "failed"
-      ]
+      "values": ["queued", "running", "completed", "cancelled", "failed"]
     }
   },
   "schemas": {},

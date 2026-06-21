@@ -1,6 +1,7 @@
-import { env } from '@canary/env/server';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
+
+import { env } from '@canary/env/server';
 
 import * as schema from './schema';
 
