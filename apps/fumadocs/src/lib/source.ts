@@ -26,7 +26,7 @@ export const source = loader({
     icon === 'Building'
       ? createElement(BuildingIcon, {
           size: 16,
-          weight: 'regular',
+          weight: 'duotone',
         })
       : undefined,
 });

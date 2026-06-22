@@ -1,14 +1,14 @@
 'use client';
 import {
-  ArrowSquareOut,
-  Brain,
-  CaretDown,
-  ChatCircle,
-  Check,
-  Copy,
-  GithubLogo,
-  OpenAiLogo,
-  Sparkle,
+  ArrowSquareOutIcon,
+  BrainIcon,
+  CaretDownIcon,
+  ChatCircleIcon,
+  CheckIcon,
+  CopyIcon,
+  GithubLogoIcon,
+  OpenAiLogoIcon,
+  SparkleIcon,
 } from '@phosphor-icons/react';
 import { buttonVariants } from 'fumadocs-ui/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from 'fumadocs-ui/components/ui/popover';
@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '~/lib/cn';
 
 const cache = new Map<string, string>();
+const tone = { weight: 'duotone' } as const;
 
 export function LLMCopyButton({
   /**
@@ -62,7 +63,7 @@ export function LLMCopyButton({
       )}
       onClick={onClick}
     >
-      {checked ? <Check /> : <Copy />}
+      {checked ? <CheckIcon {...tone} /> : <CopyIcon {...tone} />}
       Copy Markdown
     </button>
   );
@@ -91,14 +92,14 @@ export function ViewOptions({
       {
         title: 'Open in GitHub',
         href: githubUrl,
-        icon: <GithubLogo />,
+        icon: <GithubLogoIcon {...tone} />,
       },
       {
         title: 'Open in Scira AI',
         href: `https://scira.ai/?${new URLSearchParams({
           q,
         })}`,
-        icon: <Sparkle />,
+        icon: <SparkleIcon {...tone} />,
       },
       {
         title: 'Open in ChatGPT',
@@ -106,21 +107,21 @@ export function ViewOptions({
           hints: 'search',
           q,
         })}`,
-        icon: <OpenAiLogo />,
+        icon: <OpenAiLogoIcon {...tone} />,
       },
       {
         title: 'Open in Claude',
         href: `https://claude.ai/new?${new URLSearchParams({
           q,
         })}`,
-        icon: <Brain />,
+        icon: <BrainIcon {...tone} />,
       },
       {
         title: 'Open in T3 Chat',
         href: `https://t3.chat/new?${new URLSearchParams({
           q,
         })}`,
-        icon: <ChatCircle />,
+        icon: <ChatCircleIcon {...tone} />,
       },
     ];
   }, [githubUrl, markdownUrl]);
@@ -137,7 +138,7 @@ export function ViewOptions({
         )}
       >
         Open
-        <CaretDown className="size-3.5 text-fd-muted-foreground" />
+        <CaretDownIcon className="size-3.5 text-fd-muted-foreground" {...tone} />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
         {items.map((item) => (
@@ -150,7 +151,7 @@ export function ViewOptions({
           >
             {item.icon}
             {item.title}
-            <ArrowSquareOut className="text-fd-muted-foreground size-3.5 ms-auto" />
+            <ArrowSquareOutIcon className="text-fd-muted-foreground size-3.5 ms-auto" {...tone} />
           </a>
         ))}
       </PopoverContent>

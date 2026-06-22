@@ -169,7 +169,7 @@ function ThreadsComponent() {
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
           <Button aria-label="Create thread" size="icon" type="submit">
-            <PlusIcon />
+            <PlusIcon weight="regular" />
           </Button>
           <Button
             aria-label="Debug cycle threads"
@@ -189,7 +189,7 @@ function ThreadsComponent() {
                 <div
                   key={row.id}
                   className={cn(
-                    'grid grid-cols-[1fr_auto] items-center border text-xs hover:bg-muted',
+                    'grid grid-cols-[1fr_auto] items-center border text-xs hover:bg-muted px-2',
                     row.id === active && 'bg-muted',
                   )}
                 >

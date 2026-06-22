@@ -8,7 +8,7 @@ import { Streamdown } from 'streamdown';
 
 import type { Message, Part } from '@canary/sync';
 
-import { AgentIcon, SendIcon } from '~/components/icons';
+import { AgentIcon, LatestIcon, SendIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -26,9 +26,9 @@ type Scroll = {
   el: HTMLDivElement | null;
   id: string;
   loaded: boolean;
-  pin: React.MutableRefObject<boolean>;
+  pin: React.RefObject<boolean>;
   ready: boolean;
-  rest: React.MutableRefObject<boolean>;
+  rest: React.RefObject<boolean>;
   setEl: React.Dispatch<React.SetStateAction<HTMLDivElement | null>>;
   setPin: React.Dispatch<React.SetStateAction<boolean>>;
   virt: ReactVirtualizer<HTMLDivElement, HTMLDivElement>;
@@ -162,9 +162,9 @@ function Transcript(props: { id: string; ownerId: string }) {
     count: items.length,
     getScrollElement: () => el,
     getItemKey: (index) => items[index]?.id ?? index,
-    estimateSize: (index) => estimate(items[index]),
+    estimateSize: (index) => estimate(items[index]) + gap(items[index], items[index - 1]),
     overscan: 18,
-    gap: 12,
+    gap: 0,
     enabled: !!el,
     initialOffset: () => {
       return Number.MAX_SAFE_INTEGER;
@@ -234,7 +234,7 @@ function Transcript(props: { id: string; ownerId: string }) {
     <div className="relative h-full min-h-0">
       <div
         ref={scroll.ref}
-        className="h-full min-h-0 overflow-y-auto px-3 pb-24 pt-3 [overflow-anchor:none]"
+        className="h-full min-h-0 overflow-y-scroll px-3 pb-24 pt-3 [overflow-anchor:none] scrollbar-gutter-both"
       >
         <div className="mx-auto max-w-3xl">
           <div className="relative w-full" style={{ height: `${virt.getTotalSize()}px` }}>
@@ -244,6 +244,7 @@ function Transcript(props: { id: string; ownerId: string }) {
               if (!item) {
                 return null;
               }
+              const prev = items[row.index - 1];
 
               return (
                 <div
@@ -251,7 +252,10 @@ function Transcript(props: { id: string; ownerId: string }) {
                   ref={virt.measureElement}
                   className="absolute left-0 top-0 flow-root w-full min-w-0"
                   data-index={row.index}
-                  style={{ transform: `translateY(${row.start}px)` }}
+                  style={{
+                    paddingTop: `${gap(item, prev)}px`,
+                    transform: `translateY(${row.start}px)`,
+                  }}
                 >
                   <Row item={item} ready={ready} />
                 </div>
@@ -311,6 +315,22 @@ function estimate(item: Item | undefined) {
   }
 
   return 80;
+}
+
+function gap(item: Item | undefined, prev: Item | undefined) {
+  if (!item || !prev) {
+    return 0;
+  }
+
+  if (item.kind === 'user' && prev.kind === 'user') {
+    return 12;
+  }
+
+  if (item.kind === 'user' || prev.kind === 'user') {
+    return 32;
+  }
+
+  return 12;
 }
 
 function useThreadScrollRestoration(opts: Scroll) {
@@ -579,12 +599,14 @@ function TranscriptHud(props: { onJump: () => void; running: boolean; showJump: 
         <div className="justify-self-center">
           {props.showJump ? (
             <Button
+              aria-label="Jump to latest"
               className="pointer-events-auto shadow-lg"
-              size="sm"
+              size="icon"
+              title="Jump to latest"
               type="button"
               onClick={props.onJump}
             >
-              Jump to latest
+              <LatestIcon />
             </Button>
           ) : null}
         </div>
