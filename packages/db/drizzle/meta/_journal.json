@@ -8,6 +8,13 @@
       "when": 1782013535484,
       "tag": "0000_noisy_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782077366195,
+      "tag": "0001_graceful_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

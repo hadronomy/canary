@@ -1,8 +1,35 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { user } from './auth';
 
 export const role = pgEnum('message_role', ['user', 'assistant', 'system', 'tool']);
+export const partKind = pgEnum('message_part_kind', [
+  'text',
+  'reasoning',
+  'tool-call',
+  'tool-result',
+  'artifact',
+  'error',
+  'status',
+]);
+export const partStatus = pgEnum('message_part_status', [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]);
 export const status = pgEnum('run_status', [
   'queued',
   'running',
@@ -87,6 +114,7 @@ export const run = pgTable(
     ownerId: text('owner_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    inputMessageId: uuid('input_message_id').references(() => message.id, { onDelete: 'set null' }),
     status: status('status').default('queued').notNull(),
     model: text('model').notNull(),
     error: text('error'),
@@ -99,6 +127,7 @@ export const run = pgTable(
       .notNull(),
   },
   (table) => [
+    uniqueIndex('run_input_message_idx').on(table.inputMessageId),
     index('run_thread_created_idx').on(table.threadId, table.createdAt),
     index('run_owner_status_idx').on(table.ownerId, table.status),
   ],
@@ -123,8 +152,42 @@ export const event = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex('run_event_run_seq_unique').on(table.runId, table.seq),
     index('run_event_run_seq_idx').on(table.runId, table.seq),
     index('run_event_thread_created_idx').on(table.threadId, table.createdAt),
+  ],
+);
+
+export const part = pgTable(
+  'message_part',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    messageId: uuid('message_id').references(() => message.id, { onDelete: 'cascade' }),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => run.id, { onDelete: 'cascade' }),
+    threadId: uuid('thread_id')
+      .notNull()
+      .references(() => thread.id, { onDelete: 'cascade' }),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    kind: partKind('kind').notNull(),
+    status: partStatus('status').default('pending').notNull(),
+    toolName: text('tool_name'),
+    content: text('content').default('').notNull(),
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex('message_part_run_seq_unique').on(table.runId, table.seq),
+    index('message_part_thread_seq_idx').on(table.threadId, table.seq),
+    index('message_part_owner_thread_idx').on(table.ownerId, table.threadId),
   ],
 );
 
@@ -153,3 +216,29 @@ export const artifact = pgTable(
     index('artifact_owner_kind_idx').on(table.ownerId, table.kind),
   ],
 );
+
+export const cache = pgTable('agent_cache', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const cacheList = pgTable(
+  'agent_cache_list',
+  {
+    key: text('key').notNull(),
+    idx: integer('idx').notNull(),
+    value: jsonb('value').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.key, table.idx] })],
+);
+
+export const cacheCounter = pgTable('agent_cache_counter', {
+  key: text('key').primaryKey(),
+  value: integer('value').default(0).notNull(),
+});

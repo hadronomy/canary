@@ -5,6 +5,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import {
   events as eventCollection,
   messages as messageCollection,
+  parts as partCollection,
   runs as runCollection,
   setup as setupCollections,
   threads as threadCollection,
@@ -15,6 +16,7 @@ const rosters = new Map<string, ReturnType<typeof makeRoster>>();
 const logs = new Map<string, ReturnType<typeof makeFeed>>();
 const texts = new Map<string, ReturnType<typeof makeTranscript>>();
 const works = new Map<string, ReturnType<typeof makeActive>>();
+const docs = new Map<string, ReturnType<typeof makePieces>>();
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
@@ -22,6 +24,7 @@ if (import.meta.hot) {
     logs.clear();
     texts.clear();
     works.clear();
+    docs.clear();
   });
 }
 
@@ -56,6 +59,10 @@ export function runs(ownerId: string) {
 
 export function events(ownerId: string) {
   return eventCollection({ base: sync(), ownerId });
+}
+
+export function parts(ownerId: string) {
+  return partCollection({ base: sync(), ownerId });
 }
 
 export function roster(ownerId: string) {
@@ -109,6 +116,33 @@ function makeTranscript(ownerId: string, id: string) {
         .from({ msg: col })
         .where(({ msg }) => eq(msg.threadId, id))
         .orderBy(({ msg }) => msg.createdAt, 'desc'),
+  });
+}
+
+export function pieces(ownerId: string, id: string) {
+  const key = `${ownerId}:${id}`;
+  const hit = docs.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makePieces(ownerId, id);
+  docs.set(key, col);
+
+  return col;
+}
+
+function makePieces(ownerId: string, id: string) {
+  const col = parts(ownerId);
+
+  return createLiveQueryCollection({
+    id: `parts:${ownerId}:${id}`,
+    query: (q) =>
+      q
+        .from({ part: col })
+        .where(({ part }) => eq(part.threadId, id))
+        .orderBy(({ part }) => part.seq, 'asc'),
   });
 }
 

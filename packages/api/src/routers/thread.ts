@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, txid } from '@canary/db';
-import { event, member, run, thread } from '@canary/db/schema/app';
+import { event, member, part, run, thread } from '@canary/db/schema/app';
 
 import { protectedProcedure } from '../index';
 
@@ -95,15 +95,37 @@ export const threadRouter = {
           .returning();
 
         if (active.length) {
-          await client.insert(event).values(
-            active.map((row) => ({
-              runId: row.id,
-              threadId: row.threadId,
-              ownerId: context.session.user.id,
-              seq: 99_999,
-              type: 'run.cancelled',
-            })),
-          );
+          await client
+            .update(part)
+            .set({
+              status: 'cancelled',
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(part.ownerId, context.session.user.id),
+                inArray(
+                  part.runId,
+                  active.map((row) => row.id),
+                ),
+                inArray(part.status, ['pending', 'running']),
+              ),
+            );
+
+          await client
+            .insert(event)
+            .values(
+              active.map((row) => ({
+                runId: row.id,
+                threadId: row.threadId,
+                ownerId: context.session.user.id,
+                seq: 99_999,
+                type: 'run.cancelled',
+              })),
+            )
+            .onConflictDoNothing({
+              target: [event.runId, event.seq],
+            });
         }
 
         return {

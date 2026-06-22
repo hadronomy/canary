@@ -42,6 +42,7 @@ export const runSchema = z.object({
   id: z.string(),
   threadId: z.string(),
   ownerId: z.string(),
+  inputMessageId: z.string().nullable(),
   status: z.enum(['queued', 'running', 'completed', 'cancelled', 'failed']),
   model: z.string(),
   error: z.string().nullable(),
@@ -62,10 +63,27 @@ export const eventSchema = z.object({
   createdAt: stamp,
 });
 
+export const partSchema = z.object({
+  id: z.string(),
+  messageId: z.string().nullable(),
+  runId: z.string(),
+  threadId: z.string(),
+  ownerId: z.string(),
+  seq: z.number(),
+  kind: z.enum(['text', 'reasoning', 'tool-call', 'tool-result', 'artifact', 'error', 'status']),
+  status: z.enum(['pending', 'running', 'completed', 'failed', 'cancelled']),
+  toolName: z.string().nullable(),
+  content: z.string(),
+  data: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: stamp,
+  updatedAt: stamp,
+});
+
 export type Thread = z.infer<typeof threadSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type Run = z.infer<typeof runSchema>;
 export type Event = z.infer<typeof eventSchema>;
+export type Part = z.infer<typeof partSchema>;
 export type Tx = { txid: number };
 type Base = { base: string };
 type Scope = Base & { ownerId: string };
@@ -74,7 +92,8 @@ const lists = new Map<string, ReturnType<typeof makeThreads>>();
 const texts = new Map<string, ReturnType<typeof makeMessages>>();
 const rns = new Map<string, ReturnType<typeof makeRuns>>();
 const evs = new Map<string, ReturnType<typeof makeEvents>>();
-const version = 3;
+const pts = new Map<string, ReturnType<typeof makeParts>>();
+const version = 5;
 const ns = `canary-sync-v${version}`;
 let disk: PersistedCollectionPersistence | null | undefined;
 let boot: Promise<void> | undefined;
@@ -280,6 +299,7 @@ function makeMessages(opts: {
     });
 
     col.createIndex((row) => row.createdAt, { indexType: BasicIndex });
+    col.createIndex((row) => row.threadId, { indexType: BasicIndex });
 
     return col;
   }
@@ -411,6 +431,70 @@ function makeEvents(opts: Scope) {
 
   col.createIndex((row) => row.seq, { indexType: BasicIndex });
   col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+
+  return col;
+}
+
+export function parts(opts: Scope) {
+  const key = scope(opts);
+  const hit = pts.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeParts(opts);
+  pts.set(key, col);
+
+  return col;
+}
+
+function makeParts(opts: Scope) {
+  const cfg = electricCollectionOptions({
+    id: `${ns}:${scope(opts)}:parts`,
+    schema: partSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: url(opts.base, 'parts'),
+      columnMapper: snakeCamelMapper(),
+      parser: pg,
+      liveSse: true,
+      onError: retry,
+    },
+    syncMode: 'eager',
+  });
+
+  const store = storage();
+
+  if (store) {
+    const res = persistedCollectionOptions<
+      Part,
+      string | number,
+      typeof partSchema,
+      ElectricCollectionUtils<Part>
+    >({
+      ...cfg,
+      persistence: store,
+      schemaVersion: version,
+    });
+
+    const col = createCollection({
+      ...res,
+      schema: partSchema,
+    });
+
+    col.createIndex((row) => row.seq, { indexType: BasicIndex });
+    col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+    col.createIndex((row) => row.runId, { indexType: BasicIndex });
+
+    return col;
+  }
+
+  const col = createCollection(cfg);
+
+  col.createIndex((row) => row.seq, { indexType: BasicIndex });
+  col.createIndex((row) => row.threadId, { indexType: BasicIndex });
+  col.createIndex((row) => row.runId, { indexType: BasicIndex });
 
   return col;
 }

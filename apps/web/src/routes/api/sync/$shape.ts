@@ -53,11 +53,35 @@ function shape(name: string, uid: string): Shape | null {
         'id',
         'thread_id',
         'owner_id',
+        'input_message_id',
         'status',
         'model',
         'error',
         'started_at',
         'completed_at',
+        'created_at',
+        'updated_at',
+      ],
+    };
+  }
+
+  if (name === 'parts') {
+    return {
+      table: 'message_part',
+      where: 'owner_id = $1',
+      params: [uid],
+      columns: [
+        'id',
+        'message_id',
+        'run_id',
+        'thread_id',
+        'owner_id',
+        'seq',
+        'kind',
+        'status',
+        'tool_name',
+        'content',
+        'data',
         'created_at',
         'updated_at',
       ],

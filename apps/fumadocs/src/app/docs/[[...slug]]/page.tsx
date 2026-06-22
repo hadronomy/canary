@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
+import type { ComponentProps } from 'react';
 
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/docs/page';
-import { createRelativeLink } from 'fumadocs-ui/mdx';
 import { notFound } from 'next/navigation';
 
 import { LLMCopyButton, ViewOptions } from '~/components/ai/page-actions';
@@ -36,7 +36,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         <MDX
           components={getMDXComponents({
             // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
+            a: anchor(page),
           })}
         />
       </DocsBody>
@@ -59,5 +59,18 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
     openGraph: {
       images: getPageImage(page).url,
     },
+  };
+}
+
+type Page = NonNullable<ReturnType<typeof source.getPage>>;
+
+function anchor(page: Page) {
+  return function Link(props: ComponentProps<'a'>) {
+    return (
+      <a
+        {...props}
+        href={typeof props.href === 'string' ? source.resolveHref(props.href, page) : props.href}
+      />
+    );
   };
 }

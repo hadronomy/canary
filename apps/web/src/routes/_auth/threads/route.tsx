@@ -1,9 +1,9 @@
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { Link, Outlet, createFileRoute, useNavigate, useParams } from '@tanstack/react-router';
-import { Archive, FastForward, Plus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { ArchiveIcon, CycleIcon, PlusIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
@@ -169,7 +169,7 @@ function ThreadsComponent() {
             onChange={(event) => setTitle(event.currentTarget.value)}
           />
           <Button aria-label="Create thread" size="icon" type="submit">
-            <Plus />
+            <PlusIcon />
           </Button>
           <Button
             aria-label="Debug cycle threads"
@@ -179,7 +179,7 @@ function ThreadsComponent() {
             variant="secondary"
             onClick={cycle}
           >
-            <FastForward />
+            <CycleIcon />
           </Button>
         </form>
         <div className="min-h-0 overflow-y-auto p-2">
@@ -211,7 +211,7 @@ function ThreadsComponent() {
                     variant="ghost"
                     onClick={() => archive(row.id)}
                   >
-                    <Archive />
+                    <ArchiveIcon />
                   </Button>
                 </div>
               ))}
