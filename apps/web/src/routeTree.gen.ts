@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as AuthRouteImport } from './routes/_auth'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthThreadsRouteRouteImport } from './routes/_auth/threads/route'
 import { Route as AuthThreadsIndexRouteImport } from './routes/_auth/threads/index'
 import { Route as ApiSyncShapeRouteImport } from './routes/api/sync/$shape'
@@ -34,10 +34,10 @@ const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthRoute,
 } as any)
 const AuthThreadsRouteRoute = AuthThreadsRouteRouteImport.update({
   id: '/threads',
@@ -71,7 +71,7 @@ const AuthThreadsThreadIdRoute = AuthThreadsThreadIdRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AuthIndexRoute
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/threads': typeof AuthThreadsRouteRouteWithChildren
@@ -82,9 +82,9 @@ export interface FileRoutesByFullPath {
   '/threads/': typeof AuthThreadsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
+  '/': typeof AuthIndexRoute
   '/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
@@ -93,11 +93,11 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/_auth/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/_auth/': typeof AuthIndexRoute
   '/_auth/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
@@ -118,9 +118,9 @@ export interface FileRouteTypes {
     | '/threads/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/consent'
     | '/login'
+    | '/'
     | '/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
@@ -128,11 +128,11 @@ export interface FileRouteTypes {
     | '/threads'
   id:
     | '__root__'
-    | '/'
     | '/_auth'
     | '/consent'
     | '/login'
     | '/_auth/threads'
+    | '/_auth/'
     | '/_auth/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
@@ -141,7 +141,6 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   LoginRoute: typeof LoginRoute
@@ -173,12 +172,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
+    '/_auth/': {
+      id: '/_auth/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/_auth/threads': {
       id: '/_auth/threads'
@@ -240,16 +239,17 @@ const AuthThreadsRouteRouteWithChildren =
 
 interface AuthRouteChildren {
   AuthThreadsRouteRoute: typeof AuthThreadsRouteRouteWithChildren
+  AuthIndexRoute: typeof AuthIndexRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthThreadsRouteRoute: AuthThreadsRouteRouteWithChildren,
+  AuthIndexRoute: AuthIndexRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   ConsentRoute: ConsentRoute,
   LoginRoute: LoginRoute,

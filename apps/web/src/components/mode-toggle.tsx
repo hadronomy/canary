@@ -7,13 +7,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import { cn } from '~/lib/utils';
 
-export function ModeToggle() {
+export function ModeToggle(props: { className?: string }) {
   const { setTheme } = useTheme();
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="icon" />}>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            className={cn('rounded-[var(--radius-press)]', props.className)}
+            size="icon"
+            variant="outline"
+          />
+        }
+      >
         <ThemeIcon className="size-[1.2rem]" />
         <span className="sr-only">Toggle theme</span>
       </DropdownMenuTrigger>

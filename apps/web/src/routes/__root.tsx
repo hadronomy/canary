@@ -9,9 +9,14 @@ import { evlogErrorHandler } from 'evlog/nitro/v3';
 
 import type { orpc } from '~/utils/orpc';
 
-import Header from '~/components/header';
 import { ThemeProvider } from '~/components/theme-provider';
 import { Toaster } from '~/components/ui/sonner';
+import { TooltipProvider } from '~/components/ui/tooltip';
+
+import '@fontsource-variable/geist-mono/wght.css';
+import '@fontsource-variable/mona-sans/wght.css';
+import '@fontsource-variable/source-serif-4/wght.css';
+
 import appCss from '~/index.css?url';
 
 export interface RouterAppContext {
@@ -70,10 +75,9 @@ function RootComponent() {
           storageKey="canary-ui-theme"
         >
           <IconContext.Provider value={tone}>
-            <div className="grid h-svh grid-rows-[auto_1fr]">
-              <Header />
+            <TooltipProvider>
               <Outlet />
-            </div>
+            </TooltipProvider>
             <Toaster richColors />
           </IconContext.Provider>
         </ThemeProvider>

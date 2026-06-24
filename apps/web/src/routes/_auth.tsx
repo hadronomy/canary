@@ -1,12 +1,15 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
 
+import { AppFrame } from '~/components/shell/app-frame';
 import { getUser, userKey, userOptions } from '~/functions/get-user';
+import { setup } from '~/utils/chat';
 
 type MaybeUser = Awaited<ReturnType<typeof getUser>>;
 type User = NonNullable<MaybeUser>;
 
 export const Route = createFileRoute('/_auth')({
-  beforeLoad: ({ context, location }) => {
+  ssr: false,
+  beforeLoad: async ({ context, location }) => {
     const cached = context.queryClient.getQueryData<MaybeUser>(userKey);
 
     if (cached !== undefined) {
@@ -19,25 +22,33 @@ export const Route = createFileRoute('/_auth')({
         });
       }
 
+      await setup();
       return { user: cached satisfies User };
     }
 
-    return context.queryClient.ensureQueryData(userOptions()).then((user) => {
-      if (!user) {
-        throw redirect({
-          to: '/login',
-          search: {
-            redirect: location.href,
-          },
-        });
-      }
+    const user = await context.queryClient.ensureQueryData(userOptions());
 
-      return { user };
-    });
+    if (!user) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      });
+    }
+
+    await setup();
+    return { user };
   },
   component: AuthComponent,
 });
 
 function AuthComponent() {
-  return <Outlet />;
+  const ctx = Route.useRouteContext();
+
+  return (
+    <AppFrame user={ctx.user}>
+      <Outlet />
+    </AppFrame>
+  );
 }

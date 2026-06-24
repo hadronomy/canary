@@ -1,37 +1,51 @@
 import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useVirtualizer, type ReactVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { Message, Part } from '@canary/sync';
 
-import { AgentIcon, LatestIcon, SendIcon } from '~/components/icons';
+import { AgentPrompt } from '~/components/agent-prompt';
+import { AgentIcon, LatestIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
-import { Input } from '~/components/ui/input';
 import { active, messages, pieces, roster, transcript } from '~/utils/chat';
+import { client } from '~/utils/orpc';
 
-type Item =
-  | { id: string; kind: 'assistant'; live?: boolean; msg?: Message; part?: Part; text: string }
-  | { id: string; kind: 'empty' }
-  | { id: string; kind: 'reasoning'; live?: boolean; part: Part }
-  | { id: string; kind: 'tool'; part: Part }
+const TRANSCRIPT_BOTTOM_BREATHING_ROOM = 112;
+const INITIAL_END_LOCK_STABLE_FRAMES = 4;
+const INITIAL_END_LOCK_MAX_FRAMES = 30;
+
+type TranscriptVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>;
+
+type TranscriptRow =
+  | {
+      id: string;
+      kind: 'assistant';
+      live: boolean;
+      msg?: Message;
+      parts: Part[];
+      text: string;
+    }
   | { id: string; kind: 'user'; msg: Message };
-type Block = { at: string; id: string; items: Item[]; rank: number };
-type Snap = { kind: 'end' } | { kind: 'offset'; top: number };
-type Scroll = {
-  el: HTMLDivElement | null;
+
+type TranscriptBlock = {
+  at: string;
   id: string;
-  loaded: boolean;
-  pin: React.RefObject<boolean>;
-  ready: boolean;
-  rest: React.RefObject<boolean>;
-  setEl: React.Dispatch<React.SetStateAction<HTMLDivElement | null>>;
-  setPin: React.Dispatch<React.SetStateAction<boolean>>;
-  virt: ReactVirtualizer<HTMLDivElement, HTMLDivElement>;
+  rank: number;
+  row: TranscriptRow | null;
 };
 
 export const Route = createFileRoute('/_auth/threads/$threadId')({
@@ -43,6 +57,7 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
       pieces(context.user.id, params.threadId).preload(),
       active(context.user.id, params.threadId).preload(),
     ]);
+
     return null;
   },
   component: ThreadComponent,
@@ -51,60 +66,80 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
 function ThreadComponent() {
   const ctx = Route.useRouteContext();
   const params = Route.useParams();
-  const nav = useNavigate();
-  const [text, setText] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-  const owner = ctx.user.id;
-  const query = useLiveQuery(roster(owner));
-  const thread = query.data.find((row) => row.id === params.threadId);
-  const gone = query.isReady && !thread;
+  const navigate = useNavigate();
+
+  const [draft, setDraft] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const ownerId = ctx.user.id;
+
+  const rosterQuery = useLiveQuery(roster(ownerId));
+  const activeRunsQuery = useLiveQuery(active(ownerId, params.threadId));
+  const transcriptQuery = useLiveQuery(transcript(ownerId, params.threadId));
+
+  const thread = rosterQuery.data.find((row) => row.id === params.threadId);
+  const threadGone = rosterQuery.isReady && !thread;
+  const running = activeRunsQuery.data.length > 0;
+
+  const pristine = !transcriptQuery.data.some(
+    (msg) => msg.threadId === params.threadId && msg.role === 'user',
+  );
 
   useEffect(() => {
-    if (!gone) {
+    if (!threadGone) {
       return;
     }
 
-    nav({ to: '/threads', replace: true }).catch((err: unknown) => {
-      console.error('Thread redirect failed.', err);
+    navigate({ to: '/threads', replace: true }).catch((cause: unknown) => {
+      console.error('Thread redirect failed.', cause);
     });
-  }, [gone, nav]);
+  }, [navigate, threadGone]);
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    send().catch((err: unknown) => {
-      console.error('Message send failed.', err);
-    });
-  }
+  const submitUserMessage = useCallback(
+    async (body: string) => {
+      const content = body.trim();
 
-  async function send() {
-    if (!thread || !text.trim()) {
+      if (!thread || !content) {
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      const transaction = messages(ownerId).insert({
+        id: crypto.randomUUID(),
+        threadId: params.threadId,
+        ownerId,
+        runId: null,
+        role: 'user',
+        content,
+        metadata: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      setDraft('');
+      setSendError(null);
+
+      await transaction.isPersisted.promise.catch((cause: unknown) => {
+        setDraft((current) => current || content);
+        setSendError(cause instanceof Error ? cause.message : 'Message send failed.');
+        throw cause;
+      });
+    },
+    [ownerId, params.threadId, thread],
+  );
+
+  const cancelActiveRun = useCallback(async () => {
+    const run = activeRunsQuery.data[0];
+
+    if (!run) {
       return;
     }
 
-    const body = text.trim();
-    const now = new Date().toISOString();
-    const tx = messages(owner).insert({
-      id: crypto.randomUUID(),
-      threadId: params.threadId,
-      ownerId: owner,
-      runId: null,
-      role: 'user',
-      content: body,
-      metadata: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    await client.run.cancel({ id: run.id });
+  }, [activeRunsQuery.data]);
 
-    setText('');
-    setErr(null);
-    await tx.isPersisted.promise.catch((cause: unknown) => {
-      setText((prev) => prev || body);
-      setErr(cause instanceof Error ? cause.message : 'Message send failed.');
-      throw cause;
-    });
-  }
-
-  if (gone) {
+  if (threadGone) {
     return (
       <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">
         This thread was archived or is no longer available.
@@ -113,107 +148,278 @@ function ThreadComponent() {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto]">
-      <header className="border-b px-3 py-2">
-        <h1 className="truncate text-sm font-medium">{thread?.title ?? 'Thread'}</h1>
-        <p className="text-xs text-muted-foreground">{params.threadId}</p>
+    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background/70">
+      <header className="border-b border-white/10 px-4 py-3">
+        <h1 className="truncate text-sm font-semibold">{thread?.title ?? 'Thread'}</h1>
+        <p className="truncate text-[11px] text-muted-foreground">{params.threadId}</p>
       </header>
-      <Transcript id={params.threadId} ownerId={owner} />
-      <form className="flex gap-2 border-t p-2" onSubmit={submit}>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Input
-            value={text}
-            placeholder="Ask the agent..."
-            onChange={(event) => setText(event.currentTarget.value)}
-          />
-          {err ? <p className="text-xs text-destructive">{err}</p> : null}
-        </div>
-        <Button disabled={!text.trim()} type="submit">
-          <SendIcon />
-          Send
-        </Button>
-      </form>
+
+      <div className="relative h-full min-h-0">
+        <TranscriptShell key={params.threadId} ownerId={ownerId} threadId={params.threadId} />
+        <AgentActivity running={running} />
+      </div>
+
+      <AgentPrompt
+        disabled={!thread}
+        error={sendError}
+        pristine={pristine}
+        running={running}
+        value={draft}
+        onCancel={() => {
+          cancelActiveRun().catch((cause: unknown) => {
+            console.error('Run cancellation failed.', cause);
+          });
+        }}
+        onSubmit={(body) => {
+          submitUserMessage(body).catch((cause: unknown) => {
+            console.error('Message send failed.', cause);
+          });
+        }}
+        onValue={setDraft}
+      />
     </div>
   );
 }
 
-function Transcript(props: { id: string; ownerId: string }) {
-  const [el, setEl] = useState<HTMLDivElement | null>(null);
-  const pinned = useRef(true);
-  const rest = useRef(true);
-  const [pin, setPin] = useState(true);
-  const jump = useRef(false);
-  const [jumping, setJumping] = useState(false);
-  const query = useLiveQuery(transcript(props.ownerId, props.id));
-  const partQuery = useLiveQuery(pieces(props.ownerId, props.id));
-  const runQuery = useLiveQuery(active(props.ownerId, props.id));
-  const ready = query.isReady && partQuery.isReady;
-  const running = runQuery.data.length > 0;
-  const items = useMemo(
-    () => materialize(query.data, partQuery.data),
-    [partQuery.data, query.data],
+const TranscriptShell = memo(function TranscriptShell(props: {
+  ownerId: string;
+  threadId: string;
+}) {
+  const transcriptQuery = useLiveQuery(transcript(props.ownerId, props.threadId));
+  const partsQuery = useLiveQuery(pieces(props.ownerId, props.threadId));
+
+  const rawMessages = transcriptQuery.data;
+  const rawParts = partsQuery.data;
+
+  const hasForeignMessages = rawMessages.some((msg) => msg.threadId !== props.threadId);
+
+  const scopedMessages = useMemo(
+    () => rawMessages.filter((msg) => msg.threadId === props.threadId),
+    [rawMessages, props.threadId],
   );
-  const loaded = query.data.length > 0 || partQuery.data.some(show);
-  const mark = useCallback((next: boolean) => {
-    jump.current = next;
-    setJumping(next);
+
+  const scopedMessageIds = useMemo(
+    () => new Set(scopedMessages.map((msg) => msg.id)),
+    [scopedMessages],
+  );
+
+  const scopedRunIds = useMemo(
+    () => new Set(scopedMessages.flatMap((msg) => (msg.runId ? [msg.runId] : []))),
+    [scopedMessages],
+  );
+
+  const scopedParts = useMemo(
+    () =>
+      rawParts.filter((part) =>
+        isPartForCurrentThread(part, props.threadId, scopedMessageIds, scopedRunIds),
+      ),
+    [rawParts, props.threadId, scopedMessageIds, scopedRunIds],
+  );
+
+  const ready = transcriptQuery.isReady && partsQuery.isReady && !hasForeignMessages;
+
+  const rows = useMemo(() => {
+    if (!ready) {
+      return [];
+    }
+
+    return materializeTranscript(scopedMessages, scopedParts);
+  }, [ready, scopedMessages, scopedParts]);
+
+  if (!ready) {
+    return (
+      <StaticTranscriptViewport>
+        <TranscriptLoading />
+      </StaticTranscriptViewport>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <StaticTranscriptViewport>
+        <TranscriptEmpty />
+      </StaticTranscriptViewport>
+    );
+  }
+
+  return <VirtualThread rows={rows} threadId={props.threadId} />;
+});
+
+function StaticTranscriptViewport(props: { children: ReactNode }) {
+  return (
+    <div className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both">
+      <div className="mx-auto max-w-3xl">{props.children}</div>
+    </div>
+  );
+}
+
+function TranscriptLoading() {
+  return <div className="min-h-20" />;
+}
+
+function TranscriptEmpty() {
+  return (
+    <p className="grid min-h-64 place-items-center text-sm text-muted-foreground">
+      Send the first message.
+    </p>
+  );
+}
+
+const VirtualThread = memo(function VirtualThread(props: {
+  rows: TranscriptRow[];
+  threadId: string;
+}) {
+  const scrollElementRef = useRef<HTMLDivElement | null>(null);
+  const initialEndLockActiveRef = useRef(true);
+  const userScrollIntentRef = useRef(false);
+  const isJumpingToLatestRef = useRef(false);
+
+  const [didInitialScroll, setDidInitialScroll] = useState(false);
+  const [isPinnedToLatest, setIsPinnedToLatest] = useState(true);
+  const [isJumpingToLatest, setIsJumpingToLatest] = useState(false);
+
+  const setPinnedToLatest = useCallback((next: boolean) => {
+    setIsPinnedToLatest((current) => (current === next ? current : next));
   }, []);
-  const virt = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: items.length,
-    getScrollElement: () => el,
-    getItemKey: (index) => items[index]?.id ?? index,
-    estimateSize: (index) => estimate(items[index]) + gap(items[index], items[index - 1]),
-    overscan: 18,
-    gap: 0,
-    enabled: !!el,
-    initialOffset: () => {
-      return Number.MAX_SAFE_INTEGER;
+
+  const setJumpingToLatest = useCallback((next: boolean) => {
+    isJumpingToLatestRef.current = next;
+    setIsJumpingToLatest((current) => (current === next ? current : next));
+  }, []);
+
+  const getVirtualRowKey = useCallback(
+    (index: number) => {
+      const row = props.rows[index];
+
+      return row ? `${props.threadId}:${row.id}` : `${props.threadId}:missing:${index}`;
     },
+    [props.rows, props.threadId],
+  );
+
+  const estimateVirtualRowSize = useCallback(
+    (index: number) =>
+      estimateRowHeight(props.rows[index]) + rowSpacing(props.rows[index], props.rows[index - 1]),
+    [props.rows],
+  );
+
+  const handleVirtualizerChange = useCallback(
+    (instance: TranscriptVirtualizer, sync: boolean) => {
+      if (initialEndLockActiveRef.current) {
+        return;
+      }
+
+      if (!isJumpingToLatestRef.current) {
+        return;
+      }
+
+      if (!sync) {
+        return;
+      }
+
+      if (instance.isAtEnd()) {
+        setJumpingToLatest(false);
+        setPinnedToLatest(true);
+        userScrollIntentRef.current = false;
+      }
+    },
+    [setJumpingToLatest, setPinnedToLatest],
+  );
+
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: props.rows.length,
+    getScrollElement: () => scrollElementRef.current,
+    getItemKey: getVirtualRowKey,
+    estimateSize: estimateVirtualRowSize,
+    overscan: 12,
+    gap: 0,
+    paddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
+    scrollPaddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
     anchorTo: 'end',
     followOnAppend: 'auto',
     scrollEndThreshold: 96,
-    useFlushSync: false,
-    onChange: (inst, sync) => {
-      const next = inst.isAtEnd();
+    onChange: handleVirtualizerChange,
+  });
 
-      if (next && jump.current) {
-        mark(false);
+  const virtualizerRef = useLatestRef(virtualizer);
+  const totalContentHeight = virtualizer.getTotalSize();
+
+  useInitialEndLock({
+    initialEndLockActiveRef,
+    setDidInitialScroll,
+    setPinnedToLatest,
+    virtualizerRef,
+  });
+
+  useLayoutEffect(() => {
+    if (!didInitialScroll || !isPinnedToLatest || isJumpingToLatest) {
+      return;
+    }
+
+    virtualizer.scrollToEnd({ behavior: 'auto' });
+  }, [didInitialScroll, isJumpingToLatest, isPinnedToLatest, totalContentHeight, virtualizer]);
+
+  const markUserScrollIntent = useCallback(() => {
+    if (initialEndLockActiveRef.current) {
+      return;
+    }
+
+    userScrollIntentRef.current = true;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (initialEndLockActiveRef.current) {
+      return;
+    }
+
+    if (isJumpingToLatestRef.current) {
+      if (virtualizer.isAtEnd()) {
+        setJumpingToLatest(false);
+        setPinnedToLatest(true);
+        userScrollIntentRef.current = false;
       }
 
-      if (rest.current) {
-        return;
-      }
+      return;
+    }
 
-      if (!sync && pinned.current) {
-        return;
-      }
+    if (!userScrollIntentRef.current) {
+      return;
+    }
 
-      pinned.current = next;
-      setPin((prev) => (prev === next ? prev : next));
+    const atLatest = virtualizer.isAtEnd();
+
+    setPinnedToLatest(atLatest);
+
+    if (atLatest) {
+      userScrollIntentRef.current = false;
+    }
+  }, [setJumpingToLatest, setPinnedToLatest, virtualizer]);
+
+  const handleScrollKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'PageUp' ||
+        event.key === 'PageDown' ||
+        event.key === 'Home' ||
+        event.key === 'End' ||
+        event.key === ' '
+      ) {
+        markUserScrollIntent();
+      }
     },
-  });
-  const scroll = useThreadScrollRestoration({
-    el,
-    id: props.id,
-    loaded,
-    pin: pinned,
-    ready,
-    rest,
-    setEl,
-    setPin,
-    virt,
-  });
-  const list = virt.getVirtualItems();
-  const latest = useCallback(() => {
-    flushSync(() => {
-      pinned.current = true;
-      setPin(true);
-      mark(true);
-    });
+    [markUserScrollIntent],
+  );
 
-    scroll.latest('smooth');
-  }, [mark, scroll]);
-  const showJump = !pin && !jumping;
+  const jumpToLatest = useCallback(() => {
+    userScrollIntentRef.current = false;
+    setPinnedToLatest(true);
+    setJumpingToLatest(true);
+    virtualizer.scrollToEnd({ behavior: 'smooth' });
+  }, [setJumpingToLatest, setPinnedToLatest, virtualizer]);
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const showJumpToLatest = didInitialScroll && !isPinnedToLatest && !isJumpingToLatest;
 
   useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -221,405 +427,312 @@ function Transcript(props: { id: string; ownerId: string }) {
     }
 
     const seen = new Set<string>();
-    items.forEach((item) => {
-      if (seen.has(item.id)) {
-        console.warn('Duplicate virtual item id:', item.id, item);
+
+    for (const row of props.rows) {
+      const namespacedId = `${props.threadId}:${row.id}`;
+
+      if (seen.has(namespacedId)) {
+        console.warn('Duplicate virtual row id:', namespacedId, row);
       }
 
-      seen.add(item.id);
-    });
-  }, [items]);
+      seen.add(namespacedId);
+    }
+  }, [props.rows, props.threadId]);
 
   return (
     <div className="relative h-full min-h-0">
       <div
-        ref={scroll.ref}
-        className="h-full min-h-0 overflow-y-scroll px-3 pb-24 pt-3 [overflow-anchor:none] scrollbar-gutter-both"
+        ref={scrollElementRef}
+        className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both"
+        tabIndex={-1}
+        onKeyDown={handleScrollKeyDown}
+        onPointerDown={markUserScrollIntent}
+        onScroll={handleScroll}
+        onTouchMove={markUserScrollIntent}
+        onWheel={markUserScrollIntent}
       >
         <div className="mx-auto max-w-3xl">
-          <div className="relative w-full" style={{ height: `${virt.getTotalSize()}px` }}>
-            {list.map((row) => {
-              const item = items[row.index];
+          <div className="relative w-full" style={{ height: `${totalContentHeight}px` }}>
+            {virtualRows.map((virtualRow) => {
+              const row = props.rows[virtualRow.index];
 
-              if (!item) {
+              if (!row) {
                 return null;
               }
-              const prev = items[row.index - 1];
+
+              const previousRow = props.rows[virtualRow.index - 1];
 
               return (
                 <div
-                  key={String(row.key)}
-                  ref={virt.measureElement}
+                  key={String(virtualRow.key)}
+                  ref={virtualizer.measureElement}
                   className="absolute left-0 top-0 flow-root w-full min-w-0"
-                  data-index={row.index}
+                  data-index={virtualRow.index}
                   style={{
-                    paddingTop: `${gap(item, prev)}px`,
-                    transform: `translateY(${row.start}px)`,
+                    paddingTop: `${rowSpacing(row, previousRow)}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  <Row item={item} ready={ready} />
+                  <TranscriptRowView row={row} />
                 </div>
               );
             })}
           </div>
         </div>
       </div>
-      <TranscriptHud running={running} showJump={showJump} onJump={latest} />
+
+      <JumpToLatestHud show={showJumpToLatest} onJump={jumpToLatest} />
     </div>
   );
-}
+});
 
-function Row(props: { item: Item; ready: boolean }) {
-  if (props.item.kind === 'user') {
-    return <User msg={props.item.msg} />;
-  }
+function useInitialEndLock(opts: {
+  initialEndLockActiveRef: MutableRefObject<boolean>;
+  setDidInitialScroll: (next: boolean) => void;
+  setPinnedToLatest: (next: boolean) => void;
+  virtualizerRef: MutableRefObject<TranscriptVirtualizer>;
+}) {
+  useLayoutEffect(() => {
+    let frame: number | null = null;
+    let cancelled = false;
+    let lastHeight = -1;
+    let stableFrames = 0;
+    let attempts = 0;
 
-  if (props.item.kind === 'assistant') {
-    return <Assistant live={props.item.live} text={props.item.text} />;
-  }
+    opts.initialEndLockActiveRef.current = true;
+    opts.setPinnedToLatest(true);
 
-  if (props.item.kind === 'reasoning') {
-    return <Reasoning live={props.item.live} part={props.item.part} />;
-  }
+    const finish = () => {
+      const virtualizer = opts.virtualizerRef.current;
 
-  if (props.item.kind === 'tool') {
-    return <Tool part={props.item.part} />;
-  }
+      virtualizer.scrollToEnd({ behavior: 'auto' });
+      opts.setPinnedToLatest(true);
+      opts.initialEndLockActiveRef.current = false;
+      opts.setDidInitialScroll(true);
+    };
 
-  return props.ready ? (
-    <p className="text-sm text-muted-foreground">Send the first message.</p>
-  ) : (
-    <div className="min-h-20" />
-  );
-}
-
-function estimate(item: Item | undefined) {
-  if (!item) {
-    return 120;
-  }
-
-  if (item.kind === 'user') {
-    return 84;
-  }
-
-  if (item.kind === 'assistant') {
-    return Math.max(72, Math.min(520, 48 + item.text.length * 0.35));
-  }
-
-  if (item.kind === 'reasoning') {
-    return 120;
-  }
-
-  if (item.kind === 'tool') {
-    return 180;
-  }
-
-  return 80;
-}
-
-function gap(item: Item | undefined, prev: Item | undefined) {
-  if (!item || !prev) {
-    return 0;
-  }
-
-  if (item.kind === 'user' && prev.kind === 'user') {
-    return 12;
-  }
-
-  if (item.kind === 'user' || prev.kind === 'user') {
-    return 32;
-  }
-
-  return 12;
-}
-
-function useThreadScrollRestoration(opts: Scroll) {
-  const box = useRef<HTMLDivElement | null>(null);
-  const boot = useRef<string | null>(null);
-  const cur = useRef(opts.id);
-  const snaps = useRef(new Map<string, Snap>());
-  const ref = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node && box.current) {
-        snaps.current.set(cur.current, capture(box.current, opts.pin.current));
+    const tick = () => {
+      if (cancelled) {
+        return;
       }
 
-      box.current = node;
-      opts.setEl(node);
+      attempts += 1;
 
-      if (node) {
-        restore(node, snaps.current.get(cur.current));
+      const virtualizer = opts.virtualizerRef.current;
+      const totalSize = virtualizer.getTotalSize();
+
+      if (totalSize > 0) {
+        virtualizer.scrollToEnd({ behavior: 'auto' });
+
+        if (Math.abs(totalSize - lastHeight) < 1) {
+          stableFrames += 1;
+        } else {
+          stableFrames = 0;
+          lastHeight = totalSize;
+        }
       }
-    },
-    [opts.pin, opts.setEl],
-  );
-  const latest = useCallback(
-    (behavior: ScrollBehavior) => {
-      snaps.current.set(opts.id, { kind: 'end' });
-      opts.pin.current = true;
-      opts.setPin(true);
-      opts.virt.scrollToEnd({ behavior });
-    },
-    [opts.id, opts.pin, opts.setPin, opts.virt],
-  );
 
-  useLayoutEffect(() => {
-    const prev = cur.current;
+      if (
+        (totalSize > 0 && stableFrames >= INITIAL_END_LOCK_STABLE_FRAMES) ||
+        attempts >= INITIAL_END_LOCK_MAX_FRAMES
+      ) {
+        finish();
+        return;
+      }
 
-    if (prev === opts.id) {
-      return;
-    }
+      frame = requestAnimationFrame(tick);
+    };
 
-    if (box.current) {
-      snaps.current.set(prev, capture(box.current, opts.pin.current));
-    }
-
-    const snap = snaps.current.get(opts.id);
-    const next = !snap || snap.kind === 'end';
-
-    cur.current = opts.id;
-    boot.current = null;
-    opts.rest.current = true;
-    opts.pin.current = next;
-    opts.setPin(next);
-
-    if (box.current) {
-      restore(box.current, snap);
-    }
-  }, [opts.id, opts.pin, opts.rest, opts.setPin]);
-
-  useLayoutEffect(() => {
-    if (!opts.ready || !opts.el || boot.current === opts.id) {
-      return;
-    }
-
-    const snap = snaps.current.get(opts.id);
-
-    if (!opts.loaded) {
-      opts.rest.current = false;
-      return;
-    }
-
-    if (snap?.kind === 'offset') {
-      opts.el.scrollTop = snap.top;
-      boot.current = opts.id;
-      opts.rest.current = false;
-      return;
-    }
-
-    opts.pin.current = true;
-    opts.setPin(true);
-    opts.el.scrollTop = Number.MAX_SAFE_INTEGER;
-    opts.virt.scrollToEnd({ behavior: 'auto' });
-    boot.current = opts.id;
-
-    const frame = requestAnimationFrame(() => {
-      opts.virt.scrollToEnd({ behavior: 'auto' });
-      opts.rest.current = false;
-    });
+    frame = requestAnimationFrame(tick);
 
     return () => {
-      cancelAnimationFrame(frame);
-      opts.rest.current = false;
+      cancelled = true;
+
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+
+      opts.initialEndLockActiveRef.current = false;
     };
-  }, [opts.el, opts.id, opts.loaded, opts.pin, opts.ready, opts.rest, opts.setPin, opts.virt]);
-
-  return { latest, ref };
+  }, [
+    opts.initialEndLockActiveRef,
+    opts.setDidInitialScroll,
+    opts.setPinnedToLatest,
+    opts.virtualizerRef,
+  ]);
 }
 
-function end(el: HTMLDivElement, gap = 96) {
-  return el.scrollHeight - el.scrollTop - el.clientHeight <= gap;
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
 }
 
-function capture(el: HTMLDivElement, pin: boolean): Snap {
-  if (pin || end(el)) {
-    return { kind: 'end' };
+function TranscriptRowView(props: { row: TranscriptRow }) {
+  if (props.row.kind === 'user') {
+    return <UserMessage msg={props.row.msg} />;
   }
 
-  return { kind: 'offset', top: el.scrollTop };
+  return <AssistantTurn row={props.row} />;
 }
 
-function restore(el: HTMLDivElement, snap: Snap | undefined) {
-  if (snap?.kind === 'offset') {
-    el.scrollTop = snap.top;
-    return;
-  }
-
-  el.scrollTop = Number.MAX_SAFE_INTEGER;
-}
-
-function materialize(msgs: Message[], parts: Part[]): Item[] {
-  const groups = group(parts);
-  const done = new Set(msgs.flatMap((msg) => (msg.runId ? [msg.runId] : [])));
-  const blocks = [
-    ...chrono(msgs).map((msg) => {
-      const rows = order(groups.get(msg.id) ?? []);
-
-      return {
-        id: `msg:${msg.id}`,
-        at: rows[0]?.createdAt ?? msg.createdAt,
-        rank: msg.role === 'user' ? 0 : 1,
-        items: turn(msg, rows),
-      };
-    }),
-    ...[...live(parts, done)].map(([id, parts]) => {
-      const rows = order(parts);
-
-      return {
-        id: `run:${id}`,
-        at: rows[0]?.createdAt ?? '',
-        rank: 1,
-        items: rows.map((part) => partItem(part, true)),
-      };
-    }),
-  ] satisfies Block[];
-  const rows = blocks
-    .filter((block) => block.items.length)
-    .toSorted((a, b) => a.at.localeCompare(b.at) || a.rank - b.rank || a.id.localeCompare(b.id))
-    .flatMap((block) => block.items);
-  return rows.length ? rows : [{ id: 'state:empty', kind: 'empty' as const }];
-}
-
-function turn(msg: Message, parts: Part[]): Item[] {
-  if (msg.role === 'user') {
-    return [{ id: msg.id, kind: 'user', msg }];
-  }
-
-  const rows = order(parts)
-    .filter((part) => show(part))
-    .map((part) => partItem(part, false));
-
-  if (rows.length) {
-    return rows;
-  }
-
-  return [
-    {
-      id: msg.id,
-      kind: 'assistant',
-      msg,
-      text: msg.content,
-    },
-  ];
-}
-
-function partItem(part: Part, live: boolean): Item {
-  if (part.kind === 'text') {
-    return {
-      id: part.id,
-      kind: 'assistant',
-      live: live || part.status === 'running',
-      part,
-      text: part.content,
-    };
-  }
-
-  if (part.kind === 'reasoning') {
-    return {
-      id: part.id,
-      kind: 'reasoning',
-      live: live || part.status === 'running',
-      part,
-    };
-  }
-
-  return {
-    id: part.id,
-    kind: 'tool',
-    part,
-  };
-}
-
-function User(props: { msg: Message }) {
+function UserMessage(props: { msg: Message }) {
   return (
-    <Card className="ml-auto w-fit max-w-[min(58%,36rem)] rounded-sm py-2" size="sm">
-      <CardContent className="px-3">
-        <p className="whitespace-pre-wrap text-sm leading-6 wrap-anywhere">{props.msg.content}</p>
+    <Card
+      className="ml-auto w-fit max-w-[min(80%,44rem)] rounded-xl border-white/10 bg-row py-2 shadow-[0_12px_44px_oklch(0_0_0/28%)]"
+      size="sm"
+    >
+      <CardContent className="px-3.5">
+        <Markdown
+          className="text-sm leading-7 wrap-anywhere *:first:mt-0 *:last:mb-0"
+          text={props.msg.content}
+        />
       </CardContent>
     </Card>
   );
 }
 
-function Assistant(props: { live?: boolean; text: string }) {
+function AssistantTurn(props: { row: Extract<TranscriptRow, { kind: 'assistant' }> }) {
+  if (!props.row.parts.length) {
+    return (
+      <div className="flow-root min-w-0 max-w-full">
+        <Markdown live={props.row.live} text={props.row.text} />
+      </div>
+    );
+  }
+
   return (
-    <div className="flow-root min-w-0 max-w-full">
-      <Markdown live={props.live} text={props.text} />
+    <div className="flow-root min-w-0 max-w-full space-y-3">
+      {props.row.parts.map((part) => (
+        <AssistantPart key={part.id} live={props.row.live} part={part} />
+      ))}
     </div>
   );
 }
 
-function Reasoning(props: { live?: boolean; part: Part }) {
-  return (
-    <details className="flow-root min-w-0 max-w-full rounded-sm border bg-muted/20 p-3 text-xs">
-      <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
-      <Markdown live={props.live || props.part.status === 'running'} text={props.part.content} />
-    </details>
-  );
+function AssistantPart(props: { live: boolean; part: Part }) {
+  if (props.part.kind === 'text') {
+    return (
+      <Markdown
+        live={props.live || props.part.status === 'running'}
+        text={partContent(props.part)}
+      />
+    );
+  }
+
+  if (props.part.kind === 'reasoning') {
+    return <ReasoningPart live={props.live || props.part.status === 'running'} part={props.part} />;
+  }
+
+  return <StructuredPart part={props.part} />;
 }
 
-function Tool(props: { part: Part }) {
-  const body =
-    props.part.content.trim() || (props.part.data ? JSON.stringify(props.part.data, null, 2) : '');
+function Disclosure(props: { children: ReactNode; className?: string; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(props.initiallyOpen ?? false);
+
+  useEffect(() => {
+    if (props.initiallyOpen) {
+      setOpen(true);
+    }
+  }, [props.initiallyOpen]);
 
   return (
     <details
-      className="my-2 flow-root min-w-0 max-w-full rounded-sm border bg-muted/30 text-xs"
-      open={props.part.status === 'running' ? true : undefined}
+      className={props.className}
+      open={open}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+      }}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2">
-        <span className="min-w-0 truncate font-mono text-[11px]">
-          {props.part.toolName ?? 'tool call'}
-        </span>
-        <span className="shrink-0 text-muted-foreground">{props.part.status}</span>
-      </summary>
-      {body ? (
-        <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap border-t px-3 py-2 leading-5 wrap-anywhere">
-          {body}
-        </pre>
-      ) : null}
+      {props.children}
     </details>
   );
 }
 
-function TranscriptHud(props: { onJump: () => void; running: boolean; showJump: boolean }) {
-  if (!props.running && !props.showJump) {
+function ReasoningPart(props: { live?: boolean; part: Part }) {
+  return (
+    <Disclosure
+      className="flow-root min-w-0 max-w-full rounded-xl border border-white/10 bg-black/20 p-3 text-xs"
+      initiallyOpen={props.part.status === 'running'}
+    >
+      <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
+      <Markdown
+        live={props.live || props.part.status === 'running'}
+        text={partContent(props.part)}
+      />
+    </Disclosure>
+  );
+}
+
+function StructuredPart(props: { part: Part }) {
+  const body = structuredPartBody(props.part);
+
+  return (
+    <Disclosure
+      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-white/10 bg-black/25 text-xs shadow-[0_18px_60px_oklch(0_0_0/24%)]"
+      initiallyOpen={props.part.status === 'running'}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span className="min-w-0 truncate font-mono text-xs font-semibold">
+          {structuredPartTitle(props.part)}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{props.part.status}</span>
+      </summary>
+
+      {body ? (
+        <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-white/10 bg-black/30 px-4 py-3 leading-5 wrap-anywhere">
+          {body}
+        </pre>
+      ) : null}
+    </Disclosure>
+  );
+}
+
+function JumpToLatestHud(props: { onJump: () => void; show: boolean }) {
+  if (!props.show) {
     return null;
   }
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 px-3">
-      <div className="mx-auto grid max-w-3xl grid-cols-[1fr_auto_1fr] items-end gap-3">
-        <div className="justify-self-start">
-          {props.running ? (
-            <div className="rounded-full border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
-              <Work />
-            </div>
-          ) : null}
-        </div>
-        <div className="justify-self-center">
-          {props.showJump ? (
-            <Button
-              aria-label="Jump to latest"
-              className="pointer-events-auto shadow-lg"
-              size="icon"
-              title="Jump to latest"
-              type="button"
-              onClick={props.onJump}
-            >
-              <LatestIcon />
-            </Button>
-          ) : null}
-        </div>
-        <div />
+      <div className="mx-auto flex max-w-4xl justify-center">
+        <Button
+          aria-label="Jump to latest"
+          className="pointer-events-auto rounded-xl shadow-lg"
+          size="icon"
+          title="Jump to latest"
+          type="button"
+          onClick={props.onJump}
+        >
+          <LatestIcon />
+        </Button>
       </div>
     </div>
   );
 }
 
-const Markdown = memo(function Markdown(props: { live?: boolean; text: string }) {
+function AgentActivity(props: { running: boolean }) {
+  if (!props.running) {
+    return null;
+  }
+
+  return (
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+      <div className="rounded-full border border-white/10 bg-background/90 px-3 py-2 shadow-xl backdrop-blur">
+        <WorkIndicator />
+      </div>
+    </div>
+  );
+}
+
+const Markdown = memo(function Markdown(props: {
+  className?: string;
+  live?: boolean;
+  text: string;
+}) {
   return (
     <Streamdown
-      className="canary-markdown"
+      className={props.className ? `canary-markdown ${props.className}` : 'canary-markdown'}
       mode={props.live ? 'streaming' : 'static'}
       plugins={{ code }}
     >
@@ -628,54 +741,304 @@ const Markdown = memo(function Markdown(props: { live?: boolean; text: string })
   );
 });
 
-function group(rows: Part[]) {
-  return rows
-    .filter((row) => row.messageId)
-    .reduce((map, row) => {
-      const id = row.messageId;
+function materializeTranscript(msgs: Message[], parts: Part[]): TranscriptRow[] {
+  const partsByMessageId = groupPartsByMessageId(parts);
+  const finishedRunIds = new Set(msgs.flatMap((msg) => (msg.runId ? [msg.runId] : [])));
 
-      if (!id) {
-        return map;
-      }
+  const blocks: TranscriptBlock[] = [];
 
-      map.set(id, [...(map.get(id) ?? []), row]);
-      return map;
-    }, new Map<string, Part[]>());
+  for (const msg of orderMessages(msgs)) {
+    const msgParts = orderParts(partsByMessageId.get(msg.id) ?? []);
+    const row = messageRow(msg, msgParts);
+
+    blocks.push({
+      id: `block:${transcriptMessageRowId(msg)}`,
+      at: msgParts[0]?.createdAt ?? msg.createdAt,
+      rank: msg.role === 'user' ? 0 : 1,
+      row,
+    });
+  }
+
+  for (const [runId, runParts] of groupLiveRunParts(parts, finishedRunIds)) {
+    const orderedParts = orderParts(runParts);
+
+    blocks.push({
+      id: `block:run:${runId}`,
+      at: orderedParts[0]?.createdAt ?? '',
+      rank: 1,
+      row: {
+        id: `run:${runId}`,
+        kind: 'assistant',
+        live: true,
+        parts: orderedParts,
+        text: '',
+      },
+    });
+  }
+
+  return blocks
+    .filter((block): block is TranscriptBlock & { row: TranscriptRow } => block.row !== null)
+    .toSorted((a, b) => a.at.localeCompare(b.at) || a.rank - b.rank || a.id.localeCompare(b.id))
+    .map((block) => block.row);
 }
 
-function live(rows: Part[], done: Set<string>) {
-  return order(rows)
-    .filter((row) => !row.messageId && !done.has(row.runId) && show(row))
-    .reduce((map, row) => {
-      map.set(row.runId, [...(map.get(row.runId) ?? []), row]);
-      return map;
-    }, new Map<string, Part[]>());
+function messageRow(msg: Message, parts: Part[]): TranscriptRow | null {
+  if (msg.role === 'user') {
+    return {
+      id: transcriptMessageRowId(msg),
+      kind: 'user',
+      msg,
+    };
+  }
+
+  const visibleParts = parts.filter(isVisiblePart);
+
+  if (visibleParts.length) {
+    return {
+      id: transcriptMessageRowId(msg),
+      kind: 'assistant',
+      live: visibleParts.some((part) => part.status === 'running'),
+      msg,
+      parts: visibleParts,
+      text: msg.content,
+    };
+  }
+
+  if (!msg.content.trim()) {
+    return null;
+  }
+
+  return {
+    id: transcriptMessageRowId(msg),
+    kind: 'assistant',
+    live: false,
+    msg,
+    parts: [],
+    text: msg.content,
+  };
 }
 
-function chrono(rows: Message[]) {
-  return rows.toSorted(
+function transcriptMessageRowId(msg: Message) {
+  if (msg.role === 'assistant' && msg.runId) {
+    return `run:${msg.runId}`;
+  }
+
+  return `msg:${msg.id}`;
+}
+
+function groupPartsByMessageId(parts: Part[]) {
+  const grouped = new Map<string, Part[]>();
+
+  for (const part of parts) {
+    if (!part.messageId) {
+      continue;
+    }
+
+    const group = grouped.get(part.messageId);
+
+    if (group) {
+      group.push(part);
+    } else {
+      grouped.set(part.messageId, [part]);
+    }
+  }
+
+  return grouped;
+}
+
+function groupLiveRunParts(parts: Part[], finishedRunIds: Set<string>) {
+  const grouped = new Map<string, Part[]>();
+
+  for (const part of parts) {
+    if (part.messageId || !part.runId || finishedRunIds.has(part.runId) || !isVisiblePart(part)) {
+      continue;
+    }
+
+    const group = grouped.get(part.runId);
+
+    if (group) {
+      group.push(part);
+    } else {
+      grouped.set(part.runId, [part]);
+    }
+  }
+
+  return grouped;
+}
+
+function orderMessages(messages: Message[]) {
+  return messages.toSorted(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   );
 }
 
-function order(rows: Part[]) {
-  return rows.toSorted(
+function orderParts(parts: Part[]) {
+  return parts.toSorted(
     (a, b) => a.seq - b.seq || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   );
 }
 
-function show(part: Part) {
+function isVisiblePart(part: Part) {
   if (part.kind === 'text' || part.kind === 'reasoning') {
-    return part.status === 'running' || !!part.content.trim();
+    return part.status === 'running' || !!partContent(part).trim();
   }
 
   return true;
 }
 
-function Work() {
+function isToolPart(part: Part) {
+  return part.kind === 'tool-call' || part.kind === 'tool-result';
+}
+
+function isPartForCurrentThread(
+  part: Part,
+  threadId: string,
+  messageIds: Set<string>,
+  runIds: Set<string>,
+) {
+  const maybeThreadId = 'threadId' in part ? (part as { threadId?: unknown }).threadId : undefined;
+
+  if (typeof maybeThreadId === 'string') {
+    return maybeThreadId === threadId;
+  }
+
+  if (part.messageId && messageIds.has(part.messageId)) {
+    return true;
+  }
+
+  if (part.runId && runIds.has(part.runId)) {
+    return true;
+  }
+
+  return false;
+}
+
+function estimateRowHeight(row: TranscriptRow | undefined) {
+  if (!row) {
+    return 180;
+  }
+
+  if (row.kind === 'user') {
+    return Math.max(96, Math.min(340, 72 + row.msg.content.length * 0.32));
+  }
+
+  const textLength = row.parts.length
+    ? row.parts.reduce((total, part) => total + estimatePartTextLength(part), 0)
+    : row.text.length;
+
+  const structuralCost = row.parts.reduce((total, part) => {
+    if (isToolPart(part)) {
+      return total + 160;
+    }
+
+    if (part.kind === 'artifact') {
+      return total + 220;
+    }
+
+    if (part.kind === 'error') {
+      return total + 140;
+    }
+
+    if (part.kind === 'status') {
+      return total + 72;
+    }
+
+    if (part.kind === 'reasoning') {
+      return total + 120;
+    }
+
+    return total;
+  }, 0);
+
+  return Math.max(140, Math.min(1100, 96 + textLength * 0.42 + structuralCost));
+}
+
+function estimatePartTextLength(part: Part) {
+  const content = partContent(part).trim();
+
+  if (content) {
+    return content.length;
+  }
+
+  if (isToolPart(part) && partData(part)) {
+    return 420;
+  }
+
+  if (part.kind === 'artifact' && partData(part)) {
+    return 560;
+  }
+
+  if (part.kind === 'error') {
+    return 220;
+  }
+
+  return 0;
+}
+
+function rowSpacing(row: TranscriptRow | undefined, previousRow: TranscriptRow | undefined) {
+  if (!row || !previousRow) {
+    return 0;
+  }
+
+  if (row.kind === 'user' && previousRow.kind === 'user') {
+    return 12;
+  }
+
+  if (row.kind === 'user' || previousRow.kind === 'user') {
+    return 32;
+  }
+
+  return 16;
+}
+
+function structuredPartTitle(part: Part) {
+  if ('toolName' in part && typeof part.toolName === 'string' && part.toolName.trim()) {
+    return part.toolName;
+  }
+
+  if (part.kind === 'tool-call') {
+    return 'tool call';
+  }
+
+  if (part.kind === 'tool-result') {
+    return 'tool result';
+  }
+
+  return part.kind;
+}
+
+function structuredPartBody(part: Part) {
+  const content = partContent(part).trim();
+
+  if (content) {
+    return content;
+  }
+
+  const data = partData(part);
+
+  if (data === undefined || data === null) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify(data, null, 2) ?? '';
+  } catch {
+    return String(data);
+  }
+}
+
+function partContent(part: Part) {
+  return 'content' in part && typeof part.content === 'string' ? part.content : '';
+}
+
+function partData(part: Part) {
+  return 'data' in part ? part.data : undefined;
+}
+
+function WorkIndicator() {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <AgentIcon className="size-4 animate-pulse" />
+      <AgentIcon className="size-4 animate-pulse text-muted-foreground" />
       Agent is working...
     </div>
   );

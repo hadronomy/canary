@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { LightningIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -63,13 +64,18 @@ function LoginComponent() {
   }
 
   return (
-    <main className="grid min-h-full place-items-center px-4 py-8">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{mode === 'signin' ? 'Welcome back' : 'Create account'}</CardTitle>
+    <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
+      <Card className="canary-panel w-full max-w-sm rounded-[1.5rem] border-white/10 bg-surface/95">
+        <CardHeader className="gap-3 px-5 pt-5">
+          <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+            <LightningIcon className="size-5" weight="fill" />
+          </div>
+          <CardTitle className="text-base">
+            {mode === 'signin' ? 'Welcome back' : 'Create account'}
+          </CardTitle>
           <CardDescription>Sign in to sync agent threads across every client.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-5">
           <form className="grid gap-3" onSubmit={submit}>
             {mode === 'signup' ? (
               <div className="grid gap-1.5">
@@ -86,10 +92,11 @@ function LoginComponent() {
               <Input id="password" minLength={8} name="password" required type="password" />
             </div>
             {err ? <p className="text-destructive text-xs">{err}</p> : null}
-            <Button disabled={busy} type="submit">
+            <Button className="rounded-xl" disabled={busy} type="submit">
               {busy ? 'Working...' : mode === 'signin' ? 'Sign in' : 'Sign up'}
             </Button>
             <Button
+              className="rounded-xl"
               type="button"
               variant="ghost"
               onClick={() => {

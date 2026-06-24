@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { LightningIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 
@@ -60,17 +61,20 @@ function ConsentComponent() {
   }
 
   return (
-    <main className="grid min-h-full place-items-center px-4 py-8">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Authorize MCP access</CardTitle>
+    <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
+      <Card className="canary-panel w-full max-w-md rounded-[1.5rem] border-white/10 bg-surface/95">
+        <CardHeader className="gap-3 px-5 pt-5">
+          <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+            <LightningIcon className="size-5" weight="fill" />
+          </div>
+          <CardTitle className="text-base">Authorize MCP access</CardTitle>
           <CardDescription>
             {params.client_id ?? 'A client'} is requesting {params.scope ?? 'default'} scopes.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3">
+        <CardContent className="grid gap-3 px-5 pb-5">
           {err ? <p className="text-destructive text-xs">{err}</p> : null}
-          <Button disabled={busy} onClick={accept}>
+          <Button className="rounded-xl" disabled={busy} onClick={accept}>
             {busy ? 'Authorizing...' : 'Authorize'}
           </Button>
         </CardContent>
