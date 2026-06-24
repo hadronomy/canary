@@ -28,15 +28,15 @@ function ComposerPrimaryActionButton(props: {
       animate={visual}
       className={cn(
         'relative isolate mb-1 grid size-10 shrink-0 place-items-center overflow-hidden rounded-[0.95rem]',
-        'bg-white/4.5 text-foreground',
-        'shadow-[0_10px_28px_oklch(0_0_0/0.22)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25',
+        'border bg-control text-foreground',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
         'disabled:cursor-not-allowed',
       )}
       disabled={!props.enabled}
       title={props.action.label}
       type={props.action.kind === 'send-ready' ? 'submit' : 'button'}
       variants={buttonToneVariants}
+      whileHover={props.enabled ? hoverTone(visual) : undefined}
       onClick={
         props.action.kind === 'cancel-run'
           ? () => {
@@ -47,22 +47,15 @@ function ComposerPrimaryActionButton(props: {
     >
       <motion.span
         aria-hidden
-        animate={{ opacity: baseSurfaceOpacity(visual) }}
-        className="absolute inset-0 z-0 bg-white/4"
-        transition={reduce ? instantTransition : surfaceTransition}
-      />
-
-      <motion.span
-        aria-hidden
         animate={{ opacity: stopSurfaceOpacity(visual) }}
-        className="absolute inset-0 z-0 bg-red-500/16"
+        className="absolute inset-0 z-0 bg-danger/15"
         transition={reduce ? instantTransition : surfaceTransition}
       />
 
       <motion.span
         aria-hidden
         animate={{ opacity: disabledVeilOpacity(visual) }}
-        className="absolute inset-0 z-0 bg-black/15"
+        className="absolute inset-0 z-0 bg-background/12"
         transition={reduce ? instantTransition : surfaceTransition}
       />
 
@@ -111,22 +104,6 @@ function visualFromAction(kind: ComposerPrimaryActionKind): ButtonVisual {
   return 'send';
 }
 
-function baseSurfaceOpacity(visual: ButtonVisual) {
-  if (visual === 'stop') {
-    return 0.12;
-  }
-
-  if (visual === 'disabled') {
-    return 0.45;
-  }
-
-  if (visual === 'empty') {
-    return 0.7;
-  }
-
-  return 1;
-}
-
 function stopSurfaceOpacity(visual: ButtonVisual) {
   return visual === 'stop' ? 1 : 0;
 }
@@ -141,11 +118,11 @@ function sendIconOpacity(visual: ButtonVisual) {
   }
 
   if (visual === 'disabled') {
-    return 0.36;
+    return 0.56;
   }
 
   if (visual === 'empty') {
-    return 0.58;
+    return 0.72;
   }
 
   return 1;
@@ -156,11 +133,11 @@ function stopIconOpacity(visual: ButtonVisual) {
 }
 
 function sendIconFilter(visual: ButtonVisual) {
-  return visual === 'stop' ? 'blur(4px)' : 'blur(0px)';
+  return visual === 'stop' ? 'blur(3px)' : 'blur(0px)';
 }
 
 function stopIconFilter(visual: ButtonVisual) {
-  return visual === 'stop' ? 'blur(0px)' : 'blur(4px)';
+  return visual === 'stop' ? 'blur(0px)' : 'blur(3px)';
 }
 
 function sendIconTransition(visual: ButtonVisual) {
@@ -193,21 +170,56 @@ function stopIconTransition(visual: ButtonVisual) {
   } as const;
 }
 
+function hoverTone(visual: ButtonVisual) {
+  if (visual === 'stop') {
+    return {
+      backgroundColor: 'color-mix(in oklch, var(--canary-danger) 5%, var(--canary-control-hover))',
+      borderColor: 'var(--canary-danger)',
+      color: 'var(--canary-danger)',
+      transition: { duration: 0.16, ease },
+    } as const;
+  }
+
+  if (visual === 'send') {
+    return {
+      backgroundColor: 'var(--canary-control-hover)',
+      borderColor: 'var(--canary-line-strong)',
+      color: 'var(--foreground)',
+      transition: { duration: 0.16, ease },
+    } as const;
+  }
+
+  return {
+    backgroundColor: 'var(--canary-control-hover)',
+    borderColor: 'var(--canary-line-strong)',
+    color: 'var(--foreground)',
+    transition: { duration: 0.16, ease },
+  } as const;
+}
+
 const buttonToneVariants = {
   disabled: {
-    color: 'oklch(1 0 0 / 0.48)',
+    backgroundColor: 'var(--canary-control)',
+    borderColor: 'var(--canary-line)',
+    color: 'var(--muted-foreground)',
     transition: { duration: 0.28, ease },
   },
   empty: {
-    color: 'oklch(1 0 0 / 0.62)',
+    backgroundColor: 'var(--canary-control)',
+    borderColor: 'var(--canary-line)',
+    color: 'var(--muted-foreground)',
     transition: { duration: 0.28, ease },
   },
   send: {
-    color: 'oklch(1 0 0 / 0.9)',
+    backgroundColor: 'var(--canary-row)',
+    borderColor: 'var(--canary-line)',
+    color: 'var(--foreground)',
     transition: { duration: 0.28, ease },
   },
   stop: {
-    color: 'oklch(0.96 0.045 25)',
+    backgroundColor: 'var(--canary-control-hover)',
+    borderColor: 'var(--canary-danger)',
+    color: 'var(--canary-danger)',
     transition: { duration: 0.28, ease },
   },
 };

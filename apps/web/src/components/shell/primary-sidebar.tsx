@@ -46,6 +46,7 @@ function PrimarySidebar(props: {
       <div className="canary-panel grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-5 overflow-hidden rounded-(--radius-shell) p-4">
         <Header open={props.open} />
         <Search open={props.open} />
+
         <nav className="grid content-start gap-1">
           {navs.map((nav) => (
             <SideLink
@@ -57,8 +58,10 @@ function PrimarySidebar(props: {
             />
           ))}
         </nav>
+
         <Footer open={props.open} ready={props.ready} user={props.user} />
       </div>
+
       <Edge open={props.open} onToggle={props.onToggle} />
     </motion.aside>
   );
@@ -68,12 +71,15 @@ function PrimaryMobile(props: { ready: boolean; user: ShellUser }) {
   return (
     <div className="grid gap-3">
       <Brand />
+
       <Search open />
+
       <nav className="grid content-start gap-1">
         {navs.map((nav) => (
           <SideLink icon={nav.icon} key={nav.label} label={nav.label} open to={nav.to} />
         ))}
       </nav>
+
       {props.ready ? <Footer user={props.user} /> : <SyncPanel />}
     </div>
   );
@@ -94,7 +100,7 @@ function Edge(props: { onToggle: () => void; open: boolean }) {
     <div className="group/edge pointer-events-none absolute -right-5 top-0 z-20 flex h-full w-10 justify-center">
       <Button
         aria-label={props.open ? 'Collapse sidebar' : 'Expand sidebar'}
-        className="pointer-events-auto mt-5 size-8 rounded-none bg-transparent text-muted-foreground opacity-0 transition-[color,opacity,transform] duration-150 ease-out-strong hover:bg-transparent hover:text-foreground focus-visible:opacity-100 group-hover/edge:opacity-100"
+        className="pointer-events-auto mt-5 size-8 rounded-none bg-transparent text-muted-foreground opacity-0 transition-[color,opacity] duration-150 ease-out-strong hover:bg-transparent hover:text-foreground focus-visible:opacity-100 group-hover/edge:opacity-100"
         size="icon"
         type="button"
         variant="ghost"
@@ -112,20 +118,27 @@ function Search(props: { open: boolean }) {
 
 function SideLink(props: { icon: Icon; label: string; open: boolean; to: '/' | '/threads' }) {
   const base = cn(
-    'group relative flex h-10 items-center overflow-hidden rounded-[var(--radius-control)] text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow] duration-150 ease-[var(--ease-out-strong)] hover:bg-row hover:text-foreground',
+    'group relative flex h-10 items-center overflow-hidden rounded-(--radius-control) border border-transparent text-sm font-medium text-muted-foreground',
+    'transition-[background-color,border-color,color] duration-150 ease-out-strong',
+    'hover:border-line hover:bg-row-hover hover:text-foreground',
     props.open ? 'w-full justify-start px-3' : 'size-10 justify-center px-0',
   );
-  const active = 'bg-row-active text-foreground shadow-[inset_0_0_0_1px_oklch(1_0_0_/_7%)]';
+
+  const active = cn(
+    'border-line-strong bg-row text-foreground',
+    'hover:border-line-strong hover:bg-row',
+  );
 
   const node = (
     <Link
       activeOptions={{ exact: props.to === '/' }}
       activeProps={{ className: active }}
-      className={base}
       aria-label={props.open ? undefined : props.label}
+      className={base}
       to={props.to}
     >
       <props.icon className="size-5 shrink-0" />
+
       <span
         aria-hidden={!props.open}
         className={cn(
@@ -150,7 +163,7 @@ function IconButton(props: { icon: Icon; label: string }) {
     <Tip label={props.label}>
       <Button
         aria-label={props.label}
-        className="size-10 rounded-(--radius-press) text-muted-foreground hover:text-foreground"
+        className="size-10 rounded-(--radius-press) text-muted-foreground hover:bg-row-hover hover:text-foreground"
         size="icon"
         type="button"
         variant="ghost"
@@ -164,10 +177,12 @@ function IconButton(props: { icon: Icon; label: string }) {
 function CompactTools(props: { ready: boolean; user: ShellUser }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <Separator className="mb-3 mt-2 w-8 bg-white/10" />
+      <Separator className="mb-3 mt-2 w-8 bg-line-strong" />
+
       <IconButton icon={GearSixIcon} label="Settings" />
       <IconButton icon={QuestionIcon} label="Help" />
-      <div className="relative mt-3 grid size-10 place-items-center rounded-full border border-white/10 bg-black/30 text-muted-foreground">
+
+      <div className="relative mt-3 grid size-10 place-items-center rounded-full border border-line bg-surface-raised text-muted-foreground">
         <span
           className="absolute inset-0 rounded-full"
           style={{
@@ -179,6 +194,7 @@ function CompactTools(props: { ready: boolean; user: ShellUser }) {
         />
         <StackIcon className="size-5" />
       </div>
+
       <UserAvatar className="size-10" ready={props.ready} size="lg" user={props.user} />
     </div>
   );
@@ -214,7 +230,7 @@ function Footer(props: { open?: boolean; ready?: boolean; user: ShellUser }) {
 
 function SyncPanel() {
   return (
-    <div className="grid rounded-(--radius-control) border border-white/10 bg-black/20 p-3 text-xs text-muted-foreground">
+    <div className="grid rounded-(--radius-control) border border-line bg-surface/80 p-3 text-xs text-muted-foreground">
       Preparing local sync...
     </div>
   );

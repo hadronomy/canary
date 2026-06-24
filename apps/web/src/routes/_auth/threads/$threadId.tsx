@@ -148,8 +148,8 @@ function ThreadComponent() {
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background/70">
-      <header className="border-b border-white/10 px-4 py-3">
+    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background">
+      <header className="border-b border-line px-4 py-3">
         <h1 className="truncate text-sm font-semibold">{thread?.title ?? 'Thread'}</h1>
         <p className="truncate text-[11px] text-muted-foreground">{params.threadId}</p>
       </header>
@@ -579,7 +579,7 @@ function TranscriptRowView(props: { row: TranscriptRow }) {
 function UserMessage(props: { msg: Message }) {
   return (
     <Card
-      className="ml-auto w-fit max-w-[min(80%,44rem)] rounded-xl border-white/10 bg-row py-2 shadow-[0_12px_44px_oklch(0_0_0/28%)]"
+      className="ml-auto w-fit max-w-[min(80%,44rem)] rounded-xl border-line bg-row py-2 "
       size="sm"
     >
       <CardContent className="px-3.5">
@@ -652,7 +652,7 @@ function Disclosure(props: { children: ReactNode; className?: string; initiallyO
 function ReasoningPart(props: { live?: boolean; part: Part }) {
   return (
     <Disclosure
-      className="flow-root min-w-0 max-w-full rounded-xl border border-white/10 bg-black/20 p-3 text-xs"
+      className="flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/80 p-3 text-xs"
       initiallyOpen={props.part.status === 'running'}
     >
       <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
@@ -669,7 +669,7 @@ function StructuredPart(props: { part: Part }) {
 
   return (
     <Disclosure
-      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-white/10 bg-black/25 text-xs shadow-[0_18px_60px_oklch(0_0_0/24%)]"
+      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/85 text-xs "
       initiallyOpen={props.part.status === 'running'}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
@@ -680,7 +680,7 @@ function StructuredPart(props: { part: Part }) {
       </summary>
 
       {body ? (
-        <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-white/10 bg-black/30 px-4 py-3 leading-5 wrap-anywhere">
+        <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-line bg-surface-raised px-4 py-3 leading-5 wrap-anywhere">
           {body}
         </pre>
       ) : null}
@@ -698,10 +698,11 @@ function JumpToLatestHud(props: { onJump: () => void; show: boolean }) {
       <div className="mx-auto flex max-w-4xl justify-center">
         <Button
           aria-label="Jump to latest"
-          className="pointer-events-auto rounded-xl shadow-lg"
+          className="pointer-events-auto rounded-sm bg-muted!"
           size="icon"
           title="Jump to latest"
           type="button"
+          variant="outline"
           onClick={props.onJump}
         >
           <LatestIcon />
@@ -718,7 +719,7 @@ function AgentActivity(props: { running: boolean }) {
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-10">
-      <div className="rounded-full border border-white/10 bg-background/90 px-3 py-2 shadow-xl backdrop-blur">
+      <div className="rounded-full border border-line bg-background/90 px-3 py-2  backdrop-blur">
         <WorkIndicator />
       </div>
     </div>

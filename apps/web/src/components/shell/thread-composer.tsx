@@ -19,14 +19,14 @@ function ThreadComposer(props: {
       }}
     >
       <Input
-        className="h-10 rounded-[var(--radius-control)] border-white/10 bg-black/20 text-sm"
+        className="h-10 rounded-(--radius-control) border-line bg-surface/80 text-sm"
         value={props.title}
         placeholder="New thread"
         onChange={(event) => props.onTitle(event.currentTarget.value)}
       />
       <Button
         aria-label="Create thread"
-        className="rounded-[var(--radius-press)]"
+        className="rounded-(--radius-press)"
         size="icon"
         type="submit"
       >
@@ -34,7 +34,7 @@ function ThreadComposer(props: {
       </Button>
       <Button
         aria-label="Debug cycle threads"
-        className="rounded-[var(--radius-press)]"
+        className="rounded-(--radius-press)"
         disabled={props.debug || props.disabled}
         size="icon"
         type="button"

@@ -1,4 +1,4 @@
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef } from 'react';
 
 import type { Cmd, Mode, RunState } from '~/components/composer/commands';
@@ -214,10 +214,12 @@ function AgentComposer(props: {
     [ui.slash],
   );
 
+  const trayExpanded = trayVisibility === 'expanded';
+
   return (
     <form
       aria-describedby={error ? errorId : hintId}
-      className="border-t border-white/10 bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl"
+      className="border-t border-line bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl"
       onSubmit={(event) => {
         event.preventDefault();
 
@@ -226,116 +228,110 @@ function AgentComposer(props: {
         }
       }}
     >
-      <LayoutGroup>
-        <motion.div
-          layout
-          animate="show"
-          className="mx-auto max-w-4xl"
-          initial={reduce ? 'reducedHidden' : 'hidden'}
-          variants={composerMount}
-        >
-          <div className="relative isolate overflow-visible">
-            <SlashMenu
-              commands={cmds}
-              state={slashMenuFrom(ui.slash)}
-              onActive={(index) => dispatch({ type: 'slash-active', index })}
-              onPick={pickSlashCommand}
-            />
+      <motion.div
+        animate="show"
+        className="mx-auto max-w-4xl"
+        initial={reduce ? 'reducedHidden' : 'hidden'}
+        variants={composerMount}
+      >
+        <div className="relative isolate overflow-visible">
+          <SlashMenu
+            commands={cmds}
+            state={slashMenuFrom(ui.slash)}
+            onActive={(index) => dispatch({ type: 'slash-active', index })}
+            onPick={pickSlashCommand}
+          />
+
+          <motion.div
+            animate={surfaceState}
+            className="relative z-30 isolate overflow-hidden rounded-[1.35rem] border bg-background"
+            variants={surfaceVariants}
+          >
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent" />
 
             <motion.div
-              layout
-              animate={surfaceState}
-              className="relative z-30 isolate overflow-hidden rounded-[1.35rem] border bg-background shadow-[0_22px_90px_oklch(0_0_0/42%)]"
-              variants={surfaceVariants}
-            >
-              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-white/24 to-transparent" />
+              aria-hidden
+              className="pointer-events-none absolute -inset-px -z-10 rounded-[inherit]"
+              variants={auraVariants}
+            />
 
-              <motion.div
-                aria-hidden
-                className="pointer-events-none absolute -inset-px -z-10 rounded-[inherit]"
-                variants={auraVariants}
+            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-2">
+              <ComposerStatus runState={runState} surfaceState={surfaceState} />
+
+              <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
+                <span className="text-foreground/70">Enter</span> to send ·{' '}
+                <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
+                <span className="text-foreground/70">/</span> for commands
+              </p>
+            </div>
+
+            <div className="relative z-20 grid min-w-0 grid-cols-[1fr_auto] items-end gap-2 p-2">
+              <ComposerEditor
+                commands={cmds}
+                disabled={availability === 'disabled'}
+                placeholder={placeholder}
+                slashState={ui.slash}
+                value={value}
+                onCommand={runCommand}
+                onEscape={runState === 'running' ? stopRun : undefined}
+                onFocusChange={(focus) => dispatch({ type: 'focus-change', focus })}
+                onHistory={moveHistory}
+                onSlashChange={(slash) => dispatch({ type: 'slash-change', slash })}
+                onSubmit={submit}
+                onValue={onValue}
               />
 
-              <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-2">
-                <ComposerStatus runState={runState} surfaceState={surfaceState} />
-
-                <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
-                  <span className="text-foreground/70">Enter</span> to send ·{' '}
-                  <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
-                  <span className="text-foreground/70">/</span> for commands
-                </p>
-              </div>
-
-              <div className="relative z-20 grid min-w-0 grid-cols-[1fr_auto] items-end gap-2 p-2">
-                <ComposerEditor
-                  commands={cmds}
-                  disabled={availability === 'disabled'}
-                  placeholder={placeholder}
-                  slashState={ui.slash}
-                  value={value}
-                  onCommand={runCommand}
-                  onEscape={runState === 'running' ? stopRun : undefined}
-                  onFocusChange={(focus) => dispatch({ type: 'focus-change', focus })}
-                  onHistory={moveHistory}
-                  onSlashChange={(slash) => dispatch({ type: 'slash-change', slash })}
-                  onSubmit={submit}
-                  onValue={onValue}
-                />
-
-                <ComposerPrimaryActionButton
-                  action={action}
-                  enabled={canUsePrimaryAction}
-                  onCancelRun={activatePrimaryAction}
-                />
-              </div>
-
-              <AnimatePresence initial={false}>
-                {error ? (
-                  <motion.p
-                    id={errorId}
-                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    className="relative z-10 border-t border-red-400/15 bg-red-500/5.5 px-4 py-2 text-xs text-red-200"
-                    exit={{ opacity: 0, height: 0, y: -4 }}
-                    initial={{ opacity: 0, height: 0, y: -4 }}
-                    transition={{ duration: 0.18, ease }}
-                  >
-                    {error}
-                  </motion.p>
-                ) : null}
-              </AnimatePresence>
-            </motion.div>
+              <ComposerPrimaryActionButton
+                action={action}
+                enabled={canUsePrimaryAction}
+                onCancelRun={activatePrimaryAction}
+              />
+            </div>
 
             <AnimatePresence initial={false}>
-              {trayVisibility === 'expanded' ? (
-                <motion.div
-                  layout
-                  animate="open"
-                  className="relative z-20 p-4"
-                  exit={reduce ? 'reduced' : 'closed'}
-                  initial={reduce ? 'reduced' : 'closed'}
-                  variants={railSectionVariants}
+              {error ? (
+                <motion.p
+                  id={errorId}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  className="relative z-10 border-t border-danger/15 bg-danger/10 px-4 py-2 text-xs text-danger"
+                  exit={{ opacity: 0, height: 0, y: -4 }}
+                  initial={{ opacity: 0, height: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease }}
                 >
-                  <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-[1.35rem] border-x border-b border-white/9.5"
-                  />
-
-                  <div className="relative z-10 px-4">
-                    <ComposerTray
-                      chars={value.length}
-                      mode={ui.mode}
-                      tooling={ui.tooling}
-                      visibility={trayVisibility}
-                      onMode={(mode) => dispatch({ type: 'mode-change', mode })}
-                      onTools={() => dispatch({ type: 'tools-toggle' })}
-                    />
-                  </div>
-                </motion.div>
+                  {error}
+                </motion.p>
               ) : null}
             </AnimatePresence>
-          </div>
-        </motion.div>
-      </LayoutGroup>
+          </motion.div>
+
+          <motion.div
+            aria-hidden={!trayExpanded}
+            animate={trayExpanded ? 'open' : 'closed'}
+            className={cn(
+              'relative z-20 overflow-hidden p-4',
+              !trayExpanded && 'pointer-events-none',
+            )}
+            initial={false}
+            variants={railSectionVariants}
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-[1.35rem] border-x border-b border-line"
+            />
+
+            <div className="relative z-10 px-4">
+              <ComposerTray
+                chars={value.length}
+                mode={ui.mode}
+                tooling={ui.tooling}
+                visibility={trayVisibility}
+                onMode={(mode) => dispatch({ type: 'mode-change', mode })}
+                onTools={() => dispatch({ type: 'tools-toggle' })}
+              />
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
     </form>
   );
 }
@@ -462,7 +458,7 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
         aria-hidden
         animate={props.runState === 'running' ? { opacity: [0.55, 1, 0.55] } : { opacity: 0.8 }}
         className={cn(
-          'grid size-6 place-items-center rounded-[0.65rem] border border-white/10 bg-white/4.5',
+          'grid size-6 place-items-center rounded-[0.65rem] border border-line bg-control',
           props.runState === 'running' && 'text-foreground',
         )}
         transition={
@@ -486,7 +482,6 @@ const composerMount = {
   hidden: {
     opacity: 0,
     y: 8,
-    scale: 0.992,
     filter: 'blur(2px)',
   },
   reducedHidden: {
@@ -495,7 +490,6 @@ const composerMount = {
   show: {
     opacity: 1,
     y: 0,
-    scale: 1,
     filter: 'blur(0px)',
     transition: {
       duration: 0.22,
@@ -506,50 +500,50 @@ const composerMount = {
 
 const surfaceVariants = {
   commanding: {
-    borderColor: 'oklch(1 0 0 / 0.18)',
+    borderColor: 'var(--canary-line-strong)',
     borderTopLeftRadius: '1.18rem',
     borderTopRightRadius: '1.18rem',
-    boxShadow: '0 26px 96px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(1 0 0 / 0.04)',
+    boxShadow: 'none',
     y: 1,
     transition: { duration: 0.2, ease },
   },
   disabled: {
-    borderColor: 'oklch(1 0 0 / 0.075)',
+    borderColor: 'var(--canary-line)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
-    boxShadow: '0 16px 60px oklch(0 0 0 / 0.32)',
+    boxShadow: 'none',
     y: 0,
     transition: { duration: 0.18, ease },
   },
   error: {
-    borderColor: 'oklch(0.72 0.18 25 / 0.34)',
+    borderColor: 'color-mix(in oklch, var(--canary-danger) 34%, transparent)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
-    boxShadow: '0 24px 90px oklch(0.38 0.12 25 / 0.24), 0 22px 80px oklch(0 0 0 / 0.42)',
+    boxShadow: 'none',
     y: 0,
     transition: { duration: 0.18, ease },
   },
   focused: {
-    borderColor: 'oklch(1 0 0 / 0.18)',
+    borderColor: 'var(--canary-line-strong)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
-    boxShadow: '0 26px 96px oklch(0 0 0 / 0.48), 0 0 0 1px oklch(1 0 0 / 0.03)',
+    boxShadow: 'none',
     y: 0,
     transition: { duration: 0.18, ease },
   },
   resting: {
-    borderColor: 'oklch(1 0 0 / 0.095)',
+    borderColor: 'var(--canary-line)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
-    boxShadow: '0 22px 90px oklch(0 0 0 / 0.42)',
+    boxShadow: 'none',
     y: 0,
     transition: { duration: 0.18, ease },
   },
   running: {
-    borderColor: 'oklch(1 0 0 / 0.16)',
+    borderColor: 'var(--canary-line-strong)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
-    boxShadow: '0 24px 96px oklch(0 0 0 / 0.46), 0 22px 90px oklch(0 0 0 / 0.42)',
+    boxShadow: 'none',
     y: 0,
     transition: { duration: 0.18, ease },
   },
@@ -558,24 +552,29 @@ const surfaceVariants = {
 const auraVariants = {
   commanding: {
     opacity: 0.68,
-    background: 'linear-gradient(135deg, oklch(1 0 0 / 0.07), transparent 42%)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 42%)',
   },
   disabled: { opacity: 0 },
   error: {
     opacity: 1,
-    background: 'linear-gradient(135deg, oklch(0.64 0.2 25 / 0.12), transparent 38%, transparent)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, var(--canary-danger) 12%, transparent), transparent 38%, transparent)',
   },
   focused: {
     opacity: 0.7,
-    background: 'linear-gradient(135deg, oklch(1 0 0 / 0.07), transparent 44%)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 44%)',
   },
   resting: {
     opacity: 0.45,
-    background: 'linear-gradient(135deg, oklch(1 0 0 / 0.045), transparent 42%)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 4.5%, transparent), transparent 42%)',
   },
   running: {
     opacity: 0.65,
-    background: 'linear-gradient(135deg, oklch(1 0 0 / 0.065), transparent 42%)',
+    background:
+      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 6.5%, transparent), transparent 42%)',
   },
 };
 
@@ -583,20 +582,12 @@ const railSectionVariants = {
   closed: {
     opacity: 0,
     height: 0,
-    y: -6,
-    filter: 'blur(2px)',
     transition: { duration: 0.14, ease },
   },
   open: {
     opacity: 1,
     height: 'auto',
-    y: 0,
-    filter: 'blur(0px)',
     transition: { duration: 0.18, ease },
-  },
-  reduced: {
-    opacity: 0,
-    height: 0,
   },
 };
 

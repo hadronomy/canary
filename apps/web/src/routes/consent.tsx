@@ -62,7 +62,7 @@ function ConsentComponent() {
 
   return (
     <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
-      <Card className="canary-panel w-full max-w-md rounded-[1.5rem] border-white/10 bg-surface/95">
+      <Card className="canary-panel w-full max-w-md rounded-[1.5rem] border-line bg-surface/95">
         <CardHeader className="gap-3 px-5 pt-5">
           <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
             <LightningIcon className="size-5" weight="fill" />

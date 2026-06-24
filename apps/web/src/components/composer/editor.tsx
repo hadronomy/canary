@@ -101,7 +101,7 @@ function ComposerEditor(props: {
         'aria-label': 'Message Canary',
         class: cn(
           'canary-composer-editor min-h-12 max-h-48 overflow-y-auto px-3 py-3 text-[15px] leading-7 outline-none',
-          'selection:bg-white/18',
+          'selection:bg-aquatic/20',
         ),
         role: 'textbox',
       },

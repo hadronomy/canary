@@ -12,7 +12,7 @@ import { cn } from '~/lib/utils';
 import { setup } from '~/utils/chat';
 
 function AppFrame(props: { children: ReactNode; user: ShellUser }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const path = useRouterState({ select: (state) => state.location.pathname });
   const chat = path === '/threads' || path.startsWith('/threads/');
@@ -49,7 +49,7 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
             {side}
           </div>
         </MobileSidebar>
-        <div className="hidden h-full min-h-0 shrink-0 pr-[var(--shell-gap)] md:block">
+        <div className="hidden h-full min-h-0 shrink-0 pr-(--shell-gap) md:block">
           <PrimarySidebar
             open={open}
             ready={ready}
@@ -58,7 +58,7 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
           />
         </div>
         <SecondarySlot open={!!side}>{side}</SecondarySlot>
-        <main className="canary-panel min-h-0 overflow-hidden rounded-[var(--radius-shell)] md:flex-1">
+        <main className="canary-panel min-h-0 overflow-hidden rounded-(--radius-shell) md:flex-1">
           {ready ? props.children : <SyncScreen />}
         </main>
       </div>
@@ -71,13 +71,13 @@ function SecondarySlot(props: { children: ReactNode; open: boolean }) {
     <aside
       aria-hidden={!props.open}
       className={cn(
-        'hidden min-h-0 shrink-0 overflow-hidden transition-[width,margin-right] duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none md:block',
-        props.open ? 'mr-[var(--shell-gap)] w-[18rem]' : 'mr-0 w-0',
+        'hidden min-h-0 shrink-0 overflow-hidden transition-[width,margin-right] duration-200 ease-out-strong motion-reduce:transition-none md:block',
+        props.open ? 'mr-(--shell-gap) w-[18rem]' : 'mr-0 w-0',
       )}
     >
       <div
         className={cn(
-          'canary-panel h-full w-full overflow-hidden rounded-[var(--radius-shell)] p-3 transition-[opacity,transform] duration-150 ease-[var(--ease-out-strong)] motion-reduce:transition-none',
+          'canary-panel h-full w-full overflow-hidden rounded-(--radius-shell) p-3 transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none bg-background',
           props.open ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0',
         )}
       >

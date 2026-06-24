@@ -13,7 +13,7 @@ import {
 
 function MobileSidebar(props: { children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-rail px-3 py-2 md:hidden">
+    <div className="flex items-center justify-between rounded-2xl border border-line bg-rail px-3 py-2 md:hidden">
       <Brand />
       <Sheet>
         <SheetTrigger

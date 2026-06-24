@@ -37,7 +37,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'fixed inset-y-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-sidebar p-2 shadow-2xl outline-none data-closed:animate-out data-open:animate-in data-[side=left]:left-3 data-[side=left]:data-closed:slide-out-to-left-4 data-[side=left]:data-open:slide-in-from-left-4 data-[side=right]:right-3 data-[side=right]:data-closed:slide-out-to-right-4 data-[side=right]:data-open:slide-in-from-right-4',
+          'fixed inset-y-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-line bg-sidebar p-2  outline-none data-closed:animate-out data-open:animate-in data-[side=left]:left-3 data-[side=left]:data-closed:slide-out-to-left-4 data-[side=left]:data-open:slide-in-from-left-4 data-[side=right]:right-3 data-[side=right]:data-closed:slide-out-to-right-4 data-[side=right]:data-open:slide-in-from-right-4',
           className,
         )}
         {...props}

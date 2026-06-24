@@ -16,27 +16,22 @@ function UserAvatar(props: {
 
   return (
     <Avatar
-      className={cn(
-        'border border-white/10 bg-black/30 shadow-[0_8px_24px_oklch(0_0_0_/_30%)] after:border-white/10',
-        props.className,
-      )}
+      className={cn('border border-line bg-surface-raised after:border-line', props.className)}
       size={props.size}
     >
       {props.user.image ? <AvatarImage alt="" src={props.user.image} /> : null}
       <AvatarFallback className="overflow-hidden bg-transparent p-0">
         <Avvvatars
-          border
-          borderColor="oklch(1 0 0 / 14%)"
+          borderColor="var(--canary-line-strong)"
           borderSize={1}
           radius={size}
-          shadow={false}
           size={size}
           style="shape"
           value={seed}
         />
       </AvatarFallback>
       {props.ready ? (
-        <AvatarBadge className="border border-black/70 bg-[var(--canary-success)] text-transparent ring-2 ring-[var(--canary-panel)]" />
+        <AvatarBadge className="border border-background/70 bg-success text-transparent ring-2 ring-surface" />
       ) : null}
     </Avatar>
   );

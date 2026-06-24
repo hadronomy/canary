@@ -4,12 +4,7 @@ import { cn } from '~/lib/utils';
 
 function Surface(props: { children: ReactNode; className?: string }) {
   return (
-    <section
-      className={cn(
-        'rounded-[1.5rem] border border-white/10 bg-surface shadow-canary-panel',
-        props.className,
-      )}
-    >
+    <section className={cn('rounded-[1.5rem] border border-line bg-surface', props.className)}>
       {props.children}
     </section>
   );

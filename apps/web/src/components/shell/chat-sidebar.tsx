@@ -32,6 +32,7 @@ function ChatSidebar(props: { user: ShellUser }) {
     ignoreInputs: false,
     preventDefault: true,
   });
+
   useHotkey('Alt+ArrowDown', () => jump(1), {
     ignoreInputs: false,
     preventDefault: true,
@@ -119,6 +120,7 @@ function ChatSidebar(props: { user: ShellUser }) {
     });
 
     setTitle('');
+
     nav({
       to: '/threads/$threadId',
       params: {
@@ -145,6 +147,7 @@ function ChatSidebar(props: { user: ShellUser }) {
           {threads.length ? `${threads.length} synced conversations` : 'No conversations yet'}
         </p>
       </header>
+
       <ThreadComposer
         debug={debug}
         disabled={threads.length < 2}
@@ -153,6 +156,7 @@ function ChatSidebar(props: { user: ShellUser }) {
         onCreate={create}
         onTitle={setTitle}
       />
+
       <div className="min-h-0 overflow-y-auto pr-1 scrollbar-gutter-both">
         {threads.length ? (
           <div className="grid gap-1">
@@ -168,7 +172,7 @@ function ChatSidebar(props: { user: ShellUser }) {
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-white/10 p-3 text-xs text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-line p-3 text-xs text-muted-foreground">
             Create a conversation to test realtime sync.
           </p>
         )}

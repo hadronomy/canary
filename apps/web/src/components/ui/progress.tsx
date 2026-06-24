@@ -12,7 +12,7 @@ function Progress({ className, value, ...props }: ProgressPrimitive.Root.Props) 
     >
       <ProgressPrimitive.Track className="h-full w-full">
         <ProgressPrimitive.Indicator
-          className="block h-full rounded-full bg-[--canary-success] transition-[width] duration-200 ease-out-strong"
+          className="block h-full rounded-full bg-success transition-[width] duration-200 ease-out-strong"
           style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%` }}
         />
       </ProgressPrimitive.Track>

@@ -88,14 +88,14 @@ function SlashMenu(props: {
             <Command
               className={cn(
                 'relative overflow-hidden rounded-t-[1.15rem] rounded-b-none',
-                'border-x border-t border-white/10 border-b-transparent',
+                'border-x border-t border-line border-b-transparent',
                 'bg-background p-1',
-                'shadow-[0_18px_58px_oklch(0_0_0/48%),inset_0_1px_0_oklch(1_0_0/7%)]',
+                '',
               )}
               shouldFilter={false}
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-white/18 to-transparent" />
+              <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent" />
 
               <motion.div variants={contentVariants}>
                 <CommandList className="max-h-52 p-1 pb-2">
@@ -112,7 +112,7 @@ function SlashMenu(props: {
                         <motion.span
                           aria-hidden
                           animate={{ y: selectionY }}
-                          className="pointer-events-none absolute inset-x-0 top-0 z-0 rounded-[0.8rem] border border-white/10 bg-white/7.5 shadow-[inset_0_1px_0_oklch(1_0_0/8%)]"
+                          className="pointer-events-none absolute inset-x-0 top-0 z-0 rounded-[0.8rem] border border-line bg-row-active "
                           initial={false}
                           style={{ height: COMMAND_ROW_HEIGHT }}
                           transition={reduce ? instantTransition : selectionTransition}
@@ -305,30 +305,30 @@ function labelKey(value: string) {
 }
 
 const iconClass = cn(
-  'grid size-7 shrink-0 place-items-center rounded-[0.7rem] border border-white/10',
-  'bg-white/[0.035] text-muted-foreground',
+  'grid size-7 shrink-0 place-items-center rounded-[0.7rem] border border-line',
+  'bg-control text-muted-foreground',
   'transition-colors duration-150 ease-(--ease-out-strong)',
-  'group-data-selected/command-item:bg-white/[0.055]',
+  'group-data-selected/command-item:bg-control-hover',
   'group-data-selected/command-item:text-foreground',
-  'group-data-[state=active]/command-item:bg-white/[0.055]',
+  'group-data-[state=active]/command-item:bg-control-hover',
   'group-data-[state=active]/command-item:text-foreground',
 );
 
 const kbdClass = cn(
   'inline-grid h-6 min-w-6 place-items-center rounded-[0.55rem] px-1.5',
   'font-mono text-[11px] font-medium leading-none tracking-[-0.01em]',
-  'border border-white/[0.09]',
-  'bg-[linear-gradient(180deg,oklch(1_0_0_/_0.06),oklch(1_0_0_/_0.028))]',
+  'border border-line',
+  'bg-control',
   'text-foreground/60',
-  'shadow-[inset_0_1px_0_oklch(1_0_0_/_0.11),inset_0_-1px_0_oklch(0_0_0_/_0.22),0_1px_1px_oklch(0_0_0_/_0.2)]',
+  '',
   'transition-[background,border-color,color,box-shadow,transform] duration-150 ease-(--ease-out-strong)',
-  'group-data-selected/command-item:border-white/[0.14]',
-  'group-data-selected/command-item:bg-[linear-gradient(180deg,oklch(1_0_0_/_0.09),oklch(1_0_0_/_0.045))]',
+  'group-data-selected/command-item:border-line-strong',
+  'group-data-selected/command-item:bg-control-hover',
   'group-data-selected/command-item:text-foreground/82',
-  'group-data-[state=active]/command-item:border-white/[0.14]',
-  'group-data-[state=active]/command-item:bg-[linear-gradient(180deg,oklch(1_0_0_/_0.09),oklch(1_0_0_/_0.045))]',
+  'group-data-[state=active]/command-item:border-line-strong',
+  'group-data-[state=active]/command-item:bg-control-hover',
   'group-data-[state=active]/command-item:text-foreground/82',
-  'group-data-[state=active]/command-item:shadow-[inset_0_1px_0_oklch(1_0_0_/_0.13),inset_0_-1px_0_oklch(0_0_0_/_0.24),0_1px_2px_oklch(0_0_0_/_0.22)]',
+  '',
 );
 
 const rootVariants = {

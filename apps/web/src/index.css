@@ -12,84 +12,121 @@
 
   --radius: 0.75rem;
 
-  /* shadcn semantic palette */
-  --background: oklch(0.982 0.006 235);
-  --foreground: oklch(0.18 0.012 238);
+  /*
+    Base shadcn palette.
+    Light mode should feel clean and porcelain, not blue-gray fog.
+  */
+  --background: oklch(0.968 0.006 230);
+  --foreground: oklch(0.145 0.015 235);
 
-  --card: oklch(0.995 0.003 235);
+  --card: oklch(0.997 0.002 230);
   --card-foreground: var(--foreground);
 
-  --popover: oklch(0.995 0.003 235);
+  --popover: oklch(0.997 0.002 230);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.43 0.095 188);
-  --primary-foreground: oklch(0.985 0.006 235);
+  /*
+    Primary is the real aquatic action color.
+    Do not use it for large passive selected surfaces.
+  */
+  --primary: oklch(0.42 0.115 188);
+  --primary-foreground: oklch(0.985 0.006 228);
 
-  --secondary: oklch(0.94 0.011 235);
-  --secondary-foreground: oklch(0.22 0.012 238);
+  --secondary: oklch(0.94 0.008 230);
+  --secondary-foreground: oklch(0.19 0.018 235);
 
-  --muted: oklch(0.94 0.009 235);
-  --muted-foreground: oklch(0.5 0.015 238);
+  --muted: oklch(0.935 0.007 230);
+  --muted-foreground: oklch(0.42 0.018 235);
 
-  --accent: oklch(0.92 0.018 188);
-  --accent-foreground: oklch(0.22 0.035 188);
+  /*
+    shadcn accent is used heavily by ghost buttons and hover states.
+    Keep it neutral and visibly darker than card/panel.
+  */
+  --accent: oklch(0.905 0.011 230);
+  --accent-foreground: var(--foreground);
 
-  --destructive: oklch(0.62 0.19 27);
-  --destructive-foreground: oklch(0.985 0.006 235);
+  --destructive: oklch(0.58 0.2 27);
+  --destructive-foreground: oklch(0.985 0.006 228);
 
-  --border: oklch(0.865 0.012 235);
-  --input: oklch(0.875 0.012 235);
-  --ring: oklch(0.58 0.11 188);
+  --border: oklch(0.36 0.016 235 / 16%);
+  --input: oklch(0.34 0.016 235 / 20%);
+  --ring: oklch(0.5 0.13 188);
 
-  /* Data colors: aquatic, ink-blue, clay, plum, coral */
-  --chart-1: oklch(0.64 0.13 188);
-  --chart-2: oklch(0.58 0.12 245);
-  --chart-3: oklch(0.72 0.13 63);
-  --chart-4: oklch(0.62 0.13 325);
-  --chart-5: oklch(0.62 0.18 27);
+  /*
+    Data colors.
+    Aqua remains the living accent, clay/warmth stays secondary.
+  */
+  --chart-1: oklch(0.58 0.14 188);
+  --chart-2: oklch(0.5 0.13 245);
+  --chart-3: oklch(0.64 0.14 63);
+  --chart-4: oklch(0.54 0.14 325);
+  --chart-5: oklch(0.58 0.19 27);
 
-  --sidebar: oklch(0.955 0.008 235);
-  --sidebar-foreground: oklch(0.2 0.012 238);
+  /*
+    Sidebar.
+  */
+  --sidebar: oklch(0.962 0.006 230);
+  --sidebar-foreground: oklch(0.17 0.018 235);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.925 0.012 235);
-  --sidebar-accent-foreground: oklch(0.22 0.012 238);
-  --sidebar-border: oklch(0.86 0.012 235);
+  --sidebar-accent: oklch(0.905 0.011 230);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(0.36 0.016 235 / 14%);
   --sidebar-ring: var(--ring);
 
-  /* Canary app palette */
-  --canary-shell: oklch(0.948 0.01 235);
-  --canary-panel: oklch(0.99 0.004 235);
-  --canary-panel-raised: oklch(0.965 0.008 235);
-  --canary-rail: oklch(0.976 0.006 235);
+  /*
+    Canary surfaces.
+    Shell carries the schematic texture.
+    Panels stay clean and paper-like.
+  */
+  --canary-shell: oklch(0.91 0.014 235);
+  --canary-panel: oklch(0.992 0.003 230);
+  --canary-panel-raised: oklch(0.965 0.006 230);
+  --canary-rail: oklch(0.955 0.007 230);
 
-  --canary-row: oklch(0.94 0.01 235);
-  --canary-row-hover: oklch(0.915 0.013 235);
-  --canary-row-active: oklch(0.9 0.025 188);
+  /*
+    Neutral interaction states.
+    Rows and controls need real hover contrast in light mode.
+  */
+  --canary-row: oklch(0.958 0.006 230);
+  --canary-row-hover: oklch(0.918 0.011 230);
+  --canary-row-active: oklch(0.958 0.006 230);
 
-  --canary-control: oklch(0.955 0.008 235);
-  --canary-control-hover: oklch(0.925 0.014 235);
+  --canary-control: oklch(0.952 0.006 230);
+  --canary-control-hover: oklch(0.905 0.013 230);
 
-  --canary-line: oklch(0.18 0.012 238 / 10%);
-  --canary-line-strong: oklch(0.18 0.012 238 / 15%);
+  --canary-line: oklch(0.28 0.016 235 / 16%);
+  --canary-line-strong: oklch(0.22 0.016 235 / 26%);
 
-  --canary-glow: oklch(0.68 0.15 188);
-  --canary-aquatic: oklch(0.64 0.13 188);
-  --canary-success: oklch(0.66 0.15 155);
-  --canary-warning: oklch(0.74 0.13 63);
-  --canary-danger: oklch(0.62 0.19 27);
+  /*
+    Accent and semantic colors.
+    Use aqua for intent/action, not as wallpaper.
+  */
+  --canary-glow: oklch(0.58 0.14 188);
+  --canary-aquatic: oklch(0.5 0.14 188);
+  --canary-success: oklch(0.52 0.16 155);
+  --canary-warning: oklch(0.62 0.15 63);
+  --canary-danger: oklch(0.58 0.2 27);
 
-  --canary-clay: oklch(0.72 0.12 58);
-  --canary-rose: oklch(0.68 0.12 12);
-  --canary-plum: oklch(0.58 0.13 325);
+  --canary-clay: oklch(0.62 0.14 58);
+  --canary-rose: oklch(0.59 0.14 12);
+  --canary-plum: oklch(0.5 0.14 325);
 
-  --canary-grid: oklch(0.18 0.012 238 / 4%);
-  --canary-grid-strong: oklch(0.18 0.012 238 / 6%);
-  --canary-shell-glow: oklch(0.68 0.15 188 / 12%);
+  /*
+    Schematic diagonal shell lines.
+  */
+  --canary-grid: oklch(0.22 0.018 235 / 5.5%);
+  --canary-grid-strong: oklch(0.22 0.018 235 / 8%);
 
-  --shadow-panel: 0 24px 80px oklch(0 0 0 / 16%);
-  --shadow-panel-strong: 0 30px 100px oklch(0 0 0 / 22%);
-  --shadow-float: 0 18px 60px oklch(0 0 0 / 18%);
+  /*
+    Kept for compatibility, but the current shell should not use glow gradients.
+  */
+  --canary-shell-glow: oklch(0.58 0.14 188 / 0%);
+  --canary-shell-warmth: oklch(0.62 0.14 58 / 0%);
+
+  --shadow-panel: none;
+  --shadow-panel-strong: none;
+  --shadow-float: none;
 
   --radius-shell: 1.35rem;
   --radius-panel: 1.15rem;
@@ -98,14 +135,13 @@
 
   --shell-gap: 0.625rem;
 
-  --canary-ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
-  --canary-ease-drawer: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-drawer: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dark {
   color-scheme: dark;
 
-  /* shadcn semantic palette */
   --background: oklch(0.072 0.006 238);
   --foreground: oklch(0.925 0.006 235);
 
@@ -134,7 +170,6 @@
   --input: oklch(1 0 0 / 11%);
   --ring: oklch(0.72 0.15 188);
 
-  /* Data colors: aquatic glow, restrained blue, clay, plum, coral */
   --chart-1: oklch(0.72 0.15 188);
   --chart-2: oklch(0.7 0.13 245);
   --chart-3: oklch(0.8 0.14 63);
@@ -150,7 +185,6 @@
   --sidebar-border: oklch(1 0 0 / 8.5%);
   --sidebar-ring: var(--ring);
 
-  /* Canary app palette: black glass + soft ink + aquatic glow */
   --canary-shell: oklch(0.105 0.008 238);
   --canary-panel: oklch(0.072 0.006 238);
   --canary-panel-raised: oklch(0.118 0.009 238);
@@ -176,55 +210,32 @@
   --canary-rose: oklch(0.73 0.13 12);
   --canary-plum: oklch(0.72 0.13 325);
 
-  --canary-grid: oklch(1 0 0 / 2.8%);
-  --canary-grid-strong: oklch(1 0 0 / 4.8%);
+  --canary-grid: oklch(1 0 0 / 8%);
+  --canary-grid-strong: oklch(1 0 0 / 8%);
   --canary-shell-glow: oklch(0.72 0.15 188 / 10%);
+  --canary-shell-warmth: oklch(0.78 0.13 58 / 5%);
 
-  --shadow-panel: 0 30px 100px oklch(0 0 0 / 52%);
-  --shadow-panel-strong: 0 40px 130px oklch(0 0 0 / 62%);
-  --shadow-float: 0 22px 70px oklch(0 0 0 / 42%);
+  --shadow-panel: none;
+  --shadow-panel-strong: none;
+  --shadow-float: none;
 }
 
 @theme inline {
   --font-sans:
-    'Mona Sans Variable',
-    'Mona Sans',
-    'Inter Variable',
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+    'Mona Sans Variable', 'Mona Sans', 'Inter Variable', Inter, ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
   --font-mono:
-    'Geist Mono Variable',
-    'Geist Mono',
-    'JetBrains Mono',
-    'SFMono-Regular',
-    Consolas,
-    'Liberation Mono',
-    monospace;
+    'Geist Mono Variable', 'Geist Mono', 'JetBrains Mono', 'SFMono-Regular', Consolas,
+    'Liberation Mono', monospace;
 
   --font-serif:
-    'Source Serif 4 Variable',
-    'Source Serif 4',
-    ui-serif,
-    Georgia,
-    Cambria,
-    'Times New Roman',
-    Times,
-    serif;
+    'Source Serif 4 Variable', 'Source Serif 4', ui-serif, Georgia, Cambria, 'Times New Roman',
+    Times, serif;
 
   --font-display:
-    'Source Serif 4 Variable',
-    'Source Serif 4',
-    'Mona Sans Variable',
-    'Mona Sans',
-    ui-serif,
-    Georgia,
-    serif;
+    'Source Serif 4 Variable', 'Source Serif 4', 'Mona Sans Variable', 'Mona Sans', ui-serif,
+    Georgia, serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -304,8 +315,8 @@
   --shadow-canary-panel-strong: var(--shadow-panel-strong);
   --shadow-canary-float: var(--shadow-float);
 
-  --ease-out-strong: var(--canary-ease-out-strong);
-  --ease-drawer: var(--canary-ease-drawer);
+  --ease-out-strong: var(--ease-out-strong);
+  --ease-drawer: var(--ease-drawer);
 }
 
 @layer base {
@@ -332,7 +343,7 @@
   }
 
   ::selection {
-    background: oklch(0.72 0.15 188 / 24%);
+    background: oklch(0.64 0.14 188 / 24%);
     color: var(--foreground);
   }
 
@@ -348,32 +359,47 @@
   :where(svg) {
     flex-shrink: 0;
   }
+
+  [data-streamdown^="heading-"] {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  [data-streamdown="root"] {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    font-variant-numeric: tabular-nums lining-nums;
+    
+    font-family: var(--font-sans);
+    line-height: 1.625;
+    color: var(--foreground);
+  }
 }
 
 @layer components {
   .canary-shell {
-    background:
-      linear-gradient(115deg, var(--canary-grid) 0 1px, transparent 1px 22px),
-      linear-gradient(90deg, var(--canary-grid-strong) 0 1px, transparent 1px 128px),
-      linear-gradient(0deg, var(--canary-grid-strong) 0 1px, transparent 1px 128px),
-      radial-gradient(circle at 28% 8%, var(--canary-shell-glow), transparent 24rem),
-      radial-gradient(circle at 82% 84%, oklch(0.78 0.13 58 / 5%), transparent 22rem),
-      var(--canary-shell);
-    background-size:
-      22px 22px,
-      128px 128px,
-      128px 128px,
-      auto,
-      auto,
-      auto;
-  }
+  background-color: var(--canary-shell);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 16px,
+    var(--canary-grid) 16px 18px,
+    transparent 18px 32px
+  );
+}
 
   .canary-panel {
-    @apply border border-line bg-surface text-foreground shadow-canary-panel;
+    @apply border border-line bg-surface text-foreground;
+    box-shadow: none;
   }
 
   .canary-panel-raised {
-    @apply border border-line bg-surface-raised text-foreground shadow-canary-float;
+    @apply border border-line bg-surface-raised text-foreground;
+    box-shadow: none;
   }
 
   .canary-control {
@@ -385,14 +411,13 @@
   }
 
   .canary-glass {
-    @apply bg-surface/80 text-foreground shadow-canary-panel;
-    backdrop-filter: blur(24px) saturate(1.1);
+    @apply border border-line bg-surface/86 text-foreground;
+    box-shadow: none;
+    backdrop-filter: blur(24px) saturate(1.08);
   }
 
   .canary-aquatic-glow {
-    box-shadow:
-      0 0 0 1px var(--canary-line),
-      0 0 42px oklch(0.72 0.15 188 / 13%);
+    box-shadow: none;
   }
 
   .scrollbar-gutter-both {
@@ -421,7 +446,16 @@
   }
 
   .canary-markdown p {
-    @apply my-3;
+    font-family: var(--font-sans);
+    
+    /* Overrides the static line-height to a relaxed, proportional spacing */
+    line-height: 1.625 !important; 
+    
+    /* Adds crucial vertical separation so paragraphs are no longer glued together */
+    margin-bottom: 1.25rem; 
+    
+    /* Dynamically prevents awkward single-word wrap-arounds at the end of lines */
+    text-wrap: pretty;
   }
 
   .canary-markdown :where(h1, h2, h3, h4) {
@@ -474,7 +508,8 @@
   }
 
   .canary-markdown pre {
-    @apply my-4 max-w-full overflow-x-auto rounded-xl border border-line bg-black/35 p-3 shadow-canary-float;
+    @apply my-4 max-w-full overflow-x-auto rounded-xl border border-line bg-surface-raised p-3;
+    box-shadow: none;
   }
 
   .canary-markdown pre code {
@@ -540,7 +575,6 @@
     font-optical-sizing: auto;
   }
 }
-
 
 @media (prefers-reduced-motion: reduce) {
   *,
