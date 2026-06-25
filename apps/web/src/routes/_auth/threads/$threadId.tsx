@@ -604,7 +604,7 @@ function AssistantTurn(props: { row: Extract<TranscriptRow, { kind: 'assistant' 
   return (
     <div className="flow-root min-w-0 max-w-full space-y-3">
       {props.row.parts.map((part) => (
-        <AssistantPart key={part.id} live={props.row.live} part={part} />
+        <AssistantPart key={part.id} live={part.status === 'running'} part={part} />
       ))}
     </div>
   );
@@ -612,16 +612,11 @@ function AssistantTurn(props: { row: Extract<TranscriptRow, { kind: 'assistant' 
 
 function AssistantPart(props: { live: boolean; part: Part }) {
   if (props.part.kind === 'text') {
-    return (
-      <Markdown
-        live={props.live || props.part.status === 'running'}
-        text={partContent(props.part)}
-      />
-    );
+    return <Markdown live={props.live} text={partContent(props.part)} />;
   }
 
   if (props.part.kind === 'reasoning') {
-    return <ReasoningPart live={props.live || props.part.status === 'running'} part={props.part} />;
+    return <ReasoningPart live={props.live} part={props.part} />;
   }
 
   return <StructuredPart part={props.part} />;
@@ -657,7 +652,7 @@ function ReasoningPart(props: { live?: boolean; part: Part }) {
     >
       <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
       <Markdown
-        live={props.live || props.part.status === 'running'}
+        live={props.live}
         text={partContent(props.part)}
       />
     </Disclosure>

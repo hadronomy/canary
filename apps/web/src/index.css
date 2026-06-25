@@ -2,8 +2,9 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
-@source '../node_modules/streamdown/dist/*.js';
-@source '../node_modules/@streamdown/code/dist/*.js';
+@import 'streamdown/styles.css';
+@source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@streamdown/code/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -378,6 +379,10 @@
     font-family: var(--font-sans);
     line-height: 1.625;
     color: var(--foreground);
+  }
+
+  [data-streamdown="code-block-body"] {
+    border: none !important;
   }
 }
 
