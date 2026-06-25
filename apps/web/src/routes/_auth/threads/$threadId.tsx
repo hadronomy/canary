@@ -1,16 +1,14 @@
 import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
+import { Navigate, createFileRoute } from '@tanstack/react-router';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   memo,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type MutableRefObject,
   type ReactNode,
 } from 'react';
 import { Streamdown } from 'streamdown';
@@ -25,10 +23,7 @@ import { active, messages, pieces, roster, transcript } from '~/utils/chat';
 import { client } from '~/utils/orpc';
 
 const TRANSCRIPT_BOTTOM_BREATHING_ROOM = 112;
-const INITIAL_END_LOCK_STABLE_FRAMES = 4;
-const INITIAL_END_LOCK_MAX_FRAMES = 30;
-
-type TranscriptVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>;
+const TRANSCRIPT_END_THRESHOLD = 96;
 
 type TranscriptRow =
   | {
@@ -66,7 +61,6 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
 function ThreadComponent() {
   const ctx = Route.useRouteContext();
   const params = Route.useParams();
-  const navigate = useNavigate();
 
   const [draft, setDraft] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -84,16 +78,6 @@ function ThreadComponent() {
   const pristine = !transcriptQuery.data.some(
     (msg) => msg.threadId === params.threadId && msg.role === 'user',
   );
-
-  useEffect(() => {
-    if (!threadGone) {
-      return;
-    }
-
-    navigate({ to: '/threads', replace: true }).catch((cause: unknown) => {
-      console.error('Thread redirect failed.', cause);
-    });
-  }, [navigate, threadGone]);
 
   const submitUserMessage = useCallback(
     async (body: string) => {
@@ -140,11 +124,7 @@ function ThreadComponent() {
   }, [activeRunsQuery.data]);
 
   if (threadGone) {
-    return (
-      <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">
-        This thread was archived or is no longer available.
-      </div>
-    );
+    return <Navigate to="/threads" replace />;
   }
 
   return (
@@ -193,6 +173,11 @@ const TranscriptShell = memo(function TranscriptShell(props: {
 
   const hasForeignMessages = rawMessages.some((msg) => msg.threadId !== props.threadId);
 
+  const hasExplicitForeignParts = rawParts.some((part) => {
+    const threadId = explicitPartThreadId(part);
+    return typeof threadId === 'string' && threadId !== props.threadId;
+  });
+
   const scopedMessages = useMemo(
     () => rawMessages.filter((msg) => msg.threadId === props.threadId),
     [rawMessages, props.threadId],
@@ -216,7 +201,11 @@ const TranscriptShell = memo(function TranscriptShell(props: {
     [rawParts, props.threadId, scopedMessageIds, scopedRunIds],
   );
 
-  const ready = transcriptQuery.isReady && partsQuery.isReady && !hasForeignMessages;
+  const ready =
+    transcriptQuery.isReady &&
+    partsQuery.isReady &&
+    !hasForeignMessages &&
+    !hasExplicitForeignParts;
 
   const rows = useMemo(() => {
     if (!ready) {
@@ -265,26 +254,33 @@ function TranscriptEmpty() {
   );
 }
 
-const VirtualThread = memo(function VirtualThread(props: {
+function VirtualThread(props: {
   rows: TranscriptRow[];
   threadId: string;
 }) {
-  const scrollElementRef = useRef<HTMLDivElement | null>(null);
-  const initialEndLockActiveRef = useRef(true);
-  const userScrollIntentRef = useRef(false);
-  const isJumpingToLatestRef = useRef(false);
+  return <VirtualThreadInstance key={props.threadId} {...props} />;
+}
+
+const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
+  rows: TranscriptRow[];
+  threadId: string;
+}) {
+  const scrollElementRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true);
+  const jumpingRef = useRef(false);
 
   const [didInitialScroll, setDidInitialScroll] = useState(false);
-  const [isPinnedToLatest, setIsPinnedToLatest] = useState(true);
-  const [isJumpingToLatest, setIsJumpingToLatest] = useState(false);
+  const [isPinnedToLatest, setIsPinnedToLatestState] = useState(true);
+  const [isJumpingToLatest, setIsJumpingToLatestState] = useState(false);
 
   const setPinnedToLatest = useCallback((next: boolean) => {
-    setIsPinnedToLatest((current) => (current === next ? current : next));
+    pinnedRef.current = next;
+    setIsPinnedToLatestState((current) => (current === next ? current : next));
   }, []);
 
   const setJumpingToLatest = useCallback((next: boolean) => {
-    isJumpingToLatestRef.current = next;
-    setIsJumpingToLatest((current) => (current === next ? current : next));
+    jumpingRef.current = next;
+    setIsJumpingToLatestState((current) => (current === next ? current : next));
   }, []);
 
   const getVirtualRowKey = useCallback(
@@ -302,157 +298,80 @@ const VirtualThread = memo(function VirtualThread(props: {
     [props.rows],
   );
 
-  const handleVirtualizerChange = useCallback(
-    (instance: TranscriptVirtualizer, sync: boolean) => {
-      if (initialEndLockActiveRef.current) {
-        return;
-      }
-
-      if (!isJumpingToLatestRef.current) {
-        return;
-      }
-
-      if (!sync) {
-        return;
-      }
-
-      if (instance.isAtEnd()) {
-        setJumpingToLatest(false);
-        setPinnedToLatest(true);
-        userScrollIntentRef.current = false;
-      }
-    },
-    [setJumpingToLatest, setPinnedToLatest],
-  );
-
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: props.rows.length,
     getScrollElement: () => scrollElementRef.current,
     getItemKey: getVirtualRowKey,
     estimateSize: estimateVirtualRowSize,
-    overscan: 12,
+
+    overscan: 10,
     gap: 0,
+
     paddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
     scrollPaddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
+
     anchorTo: 'end',
     followOnAppend: 'auto',
-    scrollEndThreshold: 96,
-    onChange: handleVirtualizerChange,
-  });
+    scrollEndThreshold: TRANSCRIPT_END_THRESHOLD,
 
-  const virtualizerRef = useLatestRef(virtualizer);
-  const totalContentHeight = virtualizer.getTotalSize();
+    directDomUpdates: true,
 
-  useInitialEndLock({
-    initialEndLockActiveRef,
-    setDidInitialScroll,
-    setPinnedToLatest,
-    virtualizerRef,
+    onChange: (instance) => {
+      const atLatest = instance.isAtEnd();
+
+      if (jumpingRef.current && atLatest) {
+        setJumpingToLatest(false);
+      }
+
+      if (pinnedRef.current !== atLatest) {
+        setPinnedToLatest(atLatest);
+      }
+    },
   });
 
   useLayoutEffect(() => {
-    if (!didInitialScroll || !isPinnedToLatest || isJumpingToLatest) {
+    if (didInitialScroll || props.rows.length === 0 || !scrollElementRef.current) {
       return;
     }
 
-    virtualizer.scrollToEnd({ behavior: 'auto' });
-  }, [didInitialScroll, isJumpingToLatest, isPinnedToLatest, totalContentHeight, virtualizer]);
+    setPinnedToLatest(true);
+    setJumpingToLatest(false);
 
-  const markUserScrollIntent = useCallback(() => {
-    if (initialEndLockActiveRef.current) {
-      return;
-    }
+    virtualizer.scrollToEnd({ behavior: 'instant' });
 
-    userScrollIntentRef.current = true;
-  }, []);
-
-  const handleScroll = useCallback(() => {
-    if (initialEndLockActiveRef.current) {
-      return;
-    }
-
-    if (isJumpingToLatestRef.current) {
-      if (virtualizer.isAtEnd()) {
-        setJumpingToLatest(false);
-        setPinnedToLatest(true);
-        userScrollIntentRef.current = false;
-      }
-
-      return;
-    }
-
-    if (!userScrollIntentRef.current) {
-      return;
-    }
-
-    const atLatest = virtualizer.isAtEnd();
-
-    setPinnedToLatest(atLatest);
-
-    if (atLatest) {
-      userScrollIntentRef.current = false;
-    }
-  }, [setJumpingToLatest, setPinnedToLatest, virtualizer]);
-
-  const handleScrollKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (
-        event.key === 'ArrowUp' ||
-        event.key === 'ArrowDown' ||
-        event.key === 'PageUp' ||
-        event.key === 'PageDown' ||
-        event.key === 'Home' ||
-        event.key === 'End' ||
-        event.key === ' '
-      ) {
-        markUserScrollIntent();
-      }
-    },
-    [markUserScrollIntent],
-  );
+    setDidInitialScroll(true);
+  }, [
+    didInitialScroll,
+    props.rows.length,
+    setJumpingToLatest,
+    setPinnedToLatest,
+    virtualizer,
+  ]);
 
   const jumpToLatest = useCallback(() => {
-    userScrollIntentRef.current = false;
     setPinnedToLatest(true);
     setJumpingToLatest(true);
+
     virtualizer.scrollToEnd({ behavior: 'smooth' });
   }, [setJumpingToLatest, setPinnedToLatest, virtualizer]);
 
   const virtualRows = virtualizer.getVirtualItems();
+
   const showJumpToLatest = didInitialScroll && !isPinnedToLatest && !isJumpingToLatest;
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) {
-      return;
-    }
-
-    const seen = new Set<string>();
-
-    for (const row of props.rows) {
-      const namespacedId = `${props.threadId}:${row.id}`;
-
-      if (seen.has(namespacedId)) {
-        console.warn('Duplicate virtual row id:', namespacedId, row);
-      }
-
-      seen.add(namespacedId);
-    }
-  }, [props.rows, props.threadId]);
 
   return (
     <div className="relative h-full min-h-0">
       <div
         ref={scrollElementRef}
         className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both"
+        style={{
+          visibility: didInitialScroll ? undefined : 'hidden',
+          pointerEvents: didInitialScroll ? undefined : 'none',
+        }}
         tabIndex={-1}
-        onKeyDown={handleScrollKeyDown}
-        onPointerDown={markUserScrollIntent}
-        onScroll={handleScroll}
-        onTouchMove={markUserScrollIntent}
-        onWheel={markUserScrollIntent}
       >
         <div className="mx-auto max-w-3xl">
-          <div className="relative w-full" style={{ height: `${totalContentHeight}px` }}>
+          <div ref={virtualizer.containerRef} className="relative w-full">
             {virtualRows.map((virtualRow) => {
               const row = props.rows[virtualRow.index];
 
@@ -470,7 +389,6 @@ const VirtualThread = memo(function VirtualThread(props: {
                   data-index={virtualRow.index}
                   style={{
                     paddingTop: `${rowSpacing(row, previousRow)}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
                   <TranscriptRowView row={row} />
@@ -485,88 +403,6 @@ const VirtualThread = memo(function VirtualThread(props: {
     </div>
   );
 });
-
-function useInitialEndLock(opts: {
-  initialEndLockActiveRef: MutableRefObject<boolean>;
-  setDidInitialScroll: (next: boolean) => void;
-  setPinnedToLatest: (next: boolean) => void;
-  virtualizerRef: MutableRefObject<TranscriptVirtualizer>;
-}) {
-  useLayoutEffect(() => {
-    let frame: number | null = null;
-    let cancelled = false;
-    let lastHeight = -1;
-    let stableFrames = 0;
-    let attempts = 0;
-
-    opts.initialEndLockActiveRef.current = true;
-    opts.setPinnedToLatest(true);
-
-    const finish = () => {
-      const virtualizer = opts.virtualizerRef.current;
-
-      virtualizer.scrollToEnd({ behavior: 'auto' });
-      opts.setPinnedToLatest(true);
-      opts.initialEndLockActiveRef.current = false;
-      opts.setDidInitialScroll(true);
-    };
-
-    const tick = () => {
-      if (cancelled) {
-        return;
-      }
-
-      attempts += 1;
-
-      const virtualizer = opts.virtualizerRef.current;
-      const totalSize = virtualizer.getTotalSize();
-
-      if (totalSize > 0) {
-        virtualizer.scrollToEnd({ behavior: 'auto' });
-
-        if (Math.abs(totalSize - lastHeight) < 1) {
-          stableFrames += 1;
-        } else {
-          stableFrames = 0;
-          lastHeight = totalSize;
-        }
-      }
-
-      if (
-        (totalSize > 0 && stableFrames >= INITIAL_END_LOCK_STABLE_FRAMES) ||
-        attempts >= INITIAL_END_LOCK_MAX_FRAMES
-      ) {
-        finish();
-        return;
-      }
-
-      frame = requestAnimationFrame(tick);
-    };
-
-    frame = requestAnimationFrame(tick);
-
-    return () => {
-      cancelled = true;
-
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-
-      opts.initialEndLockActiveRef.current = false;
-    };
-  }, [
-    opts.initialEndLockActiveRef,
-    opts.setDidInitialScroll,
-    opts.setPinnedToLatest,
-    opts.virtualizerRef,
-  ]);
-}
-
-function useLatestRef<T>(value: T) {
-  const ref = useRef(value);
-  ref.current = value;
-  return ref;
-}
 
 function TranscriptRowView(props: { row: TranscriptRow }) {
   if (props.row.kind === 'user') {
@@ -622,20 +458,24 @@ function AssistantPart(props: { live: boolean; part: Part }) {
   return <StructuredPart part={props.part} />;
 }
 
-function Disclosure(props: { children: ReactNode; className?: string; initiallyOpen?: boolean }) {
-  const [open, setOpen] = useState(props.initiallyOpen ?? false);
-
-  useEffect(() => {
-    if (props.initiallyOpen) {
-      setOpen(true);
-    }
-  }, [props.initiallyOpen]);
+function Disclosure(props: {
+  children: ReactNode;
+  className?: string;
+  defaultOpen?: boolean;
+  forceOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(props.defaultOpen ?? false);
+  const effectiveOpen = props.forceOpen || open;
 
   return (
     <details
       className={props.className}
-      open={open}
+      open={effectiveOpen}
       onToggle={(event) => {
+        if (props.forceOpen) {
+          return;
+        }
+
         setOpen(event.currentTarget.open);
       }}
     >
@@ -645,27 +485,29 @@ function Disclosure(props: { children: ReactNode; className?: string; initiallyO
 }
 
 function ReasoningPart(props: { live?: boolean; part: Part }) {
+  const running = props.part.status === 'running';
+
   return (
     <Disclosure
       className="flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/80 p-3 text-xs"
-      initiallyOpen={props.part.status === 'running'}
+      defaultOpen={running}
+      forceOpen={running}
     >
       <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
-      <Markdown
-        live={props.live}
-        text={partContent(props.part)}
-      />
+      <Markdown live={props.live} text={partContent(props.part)} />
     </Disclosure>
   );
 }
 
 function StructuredPart(props: { part: Part }) {
   const body = structuredPartBody(props.part);
+  const running = props.part.status === 'running';
 
   return (
     <Disclosure
       className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/85 text-xs "
-      initiallyOpen={props.part.status === 'running'}
+      defaultOpen={running}
+      forceOpen={running}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <span className="min-w-0 truncate font-mono text-xs font-semibold">
@@ -714,7 +556,7 @@ function AgentActivity(props: { running: boolean }) {
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 z-10">
-      <div className="rounded-full border border-line bg-background/90 px-3 py-2  backdrop-blur">
+      <div className="rounded-full border border-line bg-background/90 px-3 py-2 backdrop-blur">
         <WorkIndicator />
       </div>
     </div>
@@ -886,15 +728,21 @@ function isToolPart(part: Part) {
   return part.kind === 'tool-call' || part.kind === 'tool-result';
 }
 
+function explicitPartThreadId(part: Part) {
+  const maybeThreadId = 'threadId' in part ? (part as { threadId?: unknown }).threadId : undefined;
+
+  return typeof maybeThreadId === 'string' ? maybeThreadId : null;
+}
+
 function isPartForCurrentThread(
   part: Part,
   threadId: string,
   messageIds: Set<string>,
   runIds: Set<string>,
 ) {
-  const maybeThreadId = 'threadId' in part ? (part as { threadId?: unknown }).threadId : undefined;
+  const maybeThreadId = explicitPartThreadId(part);
 
-  if (typeof maybeThreadId === 'string') {
+  if (maybeThreadId) {
     return maybeThreadId === threadId;
   }
 
