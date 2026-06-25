@@ -5,11 +5,10 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   memo,
   useCallback,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
+  type ReactNode
 } from 'react';
 import { Streamdown } from 'streamdown';
 
@@ -269,7 +268,6 @@ const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
   const pinnedRef = useRef(true);
   const jumpingRef = useRef(false);
 
-  const [didInitialScroll, setDidInitialScroll] = useState(false);
   const [isPinnedToLatest, setIsPinnedToLatestState] = useState(true);
   const [isJumpingToLatest, setIsJumpingToLatestState] = useState(false);
 
@@ -329,25 +327,6 @@ const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
     },
   });
 
-  useLayoutEffect(() => {
-    if (didInitialScroll || props.rows.length === 0 || !scrollElementRef.current) {
-      return;
-    }
-
-    setPinnedToLatest(true);
-    setJumpingToLatest(false);
-
-    virtualizer.scrollToEnd({ behavior: 'instant' });
-
-    setDidInitialScroll(true);
-  }, [
-    didInitialScroll,
-    props.rows.length,
-    setJumpingToLatest,
-    setPinnedToLatest,
-    virtualizer,
-  ]);
-
   const jumpToLatest = useCallback(() => {
     setPinnedToLatest(true);
     setJumpingToLatest(true);
@@ -357,17 +336,13 @@ const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
 
   const virtualRows = virtualizer.getVirtualItems();
 
-  const showJumpToLatest = didInitialScroll && !isPinnedToLatest && !isJumpingToLatest;
+  const showJumpToLatest = !isPinnedToLatest && !isJumpingToLatest;
 
   return (
     <div className="relative h-full min-h-0">
       <div
         ref={scrollElementRef}
         className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both"
-        style={{
-          visibility: didInitialScroll ? undefined : 'hidden',
-          pointerEvents: didInitialScroll ? undefined : 'none',
-        }}
         tabIndex={-1}
       >
         <div className="mx-auto max-w-3xl">
