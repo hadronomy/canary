@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 
 import type { Cmd, Mode, RunState } from '~/components/composer/commands';
 import type { ComposerSlashState, FocusState } from '~/components/composer/editor';
@@ -89,6 +89,7 @@ function AgentComposer(props: {
   const hist = useRef(history());
 
   const [ui, dispatch] = useReducer(reduceComposerUi, initialUi);
+  const [hoveringComposer, setHoveringComposer] = useState(false);
 
   const draftState: DraftState = value.trim() ? 'drafting' : 'empty';
   const runState: RunState = running ? 'running' : 'idle';
@@ -118,13 +119,15 @@ function AgentComposer(props: {
       ? hintCopy(ui.hint)
       : 'Message Canary...';
 
-  const trayVisibility: TrayVisibility =
+  const trayVisible =
+    hoveringComposer ||
     ui.focus === 'focused' ||
     draftState === 'drafting' ||
     ui.tooling === 'enabled' ||
-    ui.mode !== 'agent'
-      ? 'expanded'
-      : 'collapsed';
+    ui.mode !== 'agent';
+
+  const trayVisibility: TrayVisibility = trayVisible ? 'expanded' : 'collapsed';
+  const trayExpanded = trayVisibility === 'expanded';
 
   useEffect(() => {
     if (!pristine || draftState !== 'empty' || ui.focus !== 'blurred') {
@@ -214,8 +217,6 @@ function AgentComposer(props: {
     [ui.slash],
   );
 
-  const trayExpanded = trayVisibility === 'expanded';
-
   return (
     <form
       aria-describedby={error ? errorId : hintId}
@@ -234,7 +235,11 @@ function AgentComposer(props: {
         initial={reduce ? 'reducedHidden' : 'hidden'}
         variants={composerMount}
       >
-        <div className="relative isolate overflow-visible">
+        <div
+          className="relative isolate overflow-visible"
+          onPointerEnter={() => setHoveringComposer(true)}
+          onPointerLeave={() => setHoveringComposer(false)}
+        >
           <SlashMenu
             commands={cmds}
             state={slashMenuFrom(ui.slash)}
