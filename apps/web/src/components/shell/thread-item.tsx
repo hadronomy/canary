@@ -68,10 +68,8 @@ function ThreadItem(props: {
           className={cn(
             'pointer-events-none absolute inset-y-1 -left-5 w-5 bg-linear-to-r from-transparent opacity-0',
             'transition-opacity duration-150 ease-out-strong motion-reduce:transition-none',
-            'group-hover/item:opacity-100 group-focus-within/item:opacity-100',
-            props.active
-              ? 'to-row/95'
-              : 'to-background/95 group-hover/item:to-row-hover/95 group-focus-within/item:to-row-hover/95',
+            'group-hover/item:opacity-100',
+            props.active ? 'to-row/95' : 'to-background/95 group-hover/item:to-row-hover/95',
           )}
         />
 
@@ -84,7 +82,6 @@ function ThreadItem(props: {
             'hover:border-line hover:bg-surface-raised hover:text-foreground',
             'focus-visible:border-line-strong focus-visible:bg-surface-raised focus-visible:text-foreground',
             'group-hover/item:pointer-events-auto group-hover/item:translate-x-0 group-hover/item:scale-100 group-hover/item:opacity-100',
-            'group-focus-within/item:pointer-events-auto group-focus-within/item:translate-x-0 group-focus-within/item:scale-100 group-focus-within/item:opacity-100',
             'active:scale-[0.96]',
           )}
           size="icon-sm"

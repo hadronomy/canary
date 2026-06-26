@@ -558,11 +558,15 @@
   }
 
   .canary-composer-editor .suggestion {
-    @apply rounded-md bg-row-active px-0.5 text-foreground;
+    @apply rounded-sm bg-row-active px-2 text-foreground;
+  }
+
+  .canary-composer-editor p {
+    @apply m-0;
   }
 
   .canary-composer-editor p.is-editor-empty:first-child::before {
-    @apply pointer-events-none float-left h-0 text-muted-foreground;
+    @apply pointer-events-none float-left h-0 select-none text-muted-foreground;
     content: attr(data-placeholder);
   }
 }
