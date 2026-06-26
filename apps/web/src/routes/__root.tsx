@@ -1,14 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { IconContext } from '@phosphor-icons/react';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { createMiddleware } from '@tanstack/react-start';
 import { evlogErrorHandler } from 'evlog/nitro/v3';
 
 import type { orpc } from '~/utils/orpc';
 
+import { Devtools } from '~/components/devtools';
 import { ThemeProvider } from '~/components/theme-provider';
 import { Toaster } from '~/components/ui/sonner';
 import { TooltipProvider } from '~/components/ui/tooltip';
@@ -62,11 +61,14 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
+
       <body>
         <ThemeProvider
           attribute="class"
@@ -78,11 +80,13 @@ function RootComponent() {
             <TooltipProvider>
               <Outlet />
             </TooltipProvider>
+
             <Toaster richColors />
           </IconContext.Provider>
         </ThemeProvider>
-        <TanStackRouterDevtools position="bottom-left" />
-        <ReactQueryDevtools buttonPosition="bottom-right" position="bottom" />
+
+        <Devtools queryClient={queryClient} />
+
         <Scripts />
       </body>
     </html>

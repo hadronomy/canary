@@ -1,6 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 
+import { shellRoutes } from '~/components/shell/model';
+
 export const Route = createFileRoute('/_auth/threads/')({
+  staticData: {
+    shell: shellRoutes.chat,
+  },
   component: ThreadsIndex,
 });
 

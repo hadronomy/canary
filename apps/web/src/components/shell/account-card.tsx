@@ -8,7 +8,7 @@ import { Button } from '~/components/ui/button';
 function AccountCard(props: { onSignout: () => void; user: ShellUser }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-line bg-surface-raised p-2 ">
-      <div className="flex min-w-0 items-center gap-3 rounded-[var(--radius-control)] bg-surface/80 p-2">
+      <div className="flex min-w-0 items-center gap-3 rounded-(--radius-control) bg-surface/80 p-2">
         <UserAvatar className="size-10" ready size="lg" user={props.user} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold tracking-[-0.01em]">
@@ -24,7 +24,7 @@ function AccountCard(props: { onSignout: () => void; user: ShellUser }) {
         </div>
       </div>
       <Button
-        className="mt-1 h-8 w-full justify-start rounded-[var(--radius-press)] px-2 text-muted-foreground hover:bg-control hover:text-foreground"
+        className="mt-1 h-8 w-full justify-start rounded-(--radius-press) px-2 text-muted-foreground hover:bg-control hover:text-foreground"
         size="sm"
         type="button"
         variant="ghost"

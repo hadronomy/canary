@@ -66,6 +66,9 @@
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
+    "@tanstack/devtools-vite": "^0.8.1",
+    "@tanstack/react-devtools": "^0.10.8",
+    "@tanstack/react-hotkeys-devtools": "^0.7.0",
     "@tanstack/react-query-devtools": "^5.101.0",
     "@tanstack/react-router-devtools": "^1.167.0",
     "@tanstack/router-plugin": "^1.168.13",

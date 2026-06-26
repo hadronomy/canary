@@ -1,3 +1,4 @@
+import type { RegisterableHotkey } from '@tanstack/react-hotkeys';
 import type { ComponentType } from 'react';
 
 import {
@@ -32,11 +33,12 @@ export type Cmd = {
   disabled?: boolean;
   icon: Icon;
   id: string;
-  key?: string;
+  key?: RegisterableHotkey;
   label: string;
   slash: string;
 };
 
+// TODO: This should be part of the app's complete shortcut system and designed maybe as an event system, so that commands can affect and be registered by other parts of the app. For now, this is just a simple list of commands that are available in the composer.
 export function commands(opts: { runState: RunState }) {
   return [
     {
@@ -45,7 +47,7 @@ export function commands(opts: { runState: RunState }) {
       label: 'New thread',
       desc: 'Prepare a fresh prompt for a new thread.',
       icon: TerminalWindowIcon,
-      key: 'N',
+      key: 'Control+N',
       act: { kind: 'new' },
     },
     {
@@ -108,7 +110,7 @@ export function commands(opts: { runState: RunState }) {
       label: 'Clear composer',
       desc: 'Remove the current draft.',
       icon: BroomIcon,
-      key: 'Esc',
+      ...(opts.runState === 'idle' ? { key: 'Escape' } : {}),
       act: { kind: 'clear' },
     },
     {
@@ -118,7 +120,7 @@ export function commands(opts: { runState: RunState }) {
       desc: 'Stop the currently running agent.',
       icon: StopIcon,
       disabled: opts.runState !== 'running',
-      key: 'Esc',
+      ...(opts.runState === 'running' ? { key: 'Escape' } : {}),
       act: { kind: 'cancel' },
     },
     {

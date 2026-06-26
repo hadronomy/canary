@@ -1,3 +1,6 @@
+import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
+
+import { useHotkeys } from '@tanstack/react-hotkeys';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 
@@ -87,6 +90,7 @@ function AgentComposer(props: {
 
   const reduce = useReducedMotion();
   const hist = useRef(history());
+  const composerRef = useRef<HTMLDivElement>(null);
 
   const [ui, dispatch] = useReducer(reduceComposerUi, initialUi);
   const [hoveringComposer, setHoveringComposer] = useState(false);
@@ -187,6 +191,49 @@ function AgentComposer(props: {
     [onCancel, onNew, onValue],
   );
 
+  const commandHotkeys = useMemo<UseHotkeyDefinition[]>(() => {
+    const canUseHotkeys = availability === 'available' && ui.slash.kind === 'closed';
+
+    return cmds.flatMap((cmd) => {
+      if (!cmd.key) {
+        return [];
+      }
+
+      return [
+        {
+          hotkey: cmd.key,
+          callback: (event) => {
+            event.preventDefault();
+            runCommand(cmd);
+          },
+          options: {
+            enabled:
+              canUseHotkeys &&
+              commandHotkeyEnabled(cmd, {
+                draftState,
+                onCancel,
+                onNew,
+                runState,
+              }),
+            meta: {
+              name: cmd.label,
+              description: cmd.desc,
+            },
+          },
+        },
+      ];
+    });
+  }, [availability, cmds, draftState, onCancel, onNew, runCommand, runState, ui.slash.kind]);
+
+  useHotkeys(commandHotkeys, {
+    target: composerRef,
+    preventDefault: true,
+    stopPropagation: true,
+    ignoreInputs: false,
+    requireReset: true,
+    conflictBehavior: 'replace',
+  });
+
   const moveHistory = useCallback(
     (dir: 'down' | 'up', text: string) => hist.current.step(dir, text),
     [],
@@ -236,6 +283,7 @@ function AgentComposer(props: {
         variants={composerMount}
       >
         <div
+          ref={composerRef}
           className="relative isolate overflow-visible"
           onPointerEnter={() => setHoveringComposer(true)}
           onPointerLeave={() => setHoveringComposer(false)}
@@ -339,6 +387,35 @@ function AgentComposer(props: {
       </motion.div>
     </form>
   );
+}
+
+// TODO: Investigate how to ingrain this in the command system design, so that it's architecture in way where we don't have to be doing this kind of manual checks fo each hotkey.
+function commandHotkeyEnabled(
+  cmd: Cmd,
+  input: {
+    draftState: DraftState;
+    onCancel?: () => void;
+    onNew?: () => void;
+    runState: RunState;
+  },
+) {
+  if (cmd.disabled) {
+    return false;
+  }
+
+  if (cmd.act.kind === 'clear') {
+    return input.runState === 'idle' && input.draftState === 'drafting';
+  }
+
+  if (cmd.act.kind === 'cancel') {
+    return input.runState === 'running' && input.onCancel !== undefined;
+  }
+
+  if (cmd.act.kind === 'new') {
+    return input.onNew !== undefined;
+  }
+
+  return true;
 }
 
 function reduceComposerUi(state: ComposerUiState, event: ComposerUiEvent): ComposerUiState {

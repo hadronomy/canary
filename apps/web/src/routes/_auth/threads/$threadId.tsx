@@ -2,20 +2,14 @@ import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
 import { Navigate, createFileRoute } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-  memo,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react';
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { Message, Part } from '@canary/sync';
 
 import { AgentPrompt } from '~/components/agent-prompt';
 import { AgentIcon, LatestIcon } from '~/components/icons';
+import { shellRoutes } from '~/components/shell/model';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { active, messages, pieces, roster, transcript } from '~/utils/chat';
@@ -53,6 +47,9 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
     ]);
 
     return null;
+  },
+  staticData: {
+    shell: shellRoutes.chat,
   },
   component: ThreadComponent,
 });
@@ -253,10 +250,7 @@ function TranscriptEmpty() {
   );
 }
 
-function VirtualThread(props: {
-  rows: TranscriptRow[];
-  threadId: string;
-}) {
+function VirtualThread(props: { rows: TranscriptRow[]; threadId: string }) {
   return <VirtualThreadInstance key={props.threadId} {...props} />;
 }
 

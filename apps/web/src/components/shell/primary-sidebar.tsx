@@ -5,7 +5,7 @@ import { useLiveQuery } from '@tanstack/react-db';
 import { Link, useRouter } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 
-import type { ShellUser } from '~/components/shell/model';
+import type { ShellNavRoute, ShellUser } from '~/components/shell/model';
 
 import {
   ChevronLeftIcon,
@@ -16,7 +16,7 @@ import {
 } from '~/components/icons';
 import { AccountCard } from '~/components/shell/account-card';
 import { Brand } from '~/components/shell/brand';
-import { ease, navs } from '~/components/shell/model';
+import { ease, primaryNav } from '~/components/shell/model';
 import { SearchBox } from '~/components/shell/search-box';
 import { StatusMeter } from '~/components/shell/status-meter';
 import { UserAvatar } from '~/components/shell/user-avatar';
@@ -48,14 +48,8 @@ function PrimarySidebar(props: {
         <Search open={props.open} />
 
         <nav className="grid content-start gap-1">
-          {navs.map((nav) => (
-            <SideLink
-              icon={nav.icon}
-              key={nav.label}
-              label={nav.label}
-              open={props.open}
-              to={nav.to}
-            />
+          {primaryNav.map((item) => (
+            <SideLink item={item} key={item.to} open={props.open} />
           ))}
         </nav>
 
@@ -75,8 +69,8 @@ function PrimaryMobile(props: { ready: boolean; user: ShellUser }) {
       <Search open />
 
       <nav className="grid content-start gap-1">
-        {navs.map((nav) => (
-          <SideLink icon={nav.icon} key={nav.label} label={nav.label} open to={nav.to} />
+        {primaryNav.map((item) => (
+          <SideLink item={item} key={item.to} open />
         ))}
       </nav>
 
@@ -116,7 +110,9 @@ function Search(props: { open: boolean }) {
   return <SearchBox open={props.open} />;
 }
 
-function SideLink(props: { icon: Icon; label: string; open: boolean; to: '/' | '/threads' }) {
+function SideLink(props: { item: ShellNavRoute; open: boolean }) {
+  const Icon = props.item.icon;
+
   const base = cn(
     'group relative flex h-10 items-center overflow-hidden rounded-(--radius-control) border border-transparent text-sm font-medium text-muted-foreground',
     'transition-[background-color,border-color,color] duration-150 ease-out-strong',
@@ -131,13 +127,13 @@ function SideLink(props: { icon: Icon; label: string; open: boolean; to: '/' | '
 
   const node = (
     <Link
-      activeOptions={{ exact: props.to === '/' }}
+      activeOptions={{ exact: props.item.nav.exact }}
       activeProps={{ className: active }}
-      aria-label={props.open ? undefined : props.label}
+      aria-label={props.open ? undefined : props.item.label}
       className={base}
-      to={props.to}
+      to={props.item.to}
     >
-      <props.icon className="size-5 shrink-0" />
+      <Icon className="size-5 shrink-0" />
 
       <span
         aria-hidden={!props.open}
@@ -146,7 +142,7 @@ function SideLink(props: { icon: Icon; label: string; open: boolean; to: '/' | '
           props.open ? 'translate-x-0 opacity-100 blur-0' : 'translate-x-1 opacity-0 blur-[1px]',
         )}
       >
-        {props.label}
+        {props.item.label}
       </span>
     </Link>
   );
@@ -155,7 +151,7 @@ function SideLink(props: { icon: Icon; label: string; open: boolean; to: '/' | '
     return node;
   }
 
-  return <Tip label={props.label}>{node}</Tip>;
+  return <Tip label={props.item.label}>{node}</Tip>;
 }
 
 function IconButton(props: { icon: Icon; label: string }) {

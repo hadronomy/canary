@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { Card_8 } from '~/components/cards/card-8';
 import { LightningIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { userKey, userOptions } from '~/functions/get-user';
@@ -65,7 +66,7 @@ function LoginComponent() {
 
   return (
     <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
-      <Card className="canary-panel w-full max-w-sm rounded-[1.5rem] border-line bg-surface/95">
+      <Card_8 className="canary-panel w-full max-w-sm rounded-[1.5rem] border-line bg-surface/95">
         <CardHeader className="gap-3 px-5 pt-5">
           <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
             <LightningIcon className="size-5" weight="fill" />
@@ -108,7 +109,7 @@ function LoginComponent() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </Card_8>
     </main>
   );
 }

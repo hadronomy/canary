@@ -3,10 +3,11 @@ import type { ReactNode } from 'react';
 import { useRouterState } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
-import type { ShellUser } from '~/components/shell/model';
+import type { ShellAside, ShellUser } from '~/components/shell/model';
 
 import { ChatSidebar } from '~/components/shell/chat-sidebar';
 import { MobileSidebar } from '~/components/shell/mobile-sidebar';
+import { shellFromMatches } from '~/components/shell/model';
 import { PrimaryMobile, PrimarySidebar } from '~/components/shell/primary-sidebar';
 import { cn } from '~/lib/utils';
 import { setup } from '~/utils/chat';
@@ -14,9 +15,12 @@ import { setup } from '~/utils/chat';
 function AppFrame(props: { children: ReactNode; user: ShellUser }) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
-  const path = useRouterState({ select: (state) => state.location.pathname });
-  const chat = path === '/threads' || path.startsWith('/threads/');
-  const side = ready && chat ? <ChatSidebar user={props.user} /> : null;
+
+  const shell = useRouterState({
+    select: (state) => shellFromMatches(state.matches),
+  });
+
+  const aside = ready ? renderAside(shell?.aside, props.user) : null;
 
   useEffect(() => {
     let live = true;
@@ -46,9 +50,10 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
         <MobileSidebar>
           <div className="grid gap-4">
             <PrimaryMobile ready={ready} user={props.user} />
-            {side}
+            {aside}
           </div>
         </MobileSidebar>
+
         <div className="hidden h-full min-h-0 shrink-0 pr-(--shell-gap) md:block">
           <PrimarySidebar
             open={open}
@@ -57,13 +62,24 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
             onToggle={() => setOpen((state) => !state)}
           />
         </div>
-        <SecondarySlot open={!!side}>{side}</SecondarySlot>
+
+        <SecondarySlot open={!!aside}>{aside}</SecondarySlot>
+
         <main className="canary-panel min-h-0 overflow-hidden rounded-(--radius-shell) md:flex-1">
           {ready ? props.children : <SyncScreen />}
         </main>
       </div>
     </div>
   );
+}
+
+function renderAside(aside: ShellAside | undefined, user: ShellUser) {
+  switch (aside) {
+    case 'threads':
+      return <ChatSidebar user={user} />;
+    default:
+      return null;
+  }
 }
 
 function SecondarySlot(props: { children: ReactNode; open: boolean }) {
@@ -77,7 +93,7 @@ function SecondarySlot(props: { children: ReactNode; open: boolean }) {
     >
       <div
         className={cn(
-          'canary-panel h-full w-full overflow-hidden rounded-(--radius-shell) p-3 transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none bg-background',
+          'canary-panel h-full w-full overflow-hidden rounded-(--radius-shell) bg-background p-3 transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none',
           props.open ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0',
         )}
       >

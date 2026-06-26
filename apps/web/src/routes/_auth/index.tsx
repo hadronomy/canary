@@ -1,11 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { LightningIcon } from '~/components/icons';
+import { shellRoutes } from '~/components/shell/model';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 
 export const Route = createFileRoute('/_auth/')({
   loader: async ({ context }) => {
     return await context.queryClient.ensureQueryData(context.orpc.health.check.queryOptions());
+  },
+  staticData: {
+    shell: shellRoutes.home,
   },
   component: HomeComponent,
 });

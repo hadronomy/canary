@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Cmd } from '~/components/composer/commands';
 
 import { filter } from '~/components/composer/commands';
+import { ComposerShortcut } from '~/components/composer/keyboard-shortcut';
 import { CommandIcon } from '~/components/icons';
 import {
   Command,
@@ -13,13 +14,12 @@ import {
   CommandList,
   CommandShortcut,
 } from '~/components/ui/command';
-import { Kbd, KbdGroup } from '~/components/ui/kbd';
 import { cn } from '~/lib/utils';
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-const COMMAND_ROW_HEIGHT = 48;
-const COMMAND_ROW_GAP = 4;
+const COMMAND_ROW_HEIGHT = 36;
+const COMMAND_ROW_GAP = 2;
 
 export type SlashMenuState =
   | { kind: 'closed' }
@@ -52,6 +52,10 @@ function SlashMenu(props: {
   const selectionY = active * (COMMAND_ROW_HEIGHT + COMMAND_ROW_GAP);
 
   useEffect(() => {
+    itemRefs.current = itemRefs.current.slice(0, items.length);
+  }, [items.length]);
+
+  useEffect(() => {
     if (!menu) {
       itemRefs.current = [];
       return;
@@ -71,13 +75,13 @@ function SlashMenu(props: {
   }, [active, menu, reduce]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {menu ? (
         <motion.div
           animate="open"
-          className="pointer-events-auto absolute bottom-[calc(100%-1px)] left-1/2 z-40 w-[min(31rem,64%)] -translate-x-1/2 perspective-[1000px]"
-          exit="closed"
-          initial={reduce ? 'reduced' : 'closed'}
+          className="pointer-events-auto absolute inset-x-0 bottom-full z-50 w-full perspective-distant"
+          exit={reduce ? 'reduced' : 'closed'}
+          initial={reduce ? false : 'closed'}
           variants={rootVariants}
         >
           <motion.div
@@ -87,32 +91,37 @@ function SlashMenu(props: {
           >
             <Command
               className={cn(
-                'relative overflow-hidden rounded-t-[1.15rem] rounded-b-none',
+                'relative overflow-hidden rounded-t-[1.1rem] rounded-b-none',
                 'border-x border-t border-line border-b-transparent',
-                'bg-background p-1',
-                '',
+                'bg-background shadow-[0_-18px_52px_rgba(0,0,0,0.22)]',
               )}
               shouldFilter={false}
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent" />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent"
+              />
 
               <motion.div variants={contentVariants}>
-                <CommandList className="max-h-52 p-1 pb-2">
+                <MenuHeader query={menu.query} />
+
+                <CommandList className="max-h-60 scroll-py-1 overflow-y-auto px-1 pb-1.5 pt-1 scrollbar-gutter-stable">
                   <CommandEmpty className="px-3 py-7 text-center text-xs text-muted-foreground">
                     No slash commands found.
                   </CommandEmpty>
 
-                  <CommandGroup
-                    heading={menu.query ? `/${menu.query}` : 'Slash commands'}
-                    className="**:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:pb-1.5 **:[[cmdk-group-heading]]:pt-1 **:[[cmdk-group-heading]]:text-[11px] **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:text-muted-foreground"
-                  >
+                  <CommandGroup className="p-0">
                     <div className="relative flex flex-col" style={{ gap: COMMAND_ROW_GAP }}>
                       {items.length ? (
                         <motion.span
                           aria-hidden
                           animate={{ y: selectionY }}
-                          className="pointer-events-none absolute inset-x-0 top-0 z-0 rounded-[0.8rem] border border-line bg-row-active "
+                          className={cn(
+                            'pointer-events-none absolute inset-x-0 top-0 z-0',
+                            'rounded-[0.72rem] border border-line-strong/80',
+                            'bg-row-active shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+                          )}
                           initial={false}
                           style={{ height: COMMAND_ROW_HEIGHT }}
                           transition={reduce ? instantTransition : selectionTransition}
@@ -121,6 +130,7 @@ function SlashMenu(props: {
 
                       {items.map((cmd, idx) => {
                         const selected = idx === active;
+                        const disabled = Boolean(cmd.disabled);
 
                         return (
                           <CommandItem
@@ -128,52 +138,46 @@ function SlashMenu(props: {
                             ref={(node) => {
                               itemRefs.current[idx] = node;
                             }}
-                            aria-disabled={cmd.disabled}
-                            data-disabled={cmd.disabled ? 'disabled' : 'enabled'}
+                            aria-disabled={disabled}
+                            data-disabled={disabled ? 'disabled' : 'enabled'}
                             data-state={selected ? 'active' : 'idle'}
+                            disabled={disabled}
                             value={cmd.id}
                             className={cn(
-                              'relative z-10 flex w-full overflow-hidden rounded-[0.8rem] px-2 py-1.5',
+                              'group/command-item relative z-10 flex w-full overflow-hidden rounded-[0.72rem]',
+                              'px-2 py-0 text-left outline-none',
                               'data-[selected=true]:bg-transparent!',
                               'data-[selected=true]:text-inherit',
                               'data-[state=active]:text-foreground',
-                              'data-[disabled=disabled]:opacity-45',
+                              'data-[disabled=disabled]:pointer-events-none data-[disabled=disabled]:opacity-45',
                             )}
                             style={{ height: COMMAND_ROW_HEIGHT }}
-                            onMouseEnter={() => props.onActive(idx)}
+                            onMouseEnter={() => {
+                              if (idx !== active) {
+                                props.onActive(idx);
+                              }
+                            }}
                             onPointerMove={() => {
                               if (idx !== active) {
                                 props.onActive(idx);
                               }
                             }}
                             onSelect={() => {
-                              if (cmd.disabled) {
+                              if (disabled) {
                                 return;
                               }
 
                               props.onPick(cmd);
                             }}
                           >
-                            <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5">
+                            <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(4.5rem,8rem)_minmax(0,1fr)_auto] items-center gap-2.5">
                               <span className={iconClass}>
-                                <cmd.icon className="size-3.5" />
+                                <cmd.icon aria-hidden className="size-3.5" />
                               </span>
 
-                              <span className="min-w-0">
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span className="shrink-0 font-mono text-[12px] text-foreground">
-                                    /{cmd.slash}
-                                  </span>
+                              <SlashToken value={`/${cmd.slash}`} />
 
-                                  <span className="truncate text-xs font-medium text-foreground/86 group-data-selected/command-item:text-foreground group-data-[state=active]/command-item:text-foreground">
-                                    {cmd.label}
-                                  </span>
-                                </span>
-
-                                <span className="block truncate text-[11px] text-muted-foreground">
-                                  {cmd.desc}
-                                </span>
-                              </span>
+                              <CommandSummary cmd={cmd} />
 
                               {cmd.key ? <Shortcut value={cmd.key} /> : null}
                             </div>
@@ -192,135 +196,106 @@ function SlashMenu(props: {
   );
 }
 
-function Shortcut(props: { value: string }) {
-  const keys = shortcutParts(props.value);
+function MenuHeader(props: { query: string }) {
+  const value = props.query ? `/${props.query}` : 'Type to filter slash commands';
 
   return (
-    <CommandShortcut className="ml-0 shrink-0 justify-self-end tracking-normal text-inherit">
-      {keys.length <= 1 ? (
-        <Kbd className={kbdClass}>
-          <Keycap value={keys[0] ?? props.value} />
-        </Kbd>
-      ) : (
-        <KbdGroup className="gap-1">
-          {keys.map((key) => (
-            <Kbd key={key} className={kbdClass}>
-              <Keycap value={key} />
-            </Kbd>
-          ))}
-        </KbdGroup>
+    <div className="flex h-9 min-w-0 items-center gap-3 border-b border-line/70 px-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="grid size-5 shrink-0 place-items-center text-muted-foreground/72">
+          <CommandIcon aria-hidden className="size-3.5" />
+        </span>
+
+        <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
+          Commands
+        </span>
+
+        <span className="h-3.5 w-px shrink-0 bg-line" />
+
+        <span
+          className="block min-w-0 truncate whitespace-nowrap text-[12px] text-muted-foreground"
+          title={value}
+        >
+          {value}
+        </span>
+      </div>
+
+      <div className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 sm:flex">
+        <span className="font-mono">↑↓</span>
+        <span>navigate</span>
+        <span className="mx-1 h-3 w-px bg-line" />
+        <span className="font-mono">Enter</span>
+        <span>select</span>
+      </div>
+    </div>
+  );
+}
+
+function SlashToken(props: { value: string }) {
+  return (
+    <span
+      className={cn(
+        'block min-w-0 truncate whitespace-nowrap',
+        'font-mono text-[12px] leading-none tracking-[-0.02em]',
+        'text-foreground/78',
+        'group-data-[state=active]/command-item:text-foreground',
+        'group-data-selected/command-item:text-foreground',
       )}
+      title={props.value}
+    >
+      {props.value}
+    </span>
+  );
+}
+
+function CommandSummary(props: { cmd: Cmd }) {
+  const title = props.cmd.desc ? `${props.cmd.label} · ${props.cmd.desc}` : props.cmd.label;
+
+  return (
+    <span
+      className={cn(
+        'block min-w-0 truncate whitespace-nowrap',
+        'text-[12px] font-medium leading-none tracking-[-0.01em]',
+        'text-foreground/82',
+        'group-data-[state=active]/command-item:text-foreground',
+        'group-data-selected/command-item:text-foreground',
+      )}
+      title={title}
+    >
+      <span>{props.cmd.label}</span>
+
+      {props.cmd.desc ? (
+        <>
+          <span aria-hidden className="mx-1 text-muted-foreground/70">
+            ·
+          </span>
+          <span className="text-muted-foreground">{props.cmd.desc}</span>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+function Shortcut(props: { value: NonNullable<Cmd['key']> }) {
+  return (
+    <CommandShortcut className="ml-0 shrink-0 justify-self-end tracking-normal text-inherit">
+      <ComposerShortcut value={props.value} kbdClassName={kbdClass} />
     </CommandShortcut>
   );
 }
 
-function Keycap(props: { value: string }) {
-  const key = props.value.trim();
-
-  if (commandKey(key)) {
-    return (
-      <>
-        <span className="sr-only">Command</span>
-        <CommandIcon className="size-3" />
-      </>
-    );
-  }
-
-  return <span>{labelKey(key)}</span>;
-}
-
-function shortcutParts(value: string) {
-  const normalized = value.trim();
-
-  if (!normalized) {
-    return [];
-  }
-
-  if (normalized.includes('+')) {
-    return normalized
-      .split('+')
-      .map((part) => part.trim())
-      .filter(Boolean);
-  }
-
-  if (normalized.includes(' ')) {
-    return normalized
-      .split(/\s+/)
-      .map((part) => part.trim())
-      .filter(Boolean);
-  }
-
-  if (normalized.length > 1 && normalized.startsWith('⌘')) {
-    return ['⌘', normalized.slice(1)];
-  }
-
-  return [normalized];
-}
-
-function commandKey(value: string) {
-  const normalized = value.trim().toLowerCase();
-
-  return (
-    normalized === '⌘' ||
-    normalized === 'cmd' ||
-    normalized === 'command' ||
-    normalized === 'meta' ||
-    normalized === 'mod'
-  );
-}
-
-function labelKey(value: string) {
-  const normalized = value.trim();
-  const lower = normalized.toLowerCase();
-
-  if (lower === 'mod') {
-    return '⌘';
-  }
-
-  if (lower === 'ctrl' || lower === 'control') {
-    return 'Ctrl';
-  }
-
-  if (lower === 'alt' || lower === 'option') {
-    return 'Alt';
-  }
-
-  if (lower === 'shift') {
-    return 'Shift';
-  }
-
-  if (lower === 'enter' || lower === 'return') {
-    return 'Enter';
-  }
-
-  if (lower === 'esc' || lower === 'escape') {
-    return 'Esc';
-  }
-
-  if (lower === 'space') {
-    return 'Space';
-  }
-
-  return normalized;
-}
-
 const iconClass = cn(
-  'grid size-7 shrink-0 place-items-center rounded-[0.7rem] border border-line',
-  'bg-control text-muted-foreground',
-  'transition-colors duration-150 ease-(--ease-out-strong)',
-  'group-data-selected/command-item:bg-control-hover',
-  'group-data-selected/command-item:text-foreground',
-  'group-data-[state=active]/command-item:bg-control-hover',
-  'group-data-[state=active]/command-item:text-foreground',
+  'grid size-5 shrink-0 place-items-center',
+  'text-muted-foreground/72',
+  'transition-[color,transform] duration-150 ease-(--ease-out-strong)',
+  'group-data-selected/command-item:text-foreground/82',
+  'group-data-[state=active]/command-item:text-foreground/82',
 );
 
 const kbdClass = cn(
-  'inline-grid h-6 min-w-6 place-items-center rounded-[0.55rem] px-1.5',
-  'font-mono text-[11px] font-medium leading-none tracking-[-0.01em]',
-  'border border-line',
-  'bg-control',
-  'text-foreground/60',
-  '',
+  'inline-grid h-5 min-w-5 place-items-center rounded-[0.46rem] px-1.5',
+  'font-mono text-[10px] font-medium leading-none tracking-[-0.01em]',
+  'border border-line bg-control text-foreground/58',
   'transition-[background,border-color,color,box-shadow,transform] duration-150 ease-(--ease-out-strong)',
   'group-data-selected/command-item:border-line-strong',
   'group-data-selected/command-item:bg-control-hover',
@@ -328,34 +303,43 @@ const kbdClass = cn(
   'group-data-[state=active]/command-item:border-line-strong',
   'group-data-[state=active]/command-item:bg-control-hover',
   'group-data-[state=active]/command-item:text-foreground/82',
-  '',
 );
+
+const selectionTransition = {
+  type: 'spring',
+  stiffness: 760,
+  damping: 58,
+  mass: 0.58,
+} as const;
+
+const instantTransition = {
+  duration: 0,
+} as const;
 
 const rootVariants = {
   closed: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.12, ease },
   },
   open: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.18, ease },
   },
   reduced: {
     opacity: 0,
+    transition: instantTransition,
   },
 };
 
 const sheetVariants = {
   closed: {
     opacity: 1,
-    rotateX: -5,
-    scaleX: 0.86,
-    scaleY: 0.04,
+    rotateX: -4,
+    scaleX: 0.98,
+    scaleY: 0.05,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(96% 14% 0% 14% round 1.15rem 1.15rem 0 0)',
+    clipPath: 'inset(96% 0% 0% 0% round 1.1rem 1.1rem 0 0)',
     transition: { duration: 0.14, ease },
   },
   open: {
@@ -365,39 +349,30 @@ const sheetVariants = {
     scaleY: 1,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(0% 0% 0% 0% round 1.15rem 1.15rem 0 0)',
+    clipPath: 'inset(0% 0% 0% 0% round 1.1rem 1.1rem 0 0)',
     transition: { duration: 0.22, ease },
   },
   reduced: {
     opacity: 0,
+    transition: instantTransition,
   },
 };
 
 const contentVariants = {
   closed: {
     opacity: 0,
-    y: 6,
+    y: 5,
     transition: { duration: 0.08, ease },
   },
   open: {
     opacity: 1,
     y: 0,
-    transition: { delay: 0.08, duration: 0.14, ease },
+    transition: { delay: 0.06, duration: 0.14, ease },
   },
   reduced: {
     opacity: 0,
+    transition: instantTransition,
   },
 };
-
-const selectionTransition = {
-  type: 'spring',
-  stiffness: 720,
-  damping: 54,
-  mass: 0.62,
-} as const;
-
-const instantTransition = {
-  duration: 0,
-} as const;
 
 export { SlashMenu };
