@@ -211,7 +211,7 @@
   --canary-rose: oklch(0.73 0.13 12);
   --canary-plum: oklch(0.72 0.13 325);
 
-  --canary-grid: oklch(1 0 0 / 8%);
+  --canary-grid: oklch(1 0 0 / 10%);
   --canary-grid-strong: oklch(1 0 0 / 8%);
   --canary-shell-glow: oklch(0.72 0.15 188 / 10%);
   --canary-shell-warmth: oklch(0.78 0.13 58 / 5%);

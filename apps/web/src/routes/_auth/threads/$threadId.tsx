@@ -1,9 +1,17 @@
 import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
 import { Navigate, createFileRoute } from '@tanstack/react-router';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Streamdown } from 'streamdown';
+import { VList, type VListHandle } from 'virtua';
 
 import type { Message, Part } from '@canary/sync';
 
@@ -17,6 +25,8 @@ import { client } from '~/utils/orpc';
 
 const TRANSCRIPT_BOTTOM_BREATHING_ROOM = 112;
 const TRANSCRIPT_END_THRESHOLD = 96;
+const TRANSCRIPT_VIRTUAL_BUFFER = 768;
+const TRANSCRIPT_SMOOTH_JUMP_MAX_DISTANCE = 2_400;
 
 type TranscriptRow =
   | {
@@ -62,17 +72,22 @@ function ThreadComponent() {
   const [sendError, setSendError] = useState<string | null>(null);
 
   const ownerId = ctx.user.id;
+  const threadId = params.threadId;
 
-  const rosterQuery = useLiveQuery(roster(ownerId));
-  const activeRunsQuery = useLiveQuery(active(ownerId, params.threadId));
-  const transcriptQuery = useLiveQuery(transcript(ownerId, params.threadId));
+  const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
+  const activeRunsCollection = useMemo(() => active(ownerId, threadId), [ownerId, threadId]);
+  const transcriptCollection = useMemo(() => transcript(ownerId, threadId), [ownerId, threadId]);
 
-  const thread = rosterQuery.data.find((row) => row.id === params.threadId);
+  const rosterQuery = useLiveQuery(rosterCollection);
+  const activeRunsQuery = useLiveQuery(activeRunsCollection);
+  const transcriptQuery = useLiveQuery(transcriptCollection);
+
+  const thread = rosterQuery.data.find((row) => row.id === threadId);
   const threadGone = rosterQuery.isReady && !thread;
   const running = activeRunsQuery.data.length > 0;
 
   const pristine = !transcriptQuery.data.some(
-    (msg) => msg.threadId === params.threadId && msg.role === 'user',
+    (msg) => msg.threadId === threadId && msg.role === 'user',
   );
 
   const submitUserMessage = useCallback(
@@ -87,7 +102,7 @@ function ThreadComponent() {
 
       const transaction = messages(ownerId).insert({
         id: crypto.randomUUID(),
-        threadId: params.threadId,
+        threadId,
         ownerId,
         runId: null,
         role: 'user',
@@ -106,7 +121,7 @@ function ThreadComponent() {
         throw cause;
       });
     },
-    [ownerId, params.threadId, thread],
+    [ownerId, threadId, thread],
   );
 
   const cancelActiveRun = useCallback(async () => {
@@ -127,11 +142,11 @@ function ThreadComponent() {
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background">
       <header className="border-b border-line px-4 py-3">
         <h1 className="truncate text-sm font-semibold">{thread?.title ?? 'Thread'}</h1>
-        <p className="truncate text-[11px] text-muted-foreground">{params.threadId}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{threadId}</p>
       </header>
 
       <div className="relative h-full min-h-0">
-        <TranscriptShell key={params.threadId} ownerId={ownerId} threadId={params.threadId} />
+        <TranscriptShell key={threadId} ownerId={ownerId} threadId={threadId} />
         <AgentActivity running={running} />
       </div>
 
@@ -161,8 +176,17 @@ const TranscriptShell = memo(function TranscriptShell(props: {
   ownerId: string;
   threadId: string;
 }) {
-  const transcriptQuery = useLiveQuery(transcript(props.ownerId, props.threadId));
-  const partsQuery = useLiveQuery(pieces(props.ownerId, props.threadId));
+  const transcriptCollection = useMemo(
+    () => transcript(props.ownerId, props.threadId),
+    [props.ownerId, props.threadId],
+  );
+  const partsCollection = useMemo(
+    () => pieces(props.ownerId, props.threadId),
+    [props.ownerId, props.threadId],
+  );
+
+  const transcriptQuery = useLiveQuery(transcriptCollection);
+  const partsQuery = useLiveQuery(partsCollection);
 
   const rawMessages = transcriptQuery.data;
   const rawParts = partsQuery.data;
@@ -258,12 +282,14 @@ const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
   rows: TranscriptRow[];
   threadId: string;
 }) {
-  const scrollElementRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<VListHandle>(null);
   const pinnedRef = useRef(true);
   const jumpingRef = useRef(false);
 
   const [isPinnedToLatest, setIsPinnedToLatestState] = useState(true);
   const [isJumpingToLatest, setIsJumpingToLatestState] = useState(false);
+
+  const latestIndex = props.rows.length;
 
   const setPinnedToLatest = useCallback((next: boolean) => {
     pinnedRef.current = next;
@@ -275,103 +301,141 @@ const VirtualThreadInstance = memo(function VirtualThreadInstance(props: {
     setIsJumpingToLatestState((current) => (current === next ? current : next));
   }, []);
 
-  const getVirtualRowKey = useCallback(
-    (index: number) => {
-      const row = props.rows[index];
+  const scrollToLatest = useCallback(
+    (smooth: boolean) => {
+      const list = listRef.current;
 
-      return row ? `${props.threadId}:${row.id}` : `${props.threadId}:missing:${index}`;
-    },
-    [props.rows, props.threadId],
-  );
-
-  const estimateVirtualRowSize = useCallback(
-    (index: number) =>
-      estimateRowHeight(props.rows[index]) + rowSpacing(props.rows[index], props.rows[index - 1]),
-    [props.rows],
-  );
-
-  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: props.rows.length,
-    getScrollElement: () => scrollElementRef.current,
-    getItemKey: getVirtualRowKey,
-    estimateSize: estimateVirtualRowSize,
-
-    overscan: 10,
-    gap: 0,
-
-    paddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
-    scrollPaddingEnd: TRANSCRIPT_BOTTOM_BREATHING_ROOM,
-
-    anchorTo: 'end',
-    followOnAppend: 'auto',
-    scrollEndThreshold: TRANSCRIPT_END_THRESHOLD,
-
-    directDomUpdates: true,
-
-    onChange: (instance) => {
-      const atLatest = instance.isAtEnd();
-
-      if (jumpingRef.current && atLatest) {
-        setJumpingToLatest(false);
+      if (!list) {
+        return;
       }
 
-      if (pinnedRef.current !== atLatest) {
-        setPinnedToLatest(atLatest);
-      }
+      list.scrollToIndex(latestIndex, {
+        align: 'end',
+        smooth,
+      });
     },
-  });
+    [latestIndex],
+  );
+
+  const syncPinnedStateFromList = useCallback(() => {
+    const atLatest = isTranscriptAtLatest(listRef.current);
+
+    if (jumpingRef.current && atLatest) {
+      setJumpingToLatest(false);
+    }
+
+    if (!jumpingRef.current) {
+      setPinnedToLatest(atLatest);
+    }
+  }, [setJumpingToLatest, setPinnedToLatest]);
+
+  useLayoutEffect(() => {
+    if (pinnedRef.current || jumpingRef.current) {
+      scrollToLatest(false);
+    }
+  }, [props.rows, scrollToLatest]);
 
   const jumpToLatest = useCallback(() => {
+    const distance = distanceFromTranscriptEnd(listRef.current);
+    const smooth = distance <= TRANSCRIPT_SMOOTH_JUMP_MAX_DISTANCE;
+
     setPinnedToLatest(true);
-    setJumpingToLatest(true);
+    setJumpingToLatest(smooth);
 
-    virtualizer.scrollToEnd({ behavior: 'smooth' });
-  }, [setJumpingToLatest, setPinnedToLatest, virtualizer]);
+    scrollToLatest(smooth);
 
-  const virtualRows = virtualizer.getVirtualItems();
+    if (!smooth) {
+      requestAnimationFrame(syncPinnedStateFromList);
+    }
+  }, [scrollToLatest, setJumpingToLatest, setPinnedToLatest, syncPinnedStateFromList]);
+
+  const handleScroll = useCallback(() => {
+    syncPinnedStateFromList();
+  }, [syncPinnedStateFromList]);
+
+  const handleScrollEnd = useCallback(() => {
+    syncPinnedStateFromList();
+  }, [syncPinnedStateFromList]);
+
+  const handleWheel = useCallback(() => {
+    if (jumpingRef.current) {
+      setJumpingToLatest(false);
+    }
+  }, [setJumpingToLatest]);
+
+  const items = useMemo(
+    () => [
+      ...props.rows.map((row, index) => (
+        <TranscriptListItem
+          key={transcriptVirtualRowKey(props.threadId, row)}
+          gap={rowSpacing(row, props.rows[index - 1])}
+          row={row}
+        />
+      )),
+      <TranscriptBottomSpacer key={`${props.threadId}:bottom-spacer`} />,
+    ],
+    [props.rows, props.threadId],
+  );
 
   const showJumpToLatest = !isPinnedToLatest && !isJumpingToLatest;
 
   return (
     <div className="relative h-full min-h-0">
-      <div
-        ref={scrollElementRef}
+      <VList
+        ref={listRef}
+        aria-label="Conversation transcript"
+        bufferSize={TRANSCRIPT_VIRTUAL_BUFFER}
         className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both"
+        role="log"
         tabIndex={-1}
+        onScroll={handleScroll}
+        onScrollEnd={handleScrollEnd}
+        onWheel={handleWheel}
       >
-        <div className="mx-auto max-w-3xl">
-          <div ref={virtualizer.containerRef} className="relative w-full">
-            {virtualRows.map((virtualRow) => {
-              const row = props.rows[virtualRow.index];
-
-              if (!row) {
-                return null;
-              }
-
-              const previousRow = props.rows[virtualRow.index - 1];
-
-              return (
-                <div
-                  key={String(virtualRow.key)}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 flow-root w-full min-w-0"
-                  data-index={virtualRow.index}
-                  style={{
-                    paddingTop: `${rowSpacing(row, previousRow)}px`,
-                  }}
-                >
-                  <TranscriptRowView row={row} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+        {items}
+      </VList>
 
       <JumpToLatestHud show={showJumpToLatest} onJump={jumpToLatest} />
     </div>
   );
 });
+
+const TranscriptListItem = memo(function TranscriptListItem(props: {
+  gap: number;
+  row: TranscriptRow;
+}) {
+  return (
+    <div className="mx-auto flow-root w-full max-w-3xl min-w-0" style={{ paddingTop: props.gap }}>
+      <TranscriptRowView row={props.row} />
+    </div>
+  );
+});
+
+const TranscriptBottomSpacer = memo(function TranscriptBottomSpacer() {
+  return (
+    <div
+      aria-hidden="true"
+      className="mx-auto max-w-3xl"
+      style={{ height: TRANSCRIPT_BOTTOM_BREATHING_ROOM }}
+    />
+  );
+});
+
+function transcriptVirtualRowKey(threadId: string, row: TranscriptRow) {
+  return `${threadId}:${row.id}`;
+}
+
+function isTranscriptAtLatest(list: VListHandle | null) {
+  return distanceFromTranscriptEnd(list) <= TRANSCRIPT_END_THRESHOLD;
+}
+
+function distanceFromTranscriptEnd(list: VListHandle | null) {
+  if (!list || list.viewportSize <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, list.scrollSize - list.viewportSize - list.scrollOffset);
+}
 
 function TranscriptRowView(props: { row: TranscriptRow }) {
   if (props.row.kind === 'user') {
@@ -384,7 +448,7 @@ function TranscriptRowView(props: { row: TranscriptRow }) {
 function UserMessage(props: { msg: Message }) {
   return (
     <Card
-      className="ml-auto w-fit max-w-[min(80%,44rem)] rounded-xl border-line bg-row py-2 "
+      className="ml-auto w-fit max-w-[min(80%,44rem)] rounded-xl border-line bg-row py-2"
       size="sm"
     >
       <CardContent className="px-3.5">
@@ -474,7 +538,7 @@ function StructuredPart(props: { part: Part }) {
 
   return (
     <Disclosure
-      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/85 text-xs "
+      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/85 text-xs"
       defaultOpen={running}
       forceOpen={running}
     >
@@ -693,10 +757,6 @@ function isVisiblePart(part: Part) {
   return true;
 }
 
-function isToolPart(part: Part) {
-  return part.kind === 'tool-call' || part.kind === 'tool-result';
-}
-
 function explicitPartThreadId(part: Part) {
   const maybeThreadId = 'threadId' in part ? (part as { threadId?: unknown }).threadId : undefined;
 
@@ -724,68 +784,6 @@ function isPartForCurrentThread(
   }
 
   return false;
-}
-
-function estimateRowHeight(row: TranscriptRow | undefined) {
-  if (!row) {
-    return 180;
-  }
-
-  if (row.kind === 'user') {
-    return Math.max(96, Math.min(340, 72 + row.msg.content.length * 0.32));
-  }
-
-  const textLength = row.parts.length
-    ? row.parts.reduce((total, part) => total + estimatePartTextLength(part), 0)
-    : row.text.length;
-
-  const structuralCost = row.parts.reduce((total, part) => {
-    if (isToolPart(part)) {
-      return total + 160;
-    }
-
-    if (part.kind === 'artifact') {
-      return total + 220;
-    }
-
-    if (part.kind === 'error') {
-      return total + 140;
-    }
-
-    if (part.kind === 'status') {
-      return total + 72;
-    }
-
-    if (part.kind === 'reasoning') {
-      return total + 120;
-    }
-
-    return total;
-  }, 0);
-
-  return Math.max(140, Math.min(1100, 96 + textLength * 0.42 + structuralCost));
-}
-
-function estimatePartTextLength(part: Part) {
-  const content = partContent(part).trim();
-
-  if (content) {
-    return content.length;
-  }
-
-  if (isToolPart(part) && partData(part)) {
-    return 420;
-  }
-
-  if (part.kind === 'artifact' && partData(part)) {
-    return 560;
-  }
-
-  if (part.kind === 'error') {
-    return 220;
-  }
-
-  return 0;
 }
 
 function rowSpacing(row: TranscriptRow | undefined, previousRow: TranscriptRow | undefined) {
