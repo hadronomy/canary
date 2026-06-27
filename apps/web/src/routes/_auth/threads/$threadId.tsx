@@ -3,9 +3,11 @@ import { useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute, Navigate } from '@tanstack/react-router';
 import { useActorRef, useSelector } from '@xstate/react';
 import {
+  createContext,
   forwardRef,
   memo,
   useCallback,
+  useContext,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -13,6 +15,7 @@ import {
   type ComponentPropsWithoutRef,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   type TouchEvent as ReactTouchEvent,
   type WheelEvent as ReactWheelEvent,
@@ -52,10 +55,6 @@ const USER_SCROLL_KEYS = new Set([
 ]);
 
 type CssVars = CSSProperties & Record<`--${string}`, string | number | undefined>;
-
-type MutableRef<T> = {
-  current: T;
-};
 
 type ReadonlyRef<T> = {
   readonly current: T;
@@ -160,10 +159,33 @@ type TranscriptRuntimeCommands = {
   prepareForLocalUserAppend: () => void;
 };
 
+type TranscriptRuntimeBridge = TranscriptRuntimeCommands & {
+  registerCommands: (commands: TranscriptRuntimeCommands) => () => void;
+};
+
+type AssistantTurnSegment = {
+  at: string;
+  id: string;
+  live: boolean;
+  msg?: SyncMessage;
+  parts: Part[];
+  text: string;
+};
+
+type TranscriptTurn = {
+  assistants: AssistantTurnSegment[];
+  at: string;
+  id: string;
+  live: boolean;
+  user: SyncMessage;
+};
+
 const transcriptRuntimeCommandsFallback = {
   cancelPreparedLocalUserAppend() {},
   prepareForLocalUserAppend() {},
 } satisfies TranscriptRuntimeCommands;
+
+const TranscriptRuntimeBridgeContext = createContext<TranscriptRuntimeBridge | null>(null);
 
 const initialTranscriptScrollContext = {
   atLatest: true,
@@ -570,23 +592,6 @@ type TranscriptScrollActor = {
   syncTranscriptLayout: (input: { busy: boolean }) => void;
 };
 
-type AssistantTurnSegment = {
-  at: string;
-  id: string;
-  live: boolean;
-  msg?: SyncMessage;
-  parts: Part[];
-  text: string;
-};
-
-type TranscriptTurn = {
-  assistants: AssistantTurnSegment[];
-  at: string;
-  id: string;
-  live: boolean;
-  user: SyncMessage;
-};
-
 export const Route = createFileRoute('/_auth/threads/$threadId')({
   ssr: false,
   loader: async ({ context, params }) => {
@@ -618,12 +623,19 @@ type ThreadContentProps = {
 };
 
 function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
-  const [draft, setDraft] = useState('');
-  const [sendError, setSendError] = useState<string | null>(null);
-  const transcriptCommandsRef = useRef<TranscriptRuntimeCommands>(
-    transcriptRuntimeCommandsFallback,
+  return (
+    <TranscriptRuntimeBridgeProvider>
+      <ThreadWorkspace ownerId={ownerId} threadId={threadId} />
+    </TranscriptRuntimeBridgeProvider>
   );
+}
 
+type ThreadWorkspaceProps = {
+  ownerId: string;
+  threadId: string;
+};
+
+function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
   const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
   const activeRunsCollection = useMemo(() => active(ownerId, threadId), [ownerId, threadId]);
   const transcriptCollection = useMemo(() => transcript(ownerId, threadId), [ownerId, threadId]);
@@ -635,28 +647,142 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
   const thread = rosterQuery.data.find((row) => row.id === threadId);
   const threadGone = rosterQuery.isReady && !thread;
   const running = activeRunsQuery.data.length > 0;
+  const activeRunId = activeRunsQuery.data[0]?.id ?? null;
 
   const pristine = !transcriptQuery.data.some(
     (msg) => msg.threadId === threadId && msg.role === 'user',
   );
 
+  if (threadGone) {
+    return <Navigate to="/threads" replace />;
+  }
+
+  return (
+    <section
+      aria-labelledby="thread-title"
+      className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background"
+      data-thread-id={threadId}
+      data-thread-screen=""
+    >
+      <ThreadHeader threadId={threadId} title={thread?.title ?? 'Thread'} />
+
+      <main aria-label="Conversation" className="relative h-full min-h-0">
+        <TranscriptRuntime key={threadId} ownerId={ownerId} threadId={threadId} />
+      </main>
+
+      <ThreadComposer
+        activeRunId={activeRunId}
+        disabled={!thread}
+        ownerId={ownerId}
+        pristine={pristine}
+        running={running}
+        threadId={threadId}
+      />
+    </section>
+  );
+}
+
+type ThreadHeaderProps = Omit<ComponentPropsWithoutRef<'header'>, 'children'> & {
+  threadId: string;
+  title: string;
+};
+
+function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProps) {
+  return (
+    <header className={cn('border-b border-line px-4 py-3', className)} {...props}>
+      <h1 id="thread-title" className="truncate text-sm font-semibold">
+        {title}
+      </h1>
+      <p className="truncate text-[11px] text-muted-foreground">{threadId}</p>
+    </header>
+  );
+}
+
+type ThreadComposerProps = {
+  activeRunId: string | null;
+  disabled: boolean;
+  ownerId: string;
+  pristine: boolean;
+  running: boolean;
+  threadId: string;
+};
+
+function ThreadComposer({
+  activeRunId,
+  disabled,
+  ownerId,
+  pristine,
+  running,
+  threadId,
+}: ThreadComposerProps) {
+  const runtime = useTranscriptRuntimeBridge();
+
+  const currentThreadIdRef = useRef(threadId);
+  const draftsByThreadRef = useRef(new Map<string, string>());
+
+  currentThreadIdRef.current = threadId;
+
+  const [draftState, setDraftState] = useState(() => ({
+    threadId,
+    value: '',
+  }));
+
+  const [sendErrorState, setSendErrorState] = useState<{
+    message: string | null;
+    threadId: string;
+  }>(() => ({
+    message: null,
+    threadId,
+  }));
+
+  const draft =
+    draftState.threadId === threadId
+      ? draftState.value
+      : (draftsByThreadRef.current.get(threadId) ?? '');
+
+  const sendError = sendErrorState.threadId === threadId ? sendErrorState.message : null;
+
+  const writeDraft = useCallback((targetThreadId: string, value: string) => {
+    if (value) {
+      draftsByThreadRef.current.set(targetThreadId, value);
+    } else {
+      draftsByThreadRef.current.delete(targetThreadId);
+    }
+
+    if (currentThreadIdRef.current === targetThreadId) {
+      setDraftState({
+        threadId: targetThreadId,
+        value,
+      });
+    }
+  }, []);
+
+  const writeSendError = useCallback((targetThreadId: string, message: string | null) => {
+    if (currentThreadIdRef.current === targetThreadId) {
+      setSendErrorState({
+        message,
+        threadId: targetThreadId,
+      });
+    }
+  }, []);
+
   const submitUserMessage = useCallback(
     async (body: string) => {
       const content = body.trim();
 
-      if (!thread || !content) {
+      if (disabled || !content) {
         return;
       }
 
-      const transcriptCommands = transcriptCommandsRef.current;
+      const submittedThreadId = threadId;
 
-      transcriptCommands.prepareForLocalUserAppend();
+      runtime.prepareForLocalUserAppend();
 
       const now = new Date().toISOString();
 
       const transaction = messages(ownerId).insert({
         id: crypto.randomUUID(),
-        threadId,
+        threadId: submittedThreadId,
         ownerId,
         runId: null,
         role: 'user',
@@ -666,78 +792,115 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
         updatedAt: now,
       });
 
-      setDraft('');
-      setSendError(null);
+      writeDraft(submittedThreadId, '');
+      writeSendError(submittedThreadId, null);
 
       await transaction.isPersisted.promise.catch((cause: unknown) => {
-        transcriptCommands.cancelPreparedLocalUserAppend();
-        setDraft((current) => current || content);
-        setSendError(cause instanceof Error ? cause.message : 'Message send failed.');
+        runtime.cancelPreparedLocalUserAppend();
+
+        if (!draftsByThreadRef.current.get(submittedThreadId)) {
+          writeDraft(submittedThreadId, content);
+        }
+
+        writeSendError(
+          submittedThreadId,
+          cause instanceof Error ? cause.message : 'Message send failed.',
+        );
+
         throw cause;
       });
     },
-    [ownerId, thread, threadId],
+    [disabled, ownerId, runtime, threadId, writeDraft, writeSendError],
   );
 
   const cancelActiveRun = useCallback(async () => {
-    const run = activeRunsQuery.data[0];
-
-    if (!run) {
+    if (!activeRunId) {
       return;
     }
 
-    await client.run.cancel({ id: run.id });
-  }, [activeRunsQuery.data]);
-
-  if (threadGone) {
-    return <Navigate to="/threads" replace />;
-  }
+    await client.run.cancel({ id: activeRunId });
+  }, [activeRunId]);
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background">
-      <header className="border-b border-line px-4 py-3">
-        <h1 className="truncate text-sm font-semibold">{thread?.title ?? 'Thread'}</h1>
-        <p className="truncate text-[11px] text-muted-foreground">{threadId}</p>
-      </header>
-
-      <div className="relative h-full min-h-0">
-        <TranscriptRuntime
-          key={threadId}
-          commandsRef={transcriptCommandsRef}
-          ownerId={ownerId}
-          threadId={threadId}
-        />
-      </div>
-
-      <AgentPrompt
-        disabled={!thread}
-        error={sendError}
-        pristine={pristine}
-        running={running}
-        value={draft}
-        onCancel={() => {
-          cancelActiveRun().catch((cause: unknown) => {
-            console.error('Run cancellation failed.', cause);
-          });
-        }}
-        onSubmit={(body) => {
-          submitUserMessage(body).catch((cause: unknown) => {
-            console.error('Message send failed.', cause);
-          });
-        }}
-        onValue={setDraft}
-      />
-    </div>
+    <AgentPrompt
+      disabled={disabled}
+      error={sendError}
+      pristine={pristine}
+      running={running}
+      value={draft}
+      onCancel={() => {
+        cancelActiveRun().catch((cause: unknown) => {
+          console.error('Run cancellation failed.', cause);
+        });
+      }}
+      onSubmit={(body) => {
+        submitUserMessage(body).catch((cause: unknown) => {
+          console.error('Message send failed.', cause);
+        });
+      }}
+      onValue={(value) => {
+        writeDraft(threadId, value);
+      }}
+    />
   );
 }
 
+type TranscriptRuntimeBridgeProviderProps = {
+  children: ReactNode;
+};
+
+function TranscriptRuntimeBridgeProvider({ children }: TranscriptRuntimeBridgeProviderProps) {
+  const commandsRef = useRef<TranscriptRuntimeCommands>(transcriptRuntimeCommandsFallback);
+
+  const bridge = useMemo<TranscriptRuntimeBridge>(
+    () => ({
+      cancelPreparedLocalUserAppend() {
+        commandsRef.current.cancelPreparedLocalUserAppend();
+      },
+
+      prepareForLocalUserAppend() {
+        commandsRef.current.prepareForLocalUserAppend();
+      },
+
+      registerCommands(commands) {
+        commandsRef.current = commands;
+
+        return () => {
+          if (commandsRef.current === commands) {
+            commandsRef.current = transcriptRuntimeCommandsFallback;
+          }
+        };
+      },
+    }),
+    [],
+  );
+
+  return (
+    <TranscriptRuntimeBridgeContext.Provider value={bridge}>
+      {children}
+    </TranscriptRuntimeBridgeContext.Provider>
+  );
+}
+
+function useTranscriptRuntimeBridge() {
+  const bridge = useContext(TranscriptRuntimeBridgeContext);
+
+  if (!bridge) {
+    throw new Error(
+      'useTranscriptRuntimeBridge must be used inside TranscriptRuntimeBridgeProvider.',
+    );
+  }
+
+  return bridge;
+}
+
 type TranscriptRuntimeProps = {
-  commandsRef: MutableRef<TranscriptRuntimeCommands>;
   ownerId: string;
   threadId: string;
 };
 
-function TranscriptRuntime({ commandsRef, ownerId, threadId }: TranscriptRuntimeProps) {
+function TranscriptRuntime({ ownerId, threadId }: TranscriptRuntimeProps) {
+  const runtimeBridge = useTranscriptRuntimeBridge();
   const scrollActor = useTranscriptScrollActor();
 
   useLayoutEffect(() => {
@@ -746,14 +909,8 @@ function TranscriptRuntime({ commandsRef, ownerId, threadId }: TranscriptRuntime
       prepareForLocalUserAppend: scrollActor.prepareForLocalUserAppend,
     } satisfies TranscriptRuntimeCommands;
 
-    commandsRef.current = commands;
-
-    return () => {
-      if (commandsRef.current === commands) {
-        commandsRef.current = transcriptRuntimeCommandsFallback;
-      }
-    };
-  }, [commandsRef, scrollActor]);
+    return runtimeBridge.registerCommands(commands);
+  }, [runtimeBridge, scrollActor]);
 
   return <TranscriptShell ownerId={ownerId} scrollActor={scrollActor} threadId={threadId} />;
 }
