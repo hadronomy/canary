@@ -15,7 +15,7 @@ import { history } from '~/components/composer/history';
 import { ComposerPrimaryActionButton } from '~/components/composer/primary-action-button';
 import { SlashMenu } from '~/components/composer/slash-menu';
 import { ComposerTray } from '~/components/composer/tray';
-import { AgentIcon } from '~/components/icons';
+import { FunctionIcon } from '~/components/icons';
 import { cn } from '~/lib/utils';
 
 const ease = [0.16, 1, 0.3, 1] as const;
@@ -540,7 +540,7 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
         aria-hidden
         animate={props.runState === 'running' ? { opacity: [0.55, 1, 0.55] } : { opacity: 0.8 }}
         className={cn(
-          'grid size-6 place-items-center rounded-[0.65rem] border border-line bg-control',
+          'grid size-6 place-items-center rounded-[0.65rem]',
           props.runState === 'running' && 'text-foreground',
         )}
         transition={
@@ -549,7 +549,7 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
             : { duration: 0.18, ease }
         }
       >
-        <AgentIcon className="size-3.5" />
+        <FunctionIcon className="size-3.5" />
       </motion.span>
       <span className="truncate">{label}</span>
     </div>
