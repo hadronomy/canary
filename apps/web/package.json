@@ -51,6 +51,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cnfast": "^0.0.8",
     "dotenv": "catalog:",
     "evlog": "^2.19.1",
     "motion": "^12.40.0",
