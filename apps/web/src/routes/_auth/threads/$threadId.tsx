@@ -1,4 +1,3 @@
-import { createBrowserInspector } from '@statelyai/inspect';
 import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute, Navigate } from '@tanstack/react-router';
@@ -52,12 +51,11 @@ const USER_SCROLL_KEYS = new Set([
   ' ',
 ]);
 
-const transcriptScrollInspector =
-  import.meta.env.DEV && typeof window !== 'undefined' ? createBrowserInspector() : null;
-
-const transcriptScrollInspect = transcriptScrollInspector?.inspect;
-
 type CssVars = CSSProperties & Record<`--${string}`, string | number | undefined>;
+
+type MutableRef<T> = {
+  current: T;
+};
 
 type ReadonlyRef<T> = {
   readonly current: T;
@@ -81,19 +79,63 @@ type TranscriptScrollContext = {
   tailRetirement: TranscriptTailRetirement;
 };
 
+type MeasuredViewportEventFields = {
+  atLatest: boolean;
+  canFollowBottom?: boolean;
+  retireTail?: boolean;
+};
+
 type TranscriptScrollMachineEvent =
   | {
       type: 'RESET';
     }
   | {
+      atLatest: boolean;
       busy: boolean;
+      streamJustSettled: boolean;
       type: 'LAYOUT_CHANGED';
     }
   | {
-      atLatest?: boolean;
+      atLatest: boolean;
       latestTurnId: string;
-      type: 'LAND_TO_LATEST';
+      type: 'THREAD_READY';
     }
+  | {
+      atLatest: boolean;
+      latestTurnId: string;
+      type: 'LATEST_TURN_CHANGED';
+    }
+  | {
+      atLatest: boolean;
+      latestTurnId: string;
+      type: 'JUMP_TO_LATEST';
+    }
+  | {
+      atLatest: boolean;
+      latestTurnId: string;
+      type: 'LOCAL_APPEND_CANCELLED';
+    }
+  | {
+      atLatest: boolean;
+      type: 'LOCAL_APPEND_PREPARED';
+    }
+  | {
+      atLatest: boolean;
+      retireTail?: boolean;
+      type: 'USER_SCROLL_INTENT';
+    }
+  | (MeasuredViewportEventFields & {
+      type: 'USER_SCROLL_POSITION_CHANGED';
+    })
+  | (MeasuredViewportEventFields & {
+      type: 'SCROLL_POSITION_CHANGED';
+    })
+  | (MeasuredViewportEventFields & {
+      type: 'SCROLL_ENDED';
+    })
+  | (MeasuredViewportEventFields & {
+      type: 'PASSIVE_VIEWPORT_PROBED';
+    })
   | {
       atLatest: boolean;
       type: 'LANDING_DONE';
@@ -103,30 +145,8 @@ type TranscriptScrollMachineEvent =
       type: 'FOLLOW_BOTTOM';
     }
   | {
-      atLatest?: boolean;
-      type: 'ESCAPE_FOLLOW_BOTTOM';
-    }
-  | {
-      atLatest?: boolean;
-      type: 'PREPARE_LOCAL_APPEND';
-    }
-  | {
-      atLatest?: boolean;
-      latestTurnId: string;
-      type: 'ANCHOR_TURN';
-    }
-  | {
-      atLatest?: boolean;
-      leftLatest?: boolean;
-      retireTail?: boolean;
-      type: 'ENTER_FREE';
-    }
-  | {
-      atLatest: boolean;
-      type: 'VIEWPORT_MEASURED';
-    }
-  | {
-      type: 'TAIL_RETIRED';
+      canRetire: boolean;
+      type: 'TAIL_RETIREMENT_CHECKED';
     };
 
 type TranscriptScrollSnapshot = {
@@ -134,6 +154,16 @@ type TranscriptScrollSnapshot = {
   mode: TranscriptScrollMode;
   showJumpToLatest: boolean;
 };
+
+type TranscriptRuntimeCommands = {
+  cancelPreparedLocalUserAppend: () => void;
+  prepareForLocalUserAppend: () => void;
+};
+
+const transcriptRuntimeCommandsFallback = {
+  cancelPreparedLocalUserAppend() {},
+  prepareForLocalUserAppend() {},
+} satisfies TranscriptRuntimeCommands;
 
 const initialTranscriptScrollContext = {
   atLatest: true,
@@ -148,18 +178,29 @@ const transcriptScrollMachine = setup({
     context: TranscriptScrollContext;
     events: TranscriptScrollMachineEvent;
   },
+  guards: {
+    canFollowBottom: ({ event }) => 'canFollowBottom' in event && event.canFollowBottom === true,
+
+    canRetireTail: ({ event }) => event.type === 'TAIL_RETIREMENT_CHECKED' && event.canRetire,
+
+    isAtLatest: ({ event }) => 'atLatest' in event && event.atLatest === true,
+
+    isAwayFromLatest: ({ event }) => 'atLatest' in event && event.atLatest === false,
+
+    streamJustSettledNearLatest: ({ event }) =>
+      event.type === 'LAYOUT_CHANGED' && event.streamJustSettled && event.atLatest,
+  },
   actions: {
-    enterFreeContext: assign(({ context, event }) => {
-      if (event.type !== 'ENTER_FREE') {
+    enterFreeFromMeasuredEvent: assign(({ context, event }) => {
+      if (!('atLatest' in event)) {
         return {};
       }
 
-      const atLatest = event.atLatest ?? context.atLatest;
-
       return {
-        atLatest,
-        hasLeftLatest: event.leftLatest ?? (context.hasLeftLatest || !atLatest),
-        tailRetirement: event.retireTail ? 'pending' : context.tailRetirement,
+        atLatest: event.atLatest,
+        hasLeftLatest: context.hasLeftLatest || !event.atLatest,
+        tailRetirement:
+          'retireTail' in event && event.retireTail ? 'pending' : context.tailRetirement,
       };
     }),
 
@@ -189,7 +230,7 @@ const transcriptScrollMachine = setup({
     })),
 
     setFreeViewportContext: assign(({ context, event }) => {
-      if (event.type !== 'VIEWPORT_MEASURED') {
+      if (!('atLatest' in event)) {
         return {};
       }
 
@@ -212,177 +253,290 @@ const transcriptScrollMachine = setup({
   },
 }).createMachine({
   id: 'transcript-scroll',
-  initial: 'following-bottom',
+  initial: 'ready',
   context: () => ({ ...initialTranscriptScrollContext }),
   on: {
     RESET: {
-      target: '.following-bottom',
+      target: '#following-bottom',
       actions: 'resetContext',
     },
+
     LAYOUT_CHANGED: {
       actions: 'setLayoutBusy',
     },
   },
   states: {
-    'following-bottom': {
+    ready: {
+      id: 'ready',
+      initial: 'tracking',
       on: {
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
+        THREAD_READY: {
+          target: '#landing-to-latest',
+          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromRequiredEvent', 'resetFreeContext'],
         },
-        ESCAPE_FOLLOW_BOTTOM: {
-          target: 'escaping-follow-bottom',
-          actions: 'setAtLatestFromOptionalEvent',
+
+        JUMP_TO_LATEST: {
+          target: '#landing-to-latest',
+          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromRequiredEvent', 'resetFreeContext'],
         },
-        PREPARE_LOCAL_APPEND: {
-          target: 'pre-anchoring-next-turn',
-          actions: 'setAtLatestFromOptionalEvent',
+
+        LOCAL_APPEND_CANCELLED: {
+          target: '#landing-to-latest',
+          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromRequiredEvent', 'resetFreeContext'],
         },
-        ANCHOR_TURN: {
-          target: 'anchored-turn',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent'],
+
+        LATEST_TURN_CHANGED: {
+          target: '#anchored-turn',
+          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromRequiredEvent'],
         },
-        FOLLOW_BOTTOM: {
-          actions: ['setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        VIEWPORT_MEASURED: {
+
+        LOCAL_APPEND_PREPARED: {
+          target: '#pre-anchoring-next-turn',
           actions: 'setAtLatestFromRequiredEvent',
         },
-      },
-    },
 
-    'landing-to-latest': {
-      on: {
-        LANDING_DONE: {
-          target: 'following-bottom',
-          actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
-        },
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        ESCAPE_FOLLOW_BOTTOM: {
-          target: 'escaping-follow-bottom',
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        PREPARE_LOCAL_APPEND: {
-          target: 'pre-anchoring-next-turn',
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        VIEWPORT_MEASURED: {
-          actions: 'setAtLatestFromRequiredEvent',
-        },
-      },
-    },
-
-    'escaping-follow-bottom': {
-      on: {
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
         FOLLOW_BOTTOM: {
-          target: 'following-bottom',
+          target: '#following-bottom',
           actions: ['setAtLatestFromOptionalEvent', 'resetFreeContext'],
         },
-        PREPARE_LOCAL_APPEND: {
-          target: 'pre-anchoring-next-turn',
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        ANCHOR_TURN: {
-          target: 'anchored-turn',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent'],
-        },
-        ENTER_FREE: {
-          target: 'free',
-          actions: 'enterFreeContext',
-        },
-        ESCAPE_FOLLOW_BOTTOM: {
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        VIEWPORT_MEASURED: {
-          actions: 'setAtLatestFromRequiredEvent',
-        },
       },
-    },
+      states: {
+        'landing-to-latest': {
+          id: 'landing-to-latest',
+          on: {
+            LANDING_DONE: {
+              target: '#following-bottom',
+              actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+            },
 
-    'pre-anchoring-next-turn': {
-      on: {
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        FOLLOW_BOTTOM: {
-          target: 'following-bottom',
-          actions: ['setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        ANCHOR_TURN: {
-          target: 'anchored-turn',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent'],
-        },
-        ENTER_FREE: {
-          target: 'free',
-          actions: 'enterFreeContext',
-        },
-        VIEWPORT_MEASURED: {
-          actions: 'setAtLatestFromRequiredEvent',
-        },
-      },
-    },
+            USER_SCROLL_INTENT: {
+              target: '#escaping-follow-bottom',
+              actions: 'setAtLatestFromRequiredEvent',
+            },
 
-    'anchored-turn': {
-      on: {
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
+            SCROLL_POSITION_CHANGED: {
+              actions: 'setAtLatestFromRequiredEvent',
+            },
+          },
         },
-        FOLLOW_BOTTOM: {
-          target: 'following-bottom',
-          actions: ['setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        PREPARE_LOCAL_APPEND: {
-          target: 'pre-anchoring-next-turn',
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        ANCHOR_TURN: {
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent'],
-        },
-        ENTER_FREE: {
-          target: 'free',
-          actions: 'enterFreeContext',
-        },
-        VIEWPORT_MEASURED: {
-          actions: 'setAtLatestFromRequiredEvent',
-        },
-      },
-    },
 
-    free: {
-      on: {
-        LAND_TO_LATEST: {
-          target: 'landing-to-latest',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent', 'resetFreeContext'],
+        tracking: {
+          id: 'tracking',
+          initial: 'following-bottom',
+          states: {
+            'following-bottom': {
+              id: 'following-bottom',
+              on: {
+                USER_SCROLL_INTENT: {
+                  target: '#escaping-follow-bottom',
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+
+                SCROLL_POSITION_CHANGED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+
+                SCROLL_ENDED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+              },
+            },
+
+            'escaping-follow-bottom': {
+              id: 'escaping-follow-bottom',
+              on: {
+                USER_SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                SCROLL_ENDED: [
+                  {
+                    guard: 'isAtLatest',
+                    target: '#following-bottom',
+                    actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                ],
+
+                PASSIVE_VIEWPORT_PROBED: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                LAYOUT_CHANGED: [
+                  {
+                    guard: 'streamJustSettledNearLatest',
+                    target: '#following-bottom',
+                    actions: ['setLayoutBusy', 'setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    actions: 'setLayoutBusy',
+                  },
+                ],
+              },
+            },
+
+            free: {
+              id: 'free',
+              on: {
+                USER_SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'canFollowBottom',
+                    target: '#following-bottom',
+                    actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    actions: 'setFreeViewportContext',
+                  },
+                ],
+
+                SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'canFollowBottom',
+                    target: '#following-bottom',
+                    actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    actions: 'setFreeViewportContext',
+                  },
+                ],
+
+                SCROLL_ENDED: [
+                  {
+                    guard: 'canFollowBottom',
+                    target: '#following-bottom',
+                    actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    actions: 'setFreeViewportContext',
+                  },
+                ],
+
+                PASSIVE_VIEWPORT_PROBED: [
+                  {
+                    guard: 'canFollowBottom',
+                    target: '#following-bottom',
+                    actions: ['setAtLatestFromRequiredEvent', 'resetFreeContext'],
+                  },
+                  {
+                    actions: 'setFreeViewportContext',
+                  },
+                ],
+
+                TAIL_RETIREMENT_CHECKED: {
+                  guard: 'canRetireTail',
+                  actions: 'markTailRetired',
+                },
+              },
+            },
+          },
         },
-        FOLLOW_BOTTOM: {
-          target: 'following-bottom',
-          actions: ['setAtLatestFromOptionalEvent', 'resetFreeContext'],
-        },
-        PREPARE_LOCAL_APPEND: {
-          target: 'pre-anchoring-next-turn',
-          actions: 'setAtLatestFromOptionalEvent',
-        },
-        ANCHOR_TURN: {
-          target: 'anchored-turn',
-          actions: ['setLatestTurnIdFromEvent', 'setAtLatestFromOptionalEvent'],
-        },
-        ENTER_FREE: {
-          actions: 'enterFreeContext',
-        },
-        VIEWPORT_MEASURED: {
-          actions: 'setFreeViewportContext',
-        },
-        TAIL_RETIRED: {
-          actions: 'markTailRetired',
+
+        anchoring: {
+          id: 'anchoring',
+          initial: 'pre-anchoring-next-turn',
+          states: {
+            'pre-anchoring-next-turn': {
+              id: 'pre-anchoring-next-turn',
+              on: {
+                USER_SCROLL_INTENT: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                USER_SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                SCROLL_POSITION_CHANGED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+
+                SCROLL_ENDED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+              },
+            },
+
+            'anchored-turn': {
+              id: 'anchored-turn',
+              on: {
+                USER_SCROLL_INTENT: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                USER_SCROLL_POSITION_CHANGED: [
+                  {
+                    guard: 'isAwayFromLatest',
+                    target: '#free',
+                    actions: 'enterFreeFromMeasuredEvent',
+                  },
+                  {
+                    actions: 'setAtLatestFromRequiredEvent',
+                  },
+                ],
+
+                SCROLL_POSITION_CHANGED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+
+                SCROLL_ENDED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+
+                PASSIVE_VIEWPORT_PROBED: {
+                  actions: 'setAtLatestFromRequiredEvent',
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -455,7 +609,7 @@ function ThreadComponent() {
   const ctx = Route.useRouteContext();
   const params = Route.useParams();
 
-  return <ThreadContent key={params.threadId} ownerId={ctx.user.id} threadId={params.threadId} />;
+  return <ThreadContent ownerId={ctx.user.id} threadId={params.threadId} />;
 }
 
 type ThreadContentProps = {
@@ -466,8 +620,9 @@ type ThreadContentProps = {
 function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
   const [draft, setDraft] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
-
-  const scrollActor = useTranscriptScrollActor();
+  const transcriptCommandsRef = useRef<TranscriptRuntimeCommands>(
+    transcriptRuntimeCommandsFallback,
+  );
 
   const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
   const activeRunsCollection = useMemo(() => active(ownerId, threadId), [ownerId, threadId]);
@@ -493,7 +648,9 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
         return;
       }
 
-      scrollActor.prepareForLocalUserAppend();
+      const transcriptCommands = transcriptCommandsRef.current;
+
+      transcriptCommands.prepareForLocalUserAppend();
 
       const now = new Date().toISOString();
 
@@ -513,13 +670,13 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
       setSendError(null);
 
       await transaction.isPersisted.promise.catch((cause: unknown) => {
-        scrollActor.cancelPreparedLocalUserAppend();
+        transcriptCommands.cancelPreparedLocalUserAppend();
         setDraft((current) => current || content);
         setSendError(cause instanceof Error ? cause.message : 'Message send failed.');
         throw cause;
       });
     },
-    [ownerId, scrollActor, thread, threadId],
+    [ownerId, thread, threadId],
   );
 
   const cancelActiveRun = useCallback(async () => {
@@ -544,10 +701,10 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
       </header>
 
       <div className="relative h-full min-h-0">
-        <TranscriptShell
+        <TranscriptRuntime
           key={threadId}
+          commandsRef={transcriptCommandsRef}
           ownerId={ownerId}
-          scrollActor={scrollActor}
           threadId={threadId}
         />
       </div>
@@ -572,6 +729,33 @@ function ThreadContent({ ownerId, threadId }: ThreadContentProps) {
       />
     </div>
   );
+}
+
+type TranscriptRuntimeProps = {
+  commandsRef: MutableRef<TranscriptRuntimeCommands>;
+  ownerId: string;
+  threadId: string;
+};
+
+function TranscriptRuntime({ commandsRef, ownerId, threadId }: TranscriptRuntimeProps) {
+  const scrollActor = useTranscriptScrollActor();
+
+  useLayoutEffect(() => {
+    const commands = {
+      cancelPreparedLocalUserAppend: scrollActor.cancelPreparedLocalUserAppend,
+      prepareForLocalUserAppend: scrollActor.prepareForLocalUserAppend,
+    } satisfies TranscriptRuntimeCommands;
+
+    commandsRef.current = commands;
+
+    return () => {
+      if (commandsRef.current === commands) {
+        commandsRef.current = transcriptRuntimeCommandsFallback;
+      }
+    };
+  }, [commandsRef, scrollActor]);
+
+  return <TranscriptShell ownerId={ownerId} scrollActor={scrollActor} threadId={threadId} />;
 }
 
 type TranscriptShellProps = {
@@ -719,7 +903,11 @@ function TranscriptVirtuaList({
     ],
   );
 
-  const snapshot = useSelector(scrollActor.actorRef, selectTranscriptScrollSnapshot);
+  const snapshot = useSelector(
+    scrollActor.actorRef,
+    selectTranscriptScrollSnapshot,
+    compareTranscriptScrollSnapshot,
+  );
 
   const keepMounted = useMemo(
     () =>
@@ -831,10 +1019,40 @@ function TranscriptVirtuaList({
   );
 }
 
+function transcriptScrollModeFromSnapshot(
+  snapshot: TranscriptScrollMachineSnapshot,
+): TranscriptScrollMode {
+  if (snapshot.matches({ ready: 'landing-to-latest' })) {
+    return 'landing-to-latest';
+  }
+
+  if (snapshot.matches({ ready: { tracking: 'following-bottom' } })) {
+    return 'following-bottom';
+  }
+
+  if (snapshot.matches({ ready: { tracking: 'escaping-follow-bottom' } })) {
+    return 'escaping-follow-bottom';
+  }
+
+  if (snapshot.matches({ ready: { tracking: 'free' } })) {
+    return 'free';
+  }
+
+  if (snapshot.matches({ ready: { anchoring: 'pre-anchoring-next-turn' } })) {
+    return 'pre-anchoring-next-turn';
+  }
+
+  if (snapshot.matches({ ready: { anchoring: 'anchored-turn' } })) {
+    return 'anchored-turn';
+  }
+
+  return 'following-bottom';
+}
+
 function selectTranscriptScrollSnapshot(
   snapshot: TranscriptScrollMachineSnapshot,
 ): TranscriptScrollSnapshot {
-  const mode = snapshot.value as TranscriptScrollMode;
+  const mode = transcriptScrollModeFromSnapshot(snapshot);
   const { atLatest, hasLeftLatest } = snapshot.context;
 
   const showJumpToLatest =
@@ -850,6 +1068,17 @@ function selectTranscriptScrollSnapshot(
   };
 }
 
+function compareTranscriptScrollSnapshot(
+  previous: TranscriptScrollSnapshot,
+  next: TranscriptScrollSnapshot,
+) {
+  return (
+    previous.atLatest === next.atLatest &&
+    previous.mode === next.mode &&
+    previous.showJumpToLatest === next.showJumpToLatest
+  );
+}
+
 type TranscriptEmptyStateProps = ComponentPropsWithoutRef<'div'>;
 
 function TranscriptEmptyState({ className, ...props }: TranscriptEmptyStateProps) {
@@ -863,10 +1092,7 @@ function TranscriptEmptyState({ className, ...props }: TranscriptEmptyStateProps
 }
 
 function useTranscriptScrollActor() {
-  const actorRef = useActorRef(
-    transcriptScrollMachine,
-    transcriptScrollInspect ? { inspect: transcriptScrollInspect } : undefined,
-  );
+  const actorRef = useActorRef(transcriptScrollMachine);
 
   const actor = useMemo(() => createTranscriptScrollActor(actorRef), [actorRef]);
 
@@ -896,7 +1122,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
   let tailRetirementFrame: number | null = null;
 
   function currentMode() {
-    return actorRef.getSnapshot().value as TranscriptScrollMode;
+    return transcriptScrollModeFromSnapshot(actorRef.getSnapshot());
   }
 
   function currentContext() {
@@ -980,17 +1206,6 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
     }
   }
 
-  function enterFollowingBottom(atLatest?: boolean) {
-    cancelPassiveViewportProbe();
-    cancelTailRetirement();
-    environment?.resetTailSpacerToEndRoom();
-
-    send({
-      atLatest,
-      type: 'FOLLOW_BOTTOM',
-    });
-  }
-
   function clearProgrammaticScrollSoon() {
     if (programmaticScrollClearTimer !== null) {
       window.clearTimeout(programmaticScrollClearTimer);
@@ -1033,76 +1248,53 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
     return Math.abs(list.scrollSize - viewportBottom) <= TRANSCRIPT_EDGE_THRESHOLD;
   }
 
-  function commitViewportState() {
+  function canFollowBottomFromViewport(atLatest: boolean) {
+    const context = currentContext();
+
+    return Boolean(
+      environment &&
+      currentMode() === 'free' &&
+      atLatest &&
+      context.hasLeftLatest &&
+      environment.tailSpacerHeightRef.current <= TRANSCRIPT_END_BREATHING_ROOM,
+    );
+  }
+
+  function measuredViewportFields(atLatest = isNearLatest()): MeasuredViewportEventFields {
+    return {
+      atLatest,
+      canFollowBottom: canFollowBottomFromViewport(atLatest),
+    };
+  }
+
+  function sendScrollPositionChanged(atLatest = isNearLatest()) {
     send({
-      atLatest: isNearLatest(),
-      type: 'VIEWPORT_MEASURED',
+      ...measuredViewportFields(atLatest),
+      type: 'SCROLL_POSITION_CHANGED',
     });
   }
 
-  function runPassiveViewportProbe() {
+  function sendUserScrollPositionChanged(atLatest = isNearLatest()) {
     const mode = currentMode();
 
-    if (
-      mode === 'following-bottom' ||
-      mode === 'landing-to-latest' ||
-      mode === 'pre-anchoring-next-turn'
-    ) {
-      return;
-    }
-
-    const nearLatest = isNearLatest();
-
-    if (mode === 'free') {
-      reconcileFreeScroll(nearLatest);
-      return;
-    }
-
-    if (mode === 'escaping-follow-bottom') {
-      if (!nearLatest) {
-        send({
-          atLatest: false,
-          leftLatest: true,
-          type: 'ENTER_FREE',
-        });
-      } else {
-        send({
-          atLatest: true,
-          type: 'VIEWPORT_MEASURED',
-        });
-      }
-
-      return;
-    }
-
     send({
-      atLatest: nearLatest,
-      type: 'VIEWPORT_MEASURED',
+      ...measuredViewportFields(atLatest),
+      retireTail: mode === 'anchored-turn' || mode === 'pre-anchoring-next-turn',
+      type: 'USER_SCROLL_POSITION_CHANGED',
     });
   }
 
-  function schedulePassiveViewportProbe() {
-    const mode = currentMode();
+  function sendScrollEnded(atLatest = isNearLatest()) {
+    send({
+      ...measuredViewportFields(atLatest),
+      type: 'SCROLL_ENDED',
+    });
+  }
 
-    if (
-      mode === 'following-bottom' ||
-      mode === 'landing-to-latest' ||
-      mode === 'pre-anchoring-next-turn'
-    ) {
-      return;
-    }
-
-    if (passiveProbeFrame !== null || passiveProbeSettleFrame !== null) {
-      return;
-    }
-
-    passiveProbeFrame = window.requestAnimationFrame(() => {
-      passiveProbeFrame = null;
-
-      passiveProbeSettleFrame = window.requestAnimationFrame(() => {
-        passiveProbeSettleFrame = null;
-        runPassiveViewportProbe();
-      });
+  function sendPassiveViewportProbe(atLatest = isNearLatest()) {
+    send({
+      ...measuredViewportFields(atLatest),
+      type: 'PASSIVE_VIEWPORT_PROBED',
     });
   }
 
@@ -1163,7 +1355,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
       });
     });
 
-    commitViewportState();
+    sendScrollPositionChanged();
   }
 
   function landToLatest({
@@ -1218,7 +1410,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
       list.scrollTo(Math.max(0, list.scrollSize - list.viewportSize));
     });
 
-    commitViewportState();
+    sendScrollPositionChanged();
   }
 
   function settlePinnedToLatest() {
@@ -1280,7 +1472,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
           });
         });
 
-        commitViewportState();
+        sendScrollPositionChanged();
       });
     });
   }
@@ -1319,58 +1511,86 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
     return list.scrollOffset <= nextMaxScrollTop;
   }
 
-  function retireTailSpacerIfInvisible() {
-    if (!environment || !canRetireTailSpacerNow() || tailRetirementFrame !== null) {
+  function scheduleTailRetirementCheck() {
+    if (!environment || tailRetirementFrame !== null) {
       return;
     }
 
     tailRetirementFrame = window.requestAnimationFrame(() => {
       tailRetirementFrame = null;
 
-      if (!environment || !canRetireTailSpacerNow()) {
+      const canRetire = canRetireTailSpacerNow();
+
+      if (!canRetire || !environment) {
         return;
       }
 
       environment.setTailSpacerHeight(TRANSCRIPT_END_BREATHING_ROOM);
-      send({ type: 'TAIL_RETIRED' });
+
+      send({
+        canRetire: true,
+        type: 'TAIL_RETIREMENT_CHECKED',
+      });
     });
   }
 
-  function maybeReturnToFollowingBottom() {
-    const context = currentContext();
-
-    if (!environment || currentMode() !== 'free') {
-      return false;
-    }
-
-    if (!context.hasLeftLatest) {
-      return false;
-    }
-
-    if (environment.tailSpacerHeightRef.current > TRANSCRIPT_END_BREATHING_ROOM) {
-      return false;
-    }
-
-    if (!isNearLatest()) {
-      return false;
-    }
-
-    enterFollowingBottom(true);
-    return true;
-  }
-
-  function reconcileFreeScroll(nearLatest: boolean) {
-    if (!nearLatest) {
-      send({
-        atLatest: false,
-        type: 'VIEWPORT_MEASURED',
-      });
-
-      retireTailSpacerIfInvisible();
+  function maybeScheduleTailRetirementCheck() {
+    if (currentMode() !== 'free' || isNearLatest()) {
       return;
     }
 
-    maybeReturnToFollowingBottom();
+    scheduleTailRetirementCheck();
+  }
+
+  function runPassiveViewportProbe() {
+    const mode = currentMode();
+
+    if (
+      mode === 'following-bottom' ||
+      mode === 'landing-to-latest' ||
+      mode === 'pre-anchoring-next-turn'
+    ) {
+      return;
+    }
+
+    sendPassiveViewportProbe();
+    maybeScheduleTailRetirementCheck();
+  }
+
+  function schedulePassiveViewportProbe() {
+    const mode = currentMode();
+
+    if (
+      mode === 'following-bottom' ||
+      mode === 'landing-to-latest' ||
+      mode === 'pre-anchoring-next-turn'
+    ) {
+      return;
+    }
+
+    if (passiveProbeFrame !== null || passiveProbeSettleFrame !== null) {
+      return;
+    }
+
+    passiveProbeFrame = window.requestAnimationFrame(() => {
+      passiveProbeFrame = null;
+
+      passiveProbeSettleFrame = window.requestAnimationFrame(() => {
+        passiveProbeSettleFrame = null;
+        runPassiveViewportProbe();
+      });
+    });
+  }
+
+  function enterFollowingBottom(atLatest?: boolean) {
+    cancelPassiveViewportProbe();
+    cancelTailRetirement();
+    environment?.resetTailSpacerToEndRoom();
+
+    send({
+      atLatest,
+      type: 'FOLLOW_BOTTOM',
+    });
   }
 
   return {
@@ -1391,7 +1611,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
       send({
         atLatest: isNearLatest(),
         latestTurnId,
-        type: 'LAND_TO_LATEST',
+        type: 'LOCAL_APPEND_CANCELLED',
       });
 
       landToLatest({ immediate: true });
@@ -1427,120 +1647,27 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
     },
 
     handleScroll() {
-      const nearLatest = isNearLatest();
-      const mode = currentMode();
+      const atLatest = isNearLatest();
 
       if (userScrollIntent) {
         userScrollIntent = false;
         cancelProgrammaticScrollAuthority();
-
-        if (mode === 'escaping-follow-bottom') {
-          if (!nearLatest) {
-            send({
-              atLatest: false,
-              leftLatest: true,
-              type: 'ENTER_FREE',
-            });
-          }
-
-          commitViewportState();
-          return;
-        }
-
-        if (mode === 'anchored-turn' || mode === 'pre-anchoring-next-turn') {
-          send({
-            atLatest: nearLatest,
-            leftLatest: !nearLatest,
-            retireTail: true,
-            type: 'ENTER_FREE',
-          });
-
-          reconcileFreeScroll(nearLatest);
-          commitViewportState();
-          return;
-        }
-
-        if (mode === 'free') {
-          reconcileFreeScroll(nearLatest);
-          commitViewportState();
-          return;
-        }
-
-        if (nearLatest) {
-          enterFollowingBottom(true);
-        } else {
-          send({
-            atLatest: false,
-            leftLatest: true,
-            type: 'ENTER_FREE',
-          });
-
-          reconcileFreeScroll(false);
-        }
-
-        commitViewportState();
+        sendUserScrollPositionChanged(atLatest);
+        maybeScheduleTailRetirementCheck();
         return;
       }
 
-      if (programmaticScroll) {
-        commitViewportState();
-        return;
+      sendScrollPositionChanged(atLatest);
+
+      if (!programmaticScroll) {
+        maybeScheduleTailRetirementCheck();
       }
-
-      if (mode === 'escaping-follow-bottom' && !nearLatest) {
-        send({
-          atLatest: false,
-          leftLatest: true,
-          type: 'ENTER_FREE',
-        });
-
-        commitViewportState();
-        return;
-      }
-
-      if (mode === 'free') {
-        reconcileFreeScroll(nearLatest);
-      }
-
-      commitViewportState();
     },
 
     handleScrollEnd() {
       cancelProgrammaticScrollAuthority();
-
-      const mode = currentMode();
-
-      if (mode === 'escaping-follow-bottom') {
-        if (isNearLatest()) {
-          enterFollowingBottom(true);
-        } else {
-          send({
-            atLatest: false,
-            leftLatest: true,
-            type: 'ENTER_FREE',
-          });
-        }
-
-        commitViewportState();
-        return;
-      }
-
-      if (mode === 'free') {
-        reconcileFreeScroll(isNearLatest());
-        commitViewportState();
-        return;
-      }
-
-      if (
-        mode !== 'anchored-turn' &&
-        mode !== 'pre-anchoring-next-turn' &&
-        mode !== 'landing-to-latest' &&
-        isNearLatest()
-      ) {
-        enterFollowingBottom(true);
-      }
-
-      commitViewportState();
+      sendScrollEnded();
+      maybeScheduleTailRetirementCheck();
     },
 
     jumpToLatest() {
@@ -1558,7 +1685,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
       send({
         atLatest: isNearLatest(),
         latestTurnId,
-        type: 'LAND_TO_LATEST',
+        type: 'JUMP_TO_LATEST',
       });
 
       landToLatest({ smooth: true });
@@ -1574,12 +1701,11 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
 
       const mode = currentMode();
 
-      if (mode === 'following-bottom' || mode === 'landing-to-latest') {
-        send({
-          atLatest: isNearLatest(),
-          type: 'ESCAPE_FOLLOW_BOTTOM',
-        });
-      }
+      send({
+        atLatest: isNearLatest(),
+        retireTail: mode === 'anchored-turn' || mode === 'pre-anchoring-next-turn',
+        type: 'USER_SCROLL_INTENT',
+      });
     },
 
     prepareForLocalUserAppend() {
@@ -1593,7 +1719,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
 
       send({
         atLatest: isNearLatest(),
-        type: 'PREPARE_LOCAL_APPEND',
+        type: 'LOCAL_APPEND_PREPARED',
       });
     },
 
@@ -1615,7 +1741,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
         send({
           atLatest: isNearLatest(),
           latestTurnId: nextLatestTurnId,
-          type: 'LAND_TO_LATEST',
+          type: 'THREAD_READY',
         });
 
         landToLatest({ immediate: true });
@@ -1632,7 +1758,7 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
         send({
           atLatest: isNearLatest(),
           latestTurnId: nextLatestTurnId,
-          type: 'ANCHOR_TURN',
+          type: 'LATEST_TURN_CHANGED',
         });
 
         anchorLatestTurn({
@@ -1644,13 +1770,16 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
 
     syncTranscriptLayout({ busy }) {
       const context = currentContext();
-      const mode = currentMode();
       const streamJustSettled = context.layoutBusy && !busy;
 
       send({
+        atLatest: isNearLatest(),
         busy,
+        streamJustSettled,
         type: 'LAYOUT_CHANGED',
       });
+
+      const mode = currentMode();
 
       if (mode === 'following-bottom') {
         cancelPassiveViewportProbe();
@@ -1663,33 +1792,13 @@ function createTranscriptScrollActor(actorRef: TranscriptScrollActorRef): Transc
         return;
       }
 
-      if (mode === 'escaping-follow-bottom') {
-        if (streamJustSettled && isNearLatest()) {
-          cancelPassiveViewportProbe();
-          pinToLatestNow();
-          settlePinnedToLatest();
-          return;
-        }
-
-        if (!isNearLatest()) {
-          send({
-            atLatest: false,
-            leftLatest: true,
-            type: 'ENTER_FREE',
-          });
-        }
-
-        schedulePassiveViewportProbe();
-        return;
-      }
-
       if (mode === 'free') {
         schedulePassiveViewportProbe();
-        retireTailSpacerIfInvisible();
+        maybeScheduleTailRetirementCheck();
         return;
       }
 
-      if (mode === 'anchored-turn') {
+      if (mode === 'anchored-turn' || mode === 'escaping-follow-bottom') {
         schedulePassiveViewportProbe();
       }
     },
