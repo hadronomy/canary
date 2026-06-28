@@ -1,4 +1,9 @@
 import {
+  ArrowsClockwiseIcon as CycleIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+} from '@phosphor-icons/react';
+import {
   type ChangeEvent,
   type ComponentPropsWithoutRef,
   type FormEvent,
@@ -6,12 +11,12 @@ import {
   useId,
 } from 'react';
 
-import { CycleIcon, MagnifyingGlassIcon, PlusIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input-group';
 import { cn } from '~/lib/utils';
 
-type ThreadComposerProps = Omit<ComponentPropsWithoutRef<'section'>, 'children'> & {
+type ThreadActionsProps = Omit<ComponentPropsWithoutRef<'section'>, 'children'> & {
   debug: boolean;
   disabled?: boolean;
   onCreate: () => void;
@@ -22,7 +27,7 @@ type ThreadComposerProps = Omit<ComponentPropsWithoutRef<'section'>, 'children'>
   title: string;
 };
 
-function ThreadComposer({
+function ThreadActions({
   className,
   debug,
   disabled = false,
@@ -33,7 +38,7 @@ function ThreadComposer({
   query,
   title,
   ...props
-}: ThreadComposerProps) {
+}: ThreadActionsProps) {
   const searchId = useId();
   const titleId = useId();
 
@@ -41,12 +46,12 @@ function ThreadComposer({
     <section
       aria-label="Thread actions"
       className={cn('grid gap-2', className)}
-      data-thread-composer=""
+      data-thread-actions=""
       {...props}
     >
-      <ThreadSearchField id={searchId} value={query} onValueChange={onQuery} />
+      <ThreadSearch id={searchId} value={query} onValueChange={onQuery} />
 
-      <NewThreadForm
+      <ThreadCreateForm
         debug={debug}
         disabled={disabled}
         title={title}
@@ -59,7 +64,7 @@ function ThreadComposer({
   );
 }
 
-type ThreadSearchFieldProps = Omit<
+type ThreadSearchProps = Omit<
   ComponentPropsWithoutRef<'form'>,
   'children' | 'onChange' | 'onSubmit'
 > & {
@@ -68,13 +73,7 @@ type ThreadSearchFieldProps = Omit<
   value: string;
 };
 
-function ThreadSearchField({
-  className,
-  id,
-  onValueChange,
-  value,
-  ...props
-}: ThreadSearchFieldProps) {
+function ThreadSearch({ className, id, onValueChange, value, ...props }: ThreadSearchProps) {
   const fallbackId = useId();
   const inputId = id ?? fallbackId;
 
@@ -98,26 +97,26 @@ function ThreadSearchField({
         Search conversations
       </label>
 
-      <MagnifyingGlassIcon
-        aria-hidden="true"
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-
-      <Input
-        id={inputId}
-        autoComplete="off"
-        className="h-9 rounded-(--radius-control) border-line bg-surface/80 pl-9 pr-3 text-sm"
-        placeholder="Search threads"
-        spellCheck={false}
-        type="search"
-        value={value}
-        onChange={handleChange}
-      />
+      <InputGroup className="h-9 rounded-(--radius-control) border-line bg-surface/80">
+        <InputGroupAddon>
+          <MagnifyingGlassIcon aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          id={inputId}
+          autoComplete="off"
+          className="text-sm"
+          placeholder="Search threads"
+          spellCheck={false}
+          type="search"
+          value={value}
+          onChange={handleChange}
+        />
+      </InputGroup>
     </form>
   );
 }
 
-type NewThreadFormProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
+type ThreadCreateFormProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
   debug: boolean;
   disabled?: boolean;
   onCreate: () => void;
@@ -127,7 +126,7 @@ type NewThreadFormProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'o
   titleId?: string;
 };
 
-function NewThreadForm({
+function ThreadCreateForm({
   className,
   debug,
   disabled = false,
@@ -137,7 +136,7 @@ function NewThreadForm({
   title,
   titleId,
   ...props
-}: NewThreadFormProps) {
+}: ThreadCreateFormProps) {
   const fallbackTitleId = useId();
   const inputId = titleId ?? fallbackTitleId;
 
@@ -186,7 +185,7 @@ function NewThreadForm({
         type="submit"
       />
 
-      <CycleThreadsButton debug={debug} disabled={cycleDisabled} onCycle={onCycle} />
+      <ThreadCycleButton debug={debug} disabled={cycleDisabled} onCycle={onCycle} />
     </form>
   );
 }
@@ -203,7 +202,7 @@ function IconButton({ className, icon, ...props }: IconButtonProps) {
   );
 }
 
-type CycleThreadsButtonProps = Omit<
+type ThreadCycleButtonProps = Omit<
   ComponentPropsWithoutRef<typeof Button>,
   'children' | 'disabled' | 'onClick' | 'size' | 'type' | 'variant'
 > & {
@@ -212,13 +211,13 @@ type CycleThreadsButtonProps = Omit<
   onCycle: () => void;
 };
 
-function CycleThreadsButton({
+function ThreadCycleButton({
   className,
   debug,
   disabled = false,
   onCycle,
   ...props
-}: CycleThreadsButtonProps) {
+}: ThreadCycleButtonProps) {
   return (
     <Button
       aria-label={debug ? 'Cycling threads' : 'Debug cycle threads'}
@@ -236,11 +235,11 @@ function CycleThreadsButton({
   );
 }
 
-export { CycleThreadsButton, NewThreadForm, ThreadComposer, ThreadSearchField };
+export { ThreadCycleButton, ThreadCreateForm, ThreadActions, ThreadSearch };
 
 export type {
-  CycleThreadsButtonProps,
-  NewThreadFormProps,
-  ThreadComposerProps,
-  ThreadSearchFieldProps,
+  ThreadCycleButtonProps,
+  ThreadCreateFormProps,
+  ThreadActionsProps,
+  ThreadSearchProps,
 };

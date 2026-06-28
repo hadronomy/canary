@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
-import { SidebarSimpleIcon } from '~/components/icons';
+import { SidebarSimpleIcon } from '@phosphor-icons/react';
+
 import { Brand } from '~/components/shell/brand';
 import { Button } from '~/components/ui/button';
 import {
@@ -10,10 +11,21 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
+import { cn } from '~/lib/utils';
 
-function MobileSidebar(props: { children: ReactNode }) {
+type MobileDrawerProps = ComponentPropsWithoutRef<'div'> & {
+  children: ReactNode;
+};
+
+function MobileDrawer({ children, className, ...props }: MobileDrawerProps) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-line bg-rail px-3 py-2 md:hidden">
+    <div
+      className={cn(
+        'flex items-center justify-between rounded-2xl border border-line bg-rail px-3 py-2 md:hidden',
+        className,
+      )}
+      {...props}
+    >
       <Brand />
       <Sheet>
         <SheetTrigger
@@ -29,11 +41,12 @@ function MobileSidebar(props: { children: ReactNode }) {
           <SheetDescription className="sr-only">
             Navigation, threads, and account controls.
           </SheetDescription>
-          {props.children}
+          {children}
         </SheetContent>
       </Sheet>
     </div>
   );
 }
 
-export { MobileSidebar };
+export { MobileDrawer };
+export type { MobileDrawerProps };

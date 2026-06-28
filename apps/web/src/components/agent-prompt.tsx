@@ -1,1 +1,2 @@
-export { AgentComposer as AgentPrompt } from '~/components/composer/agent-composer';
+export { AgentPrompt } from '~/components/composer/prompt';
+export type { AgentPromptProps } from '~/components/composer/prompt';

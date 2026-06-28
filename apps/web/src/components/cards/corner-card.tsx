@@ -1,3 +1,5 @@
+import type { ComponentPropsWithoutRef } from 'react';
+
 import { Card } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 
@@ -16,7 +18,9 @@ function Icons() {
   );
 }
 
-export function Card_8({ className, children, ...props }: React.ComponentProps<'div'>) {
+type CornerCardProps = ComponentPropsWithoutRef<typeof Card>;
+
+function CornerCard({ className, children, ...props }: CornerCardProps) {
   return (
     <Card
       className={cn('relative rounded-none! shadow-none overflow-visible', className)}
@@ -27,3 +31,6 @@ export function Card_8({ className, children, ...props }: React.ComponentProps<'
     </Card>
   );
 }
+
+export { CornerCard };
+export type { CornerCardProps };

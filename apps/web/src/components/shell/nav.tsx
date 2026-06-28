@@ -1,24 +1,24 @@
-import type { Icon } from '@phosphor-icons/react';
-import type { ReactElement } from 'react';
+import type { ComponentPropsWithoutRef, ReactElement } from 'react';
 
+import {
+  CaretLeftIcon as ChevronLeftIcon,
+  CaretRightIcon as ChevronRightIcon,
+  GearSixIcon,
+  type Icon,
+  QuestionIcon,
+  StackIcon,
+} from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { Link, useRouter } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 
-import type { ShellNavRoute, ShellUser } from '~/components/shell/model';
+import type { ShellNavRoute, ShellUser } from '~/components/shell/routes';
 
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  GearSixIcon,
-  QuestionIcon,
-  StackIcon,
-} from '~/components/icons';
-import { AccountCard } from '~/components/shell/account-card';
+import { AccountPanel } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
-import { ease, primaryNav } from '~/components/shell/model';
-import { SearchBox } from '~/components/shell/search-box';
-import { StatusMeter } from '~/components/shell/status-meter';
+import { ease, primaryNav } from '~/components/shell/routes';
+import { ShellSearch } from '~/components/shell/search';
+import { SyncStatus } from '~/components/shell/status';
 import { UserAvatar } from '~/components/shell/user-avatar';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
@@ -28,42 +28,53 @@ import { authClient } from '~/lib/auth-client';
 import { cn } from '~/lib/utils';
 import { roster } from '~/utils/chat';
 
-function PrimarySidebar(props: {
+type DesktopNavProps = Omit<
+  ComponentPropsWithoutRef<typeof motion.aside>,
+  'animate' | 'children' | 'initial' | 'transition'
+> & {
   onToggle: () => void;
   open: boolean;
   ready: boolean;
   user: ShellUser;
-}) {
+};
+
+type MobileNavProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
+  ready: boolean;
+  user: ShellUser;
+};
+
+function DesktopNav({ className, onToggle, open, ready, user, ...props }: DesktopNavProps) {
   const reduce = useReducedMotion();
 
   return (
     <motion.aside
-      animate={{ width: props.open ? 272 : 72 }}
-      className="relative hidden h-full min-h-0 shrink-0 overflow-visible md:block"
+      animate={{ width: open ? 272 : 72 }}
+      className={cn('relative hidden h-full min-h-0 shrink-0 overflow-visible md:block', className)}
       initial={false}
       transition={reduce ? { duration: 0 } : { duration: 0.2, ease: ease.ease }}
+      {...props}
     >
       <div className="canary-panel grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-5 overflow-hidden rounded-(--radius-shell) p-4">
-        <Header open={props.open} />
-        <Search open={props.open} />
+        <Header open={open} />
+        <Search open={open} />
 
         <nav className="grid content-start gap-1">
           {primaryNav.map((item) => (
-            <SideLink item={item} key={item.to} open={props.open} />
+            <SideLink item={item} key={item.to} open={open} />
           ))}
         </nav>
 
-        <Footer open={props.open} ready={props.ready} user={props.user} />
+        <Footer open={open} ready={ready} user={user} />
       </div>
 
-      <Edge open={props.open} onToggle={props.onToggle} />
+      <Edge open={open} onToggle={onToggle} />
     </motion.aside>
   );
 }
 
-function PrimaryMobile(props: { ready: boolean; user: ShellUser }) {
+function MobileNav({ className, ready, user, ...props }: MobileNavProps) {
   return (
-    <div className="grid gap-3">
+    <div className={cn('grid gap-3', className)} {...props}>
       <Brand />
 
       <Search open />
@@ -74,7 +85,7 @@ function PrimaryMobile(props: { ready: boolean; user: ShellUser }) {
         ))}
       </nav>
 
-      {props.ready ? <Footer user={props.user} /> : <SyncPanel />}
+      {ready ? <Footer user={user} /> : <SyncPanel />}
     </div>
   );
 }
@@ -107,7 +118,7 @@ function Edge(props: { onToggle: () => void; open: boolean }) {
 }
 
 function Search(props: { open: boolean }) {
-  return <SearchBox open={props.open} />;
+  return <ShellSearch open={props.open} />;
 }
 
 function SideLink(props: { item: ShellNavRoute; open: boolean }) {
@@ -218,8 +229,8 @@ function Footer(props: { open?: boolean; ready?: boolean; user: ShellUser }) {
     <SyncPanel />
   ) : (
     <footer className="grid min-w-0 gap-2 overflow-hidden">
-      <StatusMeter threads={threads.length} />
-      <AccountCard user={props.user} onSignout={signout} />
+      <SyncStatus threads={threads.length} />
+      <AccountPanel user={props.user} onSignout={signout} />
     </footer>
   );
 }
@@ -241,4 +252,5 @@ function Tip(props: { children: ReactElement; label: string }) {
   );
 }
 
-export { PrimaryMobile, PrimarySidebar };
+export { DesktopNav, MobileNav };
+export type { DesktopNavProps, MobileNavProps };

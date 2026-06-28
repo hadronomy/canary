@@ -1,46 +1,57 @@
+import type { ComponentPropsWithoutRef } from 'react';
+
+import { PaperPlaneTiltIcon as SendIcon, StopIcon } from '@phosphor-icons/react';
 import { motion, useReducedMotion } from 'motion/react';
 
-import { SendIcon, StopIcon } from '~/components/icons';
+import type { ComposerActionState } from '~/components/composer/state';
+
 import { cn } from '~/lib/utils';
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-type ComposerPrimaryActionKind = 'cancel-run' | 'disabled' | 'send-empty' | 'send-ready';
-
-type ComposerPrimaryAction = {
-  kind: ComposerPrimaryActionKind;
-  label: string;
-};
-
 type ButtonVisual = 'disabled' | 'empty' | 'send' | 'stop';
 
-function ComposerPrimaryActionButton(props: {
-  action: ComposerPrimaryAction;
+type ComposerActionProps = Omit<
+  ComponentPropsWithoutRef<typeof motion.button>,
+  'animate' | 'children' | 'disabled' | 'onClick' | 'type' | 'variants' | 'whileHover'
+> & {
+  action: ComposerActionState;
   enabled: boolean;
   onCancelRun?: () => void;
-}) {
+};
+
+function ComposerAction({
+  action,
+  className,
+  enabled,
+  onCancelRun,
+  title,
+  ...props
+}: ComposerActionProps) {
   const reduce = useReducedMotion();
-  const visual = visualFromAction(props.action.kind);
+  const visual = visualFromAction(action.kind);
 
   return (
     <motion.button
-      aria-label={props.action.label}
+      aria-label={action.label}
       animate={visual}
       className={cn(
         'relative isolate mb-1 grid size-10 shrink-0 place-items-center overflow-hidden rounded-[0.95rem]',
         'border bg-control text-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
         'disabled:cursor-not-allowed',
+        className,
       )}
-      disabled={!props.enabled}
-      title={props.action.label}
-      type={props.action.kind === 'send-ready' ? 'submit' : 'button'}
+      disabled={!enabled}
+      title={title ?? action.label}
+      type={action.kind === 'send-ready' ? 'submit' : 'button'}
       variants={buttonToneVariants}
-      whileHover={props.enabled ? hoverTone(visual) : undefined}
+      whileHover={enabled ? hoverTone(visual) : undefined}
+      {...props}
       onClick={
-        props.action.kind === 'cancel-run'
+        action.kind === 'cancel-run'
           ? () => {
-              props.onCancelRun?.();
+              onCancelRun?.();
             }
           : undefined
       }
@@ -88,7 +99,7 @@ function ComposerPrimaryActionButton(props: {
   );
 }
 
-function visualFromAction(kind: ComposerPrimaryActionKind): ButtonVisual {
+function visualFromAction(kind: ComposerActionState['kind']): ButtonVisual {
   if (kind === 'cancel-run') {
     return 'stop';
   }
@@ -233,4 +244,5 @@ const instantTransition = {
   duration: 0,
 } as const;
 
-export { ComposerPrimaryActionButton };
+export { ComposerAction };
+export type { ComposerActionProps };

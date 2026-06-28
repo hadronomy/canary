@@ -1,9 +1,14 @@
 import type { ToasterProps } from 'sonner';
 
+import {
+  CheckCircleIcon as SuccessIcon,
+  CircleNotchIcon as LoaderIcon,
+  InfoIcon,
+  WarningIcon,
+  XCircleIcon as ErrorIcon,
+} from '@phosphor-icons/react';
 import { useTheme } from 'next-themes';
 import { Toaster as Sonner } from 'sonner';
-
-import { ErrorIcon, InfoIcon, LoaderIcon, SuccessIcon, WarningIcon } from '~/components/icons';
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = 'system' } = useTheme();

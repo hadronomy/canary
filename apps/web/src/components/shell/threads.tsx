@@ -1,16 +1,32 @@
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ComponentPropsWithoutRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import type { ShellUser } from '~/components/shell/model';
+import type { ShellUser } from '~/components/shell/routes';
 
-import { ThreadComposer } from '~/components/shell/thread-composer';
-import { ThreadItem } from '~/components/shell/thread-item';
+import { ThreadActions } from '~/components/shell/thread-actions';
+import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '~/components/ui/empty';
+import { Skeleton } from '~/components/ui/skeleton';
+import { cn } from '~/lib/utils';
 import { list, roster } from '~/utils/chat';
 
-type ThreadRow = {
+type ThreadRecord = {
   archivedAt: string | null;
   createdAt: string;
   id: string;
@@ -24,16 +40,20 @@ type ThreadGroupId = 'today' | 'recent' | 'older';
 type ThreadGroup = {
   id: ThreadGroupId;
   label: string;
-  threads: ThreadRow[];
+  threads: ThreadRecord[];
 };
 
 const DAY_MS = 86_400_000;
 
-function ChatSidebar(props: { user: ShellUser }) {
+type ThreadSidebarProps = Omit<ComponentPropsWithoutRef<'aside'>, 'children'> & {
+  user: ShellUser;
+};
+
+function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   const nav = useNavigate();
   const params = useParams({ strict: false });
 
-  const ownerId = props.user.id;
+  const ownerId = user.id;
   const activeThreadId = typeof params.threadId === 'string' ? params.threadId : null;
 
   const frame = useRef<number | null>(null);
@@ -215,7 +235,10 @@ function ChatSidebar(props: { user: ShellUser }) {
   }, []);
 
   return (
-    <aside className="grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3">
+    <aside
+      className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3', className)}
+      {...props}
+    >
       <header className="px-1">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
@@ -234,7 +257,7 @@ function ChatSidebar(props: { user: ShellUser }) {
         </div>
       </header>
 
-      <ThreadComposer
+      <ThreadActions
         debug={debug}
         disabled={visibleThreads.length < 2}
         query={query}
@@ -266,7 +289,7 @@ function ChatSidebar(props: { user: ShellUser }) {
 
                 <div className="grid gap-1">
                   {group.threads.map((thread) => (
-                    <ThreadItem
+                    <ThreadRow
                       active={thread.id === activeThreadId}
                       id={thread.id}
                       key={thread.id}
@@ -291,8 +314,8 @@ function ThreadSkeletonList() {
   return (
     <div className="grid gap-1" aria-hidden="true">
       {Array.from({ length: 7 }).map((_, index) => (
-        <div
-          className="h-[3.35rem] animate-pulse rounded-(--radius-control) border border-line bg-surface/60"
+        <Skeleton
+          className="h-[3.35rem] rounded-(--radius-control) border border-line bg-surface/60"
           key={index}
         />
       ))}
@@ -303,15 +326,15 @@ function ThreadSkeletonList() {
 function EmptyState(props: { filtering: boolean; query: string; onClearQuery: () => void }) {
   if (props.filtering) {
     return (
-      <div className="grid gap-2 rounded-(--radius-control) border border-line bg-surface/45 p-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">No results</p>
-          <p className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
+      <Empty className="items-start gap-2 rounded-(--radius-control) border border-line bg-surface/45 p-3 text-left">
+        <EmptyHeader className="items-start gap-1">
+          <EmptyTitle className="truncate text-xs">No results</EmptyTitle>
+          <EmptyDescription className="truncate text-[11px]">
             Nothing matches “{props.query.trim()}”.
-          </p>
-        </div>
+          </EmptyDescription>
+        </EmptyHeader>
 
-        <div className="flex">
+        <EmptyContent className="items-start">
           <Button
             className="h-7 rounded-(--radius-press) px-2 text-[11px]"
             size="sm"
@@ -321,18 +344,20 @@ function EmptyState(props: { filtering: boolean; query: string; onClearQuery: ()
           >
             Clear search
           </Button>
-        </div>
-      </div>
+        </EmptyContent>
+      </Empty>
     );
   }
 
   return (
-    <div className="grid gap-1 rounded-(--radius-control) border border-line bg-surface/45 p-3">
-      <p className="text-xs font-medium text-foreground">No conversations yet</p>
-      <p className="text-[11px] leading-4 text-muted-foreground">
-        Name one above, or press create to start with a default title.
-      </p>
-    </div>
+    <Empty className="items-start gap-1 rounded-(--radius-control) border border-line bg-surface/45 p-3 text-left">
+      <EmptyHeader className="items-start gap-1">
+        <EmptyTitle className="text-xs">No conversations yet</EmptyTitle>
+        <EmptyDescription className="text-[11px]">
+          Name one above, or press create to start with a default title.
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
@@ -357,7 +382,7 @@ function sidebarStatus(input: {
   return `${input.total} synced conversations`;
 }
 
-function sortedActiveThreads(threads: ThreadRow[]) {
+function sortedActiveThreads(threads: ThreadRecord[]) {
   return threads
     .filter((thread) => !thread.archivedAt)
     .toSorted(
@@ -374,7 +399,7 @@ function createThreadSearch(query: string) {
 
   return {
     active: value.length > 0,
-    matches: (thread: ThreadRow) =>
+    matches: (thread: ThreadRecord) =>
       normalizeSearchText(
         `${thread.title} ${thread.id} ${thread.createdAt} ${thread.updatedAt}`,
       ).includes(value),
@@ -389,7 +414,7 @@ function normalizeSearchText(value: string) {
     .toLowerCase();
 }
 
-function groupThreads(threads: ThreadRow[]) {
+function groupThreads(threads: ThreadRecord[]) {
   const groups: ThreadGroup[] = [
     { id: 'today', label: 'Today', threads: [] },
     { id: 'recent', label: 'Recent', threads: [] },
@@ -429,7 +454,7 @@ function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function threadByOffset(threads: ThreadRow[], activeThreadId: string | null, direction: number) {
+function threadByOffset(threads: ThreadRecord[], activeThreadId: string | null, direction: number) {
   if (!threads.length) {
     return null;
   }
@@ -446,7 +471,7 @@ function threadByOffset(threads: ThreadRow[], activeThreadId: string | null, dir
   return next;
 }
 
-function threadAfterRemoving(threads: ThreadRow[], removedId: string) {
+function threadAfterRemoving(threads: ThreadRecord[], removedId: string) {
   const index = threads.findIndex((thread) => thread.id === removedId);
 
   if (index < 0) {
@@ -456,4 +481,5 @@ function threadAfterRemoving(threads: ThreadRow[], removedId: string) {
   return threads[index + 1] ?? threads[index - 1] ?? null;
 }
 
-export { ChatSidebar };
+export { ThreadSidebar };
+export type { ThreadSidebarProps };

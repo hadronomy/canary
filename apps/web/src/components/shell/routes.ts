@@ -1,7 +1,6 @@
-import type { Icon } from '@phosphor-icons/react';
 import type { LinkProps, StaticDataRouteOption } from '@tanstack/react-router';
 
-import { ChatsIcon, HouseIcon } from '~/components/icons';
+import { ChatsIcon, HouseIcon, type Icon } from '@phosphor-icons/react';
 
 type ShellUser = {
   email?: null | string;

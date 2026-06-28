@@ -1,11 +1,11 @@
+import { CommandIcon } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { type ComponentPropsWithoutRef, useEffect, useMemo, useRef } from 'react';
 
 import type { Cmd } from '~/components/composer/commands';
 
 import { filter } from '~/components/composer/commands';
-import { ComposerShortcut } from '~/components/composer/keyboard-shortcut';
-import { CommandIcon } from '~/components/icons';
+import { ComposerShortcut } from '~/components/composer/shortcut';
 import {
   Command,
   CommandEmpty,
@@ -21,7 +21,7 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const COMMAND_ROW_HEIGHT = 36;
 const COMMAND_ROW_GAP = 2;
 
-export type SlashMenuState =
+export type ComposerMenuState =
   | { kind: 'closed' }
   | {
       active: number;
@@ -29,24 +29,36 @@ export type SlashMenuState =
       query: string;
     };
 
-function SlashMenu(props: {
+type ComposerMenuProps = Omit<
+  ComponentPropsWithoutRef<typeof Command>,
+  'children' | 'onMouseDown' | 'shouldFilter'
+> & {
   commands: Cmd[];
-  state: SlashMenuState;
+  state: ComposerMenuState;
   onActive: (idx: number) => void;
   onPick: (cmd: Cmd) => void;
-}) {
+};
+
+function ComposerMenu({
+  className,
+  commands,
+  onActive,
+  onPick,
+  state,
+  ...props
+}: ComposerMenuProps) {
   const reduce = useReducedMotion();
   const itemRefs = useRef<Array<HTMLDivElement | null>>([]);
 
-  const menu = props.state.kind === 'open' ? props.state : null;
+  const menu = state.kind === 'open' ? state : null;
 
   const items = useMemo(() => {
     if (!menu) {
       return [];
     }
 
-    return filter(props.commands, menu.query);
-  }, [menu, props.commands]);
+    return filter(commands, menu.query);
+  }, [commands, menu]);
 
   const active = menu ? Math.min(menu.active, Math.max(0, items.length - 1)) : 0;
   const selectionY = active * (COMMAND_ROW_HEIGHT + COMMAND_ROW_GAP);
@@ -94,9 +106,11 @@ function SlashMenu(props: {
                 'relative overflow-hidden rounded-t-[1.1rem] rounded-b-none',
                 'border-x border-t border-line border-b-transparent',
                 'bg-background shadow-[0_-18px_52px_rgba(0,0,0,0.22)]',
+                className,
               )}
               shouldFilter={false}
               onMouseDown={(event) => event.preventDefault()}
+              {...props}
             >
               <div
                 aria-hidden
@@ -154,12 +168,12 @@ function SlashMenu(props: {
                             style={{ height: COMMAND_ROW_HEIGHT }}
                             onMouseEnter={() => {
                               if (idx !== active) {
-                                props.onActive(idx);
+                                onActive(idx);
                               }
                             }}
                             onPointerMove={() => {
                               if (idx !== active) {
-                                props.onActive(idx);
+                                onActive(idx);
                               }
                             }}
                             onSelect={() => {
@@ -167,7 +181,7 @@ function SlashMenu(props: {
                                 return;
                               }
 
-                              props.onPick(cmd);
+                              onPick(cmd);
                             }}
                           >
                             <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(4.5rem,8rem)_minmax(0,1fr)_auto] items-center gap-2.5">
@@ -375,4 +389,5 @@ const contentVariants = {
   },
 };
 
-export { SlashMenu };
+export { ComposerMenu };
+export type { ComposerMenuProps };

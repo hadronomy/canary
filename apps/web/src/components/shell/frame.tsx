@@ -1,18 +1,22 @@
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
 import { useRouterState } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
-import type { ShellAside, ShellUser } from '~/components/shell/model';
+import type { ShellAside, ShellUser } from '~/components/shell/routes';
 
-import { ChatSidebar } from '~/components/shell/chat-sidebar';
-import { MobileSidebar } from '~/components/shell/mobile-sidebar';
-import { shellFromMatches } from '~/components/shell/model';
-import { PrimaryMobile, PrimarySidebar } from '~/components/shell/primary-sidebar';
+import { MobileDrawer } from '~/components/shell/mobile-drawer';
+import { MobileNav, DesktopNav } from '~/components/shell/nav';
+import { shellFromMatches } from '~/components/shell/routes';
+import { ThreadSidebar } from '~/components/shell/threads';
 import { cn } from '~/lib/utils';
 import { setup } from '~/utils/chat';
 
-function AppFrame(props: { children: ReactNode; user: ShellUser }) {
+type ShellFrameProps = ComponentPropsWithoutRef<'div'> & {
+  user: ShellUser;
+};
+
+function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -20,7 +24,7 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
     select: (state) => shellFromMatches(state.matches),
   });
 
-  const aside = ready ? renderAside(shell?.aside, props.user) : null;
+  const aside = ready ? renderAside(shell?.aside, user) : null;
 
   useEffect(() => {
     let live = true;
@@ -45,20 +49,23 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
   }, []);
 
   return (
-    <div className="canary-shell h-svh overflow-hidden p-2 text-foreground md:p-3">
+    <div
+      className={cn('canary-shell h-svh overflow-hidden p-2 text-foreground md:p-3', className)}
+      {...props}
+    >
       <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-2 md:flex md:gap-0">
-        <MobileSidebar>
+        <MobileDrawer>
           <div className="grid gap-4">
-            <PrimaryMobile ready={ready} user={props.user} />
+            <MobileNav ready={ready} user={user} />
             {aside}
           </div>
-        </MobileSidebar>
+        </MobileDrawer>
 
         <div className="hidden h-full min-h-0 shrink-0 pr-(--shell-gap) md:block">
-          <PrimarySidebar
+          <DesktopNav
             open={open}
             ready={ready}
-            user={props.user}
+            user={user}
             onToggle={() => setOpen((state) => !state)}
           />
         </div>
@@ -66,7 +73,7 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
         <SecondarySlot open={!!aside}>{aside}</SecondarySlot>
 
         <main className="canary-panel min-h-0 overflow-hidden rounded-(--radius-shell) md:flex-1">
-          {ready ? props.children : <SyncScreen />}
+          {ready ? children : <SyncScreen />}
         </main>
       </div>
     </div>
@@ -76,7 +83,7 @@ function AppFrame(props: { children: ReactNode; user: ShellUser }) {
 function renderAside(aside: ShellAside | undefined, user: ShellUser) {
   switch (aside) {
     case 'threads':
-      return <ChatSidebar user={user} />;
+      return <ThreadSidebar user={user} />;
     default:
       return null;
   }
@@ -111,4 +118,5 @@ function SyncScreen() {
   );
 }
 
-export { AppFrame };
+export { ShellFrame };
+export type { ShellFrameProps };

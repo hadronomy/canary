@@ -1,26 +1,28 @@
 import type { RegisterableHotkey } from '@tanstack/react-hotkeys';
+import type { ComponentPropsWithoutRef } from 'react';
 
+import { CommandIcon } from '@phosphor-icons/react';
 import { formatForDisplay } from '@tanstack/react-hotkeys';
 
-import { CommandIcon } from '~/components/icons';
 import { Kbd, KbdGroup } from '~/components/ui/kbd';
 import { cn } from '~/lib/utils';
 
-function ComposerShortcut(props: {
-  className?: string;
+type ComposerShortcutProps = Omit<ComponentPropsWithoutRef<typeof KbdGroup>, 'children'> & {
   kbdClassName?: string;
   value: RegisterableHotkey;
-}) {
-  const parts = shortcutParts(props.value);
+};
+
+function ComposerShortcut({ className, kbdClassName, value, ...props }: ComposerShortcutProps) {
+  const parts = shortcutParts(value);
 
   if (!parts.length) {
     return null;
   }
 
   return (
-    <KbdGroup className={cn('gap-1', props.className)} title={shortcutLabel(props.value)}>
+    <KbdGroup className={cn('gap-1', className)} title={shortcutLabel(value)} {...props}>
       {parts.map((part, index) => (
-        <Kbd key={`${part}-${index}`} className={props.kbdClassName}>
+        <Kbd key={`${part}-${index}`} className={kbdClassName}>
           <Keycap value={part} />
         </Kbd>
       ))}
@@ -83,3 +85,4 @@ function shortcutLabel(value: RegisterableHotkey) {
 }
 
 export { ComposerShortcut, shortcutLabel };
+export type { ComposerShortcutProps };

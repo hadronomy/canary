@@ -1,3 +1,4 @@
+import { ArrowLineDownIcon as LatestIcon } from '@phosphor-icons/react';
 import { code } from '@streamdown/code';
 import { useLiveQuery } from '@tanstack/react-db';
 import { createFileRoute, Navigate } from '@tanstack/react-router';
@@ -27,8 +28,7 @@ import { assign, setup, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import type { Part, Message as SyncMessage } from '@canary/sync';
 
 import { AgentPrompt } from '~/components/agent-prompt';
-import { LatestIcon } from '~/components/icons';
-import { shellRoutes } from '~/components/shell/model';
+import { shellRoutes } from '~/components/shell/routes';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
 import { Message, MessageContent } from '~/components/ui/message';
 import { cn } from '~/lib/utils';
@@ -670,7 +670,7 @@ function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
         <TranscriptRuntime key={threadId} ownerId={ownerId} threadId={threadId} />
       </main>
 
-      <ThreadComposer
+      <ThreadActions
         activeRunId={activeRunId}
         disabled={!thread}
         ownerId={ownerId}
@@ -698,7 +698,7 @@ function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProp
   );
 }
 
-type ThreadComposerProps = {
+type ThreadActionsProps = {
   activeRunId: string | null;
   disabled: boolean;
   ownerId: string;
@@ -707,14 +707,14 @@ type ThreadComposerProps = {
   threadId: string;
 };
 
-function ThreadComposer({
+function ThreadActions({
   activeRunId,
   disabled,
   ownerId,
   pristine,
   running,
   threadId,
-}: ThreadComposerProps) {
+}: ThreadActionsProps) {
   const runtime = useTranscriptRuntimeBridge();
 
   const currentThreadIdRef = useRef(threadId);

@@ -1,6 +1,6 @@
 import type { Content, Editor } from '@tiptap/core';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
-import type { MutableRefObject } from 'react';
+import type { ComponentPropsWithoutRef, RefObject } from 'react';
 
 import { Extension } from '@tiptap/core';
 import CharacterCount from '@tiptap/extension-character-count';
@@ -32,15 +32,17 @@ export type ComposerSlashState =
 type CompositionState = 'composing' | 'idle';
 
 type Refs = {
-  choose: MutableRefObject<(cmd: Cmd) => void>;
-  cmds: MutableRefObject<Cmd[]>;
-  query: MutableRefObject<string>;
+  choose: RefObject<(cmd: Cmd) => void>;
+  cmds: RefObject<Cmd[]>;
+  query: RefObject<string>;
   set: (next: ComposerSlashState) => void;
-  slash: MutableRefObject<ComposerSlashState>;
+  slash: RefObject<ComposerSlashState>;
 };
 
-function ComposerEditor(props: {
-  className?: string;
+type ComposerEditorProps = Omit<
+  ComponentPropsWithoutRef<'div'>,
+  'children' | 'onChange' | 'onSubmit'
+> & {
   commands: Cmd[];
   disabled?: boolean;
   placeholder: string;
@@ -53,20 +55,35 @@ function ComposerEditor(props: {
   onSlashChange: (next: ComposerSlashState) => void;
   onSubmit: (text: string) => void;
   onValue: (text: string) => void;
-}) {
-  const slashRef = useRef<ComposerSlashState>(props.slashState);
-  const cmds = useRef(props.commands);
-  const choose = useRef(props.onCommand);
-  const holder = useRef(props.placeholder);
+};
+
+function ComposerEditor({
+  className,
+  commands,
+  disabled,
+  onCommand,
+  onEscape,
+  onFocusChange,
+  onHistory,
+  onSlashChange,
+  onSubmit,
+  onValue,
+  placeholder,
+  slashState,
+  value,
+  ...props
+}: ComposerEditorProps) {
+  const slashRef = useRef<ComposerSlashState>(slashState);
+  const cmds = useRef(commands);
+  const choose = useRef(onCommand);
+  const holder = useRef(placeholder);
   const query = useRef('');
   const composition = useRef<CompositionState>('idle');
 
-  slashRef.current = props.slashState;
-  cmds.current = props.commands;
-  choose.current = props.onCommand;
-  holder.current = props.placeholder;
-
-  const onSlashChange = props.onSlashChange;
+  slashRef.current = slashState;
+  cmds.current = commands;
+  choose.current = onCommand;
+  holder.current = placeholder;
 
   const set = useCallback(
     (next: ComposerSlashState) => {
@@ -94,8 +111,8 @@ function ComposerEditor(props: {
       CharacterCount,
       ext,
     ],
-    content: doc(props.value),
-    editable: !props.disabled,
+    content: doc(value),
+    editable: !disabled,
     editorProps: {
       attributes: {
         'aria-label': 'Message Canary',
@@ -126,19 +143,19 @@ function ComposerEditor(props: {
           }
 
           event.preventDefault();
-          submit(editor, props);
+          submit(editor, { disabled, onSubmit });
           return true;
         }
 
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           event.preventDefault();
-          submit(editor, props);
+          submit(editor, { disabled, onSubmit });
           return true;
         }
 
-        if (event.key === 'Escape' && slashRef.current.kind === 'closed' && props.onEscape) {
+        if (event.key === 'Escape' && slashRef.current.kind === 'closed' && onEscape) {
           event.preventDefault();
-          props.onEscape();
+          onEscape();
           return true;
         }
 
@@ -152,7 +169,7 @@ function ComposerEditor(props: {
             return false;
           }
 
-          const text = props.onHistory(dir, plain(editor));
+          const text = onHistory(dir, plain(editor));
 
           if (text === null) {
             return false;
@@ -160,7 +177,7 @@ function ComposerEditor(props: {
 
           event.preventDefault();
           editor.commands.setContent(doc(text), { emitUpdate: false });
-          props.onValue(text);
+          onValue(text);
           editor.commands.focus(dir === 'up' ? 'start' : 'end');
           return true;
         }
@@ -168,10 +185,10 @@ function ComposerEditor(props: {
         return false;
       },
     },
-    onBlur: () => props.onFocusChange?.('blurred'),
-    onFocus: () => props.onFocusChange?.('focused'),
+    onBlur: () => onFocusChange?.('blurred'),
+    onFocus: () => onFocusChange?.('focused'),
     onUpdate: ({ editor }) => {
-      props.onValue(plain(editor));
+      onValue(plain(editor));
     },
   });
 
@@ -180,23 +197,23 @@ function ComposerEditor(props: {
       return;
     }
 
-    editor.setEditable(!props.disabled);
-  }, [editor, props.disabled]);
+    editor.setEditable(!disabled);
+  }, [disabled, editor]);
 
   useEffect(() => {
     if (!editor) {
       return;
     }
 
-    if (plain(editor) === props.value) {
+    if (plain(editor) === value) {
       return;
     }
 
-    editor.commands.setContent(doc(props.value), { emitUpdate: false });
-  }, [editor, props.value]);
+    editor.commands.setContent(doc(value), { emitUpdate: false });
+  }, [editor, value]);
 
   return (
-    <div className={cn('relative min-w-0', props.className)}>
+    <div className={cn('relative min-w-0', className)} {...props}>
       <EditorContent editor={editor} />
     </div>
   );
@@ -364,3 +381,4 @@ function edge(editor: Editor | null, dir: 'down' | 'up') {
 }
 
 export { ComposerEditor };
+export type { ComposerEditorProps };

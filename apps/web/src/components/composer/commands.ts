@@ -1,20 +1,18 @@
 import type { RegisterableHotkey } from '@tanstack/react-hotkeys';
-import type { ComponentType } from 'react';
 
 import {
-  AgentIcon,
   BrainIcon,
   BroomIcon,
+  type Icon,
   ListChecksIcon,
   MagicWandIcon,
   PipeWrenchIcon,
   QuestionIcon,
+  RobotIcon as AgentIcon,
   SlidersHorizontalIcon,
   StopIcon,
   TerminalWindowIcon,
-} from '~/components/icons';
-
-type Icon = ComponentType<{ className?: string }>;
+} from '@phosphor-icons/react';
 
 export type Mode = 'agent' | 'compact' | 'tools';
 
@@ -157,5 +155,3 @@ export function modeLabel(mode: Mode) {
 
   return 'Agent';
 }
-
-export { ListChecksIcon, MagicWandIcon };

@@ -1,4 +1,4 @@
-import { LoaderIcon } from '~/components/icons';
+import { CircleNotchIcon as LoaderIcon } from '@phosphor-icons/react';
 
 export default function Loader() {
   return (

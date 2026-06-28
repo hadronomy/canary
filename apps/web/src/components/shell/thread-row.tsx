@@ -1,24 +1,34 @@
-import type { MouseEvent } from 'react';
+import type { ComponentPropsWithoutRef, MouseEvent } from 'react';
 
+import { TrayArrowDownIcon as ArchiveIcon } from '@phosphor-icons/react';
 import { Link } from '@tanstack/react-router';
 
-import { ArchiveIcon } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/lib/utils';
 
-function ThreadItem(props: {
+type ThreadRowProps = Omit<ComponentPropsWithoutRef<'div'>, 'children' | 'id'> & {
   active: boolean;
   id: string;
   onArchive: (id: string) => void;
   title: string;
   updated: string;
-}) {
-  const title = props.title.trim() || 'Untitled thread';
+};
+
+function ThreadRow({
+  active,
+  className,
+  id,
+  onArchive,
+  title: label,
+  updated,
+  ...props
+}: ThreadRowProps) {
+  const title = label.trim() || 'Untitled thread';
 
   function archive(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
-    props.onArchive(props.id);
+    onArchive(id);
   }
 
   return (
@@ -27,19 +37,18 @@ function ThreadItem(props: {
         'group/item grid grid-cols-[minmax(0,1fr)_0rem] items-stretch overflow-hidden rounded-(--radius-control) border text-xs text-muted-foreground',
         'transition-[background-color,border-color,color,box-shadow,grid-template-columns] duration-150 ease-out-strong motion-reduce:transition-none',
         'hover:grid-cols-[minmax(0,1fr)_2.25rem] focus-within:grid-cols-[minmax(0,1fr)_2.25rem]',
-        props.active
+        active
           ? 'border-line-strong bg-row text-foreground shadow-[inset_0_1px_0_color-mix(in_oklab,var(--canary-foreground)_7%,transparent)]'
           : 'border-transparent hover:border-line hover:bg-row-hover hover:text-foreground focus-within:border-line focus-within:bg-row-hover focus-within:text-foreground',
+        className,
       )}
+      {...props}
     >
       <Link
-        aria-current={props.active ? 'page' : undefined}
-        aria-label={`${title}, updated ${formatThreadTime(props.updated)}, id ${props.id.slice(
-          0,
-          8,
-        )}`}
+        aria-current={active ? 'page' : undefined}
+        aria-label={`${title}, updated ${formatThreadTime(updated)}, id ${id.slice(0, 8)}`}
         className="min-w-0 px-3 py-2 outline-none"
-        params={{ threadId: props.id }}
+        params={{ threadId: id }}
         preload={false}
         to="/threads/$threadId"
       >
@@ -48,17 +57,15 @@ function ThreadItem(props: {
         </span>
 
         <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-          <time className="shrink-0 tabular-nums" dateTime={props.updated}>
-            {formatThreadTime(props.updated)}
+          <time className="shrink-0 tabular-nums" dateTime={updated}>
+            {formatThreadTime(updated)}
           </time>
 
           <span aria-hidden="true" className="text-muted-foreground/45">
             ·
           </span>
 
-          <span className="truncate font-mono text-[10px] tabular-nums">
-            {props.id.slice(0, 8)}
-          </span>
+          <span className="truncate font-mono text-[10px] tabular-nums">{id.slice(0, 8)}</span>
         </span>
       </Link>
 
@@ -69,7 +76,7 @@ function ThreadItem(props: {
             'pointer-events-none absolute inset-y-1 -left-5 w-5 bg-linear-to-r from-transparent opacity-0',
             'transition-opacity duration-150 ease-out-strong motion-reduce:transition-none',
             'group-hover/item:opacity-100',
-            props.active ? 'to-row/95' : 'to-background/95 group-hover/item:to-row-hover/95',
+            active ? 'to-row/95' : 'to-background/95 group-hover/item:to-row-hover/95',
           )}
         />
 
@@ -149,4 +156,5 @@ function isSameLocalDay(left: Date, right: Date) {
   );
 }
 
-export { ThreadItem };
+export { ThreadRow };
+export type { ThreadRowProps };

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { shellRoutes } from '~/components/shell/model';
+import { shellRoutes } from '~/components/shell/routes';
 
 export const Route = createFileRoute('/_auth/threads/')({
   staticData: {

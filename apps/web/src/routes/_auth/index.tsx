@@ -1,7 +1,7 @@
+import { LightningIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { LightningIcon } from '~/components/icons';
-import { shellRoutes } from '~/components/shell/model';
+import { shellRoutes } from '~/components/shell/routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 
 export const Route = createFileRoute('/_auth/')({

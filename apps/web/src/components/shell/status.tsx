@@ -1,11 +1,25 @@
-import { PulseIcon } from '~/components/icons';
-import { Progress } from '~/components/ui/progress';
+import type { ComponentPropsWithoutRef } from 'react';
 
-function StatusMeter(props: { threads: number }) {
-  const value = Math.min(100, 44 + props.threads * 4);
+import { PulseIcon } from '@phosphor-icons/react';
+
+import { Progress } from '~/components/ui/progress';
+import { cn } from '~/lib/utils';
+
+type SyncStatusProps = ComponentPropsWithoutRef<'div'> & {
+  threads: number;
+};
+
+function SyncStatus({ className, threads, ...props }: SyncStatusProps) {
+  const value = Math.min(100, 44 + threads * 4);
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-line bg-surface-raised p-3 ">
+    <div
+      className={cn(
+        'min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-line bg-surface-raised p-3',
+        className,
+      )}
+      {...props}
+    >
       <div className="flex items-center gap-3">
         <div className="grid size-8 shrink-0 place-items-center rounded-(--radius-press) border border-line bg-surface/85 text-success">
           <PulseIcon className="size-4" />
@@ -24,4 +38,5 @@ function StatusMeter(props: { threads: number }) {
   );
 }
 
-export { StatusMeter };
+export { SyncStatus };
+export type { SyncStatusProps };

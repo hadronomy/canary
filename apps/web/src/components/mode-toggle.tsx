@@ -1,4 +1,5 @@
-import { ThemeIcon } from '~/components/icons';
+import { SunIcon as ThemeIcon } from '@phosphor-icons/react';
+
 import { useTheme } from '~/components/theme-provider';
 import { Button } from '~/components/ui/button';
 import {

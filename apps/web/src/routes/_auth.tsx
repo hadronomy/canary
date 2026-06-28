@@ -1,6 +1,6 @@
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
 
-import { AppFrame } from '~/components/shell/app-frame';
+import { ShellFrame } from '~/components/shell/frame';
 import { getUser, userKey, userOptions } from '~/functions/get-user';
 import { setup } from '~/utils/chat';
 
@@ -47,8 +47,8 @@ function AuthComponent() {
   const ctx = Route.useRouteContext();
 
   return (
-    <AppFrame user={ctx.user}>
+    <ShellFrame user={ctx.user}>
       <Outlet />
-    </AppFrame>
+    </ShellFrame>
   );
 }

@@ -474,12 +474,6 @@
 @layer components {
   .canary-shell {
     background-color: var(--canary-shell);
-    background-image: repeating-linear-gradient(
-      135deg,
-      transparent 0 8px,
-      var(--canary-grid) 8px 10px,
-      transparent 10px 18px
-    );
   }
 
   .canary-panel {

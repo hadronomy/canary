@@ -1,24 +1,39 @@
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
+
+import { CommandIcon, ListChecksIcon, MagicWandIcon, PipeWrenchIcon } from '@phosphor-icons/react';
 
 import type { Mode } from '~/components/composer/commands';
 
-import { ListChecksIcon, MagicWandIcon, modeLabel } from '~/components/composer/commands';
-import { CommandIcon, PipeWrenchIcon } from '~/components/icons';
+import { modeLabel } from '~/components/composer/commands';
 import { Kbd, KbdGroup } from '~/components/ui/kbd';
+import { ToggleGroup, ToggleGroupItem } from '~/components/ui/toggle-group';
 import { cn } from '~/lib/utils';
 
 export type ToolingState = 'disabled' | 'enabled';
 export type TrayVisibility = 'collapsed' | 'expanded';
 
-function ComposerTray(props: {
+type ComposerTrayProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   chars: number;
   mode: Mode;
   tooling: ToolingState;
   visibility: TrayVisibility;
   onMode: (mode: Mode) => void;
   onTools: () => void;
-}) {
-  const collapsed = props.visibility === 'collapsed';
+};
+
+function ComposerTray({
+  chars,
+  className,
+  mode: value,
+  onMode,
+  onTools,
+  tooling,
+  visibility,
+  ...props
+}: ComposerTrayProps) {
+  const collapsed = visibility === 'collapsed';
+  const mode = value === 'compact' ? 'compact' : 'agent';
+  const tools = tooling === 'enabled';
 
   return (
     <div
@@ -27,43 +42,59 @@ function ComposerTray(props: {
         'relative z-10 flex min-w-0 items-center justify-between gap-3',
         'transition-opacity duration-150 ease-out-strong',
         collapsed && 'pointer-events-none opacity-0',
+        className,
       )}
+      {...props}
     >
       <div
         aria-label="Composer controls"
         className="inline-flex min-w-0 items-center gap-1 rounded-full border border-line bg-control p-1"
         role="group"
       >
-        <Chip
-          selected={props.mode === 'agent'}
-          tabIndex={collapsed ? -1 : undefined}
-          onClick={() => props.onMode('agent')}
-        >
-          <MagicWandIcon data-icon="inline-start" />
-          {modeLabel('agent')}
-        </Chip>
+        <ToggleGroup
+          aria-label="Composer mode"
+          className="min-w-0"
+          spacing={1}
+          value={[mode]}
+          onValueChange={(next) => {
+            const value = next[0];
 
-        <Chip
-          selected={props.tooling === 'enabled'}
-          tabIndex={collapsed ? -1 : undefined}
-          onClick={props.onTools}
+            if (value === 'agent' || value === 'compact') {
+              onMode(value);
+            }
+          }}
         >
-          <PipeWrenchIcon data-icon="inline-start" />
-          Tools
-        </Chip>
+          <ToggleGroupItem className={item} tabIndex={collapsed ? -1 : undefined} value="agent">
+            <MagicWandIcon data-icon="inline-start" />
+            {modeLabel('agent')}
+          </ToggleGroupItem>
 
-        <Chip
-          selected={props.mode === 'compact'}
-          tabIndex={collapsed ? -1 : undefined}
-          onClick={() => props.onMode('compact')}
+          <ToggleGroupItem className={item} tabIndex={collapsed ? -1 : undefined} value="compact">
+            <ListChecksIcon data-icon="inline-start" />
+            Compact
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+        <ToggleGroup
+          aria-label="Composer tooling"
+          multiple
+          spacing={1}
+          value={tools ? ['tools'] : []}
+          onValueChange={(next) => {
+            if (next.includes('tools') !== tools) {
+              onTools();
+            }
+          }}
         >
-          <ListChecksIcon data-icon="inline-start" />
-          Compact
-        </Chip>
+          <ToggleGroupItem className={item} tabIndex={collapsed ? -1 : undefined} value="tools">
+            <PipeWrenchIcon data-icon="inline-start" />
+            Tools
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 rounded-full border border-line bg-control px-2 py-1 text-[11px] text-muted-foreground">
-        <span className="min-w-[4.5ch] text-right tabular-nums">{formatChars(props.chars)}</span>
+        <span className="min-w-[4.5ch] text-right tabular-nums">{formatChars(chars)}</span>
 
         <span aria-hidden className="h-4 w-px bg-line" />
 
@@ -79,33 +110,6 @@ function ComposerTray(props: {
   );
 }
 
-function Chip(props: {
-  children: ReactNode;
-  selected: boolean;
-  tabIndex?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      aria-pressed={props.selected}
-      className={cn(
-        'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium',
-        'transition-[background-color,border-color,color] duration-150 ease-out-strong',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
-        '**:data-[icon=inline-start]:size-3.5 **:data-[icon=inline-start]:shrink-0',
-        props.selected
-          ? 'border-line bg-row text-foreground hover:border-line hover:bg-row'
-          : 'border-transparent bg-transparent text-muted-foreground hover:border-line hover:bg-control-hover hover:text-foreground',
-      )}
-      tabIndex={props.tabIndex}
-      type="button"
-      onClick={props.onClick}
-    >
-      {props.children}
-    </button>
-  );
-}
-
 function formatChars(chars: number) {
   if (chars < 1000) {
     return `${chars} chars`;
@@ -117,4 +121,12 @@ function formatChars(chars: number) {
 const key =
   'size-6 min-w-6 rounded-full border border-line bg-row p-0 text-[11px] text-foreground/75';
 
+const item = cn(
+  'h-7 rounded-full border border-transparent px-2.5 text-[11px]',
+  'bg-transparent text-muted-foreground hover:border-line hover:bg-control-hover hover:text-foreground',
+  'data-[pressed]:border-line data-[pressed]:bg-row data-[pressed]:text-foreground',
+  '**:data-[icon=inline-start]:size-3.5 **:data-[icon=inline-start]:shrink-0',
+);
+
 export { ComposerTray };
+export type { ComposerTrayProps };

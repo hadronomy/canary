@@ -1,68 +1,52 @@
 import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
 
+import { FunctionIcon } from '@phosphor-icons/react';
 import { useHotkeys } from '@tanstack/react-hotkeys';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  type ComponentPropsWithoutRef,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 
-import type { Cmd, Mode, RunState } from '~/components/composer/commands';
-import type { ComposerSlashState, FocusState } from '~/components/composer/editor';
-import type { SlashMenuState } from '~/components/composer/slash-menu';
-import type { ToolingState, TrayVisibility } from '~/components/composer/tray';
+import type { Cmd, RunState } from '~/components/composer/commands';
+import type {
+  AvailabilityState,
+  ComposerSurfaceState,
+  DraftState,
+} from '~/components/composer/state';
+import type { TrayVisibility } from '~/components/composer/tray';
 
+import { ComposerAction } from '~/components/composer/action';
 import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
-import { ComposerPrimaryActionButton } from '~/components/composer/primary-action-button';
-import { SlashMenu } from '~/components/composer/slash-menu';
+import { ComposerMenu } from '~/components/composer/menu';
+import {
+  auraVariants,
+  composerMount,
+  ease,
+  railSectionVariants,
+  surfaceVariants,
+} from '~/components/composer/motion';
+import {
+  action as actionFrom,
+  enabled as hotkeyEnabled,
+  hint as hintCopy,
+  initialUi,
+  menu as menuFrom,
+  reduce as reduceUi,
+  surface as surfaceFrom,
+} from '~/components/composer/state';
 import { ComposerTray } from '~/components/composer/tray';
-import { FunctionIcon } from '~/components/icons';
 import { cn } from '~/lib/utils';
 
-const ease = [0.16, 1, 0.3, 1] as const;
-
-const hints = [
-  'Ask Canary to investigate...',
-  'Describe the agent task...',
-  'Type / for commands...',
-  'Ask for the next careful step...',
-] as const;
-
-type DraftState = 'empty' | 'drafting';
-type AvailabilityState = 'available' | 'disabled';
-
-type ComposerSurfaceState = 'commanding' | 'disabled' | 'error' | 'focused' | 'resting' | 'running';
-
-type ComposerPrimaryAction =
-  | { kind: 'cancel-run'; label: string }
-  | { kind: 'disabled'; label: string }
-  | { kind: 'send-empty'; label: string }
-  | { kind: 'send-ready'; label: string };
-
-type ComposerUiState = {
-  focus: FocusState;
-  hint: number;
-  mode: Mode;
-  slash: ComposerSlashState;
-  tooling: ToolingState;
-};
-
-type ComposerUiEvent =
-  | { type: 'cycle-hint' }
-  | { type: 'focus-change'; focus: FocusState }
-  | { type: 'mode-change'; mode: Mode }
-  | { type: 'slash-active'; index: number }
-  | { type: 'slash-change'; slash: ComposerSlashState }
-  | { type: 'tools-toggle' };
-
-const initialUi: ComposerUiState = {
-  focus: 'blurred',
-  hint: 0,
-  mode: 'agent',
-  slash: { kind: 'closed' },
-  tooling: 'enabled',
-};
-
-function AgentComposer(props: {
+type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
   disabled?: boolean;
   error: null | string;
   pristine?: boolean;
@@ -72,27 +56,31 @@ function AgentComposer(props: {
   onNew?: () => void;
   onSubmit: (text: string) => void;
   onValue: (text: string) => void;
-}) {
-  const {
-    disabled: disabledProp,
-    error,
-    onCancel,
-    onNew,
-    onSubmit,
-    onValue,
-    pristine,
-    running,
-    value,
-  } = props;
+};
 
+function AgentPrompt({
+  'aria-describedby': describedBy,
+  className,
+  disabled: disabledProp,
+  error,
+  onCancel,
+  onNew,
+  onSubmit,
+  onValue,
+  pristine,
+  running,
+  value,
+  ...props
+}: AgentPromptProps) {
   const errorId = useId();
   const hintId = useId();
+  const described = [describedBy, error ? errorId : hintId].filter(Boolean).join(' ');
 
   const reduce = useReducedMotion();
   const hist = useRef(history());
   const composerRef = useRef<HTMLDivElement>(null);
 
-  const [ui, dispatch] = useReducer(reduceComposerUi, initialUi);
+  const [ui, dispatch] = useReducer(reduceUi, initialUi);
   const [hoveringComposer, setHoveringComposer] = useState(false);
 
   const draftState: DraftState = value.trim() ? 'drafting' : 'empty';
@@ -105,14 +93,14 @@ function AgentComposer(props: {
     availability,
     error,
     focus: ui.focus,
-    runState,
+    run: runState,
     slash: ui.slash,
   });
 
-  const action = primaryAction({
+  const action = actionFrom({
     availability,
-    draftState,
-    runState,
+    draft: draftState,
+    run: runState,
   });
 
   const canUsePrimaryAction =
@@ -209,11 +197,11 @@ function AgentComposer(props: {
           options: {
             enabled:
               canUseHotkeys &&
-              commandHotkeyEnabled(cmd, {
-                draftState,
+              hotkeyEnabled(cmd, {
+                draft: draftState,
                 onCancel,
                 onNew,
-                runState,
+                run: runState,
               }),
             meta: {
               name: cmd.label,
@@ -266,8 +254,12 @@ function AgentComposer(props: {
 
   return (
     <form
-      aria-describedby={error ? errorId : hintId}
-      className="border-t border-line bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl"
+      aria-describedby={described}
+      className={cn(
+        'border-t border-line bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl',
+        className,
+      )}
+      {...props}
       onSubmit={(event) => {
         event.preventDefault();
 
@@ -288,9 +280,9 @@ function AgentComposer(props: {
           onPointerEnter={() => setHoveringComposer(true)}
           onPointerLeave={() => setHoveringComposer(false)}
         >
-          <SlashMenu
+          <ComposerMenu
             commands={cmds}
-            state={slashMenuFrom(ui.slash)}
+            state={menuFrom(ui.slash)}
             onActive={(index) => dispatch({ type: 'slash-active', index })}
             onPick={pickSlashCommand}
           />
@@ -334,7 +326,7 @@ function AgentComposer(props: {
                 onValue={onValue}
               />
 
-              <ComposerPrimaryActionButton
+              <ComposerAction
                 action={action}
                 enabled={canUsePrimaryAction}
                 onCancelRun={activatePrimaryAction}
@@ -389,139 +381,6 @@ function AgentComposer(props: {
   );
 }
 
-// TODO: Investigate how to ingrain this in the command system design, so that it's architecture in way where we don't have to be doing this kind of manual checks fo each hotkey.
-function commandHotkeyEnabled(
-  cmd: Cmd,
-  input: {
-    draftState: DraftState;
-    onCancel?: () => void;
-    onNew?: () => void;
-    runState: RunState;
-  },
-) {
-  if (cmd.disabled) {
-    return false;
-  }
-
-  if (cmd.act.kind === 'clear') {
-    return input.runState === 'idle' && input.draftState === 'drafting';
-  }
-
-  if (cmd.act.kind === 'cancel') {
-    return input.runState === 'running' && input.onCancel !== undefined;
-  }
-
-  if (cmd.act.kind === 'new') {
-    return input.onNew !== undefined;
-  }
-
-  return true;
-}
-
-function reduceComposerUi(state: ComposerUiState, event: ComposerUiEvent): ComposerUiState {
-  if (event.type === 'cycle-hint') {
-    return { ...state, hint: (state.hint + 1) % hints.length };
-  }
-
-  if (event.type === 'focus-change') {
-    return { ...state, focus: event.focus };
-  }
-
-  if (event.type === 'mode-change') {
-    return {
-      ...state,
-      mode: event.mode,
-      tooling: event.mode === 'tools' ? 'enabled' : state.tooling,
-    };
-  }
-
-  if (event.type === 'slash-change') {
-    return { ...state, slash: event.slash };
-  }
-
-  if (event.type === 'slash-active') {
-    return { ...state, slash: withSlashActive(state.slash, event.index) };
-  }
-
-  return {
-    ...state,
-    tooling: state.tooling === 'enabled' ? 'disabled' : 'enabled',
-  };
-}
-
-function withSlashActive(slash: ComposerSlashState, index: number): ComposerSlashState {
-  if (slash.kind === 'closed') {
-    return slash;
-  }
-
-  return {
-    ...slash,
-    active: Math.max(0, index),
-  };
-}
-
-function slashMenuFrom(slash: ComposerSlashState): SlashMenuState {
-  if (slash.kind === 'closed') {
-    return { kind: 'closed' };
-  }
-
-  return {
-    active: slash.active,
-    kind: 'open',
-    query: slash.query,
-  };
-}
-
-function surfaceFrom(input: {
-  availability: AvailabilityState;
-  error: null | string;
-  focus: FocusState;
-  runState: RunState;
-  slash: ComposerSlashState;
-}): ComposerSurfaceState {
-  if (input.availability === 'disabled') {
-    return 'disabled';
-  }
-
-  if (input.error) {
-    return 'error';
-  }
-
-  if (input.slash.kind === 'open') {
-    return 'commanding';
-  }
-
-  if (input.runState === 'running') {
-    return 'running';
-  }
-
-  if (input.focus === 'focused') {
-    return 'focused';
-  }
-
-  return 'resting';
-}
-
-function primaryAction(input: {
-  availability: AvailabilityState;
-  draftState: DraftState;
-  runState: RunState;
-}): ComposerPrimaryAction {
-  if (input.runState === 'running') {
-    return { kind: 'cancel-run', label: 'Stop generation' };
-  }
-
-  if (input.availability === 'disabled') {
-    return { kind: 'disabled', label: 'Composer unavailable' };
-  }
-
-  if (input.draftState === 'empty') {
-    return { kind: 'send-empty', label: 'Write a message first' };
-  }
-
-  return { kind: 'send-ready', label: 'Send message' };
-}
-
 function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfaceState }) {
   const label =
     props.surfaceState === 'disabled'
@@ -556,121 +415,5 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
   );
 }
 
-function hintCopy(idx: number) {
-  return hints[idx] ?? 'Ask Canary to investigate...';
-}
-
-const composerMount = {
-  hidden: {
-    opacity: 0,
-    y: 8,
-    filter: 'blur(2px)',
-  },
-  reducedHidden: {
-    opacity: 0,
-  },
-  show: {
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: {
-      duration: 0.22,
-      ease,
-    },
-  },
-};
-
-const surfaceVariants = {
-  commanding: {
-    borderColor: 'var(--canary-line-strong)',
-    borderTopLeftRadius: '1.18rem',
-    borderTopRightRadius: '1.18rem',
-    boxShadow: 'none',
-    y: 1,
-    transition: { duration: 0.2, ease },
-  },
-  disabled: {
-    borderColor: 'var(--canary-line)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-  error: {
-    borderColor: 'color-mix(in oklch, var(--canary-danger) 34%, transparent)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-  focused: {
-    borderColor: 'var(--canary-line-strong)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-  resting: {
-    borderColor: 'var(--canary-line)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-  running: {
-    borderColor: 'var(--canary-line-strong)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-};
-
-const auraVariants = {
-  commanding: {
-    opacity: 0.68,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 42%)',
-  },
-  disabled: { opacity: 0 },
-  error: {
-    opacity: 1,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--canary-danger) 12%, transparent), transparent 38%, transparent)',
-  },
-  focused: {
-    opacity: 0.7,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 44%)',
-  },
-  resting: {
-    opacity: 0.45,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 4.5%, transparent), transparent 42%)',
-  },
-  running: {
-    opacity: 0.65,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 6.5%, transparent), transparent 42%)',
-  },
-};
-
-const railSectionVariants = {
-  closed: {
-    opacity: 0,
-    height: 0,
-    transition: { duration: 0.14, ease },
-  },
-  open: {
-    opacity: 1,
-    height: 'auto',
-    transition: { duration: 0.18, ease },
-  },
-};
-
-export { AgentComposer };
+export { AgentPrompt };
+export type { AgentPromptProps };

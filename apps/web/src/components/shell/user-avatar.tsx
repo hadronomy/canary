@@ -1,36 +1,39 @@
+import type { ComponentPropsWithoutRef } from 'react';
+
 import Avvvatars from 'avvvatars-react';
 
-import type { ShellUser } from '~/components/shell/model';
+import type { ShellUser } from '~/components/shell/routes';
 
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import { cn } from '~/lib/utils';
 
-function UserAvatar(props: {
-  className?: string;
+type UserAvatarProps = Omit<ComponentPropsWithoutRef<typeof Avatar>, 'children'> & {
   ready?: boolean;
-  size?: 'default' | 'lg';
   user: ShellUser;
-}) {
-  const seed = props.user.email ?? props.user.name ?? props.user.id;
-  const size = props.size === 'lg' ? 40 : 32;
+};
+
+function UserAvatar({ className, ready, size, user, ...props }: UserAvatarProps) {
+  const seed = user.email ?? user.name ?? user.id;
+  const pixels = size === 'lg' ? 40 : size === 'sm' ? 24 : 32;
 
   return (
     <Avatar
-      className={cn('border border-line bg-surface-raised after:border-line', props.className)}
-      size={props.size}
+      className={cn('border border-line bg-surface-raised after:border-line', className)}
+      size={size}
+      {...props}
     >
-      {props.user.image ? <AvatarImage alt="" src={props.user.image} /> : null}
+      {user.image ? <AvatarImage alt="" src={user.image} /> : null}
       <AvatarFallback className="overflow-hidden bg-transparent p-0">
         <Avvvatars
           borderColor="var(--canary-line-strong)"
           borderSize={1}
-          radius={size}
-          size={size}
+          radius={pixels}
+          size={pixels}
           style="shape"
           value={seed}
         />
       </AvatarFallback>
-      {props.ready ? (
+      {ready ? (
         <AvatarBadge className="border border-background/70 bg-success text-transparent ring-2 ring-surface" />
       ) : null}
     </Avatar>
@@ -38,3 +41,4 @@ function UserAvatar(props: {
 }
 
 export { UserAvatar };
+export type { UserAvatarProps };
