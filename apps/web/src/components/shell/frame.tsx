@@ -9,6 +9,7 @@ import { MobileDrawer } from '~/components/shell/mobile-drawer';
 import { MobileNav, DesktopNav } from '~/components/shell/nav';
 import { shellFromMatches } from '~/components/shell/routes';
 import { ThreadSidebar } from '~/components/shell/threads';
+import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 import { setup } from '~/utils/chat';
 
@@ -98,14 +99,16 @@ function SecondarySlot(props: { children: ReactNode; open: boolean }) {
         props.open ? 'mr-(--shell-gap) w-[18rem]' : 'mr-0 w-0',
       )}
     >
-      <div
+      <Elevated
+        offset={1}
+        shadowLevel={2}
         className={cn(
-          'canary-panel h-full w-full overflow-hidden rounded-(--radius-shell) bg-background p-3 transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none',
+          'h-full w-full overflow-hidden rounded-(--radius-shell) border border-sidebar-border p-3 text-sidebar-foreground transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none',
           props.open ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0',
         )}
       >
         {props.children}
-      </div>
+      </Elevated>
     </aside>
   );
 }

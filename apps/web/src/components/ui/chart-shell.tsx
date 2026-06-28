@@ -8,9 +8,9 @@ function ChartShell(props: { children: ReactNode; className?: string; title: str
     <Surface className={cn('grid gap-4 p-4', props.className)}>
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold">{props.title}</h3>
-        <span className="size-2 rounded-full bg-success " />
+        <span className="size-2 rounded-full bg-primary" />
       </div>
-      <div className="min-h-48 rounded-2xl border border-line bg-surface/80">{props.children}</div>
+      <div className="min-h-48 rounded-lg border border-border bg-card/80">{props.children}</div>
     </Surface>
   );
 }

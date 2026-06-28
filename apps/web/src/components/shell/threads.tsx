@@ -249,7 +249,7 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
           </div>
 
           <span
-            className="rounded-[0.55rem] border border-line bg-control px-1.5 py-0.5 text-[10px] font-medium leading-4 text-muted-foreground"
+            className="rounded-md border border-input/70 bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium leading-4 text-muted-foreground"
             title="Alt + Arrow Up / Alt + Arrow Down"
           >
             ⌥↑↓
@@ -258,8 +258,8 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
       </header>
 
       <ThreadActions
+        cycleDisabled={visibleThreads.length < 2}
         debug={debug}
-        disabled={visibleThreads.length < 2}
         query={query}
         title={title}
         onCreate={create}
@@ -268,26 +268,26 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
         onTitle={setTitle}
       />
 
-      <nav aria-label="Chat conversations" className="min-h-0 overflow-y-auto pr-1">
+      <nav aria-label="Chat conversations" className="min-h-0 overflow-y-auto pr-1.5">
         {!rosterQuery.isReady ? (
           <ThreadSkeletonList />
         ) : visibleThreads.length ? (
           <div className="grid gap-3">
             {groups.map((group) => (
               <section key={group.id} aria-labelledby={`threads-${group.id}`}>
-                <div className="mb-1 flex items-center justify-between px-1">
+                <div className="mb-1.5 flex items-center justify-between px-1.5">
                   <h3
-                    className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80"
+                    className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/72"
                     id={`threads-${group.id}`}
                   >
                     {group.label}
                   </h3>
-                  <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                  <span className="text-[10px] tabular-nums text-muted-foreground/62">
                     {group.threads.length}
                   </span>
                 </div>
 
-                <div className="grid gap-1">
+                <div className="grid gap-1.5">
                   {group.threads.map((thread) => (
                     <ThreadRow
                       active={thread.id === activeThreadId}
@@ -312,10 +312,10 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
 
 function ThreadSkeletonList() {
   return (
-    <div className="grid gap-1" aria-hidden="true">
+    <div className="grid gap-1.5" aria-hidden="true">
       {Array.from({ length: 7 }).map((_, index) => (
         <Skeleton
-          className="h-[3.35rem] rounded-(--radius-control) border border-line bg-surface/60"
+          className="h-[3.35rem] rounded-(--radius-control) border border-input/50 bg-surface-3/70"
           key={index}
         />
       ))}
@@ -326,7 +326,7 @@ function ThreadSkeletonList() {
 function EmptyState(props: { filtering: boolean; query: string; onClearQuery: () => void }) {
   if (props.filtering) {
     return (
-      <Empty className="items-start gap-2 rounded-(--radius-control) border border-line bg-surface/45 p-3 text-left">
+      <Empty className="items-start gap-2 rounded-(--radius-control) border border-input/60 bg-surface-3/70 p-3 text-left">
         <EmptyHeader className="items-start gap-1">
           <EmptyTitle className="truncate text-xs">No results</EmptyTitle>
           <EmptyDescription className="truncate text-[11px]">
@@ -350,7 +350,7 @@ function EmptyState(props: { filtering: boolean; query: string; onClearQuery: ()
   }
 
   return (
-    <Empty className="items-start gap-1 rounded-(--radius-control) border border-line bg-surface/45 p-3 text-left">
+    <Empty className="items-start gap-1 rounded-(--radius-control) border border-input/60 bg-surface-3/70 p-3 text-left">
       <EmptyHeader className="items-start gap-1">
         <EmptyTitle className="text-xs">No conversations yet</EmptyTitle>
         <EmptyDescription className="text-[11px]">

@@ -7,7 +7,7 @@ function Badge({ className, ...props }: ComponentProps<'span'>) {
     <span
       data-slot="badge"
       className={cn(
-        'inline-flex items-center rounded-full border border-line bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground',
+        'inline-flex items-center rounded-full border border-border bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground',
         className,
       )}
       {...props}

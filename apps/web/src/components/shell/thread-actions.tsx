@@ -14,9 +14,12 @@ import {
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input-group';
+import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 
 type ThreadActionsProps = Omit<ComponentPropsWithoutRef<'section'>, 'children'> & {
+  createDisabled?: boolean;
+  cycleDisabled?: boolean;
   debug: boolean;
   disabled?: boolean;
   onCreate: () => void;
@@ -29,6 +32,8 @@ type ThreadActionsProps = Omit<ComponentPropsWithoutRef<'section'>, 'children'> 
 
 function ThreadActions({
   className,
+  createDisabled = false,
+  cycleDisabled = false,
   debug,
   disabled = false,
   onCreate,
@@ -52,8 +57,9 @@ function ThreadActions({
       <ThreadSearch id={searchId} value={query} onValueChange={onQuery} />
 
       <ThreadCreateForm
+        createDisabled={createDisabled || disabled}
+        cycleDisabled={cycleDisabled || disabled}
         debug={debug}
-        disabled={disabled}
         title={title}
         titleId={titleId}
         onCreate={onCreate}
@@ -97,26 +103,34 @@ function ThreadSearch({ className, id, onValueChange, value, ...props }: ThreadS
         Search conversations
       </label>
 
-      <InputGroup className="h-9 rounded-(--radius-control) border-line bg-surface/80">
-        <InputGroupAddon>
-          <MagnifyingGlassIcon aria-hidden="true" />
-        </InputGroupAddon>
-        <InputGroupInput
-          id={inputId}
-          autoComplete="off"
-          className="text-sm"
-          placeholder="Search threads"
-          spellCheck={false}
-          type="search"
-          value={value}
-          onChange={handleChange}
-        />
-      </InputGroup>
+      <Elevated
+        offset={1}
+        shadowLevel={1}
+        className="rounded-(--radius-control) border border-input/70 transition-[border-color,box-shadow] duration-150 ease-out-strong focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20"
+      >
+        <InputGroup className="h-9 border-0 bg-transparent dark:bg-transparent">
+          <InputGroupAddon>
+            <MagnifyingGlassIcon aria-hidden="true" />
+          </InputGroupAddon>
+          <InputGroupInput
+            id={inputId}
+            autoComplete="off"
+            className="text-sm"
+            placeholder="Search threads"
+            spellCheck={false}
+            type="search"
+            value={value}
+            onChange={handleChange}
+          />
+        </InputGroup>
+      </Elevated>
     </form>
   );
 }
 
 type ThreadCreateFormProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
+  createDisabled?: boolean;
+  cycleDisabled?: boolean;
   debug: boolean;
   disabled?: boolean;
   onCreate: () => void;
@@ -128,6 +142,8 @@ type ThreadCreateFormProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' |
 
 function ThreadCreateForm({
   className,
+  createDisabled = false,
+  cycleDisabled = false,
   debug,
   disabled = false,
   onCreate,
@@ -140,13 +156,13 @@ function ThreadCreateForm({
   const fallbackTitleId = useId();
   const inputId = titleId ?? fallbackTitleId;
 
-  const createDisabled = disabled;
-  const cycleDisabled = disabled || debug;
+  const createBlocked = disabled || createDisabled;
+  const cycleBlocked = disabled || cycleDisabled || debug;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (createDisabled) {
+    if (createBlocked) {
       return;
     }
 
@@ -168,24 +184,33 @@ function ThreadCreateForm({
         New thread title
       </label>
 
-      <Input
-        id={inputId}
-        autoComplete="off"
-        className="h-9 rounded-(--radius-control) border-line bg-surface/80 text-sm"
-        disabled={disabled}
-        placeholder="New thread"
-        value={title}
-        onChange={handleTitleChange}
-      />
+      <Elevated
+        offset={1}
+        shadowLevel={1}
+        className={cn(
+          'min-w-0 rounded-(--radius-control) border border-input/70 transition-[border-color,box-shadow] duration-150 ease-out-strong focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20',
+          createBlocked && 'opacity-50',
+        )}
+      >
+        <Input
+          id={inputId}
+          autoComplete="off"
+          className="h-9 border-0 bg-transparent text-sm focus-visible:ring-0 dark:bg-transparent"
+          disabled={createBlocked}
+          placeholder="New thread"
+          value={title}
+          onChange={handleTitleChange}
+        />
+      </Elevated>
 
       <IconButton
         aria-label="Create thread"
-        disabled={createDisabled}
+        disabled={createBlocked}
         icon={<PlusIcon aria-hidden="true" weight="regular" />}
         type="submit"
       />
 
-      <ThreadCycleButton debug={debug} disabled={cycleDisabled} onCycle={onCycle} />
+      <ThreadCycleButton debug={debug} disabled={cycleBlocked} onCycle={onCycle} />
     </form>
   );
 }

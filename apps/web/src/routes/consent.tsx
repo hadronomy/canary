@@ -62,9 +62,9 @@ function ConsentComponent() {
 
   return (
     <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
-      <Card className="canary-panel w-full max-w-md rounded-[1.5rem] border-line bg-surface/95">
+      <Card className="canary-panel w-full max-w-md rounded-lg border-border bg-card/95">
         <CardHeader className="gap-3 px-5 pt-5">
-          <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+          <div className="grid size-11 place-items-center rounded-md bg-foreground text-background">
             <LightningIcon className="size-5" weight="fill" />
           </div>
           <CardTitle className="text-base">Authorize MCP access</CardTitle>
@@ -74,7 +74,7 @@ function ConsentComponent() {
         </CardHeader>
         <CardContent className="grid gap-3 px-5 pb-5">
           {err ? <p className="text-destructive text-xs">{err}</p> : null}
-          <Button className="rounded-xl" disabled={busy} onClick={accept}>
+          <Button disabled={busy} onClick={accept}>
             {busy ? 'Authorizing...' : 'Authorize'}
           </Button>
         </CardContent>

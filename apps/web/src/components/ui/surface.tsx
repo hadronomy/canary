@@ -1,13 +1,17 @@
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
 
 import { cn } from '~/lib/utils';
 
-function Surface(props: { children: ReactNode; className?: string }) {
+type SurfaceProps = ComponentPropsWithoutRef<'section'>;
+
+function Surface({ className, ...props }: SurfaceProps) {
   return (
-    <section className={cn('rounded-[1.5rem] border border-line bg-surface', props.className)}>
-      {props.children}
-    </section>
+    <section
+      className={cn('rounded-lg border border-border bg-card shadow-surface-2', className)}
+      {...props}
+    />
   );
 }
 
 export { Surface };
+export type { SurfaceProps };

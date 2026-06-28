@@ -18,14 +18,14 @@ function UserAvatar({ className, ready, size, user, ...props }: UserAvatarProps)
 
   return (
     <Avatar
-      className={cn('border border-line bg-surface-raised after:border-line', className)}
+      className={cn('border border-border bg-popover after:border-border', className)}
       size={size}
       {...props}
     >
       {user.image ? <AvatarImage alt="" src={user.image} /> : null}
       <AvatarFallback className="overflow-hidden bg-transparent p-0">
         <Avvvatars
-          borderColor="var(--canary-line-strong)"
+          borderColor="var(--input)"
           borderSize={1}
           radius={pixels}
           size={pixels}
@@ -34,7 +34,7 @@ function UserAvatar({ className, ready, size, user, ...props }: UserAvatarProps)
         />
       </AvatarFallback>
       {ready ? (
-        <AvatarBadge className="border border-background/70 bg-success text-transparent ring-2 ring-surface" />
+        <AvatarBadge className="border border-background/70 bg-primary text-transparent ring-2 ring-card" />
       ) : null}
     </Avatar>
   );

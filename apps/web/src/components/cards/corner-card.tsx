@@ -4,7 +4,11 @@ import { Card } from '~/components/ui/card';
 import { cn } from '~/lib/utils';
 
 function Icon({ className }: { className: string }) {
-  return <div className={cn('size-4 absolute border rounded-xs rotate-45 bg-card', className)} />;
+  return (
+    <div
+      className={cn('absolute size-4 rotate-45 rounded-xs border border-border bg-card', className)}
+    />
+  );
 }
 
 function Icons() {
@@ -23,7 +27,7 @@ type CornerCardProps = ComponentPropsWithoutRef<typeof Card>;
 function CornerCard({ className, children, ...props }: CornerCardProps) {
   return (
     <Card
-      className={cn('relative rounded-none! shadow-none overflow-visible', className)}
+      className={cn('relative overflow-visible rounded-lg shadow-surface-2', className)}
       {...props}
     >
       <Icons />

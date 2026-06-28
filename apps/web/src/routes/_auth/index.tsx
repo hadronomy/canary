@@ -19,9 +19,9 @@ function HomeComponent() {
 
   return (
     <div className="grid h-full place-items-center p-6">
-      <Card className="w-full max-w-xl rounded-[1.5rem] border-line bg-surface/80">
+      <Card className="w-full max-w-xl rounded-lg border-border bg-card/80 shadow-surface-2">
         <CardHeader className="gap-3 px-5 pt-5">
-          <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+          <div className="grid size-11 place-items-center rounded-md bg-foreground text-background">
             <LightningIcon className="size-5" weight="fill" />
           </div>
           <CardTitle className="text-base">Canary web</CardTitle>
@@ -30,7 +30,7 @@ function HomeComponent() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-5 pb-5">
-          <div className="rounded-xl border border-line bg-surface/80 p-4">
+          <div className="rounded-md border border-border bg-card/80 p-4">
             <h2 className="mb-2 text-sm font-medium">API Status</h2>
             <p className="text-sm text-muted-foreground">
               {health.ok ? 'oRPC, Start, and Query hydration are wired.' : 'API offline'}

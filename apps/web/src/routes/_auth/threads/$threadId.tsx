@@ -689,7 +689,7 @@ type ThreadHeaderProps = Omit<ComponentPropsWithoutRef<'header'>, 'children'> & 
 
 function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProps) {
   return (
-    <header className={cn('border-b border-line px-4 py-3', className)} {...props}>
+    <header className={cn('border-b border-border px-4 py-3', className)} {...props}>
       <h1 id="thread-title" className="truncate text-sm font-semibold">
         {title}
       </h1>
@@ -2170,10 +2170,10 @@ function JumpToLatestHud({
         type="button"
         aria-label={buttonPropsRest['aria-label'] ?? 'Jump to latest'}
         className={cn(
-          'grid size-10 place-items-center rounded-full border border-line',
+          'grid size-10 place-items-center rounded-full border border-border',
           'bg-background/90 text-foreground shadow-sm backdrop-blur',
           'transition duration-200 ease-out',
-          'hover:bg-surface-raised hover:shadow-md',
+          'hover:bg-popover hover:shadow-md',
           'active:translate-y-0.5',
           show ? 'pointer-events-auto scale-100' : 'pointer-events-none scale-95',
           buttonClassName,
@@ -2215,16 +2215,9 @@ function UserMessage({ msg }: UserMessageProps) {
   return (
     <Message align="end" className="px-0">
       <MessageContent className="max-w-[min(80%,44rem)]">
-        <Bubble
-          align="end"
-          className="max-w-none border border-line bg-row shadow-none"
-          variant="secondary"
-        >
-          <BubbleContent className="px-3.5 py-2">
-            <Markdown
-              className="text-sm leading-7 wrap-anywhere [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              text={msg.content}
-            />
+        <Bubble align="end" className="max-w-none" variant="secondary">
+          <BubbleContent>
+            <Markdown text={msg.content} />
           </BubbleContent>
         </Bubble>
       </MessageContent>
@@ -2333,7 +2326,7 @@ function ReasoningPart({ live, part }: ReasoningPartProps) {
 
   return (
     <Disclosure
-      className="flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/80 p-3 text-xs"
+      className="flow-root min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-card/80 p-3 text-xs shadow-surface-1"
       defaultOpen={running}
       forceOpen={running}
     >
@@ -2353,11 +2346,11 @@ function StructuredPart({ part }: StructuredPartProps) {
 
   return (
     <Disclosure
-      className="my-2 flow-root min-w-0 max-w-full rounded-xl border border-line bg-surface/85 text-xs"
+      className="my-2 flow-root min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-card/85 text-xs shadow-surface-2"
       defaultOpen={running}
       forceOpen={running}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-card px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
         <span className="min-w-0 truncate font-mono text-xs font-semibold">
           {structuredPartTitle(part)}
         </span>
@@ -2365,7 +2358,7 @@ function StructuredPart({ part }: StructuredPartProps) {
       </summary>
 
       {body ? (
-        <pre className="max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-line bg-surface-raised px-4 py-3 leading-5 wrap-anywhere">
+        <pre className="m-0 max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-border bg-popover px-3 py-2.5 font-mono text-[12px] leading-5 wrap-anywhere">
           {body}
         </pre>
       ) : null}

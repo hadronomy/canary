@@ -48,7 +48,7 @@ function ComposerTray({
     >
       <div
         aria-label="Composer controls"
-        className="inline-flex min-w-0 items-center gap-1 rounded-full border border-line bg-control p-1"
+        className="inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-muted p-1"
         role="group"
       >
         <ToggleGroup
@@ -93,10 +93,10 @@ function ComposerTray({
         </ToggleGroup>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 rounded-full border border-line bg-control px-2 py-1 text-[11px] text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground">
         <span className="min-w-[4.5ch] text-right tabular-nums">{formatChars(chars)}</span>
 
-        <span aria-hidden className="h-4 w-px bg-line" />
+        <span aria-hidden className="h-4 w-px bg-border" />
 
         <KbdGroup>
           <Kbd className={key}>
@@ -119,12 +119,12 @@ function formatChars(chars: number) {
 }
 
 const key =
-  'size-6 min-w-6 rounded-full border border-line bg-row p-0 text-[11px] text-foreground/75';
+  'size-6 min-w-6 rounded-full border border-border bg-card p-0 text-[11px] text-foreground/75';
 
 const item = cn(
   'h-7 rounded-full border border-transparent px-2.5 text-[11px]',
-  'bg-transparent text-muted-foreground hover:border-line hover:bg-control-hover hover:text-foreground',
-  'data-[pressed]:border-line data-[pressed]:bg-row data-[pressed]:text-foreground',
+  'bg-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground',
+  'data-[pressed]:border-border data-[pressed]:bg-accent data-[pressed]:text-foreground',
   '**:data-[icon=inline-start]:size-3.5 **:data-[icon=inline-start]:shrink-0',
 );
 

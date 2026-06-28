@@ -7,6 +7,7 @@ import type { ShellUser } from '~/components/shell/routes';
 import { ModeToggle } from '~/components/mode-toggle';
 import { UserAvatar } from '~/components/shell/user-avatar';
 import { Button } from '~/components/ui/button';
+import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 
 type AccountPanelProps = ComponentPropsWithoutRef<'div'> & {
@@ -16,14 +17,16 @@ type AccountPanelProps = ComponentPropsWithoutRef<'div'> & {
 
 function AccountPanel({ className, onSignout, user, ...props }: AccountPanelProps) {
   return (
-    <div
+    <Elevated
+      offset={1}
+      shadowLevel={1}
       className={cn(
-        'min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-line bg-surface-raised p-2',
+        'min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-input/70 p-2',
         className,
       )}
       {...props}
     >
-      <div className="flex min-w-0 items-center gap-3 rounded-(--radius-control) bg-surface/80 p-2">
+      <div className="flex min-w-0 items-center gap-3 rounded-(--radius-control) bg-background/35 p-2">
         <UserAvatar className="size-10" ready size="lg" user={user} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold tracking-[-0.01em]">
@@ -34,12 +37,12 @@ function AccountPanel({ className, onSignout, user, ...props }: AccountPanelProp
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <ModeToggle className="size-8 border-line bg-control text-muted-foreground hover:bg-row hover:text-foreground" />
+          <ModeToggle className="size-8 border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground" />
           <ChevronDownIcon className="size-4 text-muted-foreground" />
         </div>
       </div>
       <Button
-        className="mt-1 h-8 w-full justify-start rounded-(--radius-press) px-2 text-muted-foreground hover:bg-control hover:text-foreground"
+        className="mt-1 h-8 w-full justify-start rounded-(--radius-press) px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
         size="sm"
         type="button"
         variant="ghost"
@@ -48,7 +51,7 @@ function AccountPanel({ className, onSignout, user, ...props }: AccountPanelProp
         <SignOutIcon data-icon="inline-start" />
         Sign out
       </Button>
-    </div>
+    </Elevated>
   );
 }
 

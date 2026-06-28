@@ -1,8 +1,10 @@
-import * as React from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
 
 import { cn } from '~/lib/utils';
 
-function MessageGroup({ className, ...props }: React.ComponentProps<'div'>) {
+type MessageGroupProps = ComponentPropsWithoutRef<'div'>;
+
+function MessageGroup({ className, ...props }: MessageGroupProps) {
   return (
     <div
       data-slot="message-group"
@@ -12,11 +14,11 @@ function MessageGroup({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function Message({
-  className,
-  align = 'start',
-  ...props
-}: React.ComponentProps<'div'> & { align?: 'start' | 'end' }) {
+type MessageProps = ComponentPropsWithoutRef<'div'> & {
+  align?: 'start' | 'end';
+};
+
+function Message({ className, align = 'start', ...props }: MessageProps) {
   return (
     <div
       data-slot="message"
@@ -30,7 +32,9 @@ function Message({
   );
 }
 
-function MessageAvatar({ className, ...props }: React.ComponentProps<'div'>) {
+type MessageAvatarProps = ComponentPropsWithoutRef<'div'>;
+
+function MessageAvatar({ className, ...props }: MessageAvatarProps) {
   return (
     <div
       data-slot="message-avatar"
@@ -43,7 +47,9 @@ function MessageAvatar({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function MessageContent({ className, ...props }: React.ComponentProps<'div'>) {
+type MessageContentProps = ComponentPropsWithoutRef<'div'>;
+
+function MessageContent({ className, ...props }: MessageContentProps) {
   return (
     <div
       data-slot="message-content"
@@ -56,7 +62,9 @@ function MessageContent({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function MessageHeader({ className, ...props }: React.ComponentProps<'div'>) {
+type MessageHeaderProps = ComponentPropsWithoutRef<'div'>;
+
+function MessageHeader({ className, ...props }: MessageHeaderProps) {
   return (
     <div
       data-slot="message-header"
@@ -69,7 +77,9 @@ function MessageHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function MessageFooter({ className, ...props }: React.ComponentProps<'div'>) {
+type MessageFooterProps = ComponentPropsWithoutRef<'div'>;
+
+function MessageFooter({ className, ...props }: MessageFooterProps) {
   return (
     <div
       data-slot="message-footer"
@@ -83,3 +93,11 @@ function MessageFooter({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 export { MessageGroup, Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader };
+export type {
+  MessageGroupProps,
+  MessageProps,
+  MessageAvatarProps,
+  MessageContentProps,
+  MessageFooterProps,
+  MessageHeaderProps,
+};

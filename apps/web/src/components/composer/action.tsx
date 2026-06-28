@@ -37,7 +37,7 @@ function ComposerAction({
       animate={visual}
       className={cn(
         'relative isolate mb-1 grid size-10 shrink-0 place-items-center overflow-hidden rounded-[0.95rem]',
-        'border bg-control text-foreground',
+        'border bg-muted text-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
         'disabled:cursor-not-allowed',
         className,
@@ -59,7 +59,7 @@ function ComposerAction({
       <motion.span
         aria-hidden
         animate={{ opacity: stopSurfaceOpacity(visual) }}
-        className="absolute inset-0 z-0 bg-danger/15"
+        className="absolute inset-0 z-0 bg-destructive/15"
         transition={reduce ? instantTransition : surfaceTransition}
       />
 
@@ -184,25 +184,25 @@ function stopIconTransition(visual: ButtonVisual) {
 function hoverTone(visual: ButtonVisual) {
   if (visual === 'stop') {
     return {
-      backgroundColor: 'color-mix(in oklch, var(--canary-danger) 5%, var(--canary-control-hover))',
-      borderColor: 'var(--canary-danger)',
-      color: 'var(--canary-danger)',
+      backgroundColor: 'color-mix(in oklch, var(--destructive) 5%, var(--accent))',
+      borderColor: 'var(--destructive)',
+      color: 'var(--destructive)',
       transition: { duration: 0.16, ease },
     } as const;
   }
 
   if (visual === 'send') {
     return {
-      backgroundColor: 'var(--canary-control-hover)',
-      borderColor: 'var(--canary-line-strong)',
+      backgroundColor: 'var(--accent)',
+      borderColor: 'var(--input)',
       color: 'var(--foreground)',
       transition: { duration: 0.16, ease },
     } as const;
   }
 
   return {
-    backgroundColor: 'var(--canary-control-hover)',
-    borderColor: 'var(--canary-line-strong)',
+    backgroundColor: 'var(--accent)',
+    borderColor: 'var(--input)',
     color: 'var(--foreground)',
     transition: { duration: 0.16, ease },
   } as const;
@@ -210,27 +210,27 @@ function hoverTone(visual: ButtonVisual) {
 
 const buttonToneVariants = {
   disabled: {
-    backgroundColor: 'var(--canary-control)',
-    borderColor: 'var(--canary-line)',
+    backgroundColor: 'var(--muted)',
+    borderColor: 'var(--border)',
     color: 'var(--muted-foreground)',
     transition: { duration: 0.28, ease },
   },
   empty: {
-    backgroundColor: 'var(--canary-control)',
-    borderColor: 'var(--canary-line)',
+    backgroundColor: 'var(--muted)',
+    borderColor: 'var(--border)',
     color: 'var(--muted-foreground)',
     transition: { duration: 0.28, ease },
   },
   send: {
-    backgroundColor: 'var(--canary-row)',
-    borderColor: 'var(--canary-line)',
+    backgroundColor: 'var(--card)',
+    borderColor: 'var(--border)',
     color: 'var(--foreground)',
     transition: { duration: 0.28, ease },
   },
   stop: {
-    backgroundColor: 'var(--canary-control-hover)',
-    borderColor: 'var(--canary-danger)',
-    color: 'var(--canary-danger)',
+    backgroundColor: 'var(--accent)',
+    borderColor: 'var(--destructive)',
+    color: 'var(--destructive)',
     transition: { duration: 0.28, ease },
   },
 };

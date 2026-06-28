@@ -18,8 +18,8 @@ import { cn } from '~/lib/utils';
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-const COMMAND_ROW_HEIGHT = 36;
-const COMMAND_ROW_GAP = 2;
+const COMMAND_ROW_HEIGHT = 34;
+const COMMAND_ROW_GAP = 3;
 
 export type ComposerMenuState =
   | { kind: 'closed' }
@@ -91,7 +91,7 @@ function ComposerMenu({
       {menu ? (
         <motion.div
           animate="open"
-          className="pointer-events-auto absolute inset-x-0 bottom-full z-50 w-full perspective-distant"
+          className="pointer-events-auto absolute inset-x-0 bottom-[calc(100%-1px)] z-50 w-full perspective-distant"
           exit={reduce ? 'reduced' : 'closed'}
           initial={reduce ? false : 'closed'}
           variants={rootVariants}
@@ -103,9 +103,9 @@ function ComposerMenu({
           >
             <Command
               className={cn(
-                'relative overflow-hidden rounded-t-[1.1rem] rounded-b-none',
-                'border-x border-t border-line border-b-transparent',
-                'bg-background shadow-[0_-18px_52px_rgba(0,0,0,0.22)]',
+                'relative overflow-hidden rounded-t-[1.35rem] rounded-b-none p-0',
+                'border-x border-t border-border/80 border-b-0',
+                'bg-card text-card-foreground shadow-[0_-18px_44px_-32px_rgb(0_0_0/0.55)]',
                 className,
               )}
               shouldFilter={false}
@@ -114,13 +114,13 @@ function ComposerMenu({
             >
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent"
+                className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent"
               />
 
               <motion.div variants={contentVariants}>
                 <MenuHeader query={menu.query} />
 
-                <CommandList className="max-h-60 scroll-py-1 overflow-y-auto px-1 pb-1.5 pt-1 scrollbar-gutter-stable">
+                <CommandList className="max-h-56 scroll-py-1 overflow-y-auto bg-card px-2 pb-2 pt-1.5 scrollbar-gutter-stable">
                   <CommandEmpty className="px-3 py-7 text-center text-xs text-muted-foreground">
                     No slash commands found.
                   </CommandEmpty>
@@ -133,8 +133,7 @@ function ComposerMenu({
                           animate={{ y: selectionY }}
                           className={cn(
                             'pointer-events-none absolute inset-x-0 top-0 z-0',
-                            'rounded-[0.72rem] border border-line-strong/80',
-                            'bg-row-active shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+                            'rounded-md bg-accent',
                           )}
                           initial={false}
                           style={{ height: COMMAND_ROW_HEIGHT }}
@@ -158,8 +157,8 @@ function ComposerMenu({
                             disabled={disabled}
                             value={cmd.id}
                             className={cn(
-                              'group/command-item relative z-10 flex w-full overflow-hidden rounded-[0.72rem]',
-                              'px-2 py-0 text-left outline-none',
+                              'group/command-item relative z-10 flex w-full overflow-hidden rounded-md',
+                              'px-2.5 py-0 text-left outline-none',
                               'data-[selected=true]:bg-transparent!',
                               'data-[selected=true]:text-inherit',
                               'data-[state=active]:text-foreground',
@@ -184,7 +183,7 @@ function ComposerMenu({
                               onPick(cmd);
                             }}
                           >
-                            <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(4.5rem,8rem)_minmax(0,1fr)_auto] items-center gap-2.5">
+                            <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_minmax(4rem,7rem)_minmax(0,1fr)_auto] items-center gap-2.5">
                               <span className={iconClass}>
                                 <cmd.icon aria-hidden className="size-3.5" />
                               </span>
@@ -214,7 +213,7 @@ function MenuHeader(props: { query: string }) {
   const value = props.query ? `/${props.query}` : 'Type to filter slash commands';
 
   return (
-    <div className="flex h-9 min-w-0 items-center gap-3 border-b border-line/70 px-3">
+    <div className="flex h-8 min-w-0 items-center gap-3 rounded-t-[calc(1.35rem-1px)] border-b border-border/70 bg-surface-4/45 px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="grid size-5 shrink-0 place-items-center text-muted-foreground/72">
           <CommandIcon aria-hidden className="size-3.5" />
@@ -224,7 +223,7 @@ function MenuHeader(props: { query: string }) {
           Commands
         </span>
 
-        <span className="h-3.5 w-px shrink-0 bg-line" />
+        <span className="h-3.5 w-px shrink-0 bg-border" />
 
         <span
           className="block min-w-0 truncate whitespace-nowrap text-[12px] text-muted-foreground"
@@ -237,7 +236,7 @@ function MenuHeader(props: { query: string }) {
       <div className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 sm:flex">
         <span className="font-mono">↑↓</span>
         <span>navigate</span>
-        <span className="mx-1 h-3 w-px bg-line" />
+        <span className="mx-1 h-3 w-px bg-border" />
         <span className="font-mono">Enter</span>
         <span>select</span>
       </div>
@@ -307,15 +306,15 @@ const iconClass = cn(
 );
 
 const kbdClass = cn(
-  'inline-grid h-5 min-w-5 place-items-center rounded-[0.46rem] px-1.5',
+  'inline-grid h-5 min-w-5 place-items-center rounded-sm px-1.5',
   'font-mono text-[10px] font-medium leading-none tracking-[-0.01em]',
-  'border border-line bg-control text-foreground/58',
-  'transition-[background,border-color,color,box-shadow,transform] duration-150 ease-(--ease-out-strong)',
-  'group-data-selected/command-item:border-line-strong',
-  'group-data-selected/command-item:bg-control-hover',
+  'border border-border/70 bg-card/80 text-muted-foreground',
+  'transition-[border-color,color,background] duration-150 ease-(--ease-out-strong)',
+  'group-data-selected/command-item:border-input',
+  'group-data-selected/command-item:bg-background/65',
   'group-data-selected/command-item:text-foreground/82',
-  'group-data-[state=active]/command-item:border-line-strong',
-  'group-data-[state=active]/command-item:bg-control-hover',
+  'group-data-[state=active]/command-item:border-input',
+  'group-data-[state=active]/command-item:bg-background/65',
   'group-data-[state=active]/command-item:text-foreground/82',
 );
 
@@ -353,7 +352,7 @@ const sheetVariants = {
     scaleY: 0.05,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(96% 0% 0% 0% round 1.1rem 1.1rem 0 0)',
+    clipPath: 'inset(96% 0% 0% 0% round 1.35rem 1.35rem 0 0)',
     transition: { duration: 0.14, ease },
   },
   open: {
@@ -363,8 +362,9 @@ const sheetVariants = {
     scaleY: 1,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(0% 0% 0% 0% round 1.1rem 1.1rem 0 0)',
+    clipPath: 'inset(0% 0% 0% 0% round 1.35rem 1.35rem 0 0)',
     transition: { duration: 0.22, ease },
+    transitionEnd: { clipPath: 'none' },
   },
   reduced: {
     opacity: 0,

@@ -66,9 +66,9 @@ function LoginComponent() {
 
   return (
     <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
-      <CornerCard className="canary-panel w-full max-w-sm rounded-[1.5rem] border-line bg-surface/95">
+      <CornerCard className="canary-panel w-full max-w-sm rounded-lg border-border bg-card/95">
         <CardHeader className="gap-3 px-5 pt-5">
-          <div className="grid size-11 place-items-center rounded-xl bg-foreground text-background">
+          <div className="grid size-11 place-items-center rounded-md bg-foreground text-background">
             <LightningIcon className="size-5" weight="fill" />
           </div>
           <CardTitle className="text-base">
@@ -93,11 +93,10 @@ function LoginComponent() {
               <Input id="password" minLength={8} name="password" required type="password" />
             </div>
             {err ? <p className="text-destructive text-xs">{err}</p> : null}
-            <Button className="rounded-xl" disabled={busy} type="submit">
+            <Button disabled={busy} type="submit">
               {busy ? 'Working...' : mode === 'signin' ? 'Sign in' : 'Sign up'}
             </Button>
             <Button
-              className="rounded-xl"
               type="button"
               variant="ghost"
               onClick={() => {

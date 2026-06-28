@@ -4,6 +4,7 @@ import { TrayArrowDownIcon as ArchiveIcon } from '@phosphor-icons/react';
 import { Link } from '@tanstack/react-router';
 
 import { Button } from '~/components/ui/button';
+import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 
 type ThreadRowProps = Omit<ComponentPropsWithoutRef<'div'>, 'children' | 'id'> & {
@@ -31,19 +32,18 @@ function ThreadRow({
     onArchive(id);
   }
 
-  return (
-    <div
-      className={cn(
-        'group/item grid grid-cols-[minmax(0,1fr)_0rem] items-stretch overflow-hidden rounded-(--radius-control) border text-xs text-muted-foreground',
-        'transition-[background-color,border-color,color,box-shadow,grid-template-columns] duration-150 ease-out-strong motion-reduce:transition-none',
-        'hover:grid-cols-[minmax(0,1fr)_2.25rem] focus-within:grid-cols-[minmax(0,1fr)_2.25rem]',
-        active
-          ? 'border-line-strong bg-row text-foreground shadow-[inset_0_1px_0_color-mix(in_oklab,var(--canary-foreground)_7%,transparent)]'
-          : 'border-transparent hover:border-line hover:bg-row-hover hover:text-foreground focus-within:border-line focus-within:bg-row-hover focus-within:text-foreground',
-        className,
-      )}
-      {...props}
-    >
+  const root = cn(
+    'group/item grid grid-cols-[minmax(0,1fr)_0rem] items-stretch overflow-hidden rounded-(--radius-control) border text-xs text-muted-foreground',
+    'transition-[background-color,border-color,color,box-shadow,grid-template-columns] duration-150 ease-out-strong motion-reduce:transition-none',
+    'hover:grid-cols-[minmax(0,1fr)_2.25rem] focus-within:grid-cols-[minmax(0,1fr)_2.25rem]',
+    active
+      ? 'border-input/70 text-foreground'
+      : 'border-transparent hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground focus-within:border-input/55 focus-within:bg-surface-3/70 focus-within:text-foreground',
+    className,
+  );
+
+  const body = (
+    <>
       <Link
         aria-current={active ? 'page' : undefined}
         aria-label={`${title}, updated ${formatThreadTime(updated)}, id ${id.slice(0, 8)}`}
@@ -76,7 +76,7 @@ function ThreadRow({
             'pointer-events-none absolute inset-y-1 -left-5 w-5 bg-linear-to-r from-transparent opacity-0',
             'transition-opacity duration-150 ease-out-strong motion-reduce:transition-none',
             'group-hover/item:opacity-100',
-            active ? 'to-row/95' : 'to-background/95 group-hover/item:to-row-hover/95',
+            active ? 'to-surface-3/95' : 'to-surface-2/95 group-hover/item:to-surface-3/95',
           )}
         />
 
@@ -86,8 +86,8 @@ function ThreadRow({
             'pointer-events-none size-7 translate-x-1 scale-95 rounded-(--radius-press)',
             'border border-transparent bg-transparent text-muted-foreground opacity-0',
             'transition-[background-color,border-color,color,opacity,transform] duration-150 ease-out-strong motion-reduce:translate-x-0 motion-reduce:scale-100 motion-reduce:transition-none',
-            'hover:border-line hover:bg-surface-raised hover:text-foreground',
-            'focus-visible:border-line-strong focus-visible:bg-surface-raised focus-visible:text-foreground',
+            'hover:border-border hover:bg-popover hover:text-foreground',
+            'focus-visible:border-input focus-visible:bg-popover focus-visible:text-foreground',
             'group-hover/item:pointer-events-auto group-hover/item:translate-x-0 group-hover/item:scale-100 group-hover/item:opacity-100',
             'active:scale-[0.96]',
           )}
@@ -99,6 +99,20 @@ function ThreadRow({
           <ArchiveIcon className="size-4" />
         </Button>
       </div>
+    </>
+  );
+
+  if (active) {
+    return (
+      <Elevated offset={1} shadowLevel={1} className={root} {...props}>
+        {body}
+      </Elevated>
+    );
+  }
+
+  return (
+    <div className={root} {...props}>
+      {body}
     </div>
   );
 }

@@ -21,7 +21,7 @@ function MobileDrawer({ children, className, ...props }: MobileDrawerProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-between rounded-2xl border border-line bg-rail px-3 py-2 md:hidden',
+        'flex items-center justify-between rounded-lg border border-border bg-sidebar px-3 py-2 shadow-surface-2 md:hidden',
         className,
       )}
       {...props}

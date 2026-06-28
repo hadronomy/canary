@@ -43,128 +43,82 @@
 :root {
   color-scheme: light;
 
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
-  /*
-    Base shadcn palette.
-    Light mode should feel clean and porcelain, not blue-gray fog.
-  */
-  --background: oklch(0.968 0.006 230);
-  --foreground: oklch(0.145 0.015 235);
+  --surface-1: #fafafa;
+  --surface-2: #fcfcfc;
+  --surface-3: #ffffff;
+  --surface-4: #ffffff;
+  --surface-5: #ffffff;
+  --surface-6: #ffffff;
+  --surface-7: #ffffff;
+  --surface-8: #ffffff;
 
-  --card: oklch(0.997 0.002 230);
+  --shadow-color: rgb(0 0 0 / 0.06);
+  --shadow-1: 0 0 0 1px var(--shadow-color);
+  --shadow-2: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color);
+  --shadow-3:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color);
+  --shadow-4:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color);
+  --shadow-5:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color);
+  --shadow-6:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color);
+  --shadow-7:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color);
+  --shadow-8:
+    0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color),
+    0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color),
+    0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color),
+    0 48px 48px -24px var(--shadow-color), 0 96px 96px -48px var(--shadow-color);
+
+  --background: var(--surface-1);
+  --foreground: oklch(0.145 0.012 235);
+  --card: var(--surface-3);
   --card-foreground: var(--foreground);
-
-  --popover: oklch(0.997 0.002 230);
+  --popover: var(--surface-5);
   --popover-foreground: var(--foreground);
-
-  /*
-    Primary is the real aquatic action color.
-    Do not use it for large passive selected surfaces.
-  */
   --primary: oklch(0.42 0.115 188);
   --primary-foreground: oklch(0.985 0.006 228);
-
-  --secondary: oklch(0.94 0.008 230);
-  --secondary-foreground: oklch(0.19 0.018 235);
-
-  --muted: oklch(0.935 0.007 230);
-  --muted-foreground: oklch(0.42 0.018 235);
-
-  /*
-    shadcn accent is used heavily by ghost buttons and hover states.
-    Keep it neutral and visibly darker than card/panel.
-  */
-  --accent: oklch(0.905 0.011 230);
+  --secondary: oklch(0.955 0.006 230);
+  --secondary-foreground: oklch(0.19 0.016 235);
+  --muted: oklch(0.94 0.007 230);
+  --muted-foreground: oklch(0.42 0.016 235);
+  --accent: oklch(0.91 0.01 230);
   --accent-foreground: var(--foreground);
-
   --destructive: oklch(0.58 0.2 27);
   --destructive-foreground: oklch(0.985 0.006 228);
-
   --border: oklch(0.36 0.016 235 / 16%);
   --input: oklch(0.34 0.016 235 / 20%);
   --ring: oklch(0.5 0.13 188);
-
-  /*
-    Data colors.
-    Aqua remains the living accent, clay/warmth stays secondary.
-  */
   --chart-1: oklch(0.58 0.14 188);
   --chart-2: oklch(0.5 0.13 245);
   --chart-3: oklch(0.64 0.14 63);
   --chart-4: oklch(0.54 0.14 325);
   --chart-5: oklch(0.58 0.19 27);
-
-  /*
-    Sidebar.
-  */
-  --sidebar: oklch(0.962 0.006 230);
+  --sidebar: var(--surface-2);
   --sidebar-foreground: oklch(0.17 0.018 235);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.905 0.011 230);
+  --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: oklch(0.36 0.016 235 / 14%);
+  --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  /*
-    Canary surfaces.
-    Shell carries the schematic texture.
-    Panels stay clean and paper-like.
-  */
-  --canary-shell: oklch(0.91 0.014 235);
-  --canary-panel: oklch(0.992 0.003 230);
-  --canary-panel-raised: oklch(0.965 0.006 230);
-  --canary-rail: oklch(0.955 0.007 230);
-
-  /*
-    Neutral interaction states.
-    Rows and controls need real hover contrast in light mode.
-  */
-  --canary-row: oklch(0.958 0.006 230);
-  --canary-row-hover: oklch(0.918 0.011 230);
-  --canary-row-active: oklch(0.958 0.006 230);
-
-  --canary-control: oklch(0.952 0.006 230);
-  --canary-control-hover: oklch(0.905 0.013 230);
-
-  --canary-line: oklch(0.28 0.016 235 / 16%);
-  --canary-line-strong: oklch(0.22 0.016 235 / 26%);
-
-  /*
-    Accent and semantic colors.
-    Use aqua for intent/action, not as wallpaper.
-  */
-  --canary-glow: oklch(0.58 0.14 188);
-  --canary-aquatic: oklch(0.5 0.14 188);
-  --canary-success: oklch(0.52 0.16 155);
-  --canary-warning: oklch(0.62 0.15 63);
-  --canary-danger: oklch(0.58 0.2 27);
-
-  --canary-clay: oklch(0.62 0.14 58);
-  --canary-rose: oklch(0.59 0.14 12);
-  --canary-plum: oklch(0.5 0.14 325);
-
-  /*
-    Schematic diagonal shell lines.
-  */
-  --canary-grid: oklch(0.22 0.018 235 / 5.5%);
-  --canary-grid-strong: oklch(0.22 0.018 235 / 8%);
-
-  /*
-    Kept for compatibility, but the current shell should not use glow gradients.
-  */
-  --canary-shell-glow: oklch(0.58 0.14 188 / 0%);
-  --canary-shell-warmth: oklch(0.62 0.14 58 / 0%);
-
-  --shadow-panel: none;
-  --shadow-panel-strong: none;
-  --shadow-float: none;
-
-  --radius-shell: 1.35rem;
-  --radius-panel: 1.15rem;
-  --radius-control: 0.875rem;
-  --radius-press: 0.75rem;
+  --radius-shell: calc(var(--radius) + 4px);
+  --radius-panel: var(--radius);
+  --radius-control: calc(var(--radius) - 2px);
+  --radius-press: calc(var(--radius) - 2px);
 
   --shell-gap: 0.625rem;
 
@@ -183,82 +137,89 @@
 .dark {
   color-scheme: dark;
 
-  --background: oklch(0.072 0.006 238);
+  --surface-1: #171717;
+  --surface-2: #1e1e1e;
+  --surface-3: #252525;
+  --surface-4: #2c2c2c;
+  --surface-5: #333333;
+  --surface-6: #3a3a3a;
+  --surface-7: #414141;
+  --surface-8: #484848;
+  --dm-hi-base: rgba(255, 255, 255, 0.01);
+  --dm-hi-mid: rgba(255, 255, 255, 0.02);
+  --dm-hi-high: rgba(255, 255, 255, 0.04);
+  --dm-hi-peak: rgba(255, 255, 255, 0.06);
+  --dm-ring-base: rgba(255, 255, 255, 0.02);
+  --dm-ring-mid: rgba(255, 255, 255, 0.04);
+  --dm-ring-high: rgba(255, 255, 255, 0.06);
+  --dm-drop: rgba(0, 0, 0, 0.18);
+  --shadow-1: inset 0 0 0 1px var(--dm-ring-base);
+  --shadow-2:
+    inset 0 1px 0 0 var(--dm-hi-base), inset 0 0 0 1px var(--dm-ring-base),
+    0 1px 1px -0.5px var(--dm-drop);
+  --shadow-3:
+    inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-base),
+    0 0 0 1px rgb(0 0 0 / 12%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop);
+  --shadow-4:
+    inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgb(0 0 0 / 14%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop);
+  --shadow-5:
+    inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-mid),
+    0 0 0 1px rgb(0 0 0 / 16%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
+    0 12px 12px -6px var(--dm-drop);
+  --shadow-6:
+    inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgb(0 0 0 / 18%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
+    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop);
+  --shadow-7:
+    inset 0 1px 0 0 var(--dm-hi-peak), inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgb(0 0 0 / 20%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
+    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop),
+    0 48px 48px -24px var(--dm-drop);
+  --shadow-8:
+    inset 0 1px 0 0 var(--dm-hi-peak), inset 0 0 0 1px var(--dm-ring-high),
+    0 0 0 1px rgb(0 0 0 / 22%), 0 1px 1px -0.5px var(--dm-drop),
+    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
+    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop),
+    0 48px 48px -24px var(--dm-drop), 0 96px 96px -48px var(--dm-drop);
+
+  --background: var(--surface-1);
   --foreground: oklch(0.925 0.006 235);
-
-  --card: oklch(0.102 0.008 238);
+  --card: var(--surface-3);
   --card-foreground: var(--foreground);
-
-  --popover: oklch(0.102 0.008 238);
+  --popover: var(--surface-5);
   --popover-foreground: var(--foreground);
-
   --primary: oklch(0.72 0.15 188);
   --primary-foreground: oklch(0.07 0.006 238);
-
-  --secondary: oklch(0.145 0.009 238);
+  --secondary: var(--surface-3);
   --secondary-foreground: oklch(0.91 0.006 235);
-
-  --muted: oklch(0.15 0.009 238);
+  --muted: var(--surface-3);
   --muted-foreground: oklch(0.64 0.012 235);
-
-  --accent: oklch(0.18 0.025 188);
+  --accent: var(--surface-4);
   --accent-foreground: oklch(0.92 0.012 188);
-
   --destructive: oklch(0.68 0.19 25);
   --destructive-foreground: oklch(0.985 0.006 235);
-
-  --border: oklch(1 0 0 / 8.5%);
-  --input: oklch(1 0 0 / 11%);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.72 0.15 188);
-
   --chart-1: oklch(0.72 0.15 188);
   --chart-2: oklch(0.7 0.13 245);
   --chart-3: oklch(0.8 0.14 63);
   --chart-4: oklch(0.74 0.14 325);
   --chart-5: oklch(0.7 0.2 25);
-
-  --sidebar: oklch(0.085 0.006 238);
+  --sidebar: var(--surface-2);
   --sidebar-foreground: oklch(0.9 0.006 235);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.14 0.009 238);
+  --sidebar-accent: var(--surface-4);
   --sidebar-accent-foreground: oklch(0.93 0.006 235);
-  --sidebar-border: oklch(1 0 0 / 8.5%);
+  --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-
-  --canary-shell: oklch(0.105 0.008 238);
-  --canary-panel: oklch(0.072 0.006 238);
-  --canary-panel-raised: oklch(0.118 0.009 238);
-  --canary-rail: oklch(0.065 0.006 238);
-
-  --canary-row: oklch(1 0 0 / 3.5%);
-  --canary-row-hover: oklch(1 0 0 / 5.5%);
-  --canary-row-active: oklch(1 0 0 / 7.5%);
-
-  --canary-control: oklch(1 0 0 / 4.5%);
-  --canary-control-hover: oklch(1 0 0 / 7%);
-
-  --canary-line: oklch(1 0 0 / 8.5%);
-  --canary-line-strong: oklch(1 0 0 / 14%);
-
-  --canary-glow: oklch(0.72 0.15 188);
-  --canary-aquatic: oklch(0.72 0.15 188);
-  --canary-success: oklch(0.72 0.16 155);
-  --canary-warning: oklch(0.82 0.14 63);
-  --canary-danger: oklch(0.7 0.2 25);
-
-  --canary-clay: oklch(0.78 0.13 58);
-  --canary-rose: oklch(0.73 0.13 12);
-  --canary-plum: oklch(0.72 0.13 325);
-
-  --canary-grid: oklch(1 0 0 / 10%);
-  --canary-grid-strong: oklch(1 0 0 / 8%);
-  --canary-shell-glow: oklch(0.72 0.15 188 / 10%);
-  --canary-shell-warmth: oklch(0.78 0.13 58 / 5%);
-
-  --shadow-panel: none;
-  --shadow-panel-strong: none;
-  --shadow-float: none;
 
   --scrollbar-thumb: oklch(1 0 0 / 14%);
   --scrollbar-thumb-hover: oklch(1 0 0 / 24%);
@@ -324,29 +285,6 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --color-surface: var(--canary-panel);
-  --color-surface-raised: var(--canary-panel-raised);
-  --color-rail: var(--canary-rail);
-
-  --color-row: var(--canary-row);
-  --color-row-hover: var(--canary-row-hover);
-  --color-row-active: var(--canary-row-active);
-
-  --color-control: var(--canary-control);
-  --color-control-hover: var(--canary-control-hover);
-
-  --color-line: var(--canary-line);
-  --color-line-strong: var(--canary-line-strong);
-
-  --color-glow: var(--canary-glow);
-  --color-aquatic: var(--canary-aquatic);
-  --color-success: var(--canary-success);
-  --color-warning: var(--canary-warning);
-  --color-danger: var(--canary-danger);
-  --color-clay: var(--canary-clay);
-  --color-rose: var(--canary-rose);
-  --color-plum: var(--canary-plum);
-
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -355,12 +293,25 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  --shadow-canary-panel: var(--shadow-panel);
-  --shadow-canary-panel-strong: var(--shadow-panel-strong);
-  --shadow-canary-float: var(--shadow-float);
-
   --ease-out-strong: var(--ease-out-strong);
   --ease-drawer: var(--ease-drawer);
+
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-surface-5: var(--surface-5);
+  --color-surface-6: var(--surface-6);
+  --color-surface-7: var(--surface-7);
+  --color-surface-8: var(--surface-8);
+  --shadow-surface-1: var(--shadow-1);
+  --shadow-surface-2: var(--shadow-2);
+  --shadow-surface-3: var(--shadow-3);
+  --shadow-surface-4: var(--shadow-4);
+  --shadow-surface-5: var(--shadow-5);
+  --shadow-surface-6: var(--shadow-6);
+  --shadow-surface-7: var(--shadow-7);
+  --shadow-surface-8: var(--shadow-8);
 }
 
 @layer base {
@@ -473,35 +424,32 @@
 
 @layer components {
   .canary-shell {
-    background-color: var(--canary-shell);
+    @apply bg-background;
   }
 
   .canary-panel {
-    @apply border border-line bg-surface text-foreground;
-    box-shadow: none;
+    @apply border border-border bg-card text-card-foreground shadow-surface-2;
   }
 
   .canary-panel-raised {
-    @apply border border-line bg-surface-raised text-foreground;
-    box-shadow: none;
+    @apply border border-border bg-surface-4 text-foreground shadow-surface-3;
   }
 
   .canary-control {
-    @apply bg-control text-foreground;
+    @apply bg-muted text-foreground;
   }
 
   .canary-control:hover {
-    @apply bg-control-hover;
+    @apply bg-accent;
   }
 
   .canary-glass {
-    @apply border border-line bg-surface/86 text-foreground;
-    box-shadow: none;
+    @apply border border-border bg-popover/86 text-popover-foreground shadow-surface-4;
     backdrop-filter: blur(24px) saturate(1.08);
   }
 
   .canary-aquatic-glow {
-    box-shadow: none;
+    box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
   }
 
   .scrollbar-gutter-both {
@@ -575,25 +523,24 @@
   }
 
   .canary-markdown blockquote {
-    @apply my-4 border-l border-line-strong pl-3 text-muted-foreground;
+    @apply my-4 border-l border-border pl-3 text-muted-foreground;
   }
 
   .canary-markdown a {
-    @apply text-foreground underline decoration-line-strong underline-offset-4;
+    @apply text-foreground underline decoration-border underline-offset-4;
   }
 
   .canary-markdown a:hover {
-    @apply decoration-aquatic;
+    @apply decoration-primary;
   }
 
   .canary-markdown :where(code, kbd, samp) {
-    @apply wrap-break-word rounded-md border border-line bg-row px-1.5 py-0.5 font-mono text-[0.85em];
+    @apply wrap-break-word rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.85em];
     overflow-wrap: anywhere;
   }
 
   .canary-markdown pre {
-    @apply my-4 max-w-full overflow-x-auto rounded-xl border border-line bg-surface-raised p-3;
-    box-shadow: none;
+    @apply my-4 max-w-full overflow-x-auto rounded-lg border border-border bg-popover p-3 shadow-surface-2;
   }
 
   .canary-markdown pre code {
@@ -609,15 +556,15 @@
   }
 
   .canary-markdown table {
-    @apply my-4 block max-w-full overflow-x-auto rounded-xl border border-line;
+    @apply my-4 block max-w-full overflow-x-auto rounded-lg border border-border;
   }
 
   .canary-markdown :where(th, td) {
-    @apply border-b border-line px-3 py-2 text-left align-top;
+    @apply border-b border-border px-3 py-2 text-left align-top;
   }
 
   .canary-markdown th {
-    @apply bg-row text-xs font-medium text-muted-foreground;
+    @apply bg-muted text-xs font-medium text-muted-foreground;
   }
 
   .canary-composer-editor {
@@ -634,7 +581,7 @@
   }
 
   .canary-composer-editor .suggestion {
-    @apply rounded-sm bg-row-active px-2 text-foreground;
+    @apply rounded-sm bg-accent px-2 text-accent-foreground;
   }
 
   .canary-composer-editor p {

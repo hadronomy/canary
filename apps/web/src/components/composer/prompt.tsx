@@ -256,7 +256,7 @@ function AgentPrompt({
     <form
       aria-describedby={described}
       className={cn(
-        'border-t border-line bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl',
+        'border-t border-border bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl',
         className,
       )}
       {...props}
@@ -289,10 +289,10 @@ function AgentPrompt({
 
           <motion.div
             animate={surfaceState}
-            className="relative z-30 isolate overflow-hidden rounded-[1.35rem] border bg-background"
+            className="relative z-30 isolate overflow-hidden rounded-[1.35rem] border bg-card shadow-surface-2"
             variants={surfaceVariants}
           >
-            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-line-strong to-transparent" />
+            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
 
             <motion.div
               aria-hidden
@@ -300,7 +300,7 @@ function AgentPrompt({
               variants={auraVariants}
             />
 
-            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/[0.07] px-3 py-2">
+            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-border bg-surface-4/35 px-3 py-2">
               <ComposerStatus runState={runState} surfaceState={surfaceState} />
 
               <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
@@ -338,7 +338,7 @@ function AgentPrompt({
                 <motion.p
                   id={errorId}
                   animate={{ opacity: 1, height: 'auto', y: 0 }}
-                  className="relative z-10 border-t border-danger/15 bg-danger/10 px-4 py-2 text-xs text-danger"
+                  className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-4 py-2 text-xs text-destructive"
                   exit={{ opacity: 0, height: 0, y: -4 }}
                   initial={{ opacity: 0, height: 0, y: -4 }}
                   transition={{ duration: 0.18, ease }}
@@ -361,7 +361,7 @@ function AgentPrompt({
           >
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-[1.35rem] border-x border-b border-line"
+              className="pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-[1.35rem] border-x border-b border-border"
             />
 
             <div className="relative z-10 px-4">

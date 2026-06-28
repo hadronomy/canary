@@ -26,15 +26,15 @@ const composerMount = {
 
 const surfaceVariants = {
   commanding: {
-    borderColor: 'var(--canary-line-strong)',
-    borderTopLeftRadius: '1.18rem',
-    borderTopRightRadius: '1.18rem',
+    borderColor: 'var(--input)',
+    borderTopLeftRadius: '0px',
+    borderTopRightRadius: '0px',
     boxShadow: 'none',
-    y: 1,
+    y: 0,
     transition: { duration: 0.2, ease },
   },
   disabled: {
-    borderColor: 'var(--canary-line)',
+    borderColor: 'var(--border)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
     boxShadow: 'none',
@@ -42,7 +42,7 @@ const surfaceVariants = {
     transition: { duration: 0.18, ease },
   },
   error: {
-    borderColor: 'color-mix(in oklch, var(--canary-danger) 34%, transparent)',
+    borderColor: 'color-mix(in oklch, var(--destructive) 34%, transparent)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
     boxShadow: 'none',
@@ -50,7 +50,7 @@ const surfaceVariants = {
     transition: { duration: 0.18, ease },
   },
   focused: {
-    borderColor: 'var(--canary-line-strong)',
+    borderColor: 'var(--input)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
     boxShadow: 'none',
@@ -58,7 +58,7 @@ const surfaceVariants = {
     transition: { duration: 0.18, ease },
   },
   resting: {
-    borderColor: 'var(--canary-line)',
+    borderColor: 'var(--border)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
     boxShadow: 'none',
@@ -66,7 +66,7 @@ const surfaceVariants = {
     transition: { duration: 0.18, ease },
   },
   running: {
-    borderColor: 'var(--canary-line-strong)',
+    borderColor: 'var(--input)',
     borderTopLeftRadius: '1.35rem',
     borderTopRightRadius: '1.35rem',
     boxShadow: 'none',
@@ -85,7 +85,7 @@ const auraVariants = {
   error: {
     opacity: 1,
     background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--canary-danger) 12%, transparent), transparent 38%, transparent)',
+      'linear-gradient(135deg, color-mix(in oklch, var(--destructive) 12%, transparent), transparent 38%, transparent)',
   },
   focused: {
     opacity: 0.7,
