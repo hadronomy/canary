@@ -33,9 +33,8 @@ function ThreadRow({
   }
 
   const root = cn(
-    'group/item grid grid-cols-[minmax(0,1fr)_0rem] items-stretch overflow-hidden rounded-(--radius-control) border text-xs text-muted-foreground',
-    'transition-[background-color,border-color,color,box-shadow,grid-template-columns] duration-150 ease-out-strong motion-reduce:transition-none',
-    'hover:grid-cols-[minmax(0,1fr)_2.25rem] focus-within:grid-cols-[minmax(0,1fr)_2.25rem]',
+    'group/item grid grid-cols-[minmax(0,1fr)_2.25rem] items-stretch overflow-hidden rounded-(--radius-control) border text-xs text-muted-foreground',
+    'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
     active
       ? 'border-input/70 text-foreground'
       : 'border-transparent hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground focus-within:border-input/55 focus-within:bg-surface-3/70 focus-within:text-foreground',
@@ -83,12 +82,13 @@ function ThreadRow({
         <Button
           aria-label={`Archive ${title}`}
           className={cn(
-            'pointer-events-none size-7 translate-x-1 scale-95 rounded-(--radius-press)',
+            'size-7 translate-x-1 scale-95 rounded-(--radius-press)',
             'border border-transparent bg-transparent text-muted-foreground opacity-0',
             'transition-[background-color,border-color,color,opacity,transform] duration-150 ease-out-strong motion-reduce:translate-x-0 motion-reduce:scale-100 motion-reduce:transition-none',
             'hover:border-border hover:bg-popover hover:text-foreground',
             'focus-visible:border-input focus-visible:bg-popover focus-visible:text-foreground',
-            'group-hover/item:pointer-events-auto group-hover/item:translate-x-0 group-hover/item:scale-100 group-hover/item:opacity-100',
+            'group-hover/item:translate-x-0 group-hover/item:scale-100 group-hover/item:opacity-100',
+            'focus-visible:translate-x-0 focus-visible:scale-100 focus-visible:opacity-100',
             'active:scale-[0.96]',
           )}
           size="icon-sm"
@@ -104,7 +104,7 @@ function ThreadRow({
 
   if (active) {
     return (
-      <Elevated offset={1} shadowLevel={1} className={root} {...props}>
+      <Elevated shadowLevel={1} className={root} {...props}>
         {body}
       </Elevated>
     );

@@ -104,7 +104,6 @@ function ThreadSearch({ className, id, onValueChange, value, ...props }: ThreadS
       </label>
 
       <Elevated
-        offset={1}
         shadowLevel={1}
         className="rounded-(--radius-control) border border-input/70 transition-[border-color,box-shadow] duration-150 ease-out-strong focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20"
       >
@@ -185,7 +184,6 @@ function ThreadCreateForm({
       </label>
 
       <Elevated
-        offset={1}
         shadowLevel={1}
         className={cn(
           'min-w-0 rounded-(--radius-control) border border-input/70 transition-[border-color,box-shadow] duration-150 ease-out-strong focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/20',

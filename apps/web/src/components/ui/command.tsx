@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
-import { InputGroup, InputGroupAddon } from '~/components/ui/input-group';
 import { cn } from '~/lib/utils';
 
 type CommandProps = ComponentPropsWithoutRef<typeof CommandPrimitive>;
@@ -45,38 +44,54 @@ function CommandDialog({
 }: CommandDialogProps) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
-        className={cn('top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0', className)}
+        className={cn(
+          'overflow-visible rounded-xl! bg-transparent p-0 shadow-none ring-0 sm:max-w-none',
+          className,
+        )}
+        motion={false}
         showCloseButton={showCloseButton}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>
   );
 }
 
-type CommandInputProps = ComponentPropsWithoutRef<typeof CommandPrimitive.Input>;
+type CommandInputProps = ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+  showIcon?: boolean;
+  wrapperClassName?: string;
+};
 
-function CommandInput({ className, ...props }: CommandInputProps) {
+function CommandInput({
+  className,
+  showIcon = true,
+  wrapperClassName,
+  ...props
+}: CommandInputProps) {
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="h-8! bg-input/20 dark:bg-input/30">
-        <CommandPrimitive.Input
-          data-slot="command-input"
-          className={cn(
-            'w-full text-xs/relaxed outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
-            className,
-          )}
-          {...props}
-        />
-        <InputGroupAddon>
-          <MagnifyingGlassIcon className="size-3.5 shrink-0 opacity-50" />
-        </InputGroupAddon>
-      </InputGroup>
+    <div
+      data-slot="command-input-wrapper"
+      className={cn(
+        'flex h-14 min-w-0 items-center gap-3 border-b border-border/65 bg-transparent px-4',
+        wrapperClassName,
+      )}
+    >
+      {showIcon ? (
+        <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground/70" />
+      ) : null}
+      <CommandPrimitive.Input
+        data-slot="command-input"
+        className={cn(
+          'h-full min-w-0 flex-1 bg-transparent text-sm/relaxed text-foreground outline-hidden placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-50',
+          className,
+        )}
+        {...props}
+      />
     </div>
   );
 }
@@ -148,7 +163,7 @@ function CommandItem({
       ref={ref}
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex min-h-7 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none in-data-[slot=dialog-content]:rounded-md data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground data-selected:*:[svg]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "group/command-item relative flex min-h-7 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none in-data-[slot=dialog-content]:rounded-md data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-surface-4 data-selected:text-foreground data-selected:shadow-surface-1 data-selected:ring-1 data-selected:ring-border/80 data-selected:*:[svg]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className,
       )}
       {...props}

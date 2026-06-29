@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 
 import type { ShellAside, ShellUser } from '~/components/shell/routes';
 
+import { ShellCommandPalette } from '~/components/shell/command-palette';
 import { MobileDrawer } from '~/components/shell/mobile-drawer';
-import { MobileNav, DesktopNav } from '~/components/shell/nav';
+import { DesktopNav, MobileNav } from '~/components/shell/nav';
 import { shellFromMatches } from '~/components/shell/routes';
 import { ThreadSidebar } from '~/components/shell/threads';
 import { Elevated } from '~/lib/elevated';
@@ -18,7 +19,7 @@ type ShellFrameProps = ComponentPropsWithoutRef<'div'> & {
 };
 
 function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
-  const [open, setOpen] = useState(false);
+  const [palette, setPalette] = useState(false);
   const [ready, setReady] = useState(false);
 
   const shell = useRouterState({
@@ -57,18 +58,13 @@ function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
       <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-2 md:flex md:gap-0">
         <MobileDrawer>
           <div className="grid gap-4">
-            <MobileNav ready={ready} user={user} />
+            <MobileNav ready={ready} user={user} onCommand={() => setPalette(true)} />
             {aside}
           </div>
         </MobileDrawer>
 
         <div className="hidden h-full min-h-0 shrink-0 pr-(--shell-gap) md:block">
-          <DesktopNav
-            open={open}
-            ready={ready}
-            user={user}
-            onToggle={() => setOpen((state) => !state)}
-          />
+          <DesktopNav ready={ready} user={user} onCommand={() => setPalette(true)} />
         </div>
 
         <SecondarySlot open={!!aside}>{aside}</SecondarySlot>
@@ -76,6 +72,8 @@ function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
         <main className="canary-panel min-h-0 overflow-hidden rounded-(--radius-shell) md:flex-1">
           {ready ? children : <SyncScreen />}
         </main>
+
+        <ShellCommandPalette open={palette} user={user} onOpenChange={setPalette} />
       </div>
     </div>
   );
@@ -100,7 +98,6 @@ function SecondarySlot(props: { children: ReactNode; open: boolean }) {
       )}
     >
       <Elevated
-        offset={1}
         shadowLevel={2}
         className={cn(
           'h-full w-full overflow-hidden rounded-(--radius-shell) border border-sidebar-border p-3 text-sidebar-foreground transition-[opacity,transform] duration-150 ease-out-strong motion-reduce:transition-none',

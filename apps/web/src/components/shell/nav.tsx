@@ -1,26 +1,22 @@
 import type { ComponentPropsWithoutRef, ReactElement } from 'react';
 
-import {
-  CaretLeftIcon as ChevronLeftIcon,
-  CaretRightIcon as ChevronRightIcon,
-  GearSixIcon,
-  type Icon,
-  QuestionIcon,
-  StackIcon,
-} from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { Link, useRouter } from '@tanstack/react-router';
-import { motion, useReducedMotion } from 'motion/react';
 
 import type { ShellNavRoute, ShellUser } from '~/components/shell/routes';
 
 import { AccountPanel } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
-import { ease, primaryNav } from '~/components/shell/routes';
-import { ShellSearch } from '~/components/shell/search';
+import { ShellCommandTrigger } from '~/components/shell/command-palette';
+import { primaryNav } from '~/components/shell/routes';
 import { SyncStatus } from '~/components/shell/status';
 import { UserAvatar } from '~/components/shell/user-avatar';
 import { Button } from '~/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import { Separator } from '~/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { userKey } from '~/functions/get-user';
@@ -29,194 +25,120 @@ import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 import { roster } from '~/utils/chat';
 
-type DesktopNavProps = Omit<
-  ComponentPropsWithoutRef<typeof motion.aside>,
-  'animate' | 'children' | 'initial' | 'transition'
-> & {
-  onToggle: () => void;
-  open: boolean;
+type DesktopNavProps = Omit<ComponentPropsWithoutRef<'aside'>, 'children'> & {
+  onCommand: () => void;
   ready: boolean;
   user: ShellUser;
 };
 
 type MobileNavProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
+  onCommand: () => void;
   ready: boolean;
   user: ShellUser;
 };
 
-function DesktopNav({ className, onToggle, open, ready, user, ...props }: DesktopNavProps) {
-  const reduce = useReducedMotion();
-
+function DesktopNav({ className, onCommand, ready, user, ...props }: DesktopNavProps) {
   return (
-    <motion.aside
-      animate={{ width: open ? 272 : 72 }}
-      className={cn('relative hidden h-full min-h-0 shrink-0 overflow-visible md:block', className)}
-      initial={false}
-      transition={reduce ? { duration: 0 } : { duration: 0.2, ease: ease.ease }}
+    <aside
+      className={cn('relative hidden h-full min-h-0 w-[72px] shrink-0 md:block', className)}
       {...props}
     >
       <Elevated
-        offset={1}
         shadowLevel={2}
         className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-5 overflow-hidden rounded-(--radius-shell) border border-sidebar-border p-4 text-sidebar-foreground"
       >
-        <Header open={open} />
-        <Search open={open} onReveal={onToggle} />
+        <Header />
 
-        <nav className="grid content-start gap-1">
+        <Tip label="Command palette">
+          <ShellCommandTrigger compact onOpen={onCommand} />
+        </Tip>
+
+        <nav aria-label="Primary navigation" className="grid content-start gap-1">
           {primaryNav.map((item) => (
-            <SideLink item={item} key={item.to} open={open} />
+            <SideLink item={item} key={item.to} />
           ))}
         </nav>
 
-        <Footer open={open} ready={ready} user={user} />
+        <Footer compact ready={ready} user={user} />
       </Elevated>
-
-      <Edge open={open} onToggle={onToggle} />
-    </motion.aside>
+    </aside>
   );
 }
 
-function MobileNav({ className, ready, user, ...props }: MobileNavProps) {
+function MobileNav({ className, onCommand, ready, user, ...props }: MobileNavProps) {
   return (
     <div className={cn('grid gap-3', className)} {...props}>
       <Brand />
 
-      <Search open />
+      <ShellCommandTrigger onOpen={onCommand} />
 
-      <nav className="grid content-start gap-1">
+      <nav aria-label="Primary navigation" className="grid content-start gap-1">
         {primaryNav.map((item) => (
-          <SideLink item={item} key={item.to} open />
+          <MobileLink item={item} key={item.to} />
         ))}
       </nav>
 
-      {ready ? <Footer user={user} /> : <SyncPanel />}
+      <Footer ready={ready} user={user} />
     </div>
   );
 }
 
-function Header(props: { open: boolean }) {
+function Header() {
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      <Brand compact={!props.open} />
+    <div className="grid size-10 place-items-center">
+      <Brand compact />
     </div>
   );
 }
 
-function Edge(props: { onToggle: () => void; open: boolean }) {
-  const Icon = props.open ? ChevronLeftIcon : ChevronRightIcon;
-
-  return (
-    <div className="group/edge pointer-events-none absolute -right-5 top-0 z-20 flex h-full w-10 justify-center">
-      <Button
-        aria-label={props.open ? 'Collapse sidebar' : 'Expand sidebar'}
-        className="pointer-events-auto mt-5 size-8 rounded-md bg-transparent text-muted-foreground opacity-0 transition-[color,opacity] duration-150 ease-out-strong hover:bg-transparent hover:text-foreground focus-visible:opacity-100 group-hover/edge:opacity-100"
-        size="icon"
-        type="button"
-        variant="ghost"
-        onClick={props.onToggle}
-      >
-        <Icon className="size-4" />
-      </Button>
-    </div>
-  );
-}
-
-function Search(props: { onReveal?: () => void; open: boolean }) {
-  return <ShellSearch open={props.open} onReveal={props.onReveal} />;
-}
-
-function SideLink(props: { item: ShellNavRoute; open: boolean }) {
+function SideLink(props: { item: ShellNavRoute }) {
   const Icon = props.item.icon;
-
-  const base = cn(
-    'group relative flex h-10 items-center overflow-hidden rounded-(--radius-control) border border-transparent text-sm font-medium text-muted-foreground',
-    'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong',
-    'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
-    props.open ? 'w-full justify-start px-3' : 'size-10 justify-center px-0',
-  );
-
-  const active = cn(
-    'border-input/70 bg-surface-3 text-foreground shadow-surface-1',
-    'hover:border-input/70 hover:bg-surface-3',
-  );
 
   const node = (
     <Link
       activeOptions={{ exact: props.item.nav.exact }}
-      activeProps={{ className: active }}
-      aria-label={props.open ? undefined : props.item.label}
-      className={base}
+      activeProps={{
+        className: 'border-input/70 bg-surface-3 text-foreground shadow-surface-1',
+      }}
+      aria-label={props.item.label}
+      className={cn(
+        'group relative flex size-10 items-center justify-center rounded-(--radius-control) border border-transparent text-muted-foreground',
+        'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
+        'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
+        'focus-visible:border-ring/50 focus-visible:bg-surface-3/70 focus-visible:ring-2 focus-visible:ring-ring/20',
+      )}
       to={props.item.to}
     >
-      <Icon className="size-5 shrink-0" />
-
-      <span
-        aria-hidden={!props.open}
-        className={cn(
-          'pointer-events-none absolute left-11 right-3 min-w-0 truncate transition-[opacity,transform,filter] duration-150 ease-out-strong motion-reduce:transition-none',
-          props.open ? 'translate-x-0 opacity-100 blur-0' : 'translate-x-1 opacity-0 blur-[1px]',
-        )}
-      >
-        {props.item.label}
-      </span>
+      <Icon aria-hidden className="size-5 shrink-0" />
     </Link>
   );
-
-  if (props.open) {
-    return node;
-  }
 
   return <Tip label={props.item.label}>{node}</Tip>;
 }
 
-function IconButton(props: { icon: Icon; label: string }) {
+function MobileLink(props: { item: ShellNavRoute }) {
+  const Icon = props.item.icon;
+
   return (
-    <Tip label={props.label}>
-      <Button
-        aria-label={props.label}
-        className="size-10 rounded-(--radius-press) text-muted-foreground hover:bg-surface-3/70 hover:text-foreground"
-        size="icon"
-        type="button"
-        variant="ghost"
-      >
-        <props.icon className="size-5" />
-      </Button>
-    </Tip>
+    <Link
+      activeOptions={{ exact: props.item.nav.exact }}
+      activeProps={{
+        className: 'border-input/70 bg-surface-3 text-foreground shadow-surface-1',
+      }}
+      className={cn(
+        'flex h-10 items-center gap-3 rounded-(--radius-control) border border-transparent px-3 text-sm font-medium text-muted-foreground',
+        'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
+        'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
+      )}
+      to={props.item.to}
+    >
+      <Icon aria-hidden className="size-5 shrink-0" />
+      <span className="truncate">{props.item.label}</span>
+    </Link>
   );
 }
 
-function CompactTools(props: { ready: boolean; user: ShellUser }) {
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <Separator className="mb-3 mt-2 w-8 bg-input/70" />
-
-      <IconButton icon={GearSixIcon} label="Settings" />
-      <IconButton icon={QuestionIcon} label="Help" />
-
-      <Elevated
-        offset={1}
-        shadowLevel={1}
-        className="relative mt-3 grid size-10 place-items-center rounded-full border border-border text-muted-foreground"
-      >
-        <span
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: props.ready
-              ? 'conic-gradient(var(--primary) 0 70%, transparent 70% 100%)'
-              : undefined,
-            mask: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px))',
-          }}
-        />
-        <StackIcon className="size-5" />
-      </Elevated>
-
-      <UserAvatar className="size-10" ready={props.ready} size="lg" user={props.user} />
-    </div>
-  );
-}
-
-function Footer(props: { open?: boolean; ready?: boolean; user: ShellUser }) {
+function Footer(props: { compact?: boolean; ready?: boolean; user: ShellUser }) {
   const router = useRouter();
   const threads = useLiveQuery(roster(props.user.id)).data;
 
@@ -226,21 +148,68 @@ function Footer(props: { open?: boolean; ready?: boolean; user: ShellUser }) {
     await router.invalidate();
   }
 
-  if (props.open === false) {
+  if (props.compact) {
     return (
-      <footer>
-        <CompactTools ready={props.ready ?? true} user={props.user} />
+      <footer className="grid justify-items-center gap-3">
+        <Separator className="w-8 bg-input/70" />
+        <RailAccount
+          ready={props.ready ?? true}
+          threads={threads.length}
+          user={props.user}
+          onSignout={signout}
+        />
       </footer>
     );
   }
 
-  return props.ready === false ? (
-    <SyncPanel />
-  ) : (
+  if (props.ready === false) {
+    return <SyncPanel />;
+  }
+
+  return (
     <footer className="grid min-w-0 gap-2 overflow-hidden">
       <SyncStatus threads={threads.length} />
       <AccountPanel user={props.user} onSignout={signout} />
     </footer>
+  );
+}
+
+function RailAccount(props: {
+  onSignout: () => void;
+  ready: boolean;
+  threads: number;
+  user: ShellUser;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label="Account and sync"
+            className={cn(
+              'size-10 rounded-full border border-transparent bg-transparent p-0 text-muted-foreground',
+              'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
+              'focus-visible:border-ring/50 focus-visible:bg-surface-3/70 focus-visible:ring-2 focus-visible:ring-ring/20',
+            )}
+            size="icon"
+            type="button"
+            variant="ghost"
+          />
+        }
+      >
+        <UserAvatar className="size-8" ready={props.ready} user={props.user} />
+      </PopoverTrigger>
+
+      <PopoverContent
+        align="end"
+        className="w-72 rounded-lg border border-border bg-popover p-2 shadow-surface-5"
+        side="right"
+        sideOffset={12}
+      >
+        {props.ready ? <SyncStatus threads={props.threads} /> : <SyncPanel />}
+        <AccountPanel user={props.user} onSignout={props.onSignout} />
+      </PopoverContent>
+    </Popover>
   );
 }
 

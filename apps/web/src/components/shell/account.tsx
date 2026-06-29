@@ -18,7 +18,6 @@ type AccountPanelProps = ComponentPropsWithoutRef<'div'> & {
 function AccountPanel({ className, onSignout, user, ...props }: AccountPanelProps) {
   return (
     <Elevated
-      offset={1}
       shadowLevel={1}
       className={cn(
         'min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-input/70 p-2',

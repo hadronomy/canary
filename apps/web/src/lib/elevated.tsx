@@ -5,11 +5,11 @@ import { SurfaceProvider, useSurface } from '~/lib/surface-context';
 import { cn } from '~/lib/utils';
 
 type ElevatedProps = ComponentPropsWithRef<'div'> & {
-  offset: number;
+  offset?: number;
   shadowLevel?: number;
 };
 
-function Elevated({ className, offset, ref, shadowLevel, ...props }: ElevatedProps) {
+function Elevated({ className, offset = 1, ref, shadowLevel, ...props }: ElevatedProps) {
   const base = useSurface();
   const level = Math.min(base + offset, 8);
 
