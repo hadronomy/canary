@@ -1,5 +1,11 @@
 import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
-import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode } from 'react';
+import type {
+  ComponentPropsWithRef,
+  ComponentPropsWithoutRef,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+} from 'react';
 
 import {
   ArrowBendUpLeftIcon,
@@ -20,7 +26,7 @@ import {
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkeys } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams, useRouter, useRouterState } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ShellNavRoute, ShellUser } from '~/components/shell/routes';
 
@@ -51,11 +57,15 @@ import { Separator } from '~/components/ui/separator';
 import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 import { Elevated } from '~/lib/elevated';
+import { surfaceClasses, surfaceState } from '~/lib/surface-classes';
+import { useSurface } from '~/lib/surface-context';
 import { cn } from '~/lib/utils';
 import { list, roster } from '~/utils/chat';
 
 const RECENTS = 'canary.commandPalette.recents.v1';
+const SCREEN = 'canary.commandPalette.screen.v1';
 const MAX_RECENTS = 20;
+const SCREENS = ['account', 'create', 'root', 'theme', 'threads'] as const;
 
 type ThreadRecord = {
   archivedAt: string | null;
@@ -71,6 +81,8 @@ type ThemeChoice = 'dark' | 'light' | 'system';
 type PaletteSource = 'navigation' | 'recent' | 'thread' | 'workspace';
 
 type PalettePageId = 'account' | 'create' | 'root' | 'theme' | 'threads' | `rename:${string}`;
+
+type PaletteScreen = (typeof SCREENS)[number];
 
 type PaletteContext = {
   actions: (open: boolean) => void;
@@ -145,6 +157,7 @@ function ShellCommandPalette({
   const [recents, setRecents] = useState<string[]>([]);
   const [actions, setActions] = useState(false);
   const [value, setValue] = useState('');
+  const input = useRef<HTMLInputElement | null>(null);
 
   const threads = useMemo(() => sorted(rows), [rows]);
   const page = pages[pages.length - 1] ?? 'root';
@@ -237,19 +250,38 @@ function ShellCommandPalette({
   }, []);
 
   useEffect(() => {
-    if (!open) {
-      setPages(['root']);
-      setQuery('');
-      setActions(false);
-      setValue('');
+    if (open) {
+      setPages(stack(readScreen()));
     }
+
+    setQuery('');
+    setActions(false);
+    setValue('');
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      writeScreen(page);
+    }
+  }, [open, page]);
 
   useEffect(() => {
     setValue((current) =>
       flat.some((item) => item.id === current) ? current : (flat[0]?.id ?? ''),
     );
   }, [flat]);
+
+  useEffect(() => {
+    if (!open || actions) {
+      return;
+    }
+
+    const id = requestAnimationFrame(() => {
+      input.current?.focus({ preventScroll: true });
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [actions, open, page]);
 
   function context(): PaletteContext {
     return {
@@ -346,6 +378,18 @@ function ShellCommandPalette({
       event.preventDefault();
       event.stopPropagation();
       back();
+    }
+  }
+
+  function mouse(event: MouseEvent<HTMLDivElement>) {
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!actions) {
+      input.current?.focus({ preventScroll: true });
     }
   }
 
@@ -859,17 +903,19 @@ function ShellCommandPalette({
     >
       <Elevated
         data-command-palette-frame=""
-        offset={2}
+        offset={0}
         shadowLevel={6}
         className="max-h-[min(42rem,calc(100vh-2rem))] overflow-hidden rounded-xl border border-border"
       >
         <Command
+          disablePointerSelection
           label="Canary command palette"
           loop
           shouldFilter={false}
           value={value}
           className="bg-transparent p-0"
           onKeyDown={key}
+          onMouseDown={mouse}
           onValueChange={setValue}
         >
           <div className={cn('grid min-h-0', actions && 'pointer-events-none select-none')}>
@@ -877,6 +923,7 @@ function ShellCommandPalette({
               <div>
                 <CommandInput
                   autoFocus
+                  ref={input}
                   showIcon={false}
                   wrapperClassName={page !== 'root' ? 'border-b-0' : undefined}
                   placeholder={view().placeholder}
@@ -886,7 +933,7 @@ function ShellCommandPalette({
 
                 {page !== 'root' ? (
                   <div className="flex items-center gap-2 border-b border-border/65 px-3 pb-2 text-[10px] text-muted-foreground">
-                    <Button
+                    <PaletteButton
                       className="h-6 rounded-md px-1.5"
                       size="xs"
                       type="button"
@@ -895,20 +942,27 @@ function ShellCommandPalette({
                     >
                       <ArrowBendUpLeftIcon data-icon="inline-start" />
                       Back
-                    </Button>
+                    </PaletteButton>
                     <Badge>{view().title}</Badge>
                   </div>
                 ) : null}
               </div>
 
-              <CommandList className="max-h-[min(27rem,calc(100vh-13rem))] p-1">
+              <CommandList className="scrollbar-visible max-h-[min(27rem,calc(100vh-13rem))] p-1">
                 {empty ? <PaletteEmpty query={query} /> : null}
 
                 {sections.map((section) => (
                   <CommandGroup heading={section.title} key={section.id}>
-                    {section.items.map((item) => (
-                      <PaletteCommandItem item={item} key={item.id} onPick={choose} />
-                    ))}
+                    <div className="grid gap-1">
+                      {section.items.map((item) => (
+                        <PaletteCommandItem
+                          item={item}
+                          key={item.id}
+                          onPick={(pick) => setValue(pick.id)}
+                          onRun={choose}
+                        />
+                      ))}
+                    </div>
                   </CommandGroup>
                 ))}
               </CommandList>
@@ -950,8 +1004,9 @@ function ShellCommandTrigger({
         aria-label="Open command palette"
         className={cn(
           'size-10 rounded-md border border-transparent bg-transparent text-muted-foreground',
-          'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
-          'focus-visible:border-ring/50 focus-visible:bg-surface-3/70 focus-visible:ring-2 focus-visible:ring-ring/20',
+          'hover:border-transparent hover:text-foreground',
+          'focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20',
+          raised(),
           className,
         )}
         size="icon"
@@ -968,7 +1023,8 @@ function ShellCommandTrigger({
   return (
     <Button
       className={cn(
-        'h-9 w-full justify-start gap-2 rounded-md border-input/70 bg-input/20 px-3 text-muted-foreground hover:bg-surface-3/70 hover:text-foreground',
+        'h-9 w-full justify-start gap-2 rounded-md border-input/70 bg-transparent px-3 text-muted-foreground hover:text-foreground',
+        raised(),
         className,
       )}
       size="lg"
@@ -984,18 +1040,102 @@ function ShellCommandTrigger({
   );
 }
 
-function PaletteCommandItem(props: { item: PaletteItem; onPick: (item: PaletteItem) => void }) {
+type PaletteButtonProps = ComponentPropsWithRef<typeof Button>;
+
+function PaletteButton({ className, onMouseDown, ref, ...props }: PaletteButtonProps) {
+  return (
+    <Button
+      ref={ref}
+      className={cn('bg-transparent hover:text-foreground', raised(), className)}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        onMouseDown?.(event);
+      }}
+      {...props}
+    />
+  );
+}
+
+type PaletteGlyphProps = ComponentPropsWithoutRef<'span'>;
+
+function PaletteGlyph({ className, ...props }: PaletteGlyphProps) {
+  const base = useSurface();
+
+  return (
+    <span
+      className={cn(
+        'grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground',
+        surfaceClasses(base + 1, 1),
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+type PaletteKbdProps = ComponentPropsWithoutRef<typeof Kbd>;
+
+function PaletteKbd({ className, ...props }: PaletteKbdProps) {
+  const base = useSurface();
+
+  return (
+    <Kbd
+      className={cn(
+        'border border-border/70 text-foreground/75',
+        surfaceClasses(base + 1, 1),
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function raised() {
+  return cn(
+    surfaceState.hover,
+    surfaceState.active,
+    surfaceState.focus,
+    surfaceState.open,
+    'hover:!shadow-none focus-visible:!shadow-none aria-expanded:!shadow-none',
+    'hover:ring-1 hover:ring-border/70 aria-expanded:ring-1 aria-expanded:ring-border/70',
+  );
+}
+
+function PaletteCommandItem(props: {
+  item: PaletteItem;
+  onPick: (item: PaletteItem) => void;
+  onRun: (item: PaletteItem) => void;
+}) {
   const Icon = props.item.icon;
   const shortcut = props.item.actions.length > 1 ? 'Actions →' : props.item.actions[0]?.shortcut;
+  const click = useRef(false);
 
   return (
     <CommandItem
+      className={cn(
+        'h-10 min-h-10 gap-0 px-0 py-0 data-selected:hover:bg-active!',
+        surfaceState.hover,
+      )}
       keywords={props.item.keywords}
       value={props.item.id}
-      onSelect={() => props.onPick(props.item)}
+      onClickCapture={() => {
+        click.current = true;
+      }}
+      onDoubleClick={() => props.onRun(props.item)}
+      onSelect={() => {
+        if (click.current) {
+          click.current = false;
+          props.onPick(props.item);
+          return;
+        }
+
+        props.onRun(props.item);
+      }}
     >
-      <Icon aria-hidden />
-      <span className="grid min-w-0 flex-1">
+      <span className="grid size-10 shrink-0 place-items-center">
+        <Icon aria-hidden className="size-3.5" />
+      </span>
+      <span className="grid min-w-0 flex-1 pr-2">
         <span className="truncate">{props.item.title}</span>
         {props.item.subtitle ? (
           <span className="truncate text-[10px] leading-4 text-muted-foreground">
@@ -1003,7 +1143,7 @@ function PaletteCommandItem(props: { item: PaletteItem; onPick: (item: PaletteIt
           </span>
         ) : null}
       </span>
-      {shortcut ? <CommandShortcut>{shortcut}</CommandShortcut> : null}
+      {shortcut ? <CommandShortcut className="mr-2.5">{shortcut}</CommandShortcut> : null}
     </CommandItem>
   );
 }
@@ -1030,29 +1170,29 @@ function PaletteFooter(props: {
       )}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <span className="grid size-5 shrink-0 place-items-center rounded-sm bg-background/35 text-muted-foreground">
+        <PaletteGlyph>
           <Icon aria-hidden className="size-3.5" />
-        </span>
+        </PaletteGlyph>
         <span className="truncate font-medium">{props.title}</span>
       </span>
       <div className="flex shrink-0 items-center gap-3">
         {props.page !== 'root' ? (
           <span className="hidden items-center gap-1.5 sm:flex">
             <span>Back</span>
-            <Kbd className="bg-background/45 text-foreground/75">⌫</Kbd>
+            <PaletteKbd>⌫</PaletteKbd>
           </span>
         ) : null}
         <span className="hidden items-center gap-1.5 sm:flex">
           <span className="font-medium text-foreground">{action}</span>
-          <Kbd className="bg-background/45 text-foreground/75">↵</Kbd>
+          <PaletteKbd>↵</PaletteKbd>
         </span>
         <Separator className="h-4 bg-border/70" orientation="vertical" />
         <Popover open={props.open} onOpenChange={props.onOpenChange}>
           <PopoverTrigger
             render={
-              <Button
+              <PaletteButton
                 aria-label="Open command actions"
-                className="h-7 rounded-md px-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-3 hover:text-foreground disabled:opacity-50"
+                className="h-7 rounded-md px-1.5 text-xs font-medium text-muted-foreground disabled:opacity-50"
                 disabled={!props.item}
                 size="xs"
                 type="button"
@@ -1062,13 +1202,14 @@ function PaletteFooter(props: {
           >
             Actions
             <KbdGroup className="ml-1">
-              <Kbd className="bg-background/45 text-foreground/75">⌘</Kbd>
-              <Kbd className="bg-background/45 text-foreground/75">K</Kbd>
+              <PaletteKbd>⌘</PaletteKbd>
+              <PaletteKbd>K</PaletteKbd>
             </KbdGroup>
           </PopoverTrigger>
           {props.item ? (
             <ActionPopover
               item={props.item}
+              open={props.open}
               onOpenChange={props.onOpenChange}
               onRun={props.onRun}
             />
@@ -1081,11 +1222,13 @@ function PaletteFooter(props: {
 
 function ActionPopover(props: {
   item: PaletteItem;
+  open: boolean;
   onOpenChange: (open: boolean) => void;
   onRun: (action: PaletteAction) => void;
 }) {
   const [query, setQuery] = useState('');
   const [pos, setPos] = useState(0);
+  const input = useRef<HTMLInputElement | null>(null);
   const actions = props.item.actions.filter((action) => actionAccepts(action, query));
 
   useEffect(() => {
@@ -1096,6 +1239,18 @@ function ActionPopover(props: {
   useEffect(() => {
     setPos((value) => Math.min(value, Math.max(0, actions.length - 1)));
   }, [actions.length]);
+
+  useEffect(() => {
+    if (!props.open) {
+      return;
+    }
+
+    const id = requestAnimationFrame(() => {
+      input.current?.focus({ preventScroll: true });
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [props.item.id, props.open]);
 
   function key(event: KeyboardEvent<HTMLInputElement>) {
     event.stopPropagation();
@@ -1131,6 +1286,15 @@ function ActionPopover(props: {
     props.onRun(actions[pos]);
   }
 
+  function mouse(event: MouseEvent<HTMLDivElement>) {
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+
+    event.preventDefault();
+    input.current?.focus({ preventScroll: true });
+  }
+
   return (
     <PopoverContent
       align="end"
@@ -1138,24 +1302,21 @@ function ActionPopover(props: {
       sideOffset={10}
       className="w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-lg bg-transparent p-0 shadow-none ring-0"
       onKeyDown={(event) => event.stopPropagation()}
+      onMouseDown={mouse}
     >
-      <Elevated
-        offset={0}
-        shadowLevel={2}
-        className="overflow-hidden rounded-lg border border-border"
-      >
+      <Elevated shadowLevel={2} className="overflow-hidden rounded-lg border border-border">
         <div className="border-b border-border/65 px-2.5 py-2">
           <p className="truncate text-xs font-medium text-muted-foreground">{props.item.title}</p>
         </div>
 
-        <div className="max-h-56 overflow-y-auto p-1.5">
+        <div className="grid max-h-56 gap-1 overflow-y-auto p-2">
           {actions.length ? (
             actions.map((action, index) => (
               <ActionRow
                 action={action}
                 active={index === pos}
                 key={action.id}
-                onHover={() => setPos(index)}
+                onPick={() => setPos(index)}
                 onRun={props.onRun}
               />
             ))
@@ -1169,6 +1330,7 @@ function ActionPopover(props: {
         <div className="border-t border-border/75 bg-surface-3/80 px-2.5">
           <input
             autoFocus
+            ref={input}
             aria-label="Search command actions"
             className="h-8 w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/70"
             placeholder="Search for actions..."
@@ -1185,52 +1347,53 @@ function ActionPopover(props: {
 function ActionRow(props: {
   action: PaletteAction;
   active: boolean;
-  onHover: () => void;
+  onPick: () => void;
   onRun: (action: PaletteAction) => void;
 }) {
   const Icon = props.action.icon;
   const row = (
     <Button
       className={cn(
-        'h-7 w-full justify-start rounded-md bg-transparent! px-2 text-xs hover:bg-transparent! active:translate-y-0!',
+        'grid h-8 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-0 rounded-md bg-transparent! py-0 pl-0 pr-3 text-xs hover:bg-transparent! active:translate-y-0!',
         props.active && 'text-foreground',
         props.action.tone === 'danger' && 'text-destructive hover:text-destructive',
       )}
       size="sm"
       type="button"
       variant="ghost"
-      onMouseEnter={props.onHover}
-      onClick={() => props.onRun(props.action)}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onPick}
+      onDoubleClick={() => props.onRun(props.action)}
     >
-      <Icon data-icon="inline-start" />
-      <span className="min-w-0 flex-1 truncate text-left">{props.action.title}</span>
+      <span className="grid size-8 shrink-0 place-items-center">
+        <Icon aria-hidden className="size-3.5" />
+      </span>
+      <span className="min-w-0 truncate pr-3 text-left">{props.action.title}</span>
       {props.action.shortcut ? <ActionKeys value={props.action.shortcut} /> : null}
     </Button>
   );
 
-  const className = 'mb-0.5 rounded-md border last:mb-0';
-
-  if (!props.active) {
-    return <div className={cn(className, 'border-transparent')}>{row}</div>;
-  }
-
   return (
-    <Elevated shadowLevel={3} className={cn(className, 'border-border/70')}>
+    <div
+      className={cn(
+        'rounded-md border',
+        props.active
+          ? cn('border-border/70 hover:bg-active!', surfaceState.selected)
+          : cn('border-transparent', surfaceState.hover),
+      )}
+    >
       {row}
-    </Elevated>
+    </div>
   );
 }
 
 function ActionKeys(props: { value: string }) {
   return (
-    <KbdGroup className="ml-auto">
+    <KbdGroup className="justify-end">
       {props.value.split(/\s+/).map((item) => (
-        <Kbd
-          className="h-4 min-w-4 bg-background/45 px-1 text-[10px] text-foreground/75"
-          key={item}
-        >
+        <PaletteKbd className="h-4 min-w-4 px-1 text-[10px]" key={item}>
           {keyLabel(item)}
-        </Kbd>
+        </PaletteKbd>
       ))}
     </KbdGroup>
   );
@@ -1346,6 +1509,26 @@ function isItem(value: PaletteItem | undefined): value is PaletteItem {
 
 function renameId(page: PalettePageId) {
   return page.startsWith('rename:') ? page.slice('rename:'.length) : null;
+}
+
+function isScreen(value: string | null): value is PaletteScreen {
+  return SCREENS.some((item) => item === value);
+}
+
+function stack(page: PaletteScreen): PalettePageId[] {
+  return page === 'root' ? ['root'] : ['root', page];
+}
+
+function readScreen() {
+  const value = localStorage.getItem(SCREEN);
+
+  return isScreen(value) ? value : 'root';
+}
+
+function writeScreen(value: PalettePageId) {
+  if (isScreen(value)) {
+    localStorage.setItem(SCREEN, value);
+  }
 }
 
 function readRecents() {

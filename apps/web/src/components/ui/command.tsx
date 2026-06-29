@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
 
 type CommandProps = ComponentPropsWithoutRef<typeof CommandPrimitive>;
@@ -62,13 +63,14 @@ function CommandDialog({
   );
 }
 
-type CommandInputProps = ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+type CommandInputProps = ComponentPropsWithRef<typeof CommandPrimitive.Input> & {
   showIcon?: boolean;
   wrapperClassName?: string;
 };
 
 function CommandInput({
   className,
+  ref,
   showIcon = true,
   wrapperClassName,
   ...props
@@ -85,6 +87,7 @@ function CommandInput({
         <MagnifyingGlassIcon className="size-4 shrink-0 text-muted-foreground/70" />
       ) : null}
       <CommandPrimitive.Input
+        ref={ref}
         data-slot="command-input"
         className={cn(
           'h-full min-w-0 flex-1 bg-transparent text-sm/relaxed text-foreground outline-hidden placeholder:text-muted-foreground/70 disabled:cursor-not-allowed disabled:opacity-50',
@@ -163,7 +166,8 @@ function CommandItem({
       ref={ref}
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex min-h-7 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none in-data-[slot=dialog-content]:rounded-md data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-surface-4 data-selected:text-foreground data-selected:shadow-surface-1 data-selected:ring-1 data-selected:ring-border/80 data-selected:*:[svg]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "group/command-item relative flex min-h-7 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-xs/relaxed outline-hidden select-none in-data-[slot=dialog-content]:rounded-md data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:text-foreground data-selected:ring-1 data-selected:ring-border/80 data-selected:*:[svg]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        surfaceState.dataSelected,
         className,
       )}
       {...props}

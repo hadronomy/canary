@@ -22,6 +22,16 @@ const shadow: Record<SurfaceLevel, string> = {
   8: 'shadow-surface-8',
 };
 
+const surfaceState = {
+  active: 'active:!bg-active active:text-foreground',
+  dataSelected: 'data-selected:!bg-active data-selected:text-foreground',
+  focus: 'focus-visible:!bg-hover focus-visible:text-foreground',
+  focusWithin: 'focus-within:!bg-hover focus-within:text-foreground',
+  hover: 'hover:!bg-hover hover:text-foreground',
+  open: 'aria-expanded:!bg-active aria-expanded:text-foreground data-[state=open]:!bg-active data-[state=open]:text-foreground',
+  selected: '!bg-active text-foreground',
+} as const;
+
 function level(value: number): SurfaceLevel {
   return Math.max(1, Math.min(8, value)) as SurfaceLevel;
 }
@@ -30,5 +40,5 @@ function surfaceClasses(bgLevel: number, shadowLevel = bgLevel): string {
   return `${bg[level(bgLevel)]} ${shadow[level(shadowLevel)]}`;
 }
 
-export { surfaceClasses };
+export { surfaceClasses, surfaceState };
 export type { SurfaceLevel };

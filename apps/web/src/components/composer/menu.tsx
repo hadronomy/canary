@@ -160,6 +160,8 @@ function ComposerMenu({
                               'group/command-item relative z-10 flex w-full overflow-hidden rounded-md',
                               'px-2.5 py-0 text-left outline-none',
                               'data-[selected=true]:bg-transparent!',
+                              'data-[selected=true]:shadow-none!',
+                              'data-[selected=true]:ring-0!',
                               'data-[selected=true]:text-inherit',
                               'data-[state=active]:text-foreground',
                               'data-[disabled=disabled]:pointer-events-none data-[disabled=disabled]:opacity-45',

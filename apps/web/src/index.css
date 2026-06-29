@@ -115,6 +115,11 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
+  --overlay: 0 0 0;
+  --hover: rgb(var(--overlay) / 0.04);
+  --active: rgb(var(--overlay) / 0.07);
+  --scrim: rgb(0 0 0 / 0.24);
+
   --radius-shell: calc(var(--radius) + 4px);
   --radius-panel: var(--radius);
   --radius-control: calc(var(--radius) - 2px);
@@ -221,6 +226,11 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
+  --overlay: 255 255 255;
+  --hover: rgb(var(--overlay) / 0.06);
+  --active: rgb(var(--overlay) / 0.1);
+  --scrim: rgb(0 0 0 / 0.46);
+
   --scrollbar-thumb: oklch(1 0 0 / 14%);
   --scrollbar-thumb-hover: oklch(1 0 0 / 24%);
   --scrollbar-thumb-active: oklch(1 0 0 / 34%);
@@ -269,6 +279,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-scrim: var(--scrim);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -462,6 +475,16 @@
 
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  .scrollbar-visible,
+  .no-scrollbar.scrollbar-visible {
+    scrollbar-width: thin !important;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar,
+  .no-scrollbar.scrollbar-visible::-webkit-scrollbar {
+    display: block !important;
   }
 
   .canary-markdown {

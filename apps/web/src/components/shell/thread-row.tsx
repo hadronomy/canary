@@ -5,6 +5,7 @@ import { Link } from '@tanstack/react-router';
 
 import { Button } from '~/components/ui/button';
 import { Elevated } from '~/lib/elevated';
+import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
 
 type ThreadRowProps = Omit<ComponentPropsWithoutRef<'div'>, 'children' | 'id'> & {
@@ -37,7 +38,11 @@ function ThreadRow({
     'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
     active
       ? 'border-input/70 text-foreground'
-      : 'border-transparent hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground focus-within:border-input/55 focus-within:bg-surface-3/70 focus-within:text-foreground',
+      : cn(
+          'border-transparent hover:border-input/55 focus-within:border-input/55',
+          surfaceState.hover,
+          surfaceState.focusWithin,
+        ),
     className,
   );
 
@@ -85,8 +90,9 @@ function ThreadRow({
             'size-7 translate-x-1 scale-95 rounded-(--radius-press)',
             'border border-transparent bg-transparent text-muted-foreground opacity-0',
             'transition-[background-color,border-color,color,opacity,transform] duration-150 ease-out-strong motion-reduce:translate-x-0 motion-reduce:scale-100 motion-reduce:transition-none',
-            'hover:border-border hover:bg-popover hover:text-foreground',
-            'focus-visible:border-input focus-visible:bg-popover focus-visible:text-foreground',
+            surfaceState.hover,
+            surfaceState.focus,
+            'hover:border-border focus-visible:border-input',
             'group-hover/item:translate-x-0 group-hover/item:scale-100 group-hover/item:opacity-100',
             'focus-visible:translate-x-0 focus-visible:scale-100 focus-visible:opacity-100',
             'active:scale-[0.96]',

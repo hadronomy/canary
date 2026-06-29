@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip
 import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 import { Elevated } from '~/lib/elevated';
+import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
 import { roster } from '~/utils/chat';
 
@@ -104,8 +105,9 @@ function SideLink(props: { item: ShellNavRoute }) {
       className={cn(
         'group relative flex size-10 items-center justify-center rounded-(--radius-control) border border-transparent text-muted-foreground',
         'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
-        'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
-        'focus-visible:border-ring/50 focus-visible:bg-surface-3/70 focus-visible:ring-2 focus-visible:ring-ring/20',
+        surfaceState.hover,
+        surfaceState.focus,
+        'hover:border-input/55 focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20',
       )}
       to={props.item.to}
     >
@@ -128,7 +130,8 @@ function MobileLink(props: { item: ShellNavRoute }) {
       className={cn(
         'flex h-10 items-center gap-3 rounded-(--radius-control) border border-transparent px-3 text-sm font-medium text-muted-foreground',
         'transition-[background-color,border-color,color,box-shadow] duration-150 ease-out-strong motion-reduce:transition-none',
-        'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
+        surfaceState.hover,
+        'hover:border-input/55',
       )}
       to={props.item.to}
     >
@@ -188,8 +191,9 @@ function RailAccount(props: {
             aria-label="Account and sync"
             className={cn(
               'size-10 rounded-full border border-transparent bg-transparent p-0 text-muted-foreground',
-              'hover:border-input/55 hover:bg-surface-3/70 hover:text-foreground',
-              'focus-visible:border-ring/50 focus-visible:bg-surface-3/70 focus-visible:ring-2 focus-visible:ring-ring/20',
+              surfaceState.hover,
+              surfaceState.focus,
+              'hover:border-input/55 focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20',
             )}
             size="icon"
             type="button"

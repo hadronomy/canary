@@ -22,6 +22,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '~/components/ui/empty';
+import { ScrollArea } from '~/components/ui/scroll-area';
 import { Skeleton } from '~/components/ui/skeleton';
 import { cn } from '~/lib/utils';
 import { list, roster } from '~/utils/chat';
@@ -268,44 +269,50 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
         onTitle={setTitle}
       />
 
-      <nav aria-label="Chat conversations" className="min-h-0 overflow-y-auto pr-1.5">
-        {!rosterQuery.isReady ? (
-          <ThreadSkeletonList />
-        ) : visibleThreads.length ? (
-          <div className="grid gap-3">
-            {groups.map((group) => (
-              <section key={group.id} aria-labelledby={`threads-${group.id}`}>
-                <div className="mb-1.5 flex items-center justify-between px-1.5">
-                  <h3
-                    className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/72"
-                    id={`threads-${group.id}`}
-                  >
-                    {group.label}
-                  </h3>
-                  <span className="text-[10px] tabular-nums text-muted-foreground/62">
-                    {group.threads.length}
-                  </span>
-                </div>
+      <ScrollArea
+        className="-mx-1 min-h-0 rounded-lg"
+        cueSize="tight"
+        viewportClassName="px-1 pr-3"
+      >
+        <nav aria-label="Chat conversations">
+          {!rosterQuery.isReady ? (
+            <ThreadSkeletonList />
+          ) : visibleThreads.length ? (
+            <div className="grid gap-3">
+              {groups.map((group) => (
+                <section key={group.id} aria-labelledby={`threads-${group.id}`}>
+                  <div className="mb-1.5 flex items-center justify-between px-1.5">
+                    <h3
+                      className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/72"
+                      id={`threads-${group.id}`}
+                    >
+                      {group.label}
+                    </h3>
+                    <span className="text-[10px] tabular-nums text-muted-foreground/62">
+                      {group.threads.length}
+                    </span>
+                  </div>
 
-                <div className="grid gap-1.5">
-                  {group.threads.map((thread) => (
-                    <ThreadRow
-                      active={thread.id === activeThreadId}
-                      id={thread.id}
-                      key={thread.id}
-                      title={thread.title}
-                      updated={thread.updatedAt}
-                      onArchive={archive}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        ) : (
-          <EmptyState filtering={search.active} query={query} onClearQuery={() => setQuery('')} />
-        )}
-      </nav>
+                  <div className="grid gap-1.5">
+                    {group.threads.map((thread) => (
+                      <ThreadRow
+                        active={thread.id === activeThreadId}
+                        id={thread.id}
+                        key={thread.id}
+                        title={thread.title}
+                        updated={thread.updatedAt}
+                        onArchive={archive}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <EmptyState filtering={search.active} query={query} onClearQuery={() => setQuery('')} />
+          )}
+        </nav>
+      </ScrollArea>
     </aside>
   );
 }
