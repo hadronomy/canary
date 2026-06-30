@@ -143,6 +143,7 @@ function CommandPalette({
   function push(page: CommandPageId, query?: string) {
     dispatch({ type: 'push', page, query });
     onPage(page);
+    requestAnimationFrame(focus);
   }
 
   const ctx: CommandContext = {
@@ -629,10 +630,8 @@ function CommandActionRow(props: { action: CommandAction; active: boolean; item:
         <span className="grid size-8 shrink-0 place-items-center">
           <Icon aria-hidden className="block size-3.5" />
         </span>
-        <span>
-          <span className="h-full min-w-0 items-center pr-3 text-left block truncate leading-none">
-            {props.action.title}
-          </span>
+        <span className="min-w-0 pr-3 text-left">
+          <span className="block truncate leading-none">{props.action.title}</span>
         </span>
         {shortcutLabel(props.action) ? (
           <span className="flex h-8 items-center justify-end">
