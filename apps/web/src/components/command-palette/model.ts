@@ -2,63 +2,26 @@ import type {
   CommandAction,
   CommandEvent,
   CommandItem,
-  CommandItemInput,
-  CommandScreen,
+  CommandPageId,
+  CommandRegistry,
+  CommandSearchDocument,
   CommandSession,
   PageRef,
 } from '~/components/command-palette/types';
 
 const MAX_RECENTS = 20;
+const ROOT = 'root';
 
-function action<const T extends CommandAction>(value: T) {
-  return value;
+function ref(id: CommandPageId, query = ''): PageRef {
+  return { id, query };
 }
 
-function item<const T extends CommandItemInput>(value: T): CommandItem {
-  return {
-    ...value,
-    actions: [value.primary, ...(value.actions ?? [])],
-  };
-}
-
-function root(): PageRef {
-  return { kind: 'root', query: '' };
-}
-
-function page(screen: CommandScreen): PageRef {
-  switch (screen) {
-    case 'account':
-      return { kind: 'account', query: '' };
-    case 'create-thread':
-      return { kind: 'create-thread', query: '' };
-    case 'theme':
-      return { kind: 'theme', query: '' };
-    case 'threads':
-      return { kind: 'threads', query: '' };
-    default:
-      return root();
-  }
-}
-
-function screen(ref: PageRef): CommandScreen | null {
-  switch (ref.kind) {
-    case 'account':
-    case 'create-thread':
-    case 'root':
-    case 'theme':
-    case 'threads':
-      return ref.kind;
-    default:
-      return null;
-  }
-}
-
-function init(value: CommandScreen): CommandSession {
-  const start = root();
+function init(value: CommandPageId): CommandSession {
+  const root = ref(ROOT);
 
   return {
     panel: { kind: 'list' },
-    stack: value === 'root' ? [start] : [start, page(value)],
+    stack: value === ROOT ? [root] : [root, ref(value)],
   };
 }
 
@@ -67,10 +30,10 @@ function current(state: CommandSession) {
 }
 
 function previous(state: CommandSession) {
-  if (state.stack.length > 1) return state.stack[state.stack.length - 2] ?? root();
-  if (current(state).kind === 'root') return null;
+  if (state.stack.length > 1) return state.stack[state.stack.length - 2] ?? ref(ROOT);
+  if (current(state).id === ROOT) return null;
 
-  return root();
+  return ref(ROOT);
 }
 
 function reducer(state: CommandSession, event: CommandEvent): CommandSession {
@@ -91,13 +54,13 @@ function reducer(state: CommandSession, event: CommandEvent): CommandSession {
       };
     case 'back':
       if (state.stack.length === 1) {
-        if (current(state).kind === 'root') return state;
+        if (current(state).id === ROOT) return state;
 
         return {
           ...state,
           panel: { kind: 'list' },
           selected: undefined,
-          stack: [root()],
+          stack: [ref(ROOT)],
         };
       }
 
@@ -124,7 +87,7 @@ function reducer(state: CommandSession, event: CommandEvent): CommandSession {
         ...state,
         panel: { kind: 'list' },
         selected: undefined,
-        stack: [...state.stack, event.page],
+        stack: [...state.stack, ref(event.page, event.query ?? '')],
       };
     case 'query':
       return {
@@ -148,11 +111,15 @@ function remember(value: readonly string[], id: string) {
   return [id, ...value.filter((item) => item !== id)].slice(0, MAX_RECENTS);
 }
 
-function filter(items: readonly CommandItem[], query: string) {
+function stale(registry: CommandRegistry, value: readonly string[]) {
+  return value.filter((item) => registry.items.has(item)).slice(0, MAX_RECENTS);
+}
+
+function filter<T extends CommandSearchDocument>(items: readonly T[], query: string) {
   return items.filter((item) => accepts(item, query));
 }
 
-function accepts(item: CommandItem, query: string) {
+function accepts(item: CommandSearchDocument, query: string) {
   const term = norm(query);
 
   if (!term) return true;
@@ -167,14 +134,16 @@ function actionAccepts(item: CommandAction, query: string) {
 
   if (!term) return true;
 
-  return [item.title, item.shortcut ?? ''].some((value) => norm(value).includes(term));
+  return [item.title, item.label ?? '', item.hotkey ?? ''].some((value) =>
+    norm(String(value)).includes(term),
+  );
+}
+
+function visible(page: CommandPageId, root: CommandPageId) {
+  return page === root ? ROOT : page;
 }
 
 function byId(items: readonly CommandItem[]) {
-  return new Map(items.map((item) => [item.id, item]));
-}
-
-function actionById(items: readonly CommandAction[]) {
   return new Map(items.map((item) => [item.id, item]));
 }
 
@@ -187,19 +156,18 @@ function norm(value: string) {
 }
 
 export {
+  ROOT,
   accepts,
-  action,
   actionAccepts,
-  actionById,
   byId,
   current,
   filter,
   init,
-  item,
   norm,
-  page,
   previous,
   reducer,
+  ref,
   remember,
-  screen,
+  stale,
+  visible,
 };

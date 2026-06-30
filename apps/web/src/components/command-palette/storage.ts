@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from 'react';
 
-import type { CommandScreen } from '~/components/command-palette/types';
+import type { CommandPageId } from '~/components/command-palette/types';
 
 const RECENTS = 'canary.commandPalette.recents.v2';
 const LEGACY_RECENTS = 'canary.commandPalette.recents.v1';
-const SCREEN = 'canary.commandPalette.screen.v2';
-const LEGACY_SCREEN = 'canary.commandPalette.screen.v1';
+const PAGE = 'canary.commandPalette.screen.v2';
+const LEGACY_PAGE = 'canary.commandPalette.screen.v1';
 const MAX_RECENTS = 20;
-const SCREENS = ['account', 'create-thread', 'root', 'theme', 'threads'] as const;
+const ROOT = 'root';
 
 const empty: readonly string[] = [];
 const subs = new Set<() => void>();
@@ -19,16 +19,16 @@ function useCommandRecents() {
   return useSyncExternalStore(subscribe, recents, serverRecents);
 }
 
-function useCommandScreen() {
-  return useSyncExternalStore(subscribe, readScreen, serverScreen);
+function useCommandPage() {
+  return useSyncExternalStore(subscribe, readPage, serverPage);
 }
 
 function writeRecents(value: readonly string[]) {
   save(RECENTS, JSON.stringify(value.slice(0, MAX_RECENTS)));
 }
 
-function writeScreen(value: CommandScreen) {
-  save(SCREEN, value);
+function writePage(value: CommandPageId) {
+  save(PAGE, value);
 }
 
 function subscribe(fn: () => void) {
@@ -61,18 +61,16 @@ function recents() {
   return snap;
 }
 
-function readScreen(): CommandScreen {
-  const value = load(SCREEN) ?? legacyScreen(load(LEGACY_SCREEN));
-
-  return isScreen(value) ? value : 'root';
+function readPage(): CommandPageId {
+  return legacy(load(PAGE) ?? load(LEGACY_PAGE)) ?? ROOT;
 }
 
 function serverRecents() {
   return empty;
 }
 
-function serverScreen(): CommandScreen {
-  return 'root';
+function serverPage(): CommandPageId {
+  return ROOT;
 }
 
 function parse(value: string | null | undefined) {
@@ -108,12 +106,11 @@ function save(key: string, value: string) {
   } catch {}
 }
 
-function legacyScreen(value: string | null) {
-  return value === 'create' ? 'create-thread' : value;
+function legacy(value: string | null) {
+  if (!value) return null;
+  if (value === 'create') return 'create-thread';
+
+  return value;
 }
 
-function isScreen(value: string | null): value is CommandScreen {
-  return SCREENS.some((item) => item === value);
-}
-
-export { useCommandRecents, useCommandScreen, writeRecents, writeScreen };
+export { useCommandPage, useCommandRecents, writePage, writeRecents };

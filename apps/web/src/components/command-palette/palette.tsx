@@ -1,3 +1,4 @@
+import type { RegisterableHotkey } from '@tanstack/react-hotkeys';
 import type {
   ComponentPropsWithRef,
   ComponentPropsWithoutRef,
@@ -8,30 +9,30 @@ import type {
 } from 'react';
 
 import { ArrowBendUpLeftIcon, CommandIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
-import { use, createContext, useReducer, useRef } from 'react';
+import { formatForDisplay } from '@tanstack/react-hotkeys';
+import { createContext, use, useReducer, useRef } from 'react';
 
 import type {
   CommandAction,
   CommandContext,
-  CommandEvent,
   CommandItem as CommandEntry,
+  CommandEvent,
   CommandPage,
-  CommandPageResolver,
-  CommandScreen,
+  CommandPageId,
+  CommandRegistry,
   CommandSession,
-  PageRef,
   PanelState,
 } from '~/components/command-palette/types';
 
+import { useCommandHotkeys } from '~/components/command-palette/hotkeys';
 import {
   actionAccepts,
-  actionById,
-  byId,
   current,
+  filter,
   init,
   previous,
   reducer,
-  screen,
+  stale,
 } from '~/components/command-palette/model';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -70,13 +71,15 @@ type CommandPaletteProps = Omit<
 > & {
   api?: RefObject<CommandPaletteApi | null>;
   description?: string;
-  initial: CommandScreen;
+  initial: CommandPageId;
   onOpenChange: (open: boolean) => void;
+  onPage: (page: CommandPageId) => void;
   onRemember: (id: string) => void;
-  onScreen: (screen: CommandScreen) => void;
   open: boolean;
-  resolve: CommandPageResolver;
+  recents: readonly string[];
+  registry: CommandRegistry;
   title?: string;
+  toggle?: RegisterableHotkey;
 };
 
 type CommandValue = {
@@ -86,9 +89,9 @@ type CommandValue = {
   flat: readonly CommandEntry[];
   focus: () => void;
   item: CommandEntry | null;
-  map: Map<string, CommandEntry>;
   page: CommandPage;
   panel: PanelState;
+  registry: CommandRegistry;
   run: (item: CommandEntry) => void;
   runAction: (item: CommandEntry, action: CommandAction) => void;
   state: CommandSession;
@@ -102,38 +105,55 @@ function CommandPalette({
   description = 'Search navigation, conversations, and workspace actions.',
   initial,
   onOpenChange,
+  onPage,
   onRemember,
-  onScreen,
   open,
-  resolve,
+  recents,
+  registry,
   title = 'Canary command palette',
+  toggle,
   ...props
 }: CommandPaletteProps) {
   const [state, dispatch] = useReducer(reducer, initial, init);
   const input = useRef<HTMLInputElement | null>(null);
+  const ref = current(state);
+  const page = registry.pages.get(ref.id) ?? registry.pages.get(registry.root)!;
+  const sections = resolveSections(registry, page, ref.query, recents);
+  const flat = sections.flatMap((item) => item.items);
+  const item = state.selected
+    ? (registry.items.get(state.selected) ?? flat[0] ?? null)
+    : (flat[0] ?? null);
+  const panel =
+    state.panel.kind === 'actions' && registry.items.has(state.panel.item)
+      ? state.panel
+      : ({ kind: 'list' } satisfies PanelState);
 
   function close() {
     onOpenChange(false);
+  }
+
+  function copy(value: string) {
+    return navigator.clipboard.writeText(value);
   }
 
   function focus() {
     input.current?.focus({ preventScroll: true });
   }
 
-  function push(next: PageRef) {
-    dispatch({ type: 'push', page: next });
-
-    const value = screen(next);
-    if (value) onScreen(value);
+  function push(page: CommandPageId, query?: string) {
+    dispatch({ type: 'push', page, query });
+    onPage(page);
   }
 
   const ctx: CommandContext = {
     actions: (id) => {
-      const item = id ?? view.item?.id;
-      if (item) dispatch({ type: 'open-actions', item });
+      const next = id ?? view.item?.id;
+      if (next) dispatch({ type: 'open-actions', item: next });
     },
     close,
+    copy,
     page: push,
+    query: ref.query,
   };
 
   function back() {
@@ -141,21 +161,8 @@ function CommandPalette({
 
     dispatch({ type: 'back' });
 
-    if (next) {
-      const value = screen(next);
-      if (value) onScreen(value);
-    }
+    if (next) onPage(next.id);
   }
-
-  const page = resolve(state, ctx);
-  const sections = page.sections.filter((item) => item.items.length);
-  const flat = sections.flatMap((item) => item.items);
-  const map = byId(flat);
-  const item = state.selected ? (map.get(state.selected) ?? flat[0] ?? null) : (flat[0] ?? null);
-  const panel =
-    state.panel.kind === 'actions' && map.has(state.panel.item)
-      ? state.panel
-      : ({ kind: 'list' } satisfies PanelState);
 
   const view: CommandValue = {
     back,
@@ -164,9 +171,9 @@ function CommandPalette({
     flat,
     focus,
     item,
-    map,
-    page,
+    page: { ...page, sections },
     panel,
+    registry,
     run,
     runAction,
     state,
@@ -189,6 +196,27 @@ function CommandPalette({
     Promise.resolve(action.run(ctx)).then(() => onRemember(item.id));
   }
 
+  function submit() {
+    const action = page.submit;
+
+    if (action) {
+      Promise.resolve(action.run(ctx)).then(() => onRemember(action.id));
+    }
+  }
+
+  useCommandHotkeys({
+    actions: () => {
+      if (item) dispatch({ type: 'open-actions', item: item.id });
+    },
+    item,
+    onOpenChange,
+    open,
+    runAction,
+    submit: page.submit,
+    submitRun: submit,
+    toggle,
+  });
+
   function key(event: KeyboardEvent<HTMLDivElement>) {
     if (panel.kind === 'actions') {
       event.preventDefault();
@@ -199,10 +227,8 @@ function CommandPalette({
     }
 
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && page.submit) {
-      const action = page.submit;
-
       event.preventDefault();
-      Promise.resolve(action.run(ctx)).then(() => onRemember(action.id));
+      submit();
       return;
     }
 
@@ -212,11 +238,7 @@ function CommandPalette({
       return;
     }
 
-    if (
-      event.key === 'Backspace' &&
-      current(state).kind !== 'root' &&
-      current(state).query === ''
-    ) {
+    if (event.key === 'Backspace' && ref.id !== registry.root && ref.query === '') {
       event.preventDefault();
       back();
       return;
@@ -224,7 +246,7 @@ function CommandPalette({
 
     if (event.key !== 'Escape') return;
 
-    if (current(state).kind !== 'root') {
+    if (ref.id !== registry.root) {
       event.preventDefault();
       event.stopPropagation();
       back();
@@ -278,9 +300,9 @@ function CommandPalette({
                     autoFocus
                     ref={input}
                     showIcon={false}
-                    wrapperClassName={current(state).kind !== 'root' ? 'border-b-0' : undefined}
+                    wrapperClassName={ref.id !== registry.root ? 'border-b-0' : undefined}
                     placeholder={page.placeholder}
-                    value={current(state).query}
+                    value={ref.query}
                     onValueChange={(query) => dispatch({ type: 'query', query })}
                   />
 
@@ -312,7 +334,7 @@ function useCommand() {
 function CommandBack() {
   const cmd = useCommand();
 
-  if (current(cmd.state).kind === 'root') return null;
+  if (current(cmd.state).id === cmd.registry.root) return null;
 
   function back() {
     cmd.back();
@@ -361,7 +383,7 @@ function CommandSections() {
 function CommandPaletteRow(props: { item: CommandEntry }) {
   const cmd = useCommand();
   const Icon = props.item.icon;
-  const shortcut = props.item.actions.length > 1 ? 'Actions →' : props.item.primary.shortcut;
+  const shortcut = props.item.actions.length > 1 ? 'Actions →' : shortcutLabel(props.item.primary);
   const click = useRef(false);
 
   return (
@@ -424,7 +446,7 @@ function CommandPaletteFooter() {
         <span className="truncate font-medium">{cmd.page.title}</span>
       </span>
       <div className="flex shrink-0 items-center gap-3">
-        {current(cmd.state).kind !== 'root' ? (
+        {current(cmd.state).id !== cmd.registry.root ? (
           <span className="hidden items-center gap-1.5 sm:flex">
             <span>Back</span>
             <CommandKey>⌫</CommandKey>
@@ -479,9 +501,8 @@ function CommandActionPopover() {
   const item = cmd.item;
   const panel = cmd.panel;
   const actions = item.actions.filter((item) => actionAccepts(item, panel.query));
-  const map = actionById(actions);
   const active = panel.selected
-    ? (map.get(panel.selected) ?? actions[0] ?? null)
+    ? (actions.find((item) => item.id === panel.selected) ?? actions[0] ?? null)
     : (actions[0] ?? null);
 
   function key(event: KeyboardEvent<HTMLInputElement>) {
@@ -582,7 +603,7 @@ function CommandActionPopover() {
 
 function CommandActionRow(props: { action: CommandAction; active: boolean; item: CommandEntry }) {
   const cmd = useCommand();
-  const Icon = props.action.icon;
+  const Icon = props.action.icon ?? props.item.icon;
 
   return (
     <div
@@ -593,41 +614,46 @@ function CommandActionRow(props: { action: CommandAction; active: boolean; item:
           : cn('border-transparent', surfaceState.hover),
       )}
     >
-      <Button
+      <button
         className={cn(
-          'grid h-8 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-0 rounded-md bg-transparent! py-0 pl-0 pr-2.5 text-xs hover:bg-transparent! active:translate-y-0!',
+          'grid h-8 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md bg-transparent py-0 pl-0 pr-2 text-xs font-medium leading-none text-foreground outline-none transition-colors hover:bg-transparent active:translate-y-0',
+          'focus-visible:ring-2 focus-visible:ring-ring/20',
           props.active && 'text-foreground',
           props.action.tone === 'danger' && 'text-destructive hover:text-destructive',
         )}
-        size="sm"
         type="button"
-        variant="ghost"
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => cmd.dispatch({ type: 'action-select', id: props.action.id })}
         onDoubleClick={() => cmd.runAction(props.item, props.action)}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center self-center leading-none">
-          <Icon aria-hidden className="size-3.5" />
+        <span className="grid size-8 shrink-0 place-items-center">
+          <Icon aria-hidden className="block size-3.5" />
         </span>
-        <span className="flex h-8 min-w-0 items-center self-center pr-3 text-left leading-none">
-          <span className="truncate">{props.action.title}</span>
+        <span>
+          <span className="h-full min-w-0 items-center pr-3 text-left block truncate leading-none">
+            {props.action.title}
+          </span>
         </span>
-        {props.action.shortcut ? (
-          <span className="flex h-8 items-center justify-end self-center">
-            <CommandKeys value={props.action.shortcut} />
+        {shortcutLabel(props.action) ? (
+          <span className="flex h-8 items-center justify-end">
+            <CommandKeys action={props.action} />
           </span>
         ) : null}
-      </Button>
+      </button>
     </div>
   );
 }
 
-function CommandKeys(props: { value: string }) {
+function CommandKeys(props: { action: CommandAction }) {
+  const parts = shortcutParts(props.action);
+
+  if (!parts.length) return null;
+
   return (
     <KbdGroup className="h-8 items-center justify-end">
-      {props.value.split(/\s+/).map((item) => (
-        <CommandKey className="h-4 min-w-4 px-1 text-[10px]" key={item}>
-          {label(item)}
+      {parts.map((item, index) => (
+        <CommandKey className="h-4 min-w-4 px-1 text-[10px]" key={`${item}-${index}`}>
+          <ShortcutKey value={item} />
         </CommandKey>
       ))}
     </KbdGroup>
@@ -782,6 +808,32 @@ function CommandTrigger({ className, compact = false, onOpen, ...props }: Comman
   );
 }
 
+function resolveSections(
+  registry: CommandRegistry,
+  page: CommandPage,
+  query: string,
+  recents: readonly string[],
+) {
+  const sections = page.sections.map((section) => ({
+    ...section,
+    items: filter(section.items, query),
+  }));
+
+  if (page.id !== registry.root) return sections;
+
+  const recent = stale(registry, recents)
+    .map((id) => registry.items.get(id))
+    .filter((item): item is CommandEntry => item !== undefined)
+    .filter((item) => filter([item], query).length > 0);
+  const used = new Set(recent.map((item) => item.id));
+  const base = sections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !used.has(item.id)),
+  }));
+
+  return [{ id: 'recent', items: recent, title: 'Recent' }, ...base];
+}
+
 function raised() {
   return cn(
     surfaceState.hover,
@@ -802,17 +854,37 @@ function shift(items: readonly CommandAction[], item: CommandAction | null, delt
   return items[next] ?? null;
 }
 
-function label(value: string) {
-  switch (value) {
-    case 'Enter':
-      return '↵';
-    case 'Command':
-    case 'Mod':
-    case '⌘':
-      return '⌘';
-    default:
-      return value;
+function shortcutLabel(action: CommandAction) {
+  if (action.label) return action.label;
+  if (!action.hotkey) return undefined;
+
+  return formatForDisplay(action.hotkey, { separatorToken: ' ' });
+}
+
+function shortcutParts(action: CommandAction) {
+  const value = shortcutLabel(action);
+
+  return value
+    ? value
+        .split(/\s*\+\s*|\s+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function ShortcutKey(props: { value: string }) {
+  const value = props.value.trim();
+
+  if (value === '⌘') {
+    return (
+      <>
+        <span className="sr-only">Command</span>
+        <CommandIcon aria-hidden className="size-3" />
+      </>
+    );
   }
+
+  return <span>{value}</span>;
 }
 
 export { CommandCard, CommandPalette, CommandTrigger };
