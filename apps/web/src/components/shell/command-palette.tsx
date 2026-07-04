@@ -7,38 +7,29 @@ import type { ShellUser } from '~/components/shell/routes';
 import {
   CommandPalette,
   CommandTrigger,
-  compileCommandPalette,
+  recordCommandUse,
+  resetCommandUse,
   type CommandPaletteApi,
   type CommandPaletteProps,
   type CommandTriggerProps,
+  type ItemId,
+  type PageId,
+  useCommandLearning,
+  writeCommandPage,
 } from '~/components/command-palette';
-import {
-  useCommandPage,
-  useCommandRecents,
-  writePage,
-  writeRecents,
-} from '~/components/command-palette';
-import { remember } from '~/components/command-palette/model';
-import {
-  currentTheme,
-  shellCommandTree,
-  shellPalette,
-  sorted,
-} from '~/components/shell/command-palette-modules';
+import { currentTheme, shellPalette, sorted } from '~/components/shell/command-modules';
 import { useTheme } from '~/components/theme-provider';
 import { list, roster } from '~/utils/chat';
 
 type ShellCommandPaletteProps = Omit<
   CommandPaletteProps,
-  'api' | 'initial' | 'onPage' | 'onRemember' | 'recents' | 'registry'
+  'api' | 'initial' | 'onPage' | 'onReset' | 'onUse' | 'registry' | 'usage'
 > & {
   user: ShellUser;
 };
 
 function ShellCommandPalette({ onOpenChange, open, user, ...props }: ShellCommandPaletteProps) {
   const api = useRef<CommandPaletteApi | null>(null);
-  const recents = useCommandRecents();
-  const page = useCommandPage();
   const nav = useNavigate();
   const params = useParams({ strict: false });
   const router = useRouter();
@@ -49,8 +40,8 @@ function ShellCommandPalette({ onOpenChange, open, user, ...props }: ShellComman
   const col = useMemo(() => list(owner), [owner]);
   const rows = useLiveQuery(roster(owner)).data;
   const threads = useMemo(() => sorted(rows), [rows]);
-  const registry = compileCommandPalette(
-    shellCommandTree({
+  const deps = useMemo(
+    () => ({
       active,
       col,
       mode: currentTheme(theme.theme),
@@ -62,24 +53,36 @@ function ShellCommandPalette({ onOpenChange, open, user, ...props }: ShellComman
       threads,
       user,
     }),
-    shellPalette.root,
+    [active, col, nav, onOpenChange, path, router, theme, threads, user],
   );
+  const registry = useMemo(() => shellPalette.compile(deps), [deps]);
+  const learning = useCommandLearning(owner, registry);
+  const initial = registry.pages.has(learning.page) ? learning.page : registry.root;
 
-  function keep(id: string) {
-    writeRecents(remember(recents, id));
+  function record(id: ItemId, query: string) {
+    recordCommandUse({ item: id, query, user: owner });
+  }
+
+  function reset(id: ItemId) {
+    resetCommandUse({ item: id, user: owner });
+  }
+
+  function page(id: PageId) {
+    writeCommandPage({ page: id, user: owner });
   }
 
   return (
     <CommandPalette
       api={api}
-      initial={page}
+      initial={initial}
       onOpenChange={onOpenChange}
-      onPage={writePage}
-      onRemember={keep}
+      onPage={page}
+      onReset={reset}
+      onUse={record}
       open={open}
-      recents={recents}
       registry={registry}
       toggle={shellPalette.hotkeys?.toggle}
+      usage={learning.usage}
       {...props}
     />
   );

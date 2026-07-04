@@ -1,124 +1,101 @@
-import type { Icon } from '@phosphor-icons/react';
 import type { ReactElement, ReactNode } from 'react';
 
-import { Children, Fragment, isValidElement } from 'react';
+import { Children, Fragment, createElement, isValidElement } from 'react';
 
 import type {
+  ActionNode,
+  ActionProps,
+  CopyProps,
+  DangerProps,
+  NodeKind,
+  DetailNode,
+  ItemNode,
+  ItemProps,
+  PageNode,
+  PushProps,
+  SectionNode,
+} from '~/components/command-palette/dsl';
+import type {
+  ActionId,
   CommandAction,
-  CommandId,
   CommandModule,
   CommandPage,
-  CommandPageId,
   CommandPaletteConfig,
   CommandRegistry,
-  CommandRun,
+  CommandRoot,
   CommandSection,
   CommandShortcut,
-  CommandSource,
-  CommandTone,
+  ItemId,
+  PageId,
 } from '~/components/command-palette/types';
 
-const mark = Symbol('command-palette-node');
-const ROOT = 'root';
-
-type Kind = 'action' | 'copy' | 'danger' | 'detail' | 'item' | 'page' | 'push' | 'section';
-
-type Marked<TProps, TKind extends Kind> = ((props: TProps) => null) & {
-  [mark]: TKind;
-};
-
-type PageProps = {
-  children?: ReactNode;
-  id: CommandPageId;
-  placeholder: string;
-  title: string;
-};
-
-type SectionProps = {
-  children?: ReactNode;
-  id: CommandId;
-  title: string;
-};
-
-type ItemProps = {
-  children?: ReactNode;
-  icon: Icon;
-  id: CommandId;
-  keywords?: readonly string[];
-  source?: CommandSource;
-  subtitle?: string;
-  title: string;
-};
-
-type DetailProps = {
-  children?: ReactNode;
-};
-
-type ActionProps = {
-  children?: ReactNode;
-  icon?: Icon;
-  id: CommandId;
-  run: CommandRun;
-  shortcut?: CommandShortcut;
-  submit?: boolean;
-  tone?: CommandTone;
-};
-
-type PushProps = {
-  children?: ReactNode;
-  icon?: Icon;
-  id: CommandId;
-  page: CommandPageId | PageNode;
-  query?: string;
-  shortcut?: CommandShortcut;
-  submit?: boolean;
-};
-
-type CopyProps = {
-  children?: ReactNode;
-  icon?: Icon;
-  id: CommandId;
-  shortcut?: CommandShortcut;
-  submit?: boolean;
-  value: string | (() => string);
-};
-
-type DangerProps = Omit<ActionProps, 'tone'>;
-
-type ActionComponent = Marked<ActionProps, 'action'> & {
-  Copy: Marked<CopyProps, 'copy'>;
-  Danger: Marked<DangerProps, 'danger'>;
-  Push: Marked<PushProps, 'push'>;
-};
-
-type PageNode = ReactElement<PageProps, Marked<PageProps, 'page'>>;
+import { Command, nodeKind } from '~/components/command-palette/dsl';
+import {
+  ROOT_PAGE,
+  actionId,
+  itemId,
+  pageId,
+  paletteId,
+  sectionId,
+} from '~/components/command-palette/types';
 
 type Build = {
-  actions: Map<CommandId, { action: CommandAction; item: CommandSection['items'][number] }>;
+  actions: Map<ActionId, { action: CommandAction; item: CommandSection['items'][number] }>;
   ids: Set<string>;
-  items: Map<CommandId, CommandSection['items'][number]>;
-  pages: Map<CommandPageId, CommandPage>;
-  pending: Set<CommandPageId>;
-  root: CommandPageId;
+  items: Map<ItemId, CommandSection['items'][number]>;
+  pages: Map<PageId, CommandPage>;
+  pending: Set<PageId>;
+  root: PageId;
 };
 
-function definePalette<TDeps>(value: CommandPaletteConfig<TDeps>) {
-  return value;
+function definePalette<TDeps>(cfg: CommandPaletteConfig<TDeps>) {
+  const root = cfg.root.id ?? ROOT_PAGE;
+
+  moduleIds(cfg.modules);
+
+  return {
+    ...cfg,
+    id: paletteId(String(cfg.id)),
+    root: { ...cfg.root, id: root },
+    compile: (deps: TDeps) =>
+      compileCommandPalette(renderPalette(cfg.root, cfg.modules, deps), root),
+    render: (deps: TDeps) => renderPalette(cfg.root, cfg.modules, deps),
+  };
 }
 
-function defineCommandModule<TDeps, TData>(value: CommandModule<TDeps, TData>) {
-  return value;
+function moduleIds(mods: readonly { id: string }[]) {
+  const ids = new Set<string>();
+
+  mods.forEach((mod) => {
+    if (ids.has(mod.id)) {
+      throw new Error(`Command module "${mod.id}" is declared twice.`);
+    }
+
+    ids.add(mod.id);
+  });
+}
+
+function defineCommandModule<TDeps, TData>(
+  cfg: Omit<CommandModule<TDeps, TData>, 'kind' | 'view'>,
+) {
+  return {
+    ...cfg,
+    kind: 'command-module' as const,
+    view: (deps: TDeps) => cfg.render(cfg.useData(deps), deps),
+  };
 }
 
 function createCommandIds(scope: string) {
   return {
-    action: (item: string, action: string) => join(scope, item, action),
-    item: (...parts: string[]) => join(scope, ...parts),
-    page: (...parts: string[]) => join(scope, 'page', ...parts),
+    action: (item: ItemId, action: string) => actionId(join(item, action)),
+    item: (...parts: readonly string[]) => itemId(join(scope, ...parts)),
+    page: (...parts: readonly string[]) => pageId(join(scope, 'page', ...parts)),
+    palette: () => paletteId(scope),
+    section: (...parts: readonly string[]) => sectionId(join(scope, 'section', ...parts)),
   };
 }
 
-function compileCommandPalette(node: ReactNode, root = ROOT): CommandRegistry {
+function compileCommandPalette(node: ReactNode, root = ROOT_PAGE): CommandRegistry {
   const build: Build = {
     actions: new Map(),
     ids: new Set(),
@@ -130,7 +107,7 @@ function compileCommandPalette(node: ReactNode, root = ROOT): CommandRegistry {
 
   collect(node).forEach((item) => {
     expect(item, 'page');
-    compilePage(build, item as PageNode);
+    compilePage(build, item);
   });
 
   if (!build.pages.has(root)) {
@@ -151,54 +128,28 @@ function compileCommandPalette(node: ReactNode, root = ROOT): CommandRegistry {
   };
 }
 
-function page(_props: PageProps) {
-  return null;
+function renderPalette<TDeps>(
+  root: CommandRoot,
+  modules: readonly Pick<CommandModule<TDeps, unknown>, 'view'>[],
+  deps: TDeps,
+) {
+  const views = modules.map((item) => item.view(deps));
+
+  return createElement(
+    Fragment,
+    null,
+    createElement(
+      Command.Page,
+      {
+        id: root.id ?? ROOT_PAGE,
+        placeholder: root.placeholder,
+        title: root.title,
+      },
+      views.map((item) => item.sections),
+    ),
+    views.map((item) => item.pages),
+  );
 }
-
-function section(_props: SectionProps) {
-  return null;
-}
-
-function item(_props: ItemProps) {
-  return null;
-}
-
-function detail(_props: DetailProps) {
-  return null;
-}
-
-function action(_props: ActionProps) {
-  return null;
-}
-
-function push(_props: PushProps) {
-  return null;
-}
-
-function copy(_props: CopyProps) {
-  return null;
-}
-
-function danger(_props: DangerProps) {
-  return null;
-}
-
-const Page = tag(page, 'page');
-const Section = tag(section, 'section');
-const Item = tag(item, 'item');
-const Detail = tag(detail, 'detail');
-const Action = tag(action, 'action') as ActionComponent;
-Action.Push = tag(push, 'push');
-Action.Copy = tag(copy, 'copy');
-Action.Danger = tag(danger, 'danger');
-
-const Command = {
-  Action,
-  Detail,
-  Item,
-  Page,
-  Section,
-};
 
 function compilePage(build: Build, node: PageNode) {
   unique(build, `page:${node.props.id}`, `Command page "${node.props.id}" is declared twice.`);
@@ -208,7 +159,7 @@ function compilePage(build: Build, node: PageNode) {
     placeholder: node.props.placeholder,
     sections: collect(node.props.children).map((item) => {
       expect(item, 'section');
-      return compileSection(build, item as ReactElement<SectionProps>);
+      return compileSection(build, item);
     }),
     title: node.props.title,
   };
@@ -220,25 +171,22 @@ function compilePage(build: Build, node: PageNode) {
   build.pages.set(node.props.id, submit ? { ...page, submit } : page);
 }
 
-function compileSection(build: Build, node: ReactElement<SectionProps>) {
-  expect(node, 'section');
-
+function compileSection(build: Build, node: SectionNode) {
   return {
     id: node.props.id,
     items: collect(node.props.children).map((item) => {
       expect(item, 'item');
-      return compileItem(build, item as ReactElement<ItemProps>);
+      return compileItem(build, item);
     }),
     title: node.props.title,
   } satisfies CommandSection;
 }
 
-function compileItem(build: Build, node: ReactElement<ItemProps>) {
-  expect(node, 'item');
+function compileItem(build: Build, node: ItemNode) {
   unique(build, `item:${node.props.id}`, `Command item "${node.props.id}" is declared twice.`);
 
-  const detail = collect(node.props.children).find((item) => kind(item) === 'detail') as
-    | ReactElement<DetailProps>
+  const detail = collect(node.props.children).find((item) => nodeKind(item) === 'detail') as
+    | DetailNode
     | undefined;
   const actions = collect(node.props.children)
     .filter((item) => actionKind(item))
@@ -268,10 +216,10 @@ function compileItem(build: Build, node: ReactElement<ItemProps>) {
   return value;
 }
 
-function compileAction(build: Build, owner: ItemProps, node: ReactElement) {
-  const type = kind(node);
+function compileAction(build: Build, owner: ItemProps, node: ActionNode) {
+  const type = nodeKind(node);
   const props = node.props as ActionProps & CopyProps & DangerProps & PushProps;
-  const id = join(owner.id, props.id);
+  const id = actionId(join(owner.id, props.id));
   const base = {
     hotkey: hotkey(props.shortcut),
     icon: props.icon,
@@ -296,11 +244,14 @@ function compileAction(build: Build, owner: ItemProps, node: ReactElement) {
         run: props.run,
         tone: 'danger',
       } satisfies CommandAction;
-    case 'push':
+    case 'push': {
+      const page = pushPage(build, props.page);
+
       return {
         ...base,
-        run: (ctx) => ctx.page(pushPage(build, props.page), props.query),
+        run: (ctx) => ctx.page(page, props.query),
       } satisfies CommandAction;
+    }
     default:
       return {
         ...base,
@@ -310,7 +261,7 @@ function compileAction(build: Build, owner: ItemProps, node: ReactElement) {
   }
 }
 
-function pushPage(build: Build, value: CommandPageId | PageNode) {
+function pushPage(build: Build, value: PageId | PageNode) {
   if (typeof value === 'string') {
     build.pending.add(value);
     return value;
@@ -333,24 +284,20 @@ function collect(node: ReactNode): ReactElement[] {
   });
 }
 
-function actionKind(node: ReactElement) {
-  const type = kind(node);
+function actionKind(node: ReactElement): node is ActionNode {
+  const type = nodeKind(node);
 
   return type === 'action' || type === 'copy' || type === 'danger' || type === 'push';
 }
 
-function expect(node: ReactElement, value: Kind): asserts node is ReactElement {
-  if (kind(node) !== value) {
+function expect(node: ReactElement, value: 'page'): asserts node is PageNode;
+function expect(node: ReactElement, value: 'section'): asserts node is SectionNode;
+function expect(node: ReactElement, value: 'item'): asserts node is ItemNode;
+function expect(node: ReactElement, value: 'detail'): asserts node is DetailNode;
+function expect(node: ReactElement, value: NodeKind): asserts node is ReactElement {
+  if (nodeKind(node) !== value) {
     throw new Error(`Expected command ${value} node.`);
   }
-}
-
-function kind(node: ReactElement) {
-  return (node.type as Partial<Record<typeof mark, Kind>>)[mark];
-}
-
-function tag<TProps, TKind extends Kind>(fn: (props: TProps) => null, kind: TKind) {
-  return Object.assign(fn, { [mark]: kind }) as Marked<TProps, TKind>;
 }
 
 function unique(build: Build, id: string, message: string) {
@@ -384,4 +331,4 @@ function shortcut(
   return typeof value === 'object' && value !== null && 'hotkey' in value;
 }
 
-export { Command, compileCommandPalette, createCommandIds, defineCommandModule, definePalette };
+export { compileCommandPalette, createCommandIds, defineCommandModule, definePalette };
