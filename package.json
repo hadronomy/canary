@@ -29,7 +29,7 @@
     "prepare": "husky && effect-language-service patch",
     "check:knip": "knip --no-progress",
     "check:syncpack": "syncpack lint",
-    "check:deps": "bun run check:knip && bun run check:syncpack"
+    "check:deps": "bun run check:knip; k=$?; bun run check:syncpack; s=$?; exit $((k||s))"
   },
   "dependencies": {
     "@canary/env": "workspace:*",
