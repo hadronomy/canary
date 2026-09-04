@@ -26,7 +26,10 @@
     "db:push": "turbo run db:push --filter=@canary/db",
     "db:studio": "turbo run db:studio --filter=@canary/db",
     "check": "oxlint && oxfmt --write",
-    "prepare": "husky && effect-language-service patch"
+    "prepare": "husky && effect-language-service patch",
+    "check:knip": "knip --no-progress",
+    "check:syncpack": "syncpack lint",
+    "check:deps": "bun run check:knip; k=$?; bun run check:syncpack; s=$?; exit $((k||s))"
   },
   "dependencies": {
     "@canary/env": "workspace:*",
@@ -42,11 +45,13 @@
     "@effect/language-service": "^0.86.2",
     "@types/bun": "^1.3.14",
     "husky": "^9.1.7",
+    "knip": "^6.34.0",
     "lint-staged": "^17.0.7",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "playwright": "^1.61.0",
     "portless": "^0.14.0",
+    "syncpack": "^15.3.3",
     "turbo": "^2.9.16",
     "typescript": "^6.0.3"
   },
