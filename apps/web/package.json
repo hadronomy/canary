@@ -20,7 +20,6 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource-variable/mona-sans": "^5.2.8",
     "@fontsource-variable/source-serif-4": "^5.2.9",
-    "@hookform/resolvers": "^5.4.0",
     "@orpc/client": "^1.14.6",
     "@orpc/openapi": "^1.14.6",
     "@orpc/server": "^1.14.6",
