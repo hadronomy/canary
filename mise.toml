@@ -4,5 +4,5 @@ bun                   = "1.4.2"
 "cargo:cargo-nextest" = "latest"
 "cargo:surrealkit"    = "0.7.0"
 just                  = "latest"
-node                  = "24"
+node                  = "26"
 taplo                 = { version = "latest", matching = "full" }
