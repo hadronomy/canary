@@ -18,12 +18,10 @@
     "@better-auth/oauth-provider": "^1.6.20",
     "@canary/db": "workspace:*",
     "@canary/env": "workspace:*",
-    "better-auth": "^1.6.20",
-    "dotenv": "^17.4.2",
-    "zod": "^4.4.3"
+    "better-auth": "^1.6.20"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   }
 }
