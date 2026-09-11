@@ -1,8 +1,9 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, txid } from '@canary/db';
 import { event, part, run } from '@canary/db/schema/app';
+import { own } from '~/scope';
 
 import { protectedProcedure } from '../index';
 
@@ -18,9 +19,10 @@ export const runRouter = {
             completedAt: new Date(),
           })
           .where(
-            and(
+            own(
+              run,
+              context.owner,
               eq(run.id, input.id),
-              eq(run.ownerId, context.session.user.id),
               inArray(run.status, ['queued', 'running']),
             ),
           )
@@ -36,9 +38,10 @@ export const runRouter = {
               updatedAt: new Date(),
             })
             .where(
-              and(
+              own(
+                part,
+                context.owner,
                 eq(part.runId, row.id),
-                eq(part.ownerId, context.session.user.id),
                 inArray(part.status, ['pending', 'running']),
               ),
             );
@@ -48,7 +51,7 @@ export const runRouter = {
             .values({
               runId: row.id,
               threadId: row.threadId,
-              ownerId: context.session.user.id,
+              ownerId: context.owner,
               seq: 99_999,
               type: 'run.cancelled',
             })

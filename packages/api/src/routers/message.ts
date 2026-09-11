@@ -1,9 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, txid } from '@canary/db';
 import { event, message, run, thread } from '@canary/db/schema/app';
 import { env } from '@canary/env/server';
+import { own } from '~/scope';
 
 import { protectedProcedure } from '../index';
 import { start } from '../runner';
@@ -23,11 +24,7 @@ export const messageRouter = {
           .select({ id: thread.id })
           .from(thread)
           .where(
-            and(
-              eq(thread.id, input.threadId),
-              eq(thread.ownerId, context.session.user.id),
-              isNull(thread.archivedAt),
-            ),
+            own(thread, context.owner, eq(thread.id, input.threadId), isNull(thread.archivedAt)),
           )
           .limit(1);
 
@@ -40,7 +37,7 @@ export const messageRouter = {
           .values({
             id: input.id,
             threadId: input.threadId,
-            ownerId: context.session.user.id,
+            ownerId: context.owner,
             role: 'user',
             content: input.content,
           })
@@ -53,9 +50,10 @@ export const messageRouter = {
               .select()
               .from(message)
               .where(
-                and(
+                own(
+                  message,
+                  context.owner,
                   eq(message.id, input.id),
-                  eq(message.ownerId, context.session.user.id),
                   eq(message.threadId, input.threadId),
                 ),
               )
@@ -71,7 +69,7 @@ export const messageRouter = {
           .insert(run)
           .values({
             threadId: input.threadId,
-            ownerId: context.session.user.id,
+            ownerId: context.owner,
             inputMessageId: row.id,
             status: 'queued',
             model: env.AGENT_MODEL,
@@ -83,7 +81,7 @@ export const messageRouter = {
         const active = await client
           .select()
           .from(run)
-          .where(and(eq(run.inputMessageId, row.id), eq(run.ownerId, context.session.user.id)))
+          .where(own(run, context.owner, eq(run.inputMessageId, row.id)))
           .limit(1);
         const item = queued[0] ?? active[0];
 
@@ -96,7 +94,7 @@ export const messageRouter = {
           .values({
             runId: item.id,
             threadId: item.threadId,
-            ownerId: context.session.user.id,
+            ownerId: context.owner,
             seq: 0,
             type: 'run.queued',
             data: { model: env.AGENT_MODEL },
@@ -108,7 +106,7 @@ export const messageRouter = {
         await client
           .update(thread)
           .set({ updatedAt: new Date() })
-          .where(eq(thread.id, input.threadId));
+          .where(own(thread, context.owner, eq(thread.id, input.threadId)));
 
         return {
           message: row,
@@ -118,7 +116,7 @@ export const messageRouter = {
       });
 
       start({
-        ownerId: context.session.user.id,
+        ownerId: context.owner,
         runId: res.run.id,
         threadId: input.threadId,
       });

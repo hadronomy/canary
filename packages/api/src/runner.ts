@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { stream, type Chat, type Piece } from '@canary/agents';
 import { db } from '@canary/db';
 import { event, message, part, run, thread } from '@canary/db/schema/app';
+import { own } from '~/scope';
 
 type Ref = {
   ownerId: string;
@@ -52,11 +53,7 @@ export async function cancel(ref: Ref) {
         completedAt: new Date(),
       })
       .where(
-        and(
-          eq(run.id, ref.runId),
-          eq(run.ownerId, ref.ownerId),
-          inArray(run.status, ['queued', 'running']),
-        ),
+        own(run, ref.ownerId, eq(run.id, ref.runId), inArray(run.status, ['queued', 'running'])),
       )
       .returning();
 
@@ -73,9 +70,10 @@ export async function cancel(ref: Ref) {
         updatedAt: new Date(),
       })
       .where(
-        and(
+        own(
+          part,
+          ref.ownerId,
           eq(part.runId, row.id),
-          eq(part.ownerId, ref.ownerId),
           inArray(part.status, ['pending', 'running']),
         ),
       );
@@ -111,7 +109,7 @@ async function runOne(ref: Ref) {
         content: message.content,
       })
       .from(message)
-      .where(and(eq(message.threadId, ref.threadId), eq(message.ownerId, ref.ownerId)))
+      .where(own(message, ref.ownerId, eq(message.threadId, ref.threadId)))
       .orderBy(desc(message.createdAt))
       .limit(24);
 
@@ -135,7 +133,7 @@ async function claim(ref: Ref) {
         status: 'running',
         startedAt: new Date(),
       })
-      .where(and(eq(run.id, ref.runId), eq(run.ownerId, ref.ownerId), eq(run.status, 'queued')))
+      .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'queued')))
       .returning();
 
     const row = rows[0];
@@ -304,9 +302,7 @@ function writer(ref: Ref) {
         await client
           .update(run)
           .set({ updatedAt: new Date() })
-          .where(
-            and(eq(run.id, ref.runId), eq(run.ownerId, ref.ownerId), eq(run.status, 'running')),
-          );
+          .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'running')));
       })
       .catch((err: unknown) => {
         rows.forEach((row) => {
@@ -322,7 +318,7 @@ function writer(ref: Ref) {
     const rows = await db
       .select({ status: run.status })
       .from(run)
-      .where(and(eq(run.id, ref.runId), eq(run.ownerId, ref.ownerId)))
+      .where(own(run, ref.ownerId, eq(run.id, ref.runId)))
       .limit(1);
 
     return rows[0]?.status === 'running';
@@ -490,11 +486,7 @@ function writer(ref: Ref) {
           completedAt: new Date(),
         })
         .where(
-          and(
-            eq(run.id, ref.runId),
-            eq(run.ownerId, ref.ownerId),
-            inArray(run.status, ['queued', 'running']),
-          ),
+          own(run, ref.ownerId, eq(run.id, ref.runId), inArray(run.status, ['queued', 'running'])),
         )
         .returning();
 
@@ -531,7 +523,7 @@ function writer(ref: Ref) {
       await client
         .update(thread)
         .set({ updatedAt: new Date() })
-        .where(and(eq(thread.id, ref.threadId), eq(thread.ownerId, ref.ownerId)));
+        .where(own(thread, ref.ownerId, eq(thread.id, ref.threadId)));
 
       await client
         .insert(event)
@@ -596,11 +588,7 @@ async function failRun(ref: Ref, cause: unknown) {
         completedAt: new Date(),
       })
       .where(
-        and(
-          eq(run.id, ref.runId),
-          eq(run.ownerId, ref.ownerId),
-          inArray(run.status, ['queued', 'running']),
-        ),
+        own(run, ref.ownerId, eq(run.id, ref.runId), inArray(run.status, ['queued', 'running'])),
       )
       .returning();
 
@@ -617,9 +605,10 @@ async function failRun(ref: Ref, cause: unknown) {
         updatedAt: new Date(),
       })
       .where(
-        and(
+        own(
+          part,
+          ref.ownerId,
           eq(part.runId, ref.runId),
-          eq(part.ownerId, ref.ownerId),
           inArray(part.status, ['pending', 'running']),
         ),
       );

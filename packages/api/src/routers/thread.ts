@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, txid } from '@canary/db';
 import { event, member, part, run, thread } from '@canary/db/schema/app';
+import { own } from '~/scope';
 
 import { protectedProcedure } from '../index';
 
@@ -11,7 +12,7 @@ export const threadRouter = {
     return await db
       .select()
       .from(thread)
-      .where(and(eq(thread.ownerId, context.session.user.id), isNull(thread.archivedAt)))
+      .where(own(thread, context.owner, isNull(thread.archivedAt)))
       .orderBy(desc(thread.updatedAt));
   }),
 
@@ -19,7 +20,7 @@ export const threadRouter = {
     const rows = await db
       .select()
       .from(thread)
-      .where(and(eq(thread.id, input.id), eq(thread.ownerId, context.session.user.id)))
+      .where(own(thread, context.owner, eq(thread.id, input.id)))
       .limit(1);
 
     return rows[0] ?? null;
@@ -40,7 +41,7 @@ export const threadRouter = {
           .insert(thread)
           .values({
             id: input?.id,
-            ownerId: context.session.user.id,
+            ownerId: context.owner,
             title: input?.title ?? 'New thread',
           })
           .returning();
@@ -53,7 +54,7 @@ export const threadRouter = {
 
         await client.insert(member).values({
           threadId: row.id,
-          userId: context.session.user.id,
+          userId: context.owner,
         });
 
         return {
@@ -70,13 +71,7 @@ export const threadRouter = {
         const rows = await client
           .update(thread)
           .set({ archivedAt: new Date() })
-          .where(
-            and(
-              eq(thread.id, input.id),
-              eq(thread.ownerId, context.session.user.id),
-              isNull(thread.archivedAt),
-            ),
-          )
+          .where(own(thread, context.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
           .returning();
 
         const active = await client
@@ -86,9 +81,10 @@ export const threadRouter = {
             completedAt: new Date(),
           })
           .where(
-            and(
+            own(
+              run,
+              context.owner,
               eq(run.threadId, input.id),
-              eq(run.ownerId, context.session.user.id),
               inArray(run.status, ['queued', 'running']),
             ),
           )
@@ -102,8 +98,9 @@ export const threadRouter = {
               updatedAt: new Date(),
             })
             .where(
-              and(
-                eq(part.ownerId, context.session.user.id),
+              own(
+                part,
+                context.owner,
                 inArray(
                   part.runId,
                   active.map((row) => row.id),
@@ -118,7 +115,7 @@ export const threadRouter = {
               active.map((row) => ({
                 runId: row.id,
                 threadId: row.threadId,
-                ownerId: context.session.user.id,
+                ownerId: context.owner,
                 seq: 99_999,
                 type: 'run.cancelled',
               })),
