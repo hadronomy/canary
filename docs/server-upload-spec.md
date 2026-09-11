@@ -1,5 +1,7 @@
 # Server Upload Architecture
 
+System of record: the Rust server owns files and bytes. Object storage owns the bytes after authorization. The TypeScript chat stack must not own blobs or keys. Duplicates of file state live in the server only.
+
 ## Goal
 
 Canary treats files as object-storage assets from the beginning. The app server

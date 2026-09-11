@@ -1,5 +1,7 @@
 # Canary MCP Server Design
 
+System of record: the Rust server owns this MCP surface. It exposes tools, resources, and prompts over server state. The TypeScript chat stack must not expose a parallel MCP surface. Duplicates of server state live in the server only.
+
 Status: foundation scaffold implemented
 Research completed: 2026-06-02
 

@@ -1,5 +1,7 @@
 # Production RAG + MCP Server API and ID Specification
 
+System of record: the Rust server owns this spec. It owns collections, documents, sources, ingestions, search, files, IDs, pagination, and errors. The TypeScript chat stack owns thread, message, run, part, and event rows as UI cache. The cache must not own legal fragments, embeddings, files, or public IDs. Duplicates of server state live in the server only.
+
 This document defines a cohesive public API shape for a production-grade Rust server that ingests documents and external sources into an agentic RAG system, runs scheduled ingestion tasks, and exposes augmented capabilities through MCP.
 
 The target shape is simple:
