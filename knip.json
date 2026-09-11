@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "ignore": ["**/routeTree.gen.ts", "**/next-env.d.ts", "**/dist/**"],
+  "ignoreBinaries": ["caddy", "mise", "shadcn"],
+  "workspaces": {
+    "apps/web": {
+      "entry": ["vite.config.ts", "src/router.tsx", "src/vite-plugin-caddy.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/tui": {
+      "entry": ["src/index.tsx"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/fumadocs": {
+      "entry": ["source.config.ts", "next.config.mjs"],
+      "project": ["src/**/*.{ts,tsx,mdx}", "source.config.ts"]
+    },
+    "packages/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  }
+}
