@@ -20,15 +20,14 @@
   },
   "dependencies": {
     "@canary/env": "workspace:*",
-    "dotenv": "^17.4.2",
+    "dotenv": "catalog:",
     "drizzle-orm": "^0.45.2",
-    "pg": "^8.22.0",
-    "zod": "^4.4.3"
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   }
 }

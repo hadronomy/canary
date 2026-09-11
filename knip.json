@@ -2,10 +2,32 @@
   "$schema": "./node_modules/knip/schema.json",
   "ignore": ["**/routeTree.gen.ts", "**/next-env.d.ts", "**/dist/**"],
   "ignoreBinaries": ["caddy", "mise", "shadcn"],
+  "ignoreExportsUsedInFile": true,
   "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.ts"],
+      "ignoreDependencies": ["lint-staged", "portless"]
+    },
     "apps/web": {
-      "entry": ["vite.config.ts", "src/router.tsx", "src/vite-plugin-caddy.ts"],
-      "project": ["src/**/*.{ts,tsx}"]
+      "entry": [
+        "vite.config.ts",
+        "src/router.tsx",
+        "src/vite-plugin-caddy.ts",
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": [
+        "tailwindcss",
+        "postcss",
+        "@tanstack/router-plugin",
+        "@statelyai/inspect",
+        "shadcn",
+        "tw-animate-css",
+        "@shadcn/react"
+      ],
+      "ignoreIssues": {
+        "src/components/ui/**": ["exports", "types"]
+      }
     },
     "apps/tui": {
       "entry": ["src/index.tsx"],
@@ -13,7 +35,14 @@
     },
     "apps/fumadocs": {
       "entry": ["source.config.ts", "next.config.mjs"],
-      "project": ["src/**/*.{ts,tsx,mdx}", "source.config.ts"]
+      "project": ["src/**/*.{ts,tsx,mdx}", "source.config.ts"],
+      "ignoreDependencies": [
+        "tailwindcss",
+        "shadcn",
+        "tw-animate-css",
+        "@base-ui/react",
+        "class-variance-authority"
+      ]
     },
     "packages/*": {
       "entry": ["src/index.ts"],

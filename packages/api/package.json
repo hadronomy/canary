@@ -19,16 +19,12 @@
     "@canary/auth": "workspace:*",
     "@canary/db": "workspace:*",
     "@canary/env": "workspace:*",
-    "@orpc/client": "^1.14.6",
-    "@orpc/openapi": "^1.14.6",
     "@orpc/server": "^1.14.6",
-    "@orpc/zod": "^1.14.6",
-    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   }
 }
