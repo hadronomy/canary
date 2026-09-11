@@ -19,11 +19,10 @@
     "@tanstack/browser-db-sqlite-persistence": "^0.2.1",
     "@tanstack/db": "^0.6.9",
     "@tanstack/electric-db-collection": "^0.3.7",
-    "@tanstack/react-db": "^0.1.87",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "typescript": "^6.0.3"
+    "typescript": "catalog:"
   }
 }
