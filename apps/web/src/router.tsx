@@ -1,6 +1,7 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 
+import { AppError, AppNotFound, type AppErrorProps } from '~/components/fallbacks/route';
 import { routeTree } from '~/routeTree.gen';
 import { createQueryClient, orpc } from '~/utils/orpc';
 
@@ -15,7 +16,8 @@ export function getRouter() {
     defaultPreloadIntentProximity: 96,
     defaultPreloadStaleTime: 30_000,
     context: { orpc, queryClient },
-    defaultNotFoundComponent: () => <div>Not Found</div>,
+    defaultErrorComponent: RouterError,
+    defaultNotFoundComponent: RouterNotFound,
   });
 
   setupRouterSsrQueryIntegration({
@@ -24,6 +26,14 @@ export function getRouter() {
   });
 
   return router;
+}
+
+function RouterError(props: AppErrorProps) {
+  return <AppError {...props} />;
+}
+
+function RouterNotFound() {
+  return <AppNotFound />;
 }
 
 declare module '@tanstack/react-router' {

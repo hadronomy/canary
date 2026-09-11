@@ -16,6 +16,8 @@ const rosters = new Map<string, ReturnType<typeof makeRoster>>();
 const logs = new Map<string, ReturnType<typeof makeFeed>>();
 const texts = new Map<string, ReturnType<typeof makeTranscript>>();
 const works = new Map<string, ReturnType<typeof makeActive>>();
+const fails = new Map<string, ReturnType<typeof makeFailed>>();
+const lasts = new Map<string, ReturnType<typeof makeLatest>>();
 const docs = new Map<string, ReturnType<typeof makePieces>>();
 
 if (import.meta.hot) {
@@ -24,6 +26,8 @@ if (import.meta.hot) {
     logs.clear();
     texts.clear();
     works.clear();
+    fails.clear();
+    lasts.clear();
     docs.clear();
   });
 }
@@ -172,6 +176,62 @@ function makeActive(ownerId: string, id: string) {
           and(eq(run.threadId, id), or(eq(run.status, 'queued'), eq(run.status, 'running'))),
         )
         .orderBy(({ run }) => run.updatedAt, 'desc'),
+  });
+}
+
+export function failed(ownerId: string, id: string) {
+  const key = `${ownerId}:${id}`;
+  const hit = fails.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeFailed(ownerId, id);
+  fails.set(key, col);
+
+  return col;
+}
+
+function makeFailed(ownerId: string, id: string) {
+  const col = runs(ownerId);
+
+  return createLiveQueryCollection({
+    id: `failed-runs:${ownerId}:${id}`,
+    query: (q) =>
+      q
+        .from({ run: col })
+        .where(({ run }) => and(eq(run.threadId, id), eq(run.status, 'failed')))
+        .orderBy(({ run }) => run.updatedAt, 'desc')
+        .limit(1),
+  });
+}
+
+export function latest(ownerId: string, id: string) {
+  const key = `${ownerId}:${id}`;
+  const hit = lasts.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeLatest(ownerId, id);
+  lasts.set(key, col);
+
+  return col;
+}
+
+function makeLatest(ownerId: string, id: string) {
+  const col = runs(ownerId);
+
+  return createLiveQueryCollection({
+    id: `latest-run:${ownerId}:${id}`,
+    query: (q) =>
+      q
+        .from({ run: col })
+        .where(({ run }) => eq(run.threadId, id))
+        .orderBy(({ run }) => run.updatedAt, 'desc')
+        .limit(1),
   });
 }
 

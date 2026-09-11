@@ -32,7 +32,7 @@ import { shellRoutes } from '~/components/shell/routes';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
 import { Message, MessageContent } from '~/components/ui/message';
 import { cn } from '~/lib/utils';
-import { active, messages, pieces, roster, transcript } from '~/utils/chat';
+import { active, failed, latest, messages, pieces, roster, transcript } from '~/utils/chat';
 import { client } from '~/utils/orpc';
 
 const TRANSCRIPT_BUFFER_SIZE = 768;
@@ -600,6 +600,8 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
       transcript(context.user.id, params.threadId).preload(),
       pieces(context.user.id, params.threadId).preload(),
       active(context.user.id, params.threadId).preload(),
+      failed(context.user.id, params.threadId).preload(),
+      latest(context.user.id, params.threadId).preload(),
     ]);
 
     return null;
@@ -638,16 +640,26 @@ type ThreadWorkspaceProps = {
 function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
   const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
   const activeRunsCollection = useMemo(() => active(ownerId, threadId), [ownerId, threadId]);
+  const failedRunsCollection = useMemo(() => failed(ownerId, threadId), [ownerId, threadId]);
+  const latestRunCollection = useMemo(() => latest(ownerId, threadId), [ownerId, threadId]);
   const transcriptCollection = useMemo(() => transcript(ownerId, threadId), [ownerId, threadId]);
 
   const rosterQuery = useLiveQuery(rosterCollection);
   const activeRunsQuery = useLiveQuery(activeRunsCollection);
+  const failedRunsQuery = useLiveQuery(failedRunsCollection);
+  const latestRunQuery = useLiveQuery(latestRunCollection);
   const transcriptQuery = useLiveQuery(transcriptCollection);
 
   const thread = rosterQuery.data.find((row) => row.id === threadId);
   const threadGone = rosterQuery.isReady && !thread;
   const running = activeRunsQuery.data.length > 0;
   const activeRunId = activeRunsQuery.data[0]?.id ?? null;
+  const failedRun = failedRunsQuery.data[0] ?? null;
+  const latestRun = latestRunQuery.data[0] ?? null;
+  const runError =
+    latestRun && failedRun && latestRun.id === failedRun.id
+      ? (failedRun.error ?? 'Agent run failed.')
+      : null;
 
   const pristine = !transcriptQuery.data.some(
     (msg) => msg.threadId === threadId && msg.role === 'user',
@@ -675,6 +687,7 @@ function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
         disabled={!thread}
         ownerId={ownerId}
         pristine={pristine}
+        runError={runError}
         running={running}
         threadId={threadId}
       />
@@ -703,6 +716,7 @@ type ThreadActionsProps = {
   disabled: boolean;
   ownerId: string;
   pristine: boolean;
+  runError: string | null;
   running: boolean;
   threadId: string;
 };
@@ -712,6 +726,7 @@ function ThreadActions({
   disabled,
   ownerId,
   pristine,
+  runError,
   running,
   threadId,
 }: ThreadActionsProps) {
@@ -824,13 +839,17 @@ function ThreadActions({
   return (
     <AgentPrompt
       disabled={disabled}
-      error={sendError}
+      error={sendError ?? runError}
       pristine={pristine}
       running={running}
       value={draft}
       onCancel={() => {
         cancelActiveRun().catch((cause: unknown) => {
           console.error('Run cancellation failed.', cause);
+          writeSendError(
+            threadId,
+            cause instanceof Error ? cause.message : 'Run cancellation failed.',
+          );
         });
       }}
       onSubmit={(body) => {

@@ -26,7 +26,7 @@ let last = 0;
 
 export function start(ref: Ref) {
   runOne(ref).catch((err: unknown) => {
-    fail(ref, err).catch((cause: unknown) => {
+    failRun(ref, err).catch((cause: unknown) => {
       console.error('Agent run failure could not be persisted.', cause);
     });
   });
@@ -103,26 +103,28 @@ async function runOne(ref: Ref) {
   }
 
   const sink = writer(ref);
-  const rows = await db
-    .select({
-      role: message.role,
-      content: message.content,
-    })
-    .from(message)
-    .where(and(eq(message.threadId, ref.threadId), eq(message.ownerId, ref.ownerId)))
-    .orderBy(desc(message.createdAt))
-    .limit(24);
 
-  await stream({
-    ...ref,
-    messages: rows.reverse() as Chat[],
-    piece: sink.piece,
-    finish: sink.finish,
-    fail: async (err) => {
-      await sink.flush();
-      await fail(ref, err);
-    },
-  });
+  try {
+    const rows = await db
+      .select({
+        role: message.role,
+        content: message.content,
+      })
+      .from(message)
+      .where(and(eq(message.threadId, ref.threadId), eq(message.ownerId, ref.ownerId)))
+      .orderBy(desc(message.createdAt))
+      .limit(24);
+
+    await stream({
+      ...ref,
+      messages: rows.reverse() as Chat[],
+      piece: sink.piece,
+      finish: sink.finish,
+      fail: sink.fail,
+    });
+  } catch (err) {
+    await sink.fail(err);
+  }
 }
 
 async function claim(ref: Ref) {
@@ -168,6 +170,7 @@ function writer(ref: Ref) {
   let log = 2;
   let seg = 0;
   let tick: ReturnType<typeof setTimeout> | undefined;
+  let failed: Promise<void> | undefined;
 
   function slot(key: string, init: Omit<Draft, 'seq'>) {
     const hit = slots.get(key);
@@ -326,6 +329,10 @@ function writer(ref: Ref) {
   }
 
   async function piece(input: Piece) {
+    if (failed) {
+      return;
+    }
+
     if (input.type === 'text-start') {
       push(
         slot(text(input.id, true), {
@@ -458,19 +465,13 @@ function writer(ref: Ref) {
       push(row);
       return;
     }
-
-    edge();
-    const row = slot(`error:${log}`, {
-      kind: 'error',
-      status: 'failed',
-      content: input.message,
-      data: null,
-      toolName: null,
-    });
-    push(row);
   }
 
   async function finish(text: string, data: Record<string, unknown>) {
+    if (failed) {
+      return;
+    }
+
     edge();
     await flush();
     const body =
@@ -548,11 +549,43 @@ function writer(ref: Ref) {
     });
   }
 
-  return { piece, flush, finish };
+  async function fail(cause: unknown) {
+    failed ??= failOnce(cause);
+    await failed;
+  }
+
+  async function failOnce(cause: unknown) {
+    const err = reason(cause);
+    texts.clear();
+    slots.forEach((row) => {
+      if (row.status !== 'pending' && row.status !== 'running') {
+        return;
+      }
+
+      row.status = 'failed';
+      push(row);
+    });
+
+    const row = slot('error:terminal', {
+      kind: 'error',
+      status: 'failed',
+      content: err,
+      data: null,
+      toolName: null,
+    });
+    row.content = err;
+    row.status = 'failed';
+    push(row);
+
+    await flush();
+    await failRun(ref, err);
+  }
+
+  return { piece, flush, finish, fail };
 }
 
-async function fail(ref: Ref, cause: unknown) {
-  const err = cause instanceof Error ? cause.message : String(cause);
+async function failRun(ref: Ref, cause: unknown) {
+  const err = reason(cause);
 
   await db.transaction(async (client) => {
     const rows = await client
@@ -634,5 +667,19 @@ async function recoverRuns() {
     .where(and(eq(run.status, 'running'), lt(run.updatedAt, stale)))
     .limit(10);
 
-  await Promise.all(rows.map((row) => fail(row, new Error('Agent runner recovered stale run.'))));
+  await Promise.all(
+    rows.map((row) => failRun(row, new Error('Agent runner recovered stale run.'))),
+  );
+}
+
+function reason(cause: unknown) {
+  if (cause instanceof Error) {
+    return cause.message;
+  }
+
+  if (typeof cause === 'string') {
+    return cause;
+  }
+
+  return JSON.stringify(cause) ?? String(cause);
 }

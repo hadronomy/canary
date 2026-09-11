@@ -33,8 +33,7 @@ export type Piece =
   | { type: 'reasoning-end'; id: string }
   | { type: 'tool-call'; id: string; name: string; data: Record<string, unknown> }
   | { type: 'tool-delta'; id: string; name: string | null; text: string }
-  | { type: 'tool-result'; id: string; name: string; data: Record<string, unknown> }
-  | { type: 'error'; message: string };
+  | { type: 'tool-result'; id: string; name: string; data: Record<string, unknown> };
 
 export const store = new PostgresStore({
   id: 'canary-agents',
@@ -102,6 +101,11 @@ export async function stream(input: Input) {
       resource: input.ownerId,
     },
     onChunk: async (chunk) => {
+      if (chunk.type === 'error') {
+        await input.fail(toError(chunk.payload.error));
+        return;
+      }
+
       const part = piece(chunk);
 
       if (part) {
@@ -114,7 +118,9 @@ export async function stream(input: Input) {
         usage: data.output.usage,
       });
     },
-    onError: input.fail,
+    onError: async (err) => {
+      await input.fail(toError(err));
+    },
   });
 
   return res.runId;
@@ -176,17 +182,15 @@ function piece(chunk: ChunkType): Piece | null {
           isError: chunk.payload.isError ?? false,
         },
       };
-    case 'error':
-      return { type: 'error', message: error(chunk.payload.error) };
     default:
       return null;
   }
 }
 
-function error(value: unknown) {
+function toError(value: unknown) {
   if (value instanceof Error) {
-    return value.message;
+    return value;
   }
 
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  return new Error(typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value)));
 }
