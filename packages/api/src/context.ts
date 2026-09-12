@@ -1,15 +1,17 @@
-import { auth } from '@canary/auth';
+import { Effect } from 'effect';
 
-import { recover } from './runner';
+import { auth } from '@canary/auth';
+import { Run } from '~/runner';
 
 export async function createContext({ req }: { req: Request }) {
-  recover();
+  const state = await Promise.all([
+    auth.api.getSession({
+      headers: req.headers,
+    }),
+    Effect.runPromise(Run.Service.pipe(Effect.provide(Run.layer))),
+  ]);
 
-  const session = await auth.api.getSession({
-    headers: req.headers,
-  });
-
-  return { session };
+  return { session: state[0], run: state[1] };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

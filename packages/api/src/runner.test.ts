@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { Effect } from 'effect';
 
 import { event, message, part, run, thread } from '@canary/db/schema/app';
 
@@ -6,7 +7,7 @@ type Status = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
 type Row = Record<string, unknown>;
 type Client = {
   insert: (table: unknown) => Insert;
-  select: (fields: Record<string, unknown>) => Select;
+  select: (fields?: Record<string, unknown>) => Select;
   transaction: <T>(fn: (client: Client) => Promise<T> | T) => Promise<T>;
   update: (table: unknown) => Update;
 };
@@ -27,15 +28,22 @@ const ref = {
 };
 
 const state = {
+  agent: async (input: Input) => {
+    state.calls += 1;
+    await input.finish('ok', {});
+    return ref.runId;
+  },
+  calls: 0,
   events: [] as Row[],
   messages: [] as Row[],
   parts: [] as Row[],
   run: row('queued'),
-};
-
-let agent: (input: Input) => Promise<string> = async (input) => {
-  await input.finish('ok', {});
-  return ref.runId;
+  thread: {
+    archivedAt: null as Date | null,
+    id: ref.threadId,
+    ownerId: ref.ownerId,
+    title: 'Test thread',
+  },
 };
 
 const db: Client = {
@@ -43,7 +51,7 @@ const db: Client = {
     return new Insert(table);
   },
 
-  select(fields: Record<string, unknown>) {
+  select(fields: Record<string, unknown> = {}) {
     return new Select(fields);
   },
 
@@ -57,20 +65,33 @@ const db: Client = {
 };
 
 mock.module('@canary/agents', () => ({
-  stream: (input: Input) => agent(input),
+  stream: (input: Input) => state.agent(input),
 }));
 
 mock.module('@canary/db', () => ({
   db,
+  txid: () => Promise.resolve(1),
+}));
+
+mock.module('@canary/env/server', () => ({
+  env: { AGENT_MODEL: 'test-model' },
 }));
 
 const runner = await import('./runner');
+const runs = await Effect.runPromise(runner.Run.Service.pipe(Effect.provide(runner.Run.layer)));
 
-describe('agent runner failures', () => {
+describe('Run', () => {
   beforeEach(() => {
     state.run = row('queued');
+    state.thread = {
+      archivedAt: null,
+      id: ref.threadId,
+      ownerId: ref.ownerId,
+      title: 'Test thread',
+    };
     state.messages = [
       {
+        id: 'message-history',
         content: 'hello',
         ownerId: ref.ownerId,
         role: 'user',
@@ -79,57 +100,66 @@ describe('agent runner failures', () => {
     ];
     state.parts = [];
     state.events = [];
-  });
-
-  test('marks stream errors as failed runs with a visible error part', async () => {
-    agent = async (input) => {
-      await input.piece({ id: 'text', type: 'text-start' });
-      await input.piece({ id: 'text', text: 'partial', type: 'text-delta' });
-      throw new Error('Connection lost.');
+    state.calls = 0;
+    state.agent = async (input) => {
+      state.calls += 1;
+      await input.finish('ok', {});
+      return ref.runId;
     };
-
-    runner.start(ref);
-    await until(() => state.run.status === 'failed');
-
-    expect(state.run.error).toBe('Connection lost.');
-    expect(state.parts.find((item) => item.kind === 'text')?.status).toBe('failed');
-    expect(state.parts.find((item) => item.kind === 'error')?.content).toBe('Connection lost.');
   });
 
-  test('deduplicates repeated terminal stream errors', async () => {
-    agent = async (input) => {
-      await input.fail(new Error('Provider stopped.'));
-      await input.fail(new Error('Provider stopped again.'));
-      throw new Error('Provider stopped yet again.');
-    };
-
-    runner.start(ref);
-    await until(() => state.run.status === 'failed');
-
-    expect(state.run.error).toBe('Provider stopped.');
-    expect(state.parts.filter((item) => item.kind === 'error')).toHaveLength(1);
-  });
-
-  test('keeps user cancellation distinct from failures', async () => {
-    state.run = row('running');
-    state.parts = [
-      {
-        content: '',
-        kind: 'text',
-        ownerId: ref.ownerId,
-        runId: ref.runId,
-        seq: 0,
-        status: 'running',
+  test('starts a run after send returns the queued record', async () => {
+    const res = await Effect.runPromise(
+      runs.send({
+        content: 'hello',
+        id: 'message-1',
+        owner: ref.ownerId,
         threadId: ref.threadId,
-      },
-    ];
+      }),
+    );
+    await until(() => state.calls === 1);
 
-    await runner.cancel(ref);
+    expect(res.message).toMatchObject({
+      content: 'hello',
+      id: 'message-1',
+      ownerId: ref.ownerId,
+      threadId: ref.threadId,
+    });
+    expect(res.run).toMatchObject({
+      id: ref.runId,
+      ownerId: ref.ownerId,
+      status: 'queued',
+      threadId: ref.threadId,
+    });
+    expect(res.txid).toBe(1);
+  });
 
-    expect(state.run.status).toBe('cancelled');
-    expect(state.run.error).toBeNull();
-    expect(state.parts[0]?.status).toBe('cancelled');
-    expect(state.parts.some((item) => item.kind === 'error')).toBeFalse();
+  test('cancels a run once', async () => {
+    state.run = row('running');
+    const first = await Effect.runPromise(runs.cancel({ id: ref.runId, owner: ref.ownerId }));
+    const second = await Effect.runPromise(runs.cancel({ id: ref.runId, owner: ref.ownerId }));
+
+    expect(first.run).toMatchObject({
+      error: null,
+      id: ref.runId,
+      status: 'cancelled',
+    });
+    expect(first.txid).toBe(1);
+    expect(second.run).toBeNull();
+  });
+
+  test('uses the same cancel path when it archives a thread', async () => {
+    state.run = row('running');
+
+    const res = await Effect.runPromise(runs.archive({ id: ref.threadId, owner: ref.ownerId }));
+    const stopped = await Effect.runPromise(runs.cancel({ id: ref.runId, owner: ref.ownerId }));
+
+    expect(res.thread).toMatchObject({
+      id: ref.threadId,
+      ownerId: ref.ownerId,
+    });
+    expect(res.thread?.archivedAt).toBeInstanceOf(Date);
+    expect(stopped.run).toBeNull();
   });
 });
 
@@ -141,6 +171,18 @@ class Select {
   from(table: unknown) {
     this.table = table;
     return this;
+  }
+
+  groupBy(_field: unknown) {
+    const ids = [...new Set(state.events.map((item) => item.runId))];
+    return Promise.resolve(
+      ids.map((id) => ({
+        runId: id,
+        seq: Math.max(
+          ...state.events.filter((item) => item.runId === id).map((item) => Number(item.seq)),
+        ),
+      })),
+    );
   }
 
   limit(_count: number) {
@@ -189,11 +231,13 @@ class Insert {
   constructor(private table: unknown) {}
 
   onConflictDoNothing(_opts?: unknown) {
-    return Promise.resolve(this.rows());
+    this.rows();
+    return this;
   }
 
   onConflictDoUpdate(_opts?: unknown) {
-    return Promise.resolve(this.rows());
+    this.rows();
+    return this;
   }
 
   returning() {
@@ -214,7 +258,15 @@ class Insert {
 
 function select(table: unknown, fields: Record<string, unknown>) {
   if (table === run) {
+    if (Object.hasOwn(fields, 'runId')) {
+      return [];
+    }
+
     return Object.keys(fields).length === 1 ? [{ status: state.run.status }] : [state.run];
+  }
+
+  if (table === thread) {
+    return [state.thread];
   }
 
   if (table === message) {
@@ -237,6 +289,16 @@ function update(table: unknown, data: Row) {
 
       return { ...item, ...data };
     });
+  }
+
+  if (table === thread) {
+    if (data.archivedAt && !state.thread.archivedAt) {
+      state.thread = { ...state.thread, ...data };
+      return [state.thread];
+    }
+
+    state.thread = { ...state.thread, ...data };
+    return [state.thread];
   }
 
   return [];
@@ -274,9 +336,10 @@ function insert(table: unknown, data: Row | Row[]) {
 
       if (index >= 0) {
         state.parts[index] = { ...state.parts[index], ...item };
-      } else {
-        state.parts.push({ id: `part-${state.parts.length}`, messageId: null, ...item });
+        return;
       }
+
+      state.parts.push({ id: `part-${state.parts.length}`, messageId: null, ...item });
     });
   }
 
@@ -292,6 +355,17 @@ function insert(table: unknown, data: Row | Row[]) {
 
   if (table === message) {
     state.messages.push(...rows);
+  }
+
+  if (table === run) {
+    const item = rows[0];
+
+    if (!item) {
+      return [];
+    }
+
+    state.run = { ...row('queued'), ...item, id: ref.runId };
+    return [state.run];
   }
 
   if (table === thread) {

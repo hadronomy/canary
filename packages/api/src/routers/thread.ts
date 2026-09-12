@@ -1,8 +1,9 @@
-import { desc, eq, inArray, isNull } from 'drizzle-orm';
+import { desc, eq, isNull } from 'drizzle-orm';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 import { db, txid } from '@canary/db';
-import { event, member, part, run, thread } from '@canary/db/schema/app';
+import { member, thread } from '@canary/db/schema/app';
 import { own } from '~/scope';
 
 import { protectedProcedure } from '../index';
@@ -67,68 +68,6 @@ export const threadRouter = {
   archive: protectedProcedure
     .input(z.object({ id: z.uuid() }))
     .handler(async ({ context, input }) => {
-      return await db.transaction(async (client) => {
-        const rows = await client
-          .update(thread)
-          .set({ archivedAt: new Date() })
-          .where(own(thread, context.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
-          .returning();
-
-        const active = await client
-          .update(run)
-          .set({
-            status: 'cancelled',
-            completedAt: new Date(),
-          })
-          .where(
-            own(
-              run,
-              context.owner,
-              eq(run.threadId, input.id),
-              inArray(run.status, ['queued', 'running']),
-            ),
-          )
-          .returning();
-
-        if (active.length) {
-          await client
-            .update(part)
-            .set({
-              status: 'cancelled',
-              updatedAt: new Date(),
-            })
-            .where(
-              own(
-                part,
-                context.owner,
-                inArray(
-                  part.runId,
-                  active.map((row) => row.id),
-                ),
-                inArray(part.status, ['pending', 'running']),
-              ),
-            );
-
-          await client
-            .insert(event)
-            .values(
-              active.map((row) => ({
-                runId: row.id,
-                threadId: row.threadId,
-                ownerId: context.owner,
-                seq: 99_999,
-                type: 'run.cancelled',
-              })),
-            )
-            .onConflictDoNothing({
-              target: [event.runId, event.seq],
-            });
-        }
-
-        return {
-          thread: rows[0] ?? null,
-          txid: await txid(client),
-        };
-      });
+      return await Effect.runPromise(context.run.archive({ id: input.id, owner: context.owner }));
     }),
 };

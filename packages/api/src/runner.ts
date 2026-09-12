@@ -1,8 +1,12 @@
-import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+export * as Run from '~/runner';
+
+import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from 'drizzle-orm';
+import { Cause, Context, Effect, Layer } from 'effect';
 
 import { stream, type Chat, type Piece } from '@canary/agents';
-import { db } from '@canary/db';
+import { db, txid } from '@canary/db';
 import { event, message, part, run, thread } from '@canary/db/schema/app';
+import { env } from '@canary/env/server';
 import { own } from '~/scope';
 
 type Ref = {
@@ -10,6 +14,52 @@ type Ref = {
   runId: string;
   threadId: string;
 };
+
+type Send = {
+  content: string;
+  id?: string;
+  owner: string;
+  threadId: string;
+};
+
+type Key = {
+  id: string;
+  owner: string;
+};
+
+type Sent = {
+  message: typeof message.$inferSelect;
+  run: typeof run.$inferSelect;
+  txid: number;
+};
+
+type Cancelled = {
+  run: typeof run.$inferSelect | null;
+  txid: number;
+};
+
+type Archived = {
+  thread: typeof thread.$inferSelect | null;
+  txid: number;
+};
+
+type Row = typeof run.$inferSelect;
+type Client = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Log = {
+  data?: Record<string, unknown>;
+  ownerId: string;
+  runId: string;
+  threadId: string;
+  type: string;
+};
+
+export interface Interface {
+  readonly send: (input: Send) => Effect.Effect<Sent>;
+  readonly cancel: (input: Key) => Effect.Effect<Cancelled>;
+  readonly archive: (input: Key) => Effect.Effect<Archived>;
+}
+
+export class Service extends Context.Service<Service, Interface>()('@canary/api/Run') {}
 
 type Draft = {
   content: string;
@@ -22,30 +72,171 @@ type Draft = {
 
 const ttl = 10 * 60 * 1000;
 const gap = 30 * 1000;
-let boot: Promise<void> | undefined;
-let last = 0;
+const gate = { boot: false, last: 0 };
 
-export function start(ref: Ref) {
-  runOne(ref).catch((err: unknown) => {
-    failRun(ref, err).catch((cause: unknown) => {
-      console.error('Agent run failure could not be persisted.', cause);
-    });
-  });
-}
+const start = Effect.fn('Run.start')(function* (ref: Ref) {
+  yield* Effect.promise(() => runOne(ref)).pipe(
+    Effect.catchCause((cause) => {
+      if (Cause.hasInterruptsOnly(cause)) {
+        return Effect.failCause(cause);
+      }
 
-export function recover() {
-  if (boot || Date.now() - last < gap) {
+      return Effect.promise(() => failRun(ref, Cause.squash(cause))).pipe(
+        Effect.catchCause((next) =>
+          Effect.logError('Agent run failure could not be persisted.', next),
+        ),
+      );
+    }),
+  );
+});
+
+const recover = Effect.fn('Run.recover')(function* () {
+  if (gate.boot || Date.now() - gate.last < gap) {
     return;
   }
 
-  last = Date.now();
-  boot = recoverRuns().finally(() => {
-    boot = undefined;
+  gate.boot = true;
+  gate.last = Date.now();
+  yield* Effect.gen(function* () {
+    const state = yield* Effect.promise(() => recoverRuns());
+    yield* Effect.forEach(state.queued, (row) => start(row).pipe(Effect.forkDetach), {
+      discard: true,
+    });
+    yield* Effect.promise(() =>
+      Promise.all(
+        state.stale.map((row) => failRun(row, new Error('Agent runner recovered stale run.'))),
+      ),
+    );
+  }).pipe(
+    Effect.catchCause((cause) => Effect.logError('Agent run recovery failed.', cause)),
+    Effect.ensuring(
+      Effect.sync(() => {
+        gate.boot = false;
+      }),
+    ),
+  );
+});
+
+const send = Effect.fn('Run.send')(function* (input: Send) {
+  const res = yield* Effect.promise(() => sending(input));
+  yield* start({
+    ownerId: input.owner,
+    runId: res.run.id,
+    threadId: input.threadId,
+  }).pipe(Effect.forkDetach);
+  return res;
+});
+
+const cancel = Effect.fn('Run.cancel')((input: Key) => Effect.promise(() => cancelling(input)));
+
+const archive = Effect.fn('Run.archive')((input: Key) => Effect.promise(() => archiving(input)));
+
+export const layer = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    yield* recover().pipe(Effect.forkDetach);
+    return Service.of({ send, cancel, archive });
+  }),
+);
+
+async function sending(input: Send): Promise<Sent> {
+  return await db.transaction(async (client) => {
+    const rows = await client
+      .select({ id: thread.id })
+      .from(thread)
+      .where(own(thread, input.owner, eq(thread.id, input.threadId), isNull(thread.archivedAt)))
+      .limit(1);
+
+    if (!rows[0]) {
+      throw new Error('Thread not found.');
+    }
+
+    const sent = await client
+      .insert(message)
+      .values({
+        id: input.id,
+        threadId: input.threadId,
+        ownerId: input.owner,
+        role: 'user',
+        content: input.content,
+      })
+      .onConflictDoNothing({
+        target: message.id,
+      })
+      .returning();
+    const found = input.id
+      ? await client
+          .select()
+          .from(message)
+          .where(
+            own(
+              message,
+              input.owner,
+              eq(message.id, input.id),
+              eq(message.threadId, input.threadId),
+            ),
+          )
+          .limit(1)
+      : [];
+    const row = sent[0] ?? found[0];
+
+    if (!row) {
+      throw new Error('Message insert failed.');
+    }
+
+    const queued = await client
+      .insert(run)
+      .values({
+        threadId: input.threadId,
+        ownerId: input.owner,
+        inputMessageId: row.id,
+        status: 'queued',
+        model: env.AGENT_MODEL,
+      })
+      .onConflictDoNothing({
+        target: run.inputMessageId,
+      })
+      .returning();
+    const active = await client
+      .select()
+      .from(run)
+      .where(own(run, input.owner, eq(run.inputMessageId, row.id)))
+      .limit(1);
+    const item = queued[0] ?? active[0];
+
+    if (!item) {
+      throw new Error('Run insert failed.');
+    }
+
+    await client
+      .insert(event)
+      .values({
+        runId: item.id,
+        threadId: item.threadId,
+        ownerId: input.owner,
+        seq: 0,
+        type: 'run.queued',
+        data: { model: env.AGENT_MODEL },
+      })
+      .onConflictDoNothing({
+        target: [event.runId, event.seq],
+      });
+
+    await client
+      .update(thread)
+      .set({ updatedAt: new Date() })
+      .where(own(thread, input.owner, eq(thread.id, input.threadId)));
+
+    return {
+      message: row,
+      run: item,
+      txid: await txid(client),
+    };
   });
 }
 
-export async function cancel(ref: Ref) {
-  await db.transaction(async (client) => {
+async function cancelling(input: Key): Promise<Cancelled> {
+  return await db.transaction(async (client) => {
     const rows = await client
       .update(run)
       .set({
@@ -53,44 +244,123 @@ export async function cancel(ref: Ref) {
         completedAt: new Date(),
       })
       .where(
-        own(run, ref.ownerId, eq(run.id, ref.runId), inArray(run.status, ['queued', 'running'])),
+        own(run, input.owner, eq(run.id, input.id), inArray(run.status, ['queued', 'running'])),
       )
       .returning();
 
-    const row = rows[0];
+    await cancelled(client, rows);
 
-    if (!row) {
-      return;
-    }
+    return {
+      run: rows[0] ?? null,
+      txid: await txid(client),
+    };
+  });
+}
 
-    await client
-      .update(part)
+async function archiving(input: Key): Promise<Archived> {
+  return await db.transaction(async (client) => {
+    const rows = await client
+      .update(thread)
+      .set({ archivedAt: new Date() })
+      .where(own(thread, input.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
+      .returning();
+
+    const active = await client
+      .update(run)
       .set({
         status: 'cancelled',
-        updatedAt: new Date(),
+        completedAt: new Date(),
       })
       .where(
         own(
-          part,
-          ref.ownerId,
-          eq(part.runId, row.id),
-          inArray(part.status, ['pending', 'running']),
+          run,
+          input.owner,
+          eq(run.threadId, input.id),
+          inArray(run.status, ['queued', 'running']),
         ),
-      );
+      )
+      .returning();
 
-    await client
-      .insert(event)
-      .values({
-        runId: row.id,
-        threadId: row.threadId,
-        ownerId: ref.ownerId,
-        seq: 99_999,
-        type: 'run.cancelled',
-      })
-      .onConflictDoNothing({
-        target: [event.runId, event.seq],
-      });
+    await cancelled(client, active);
+
+    return {
+      thread: rows[0] ?? null,
+      txid: await txid(client),
+    };
   });
+}
+
+async function cancelled(client: Client, rows: readonly Row[]) {
+  const first = rows.at(0);
+
+  if (!first) {
+    return;
+  }
+
+  const ids = rows.map((row) => row.id);
+  await client
+    .update(part)
+    .set({
+      status: 'cancelled',
+      updatedAt: new Date(),
+    })
+    .where(
+      own(
+        part,
+        first.ownerId,
+        inArray(part.runId, ids),
+        inArray(part.status, ['pending', 'running']),
+      ),
+    );
+
+  await record(
+    client,
+    rows.map((row) => ({
+      runId: row.id,
+      threadId: row.threadId,
+      ownerId: row.ownerId,
+      type: 'run.cancelled',
+    })),
+  );
+}
+
+async function record(client: Client, rows: readonly Log[]) {
+  const first = rows.at(0);
+
+  if (!first) {
+    return;
+  }
+
+  const seqs = await client
+    .select({
+      runId: event.runId,
+      seq: max(event.seq),
+    })
+    .from(event)
+    .where(
+      own(
+        event,
+        first.ownerId,
+        inArray(
+          event.runId,
+          rows.map((row) => row.runId),
+        ),
+      ),
+    )
+    .groupBy(event.runId);
+  const next = new Map(seqs.map((row) => [row.runId, row.seq ?? -1]));
+
+  await client
+    .insert(event)
+    .values(
+      rows.map((row) => ({
+        ...row,
+        seq: (next.get(row.runId) ?? -1) + 1,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [event.runId, event.seq],
+    });
 }
 
 async function runOne(ref: Ref) {
@@ -247,12 +517,18 @@ function writer(ref: Ref) {
       return;
     }
 
-    if (!(await live())) {
-      return;
-    }
-
     await db
       .transaction(async (client) => {
+        const active = await client
+          .update(run)
+          .set({ updatedAt: new Date() })
+          .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'running')))
+          .returning();
+
+        if (!active[0]) {
+          return;
+        }
+
         await client
           .insert(part)
           .values(
@@ -298,11 +574,6 @@ function writer(ref: Ref) {
             return item;
           }),
         );
-
-        await client
-          .update(run)
-          .set({ updatedAt: new Date() })
-          .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'running')));
       })
       .catch((err: unknown) => {
         rows.forEach((row) => {
@@ -312,16 +583,6 @@ function writer(ref: Ref) {
         });
         throw err;
       });
-  }
-
-  async function live() {
-    const rows = await db
-      .select({ status: run.status })
-      .from(run)
-      .where(own(run, ref.ownerId, eq(run.id, ref.runId)))
-      .limit(1);
-
-    return rows[0]?.status === 'running';
   }
 
   async function piece(input: Piece) {
@@ -613,24 +874,20 @@ async function failRun(ref: Ref, cause: unknown) {
         ),
       );
 
-    await client
-      .insert(event)
-      .values({
+    await record(client, [
+      {
         runId: ref.runId,
         threadId: ref.threadId,
         ownerId: ref.ownerId,
-        seq: 99_998,
         type: 'run.failed',
         data: { error: err },
-      })
-      .onConflictDoNothing({
-        target: [event.runId, event.seq],
-      });
+      },
+    ]);
   });
 }
 
 async function recoverRuns() {
-  const stale = new Date(Date.now() - ttl);
+  const before = new Date(Date.now() - ttl);
   const queued = await db
     .select({
       runId: run.id,
@@ -642,23 +899,17 @@ async function recoverRuns() {
     .orderBy(asc(run.createdAt))
     .limit(10);
 
-  queued.forEach((row) => {
-    start(row);
-  });
-
-  const rows = await db
+  const stale = await db
     .select({
       runId: run.id,
       threadId: run.threadId,
       ownerId: run.ownerId,
     })
     .from(run)
-    .where(and(eq(run.status, 'running'), lt(run.updatedAt, stale)))
+    .where(and(eq(run.status, 'running'), lt(run.updatedAt, before)))
     .limit(10);
 
-  await Promise.all(
-    rows.map((row) => failRun(row, new Error('Agent runner recovered stale run.'))),
-  );
+  return { queued, stale };
 }
 
 function reason(cause: unknown) {

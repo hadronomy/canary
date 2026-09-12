@@ -1,9 +1,5 @@
-import { eq, inArray } from 'drizzle-orm';
+import { Effect } from 'effect';
 import { z } from 'zod';
-
-import { db, txid } from '@canary/db';
-import { event, part, run } from '@canary/db/schema/app';
-import { own } from '~/scope';
 
 import { protectedProcedure } from '../index';
 
@@ -11,59 +7,6 @@ export const runRouter = {
   cancel: protectedProcedure
     .input(z.object({ id: z.uuid() }))
     .handler(async ({ context, input }) => {
-      return await db.transaction(async (client) => {
-        const rows = await client
-          .update(run)
-          .set({
-            status: 'cancelled',
-            completedAt: new Date(),
-          })
-          .where(
-            own(
-              run,
-              context.owner,
-              eq(run.id, input.id),
-              inArray(run.status, ['queued', 'running']),
-            ),
-          )
-          .returning();
-
-        const row = rows[0];
-
-        if (row) {
-          await client
-            .update(part)
-            .set({
-              status: 'cancelled',
-              updatedAt: new Date(),
-            })
-            .where(
-              own(
-                part,
-                context.owner,
-                eq(part.runId, row.id),
-                inArray(part.status, ['pending', 'running']),
-              ),
-            );
-
-          await client
-            .insert(event)
-            .values({
-              runId: row.id,
-              threadId: row.threadId,
-              ownerId: context.owner,
-              seq: 99_999,
-              type: 'run.cancelled',
-            })
-            .onConflictDoNothing({
-              target: [event.runId, event.seq],
-            });
-        }
-
-        return {
-          run: row ?? null,
-          txid: await txid(client),
-        };
-      });
+      return await Effect.runPromise(context.run.cancel({ id: input.id, owner: context.owner }));
     }),
 };
