@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { IconContext } from '@phosphor-icons/react';
 import {
+  ClientOnly,
   HeadContent,
   Outlet,
   Scripts,
@@ -12,10 +13,10 @@ import {
 } from '@tanstack/react-router';
 import { createMiddleware } from '@tanstack/react-start';
 import { evlogErrorHandler } from 'evlog/nitro/v3';
+import { Suspense, lazy } from 'react';
 
 import type { orpc } from '~/utils/orpc';
 
-import { Devtools } from '~/components/devtools';
 import { AppError, AppNotFound } from '~/components/fallbacks/route';
 import { ThemeProvider } from '~/components/theme-provider';
 import { Toaster } from '~/components/ui/sonner';
@@ -33,6 +34,9 @@ export interface RouterAppContext {
 }
 
 const tone = { weight: 'duotone' } as const;
+const Devtools = lazy(() =>
+  import('~/components/devtools').then((mod) => ({ default: mod.Devtools })),
+);
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   server: {
@@ -122,7 +126,11 @@ function RootProviders(props: { children: ReactNode }) {
         </IconContext.Provider>
       </ThemeProvider>
 
-      <Devtools queryClient={ctx.queryClient} />
+      <ClientOnly fallback={null}>
+        <Suspense fallback={null}>
+          <Devtools queryClient={ctx.queryClient} />
+        </Suspense>
+      </ClientOnly>
     </>
   );
 }
