@@ -1,7 +1,9 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { z } from 'zod';
 
-import { protectedProcedure } from '../index';
+import { protectedProcedure } from '@canary/api';
+import * as Run from '@canary/api/runner';
+import { exec } from '@canary/api/runtime';
 
 export const messageRouter = {
   send: protectedProcedure
@@ -13,13 +15,12 @@ export const messageRouter = {
       }),
     )
     .handler(async ({ context, input }) => {
-      return await Effect.runPromise(
-        context.run.send({
-          content: input.content,
-          id: input.id,
+      return await exec(
+        Schema.decodeUnknownEffect(Run.Send)({
+          ...input,
           owner: context.owner,
-          threadId: input.threadId,
-        }),
+        }).pipe(Effect.flatMap((input) => Run.Service.use((run) => run.send(input)))),
+        context.signal,
       );
     }),
 };

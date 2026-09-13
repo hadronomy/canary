@@ -12,13 +12,13 @@
     }
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@canary/agents": "workspace:*",
     "@canary/auth": "workspace:*",
     "@canary/db": "workspace:*",
-    "@canary/env": "workspace:*",
     "@orpc/server": "^1.14.6",
     "drizzle-orm": "^0.45.2",
     "effect": "^4.0.0-rc.115",
@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
-    "typescript": "catalog:"
+    "@effect/vitest": "4.0.0-rc.115",
+    "typescript": "catalog:",
+    "vitest": "5.0.0"
   }
 }

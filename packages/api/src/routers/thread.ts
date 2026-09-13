@@ -1,12 +1,13 @@
 import { desc, eq, isNull } from 'drizzle-orm';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { z } from 'zod';
 
+import { protectedProcedure } from '@canary/api';
+import * as Run from '@canary/api/runner';
+import { exec } from '@canary/api/runtime';
+import { own } from '@canary/api/scope';
 import { db, txid } from '@canary/db';
 import { member, thread } from '@canary/db/schema/app';
-import { own } from '~/scope';
-
-import { protectedProcedure } from '../index';
 
 export const threadRouter = {
   list: protectedProcedure.handler(async ({ context }) => {
@@ -68,6 +69,11 @@ export const threadRouter = {
   archive: protectedProcedure
     .input(z.object({ id: z.uuid() }))
     .handler(async ({ context, input }) => {
-      return await Effect.runPromise(context.run.archive({ id: input.id, owner: context.owner }));
+      return await exec(
+        Schema.decodeUnknownEffect(Run.ThreadKey)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.archive(input))),
+        ),
+        context.signal,
+      );
     }),
 };

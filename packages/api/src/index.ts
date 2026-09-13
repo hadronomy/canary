@@ -1,6 +1,6 @@
 import { ORPCError, os } from '@orpc/server';
 
-import type { Context } from './context';
+import type { Context } from '@canary/api/context';
 
 const o = os.$context<Context>();
 
@@ -17,7 +17,7 @@ const requireAuth = o.middleware(async ({ context, next }) => {
     context: {
       session: context.session,
       owner: id,
-      run: context.run,
+      signal: context.signal,
     },
   });
 });

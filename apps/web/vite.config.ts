@@ -21,7 +21,7 @@ export default defineConfig({
     caddyPlugin(),
     tailwindcss(),
     tanstackStart(),
-    nitro(),
+    nitro({ plugins: ['./plugins/runtime.ts'] }),
     viteReact(),
   ],
   server: {

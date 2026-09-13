@@ -1,7 +1,8 @@
+import type { DurableAgenticWorkflowInput } from '@mastra/core/agent/durable';
 import type { ChunkType } from '@mastra/core/stream';
 
 import { Agent } from '@mastra/core/agent';
-import { createEventedAgent } from '@mastra/core/agent/durable';
+import { EventedAgent } from '@mastra/core/agent/durable';
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 
@@ -15,7 +16,7 @@ export type Chat = {
 };
 
 export type Input = {
-  messages: Chat[];
+  messages: readonly Chat[];
   ownerId: string;
   runId: string;
   threadId: string;
@@ -80,18 +81,66 @@ Keep answers direct.`,
   memory,
 });
 
-export const durable = createEventedAgent({
+class CanaryAgent extends EventedAgent {
+  private readonly runs = new Map<string, { cancel: () => Promise<void> }>();
+  private readonly stopped = new Set<string>();
+
+  protected override async executeWorkflow(id: string, input: DurableAgenticWorkflowInput) {
+    const run = await this.getWorkflow().createRun({ runId: id, pubsub: this.pubsubInternal });
+    this.runs.set(id, run);
+
+    if (this.stopped.has(id)) {
+      await run.cancel();
+      this.runs.delete(id);
+      this.stopped.delete(id);
+      return;
+    }
+
+    await run.startAsync({
+      inputData: input,
+      requestContext: this.runRegistryInternal.get(id)?.requestContext,
+    });
+  }
+
+  async cancel(id: string) {
+    this.stopped.add(id);
+    const run = this.runs.get(id);
+
+    if (run) {
+      await run.cancel();
+      this.stopped.delete(id);
+      return;
+    }
+
+    const pending = await this.getWorkflow().createRun({
+      runId: id,
+      pubsub: this.pubsub,
+    });
+    await pending.cancel();
+  }
+
+  forget(id: string) {
+    this.runs.delete(id);
+  }
+
+  complete(id: string) {
+    this.runs.delete(id);
+    this.stopped.delete(id);
+  }
+}
+
+export const durable = new CanaryAgent({
   agent,
   cache: new PostgresCache(),
   maxSteps: 12,
 });
 
-export async function stream(input: Input) {
+export async function open(input: Input) {
   const last = input.messages.at(-1)?.content ?? '';
 
   if (!env.OPENROUTER_API_KEY) {
     await fallback(input, last);
-    return input.runId;
+    return { runId: input.runId, cleanup() {} };
   }
 
   const res = await durable.stream(last, {
@@ -117,13 +166,25 @@ export async function stream(input: Input) {
         reason: data.stepResult.reason,
         usage: data.output.usage,
       });
+      durable.complete(input.runId);
     },
     onError: async (err) => {
       await input.fail(toError(err));
+      durable.complete(input.runId);
     },
   });
 
-  return res.runId;
+  return {
+    runId: res.runId,
+    cleanup() {
+      res.cleanup();
+      durable.forget(input.runId);
+    },
+  };
+}
+
+export async function cancel(id: string) {
+  await durable.cancel(id);
 }
 
 async function fallback(input: Input, last: string) {
