@@ -119,7 +119,8 @@ workspace and run on Bun.
 - `apps/web` is the main web client
 - `apps/tui` is the terminal UI
 - `apps/fumadocs` is the documentation site
-- `packages/env` and `packages/config` hold shared TypeScript configuration
+- `.env.schema` files define each process environment contract
+- `packages/config` holds shared TypeScript configuration
 
 ## Getting started
 

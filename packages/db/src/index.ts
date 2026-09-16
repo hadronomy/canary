@@ -1,12 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
-import { env } from '@canary/env/server';
+import { ENV } from '@canary/db/env';
 
 import * as schema from './schema';
 
 export function createDb() {
-  return drizzle(env.DATABASE_URL, { schema });
+  return drizzle(ENV.DATABASE_URL, { schema });
 }
 
 export const db = createDb();

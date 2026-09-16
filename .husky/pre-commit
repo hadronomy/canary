@@ -2,3 +2,4 @@
 . "$(dirname "$0")/_/h"
 
 mise exec -- bunx lint-staged
+mise exec -- bunx varlock scan --staged --path apps/web/ --path packages/db/

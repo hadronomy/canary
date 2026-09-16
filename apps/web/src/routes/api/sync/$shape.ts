@@ -2,7 +2,7 @@ import { ELECTRIC_PROTOCOL_QUERY_PARAMS } from '@electric-sql/client';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { auth } from '@canary/auth';
-import { env } from '@canary/env/server';
+import { ENV } from '~/env';
 
 const pass = new Set(ELECTRIC_PROTOCOL_QUERY_PARAMS);
 const ping = new TextEncoder().encode(': keep-alive\n\n');
@@ -116,7 +116,7 @@ async function handle({ params, request }: { params: { shape: string }; request:
     return new Response('Shape not found', { status: 404 });
   }
 
-  const dst = new URL('/v1/shape', env.ELECTRIC_URL);
+  const dst = new URL('/v1/shape', ENV.ELECTRIC_URL);
 
   src.searchParams.forEach((value, key) => {
     if (pass.has(key)) {
@@ -131,8 +131,8 @@ async function handle({ params, request }: { params: { shape: string }; request:
     dst.searchParams.set(`params[${index + 1}]`, value);
   });
 
-  if (env.ELECTRIC_SECRET) {
-    dst.searchParams.set('secret', env.ELECTRIC_SECRET);
+  if (ENV.ELECTRIC_SECRET) {
+    dst.searchParams.set('secret', ENV.ELECTRIC_SECRET);
   }
 
   const res = await fetch(dst, {

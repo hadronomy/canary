@@ -6,7 +6,7 @@ import { EventedAgent } from '@mastra/core/agent/durable';
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 
-import { env } from '@canary/env/server';
+import { ENV } from '@canary/agents/env';
 
 import { PostgresCache } from './cache';
 
@@ -38,7 +38,7 @@ export type Piece =
 
 export const store = new PostgresStore({
   id: 'canary-agents',
-  connectionString: env.DATABASE_URL,
+  connectionString: ENV.DATABASE_URL,
 });
 
 export const memory = new Memory({
@@ -70,11 +70,11 @@ When a task needs a tool:
 Keep answers direct.`,
   model: {
     providerId: 'openrouter',
-    modelId: env.AGENT_MODEL,
+    modelId: ENV.AGENT_MODEL,
     url: 'https://openrouter.ai/api/v1',
-    apiKey: env.OPENROUTER_API_KEY,
+    apiKey: ENV.OPENROUTER_API_KEY,
     headers: {
-      'HTTP-Referer': env.BETTER_AUTH_URL,
+      'HTTP-Referer': ENV.BETTER_AUTH_URL,
       'X-Title': 'Canary',
     },
   },
@@ -138,7 +138,7 @@ export const durable = new CanaryAgent({
 export async function open(input: Input) {
   const last = input.messages.at(-1)?.content ?? '';
 
-  if (!env.OPENROUTER_API_KEY) {
+  if (!ENV.OPENROUTER_API_KEY) {
     await fallback(input, last);
     return { runId: input.runId, cleanup() {} };
   }
@@ -188,7 +188,7 @@ export async function cancel(id: string) {
 }
 
 async function fallback(input: Input, last: string) {
-  const text = `I received your message and queued the durable agent path. Configure OPENROUTER_API_KEY to let Mastra call ${env.AGENT_MODEL} through OpenRouter. Last input: ${last}`;
+  const text = `I received your message and queued the durable agent path. Configure OPENROUTER_API_KEY to let Mastra call ${ENV.AGENT_MODEL} through OpenRouter. Last input: ${last}`;
 
   await input.piece({ type: 'text-start', id: 'fallback' });
   await text

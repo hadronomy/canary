@@ -1,0 +1,6 @@
+# Varlock owns file loading and precedence for environment values.
+env = false
+
+[install]
+# Bun self-contained workspaces require the hoisted linker.
+linker = "hoisted"

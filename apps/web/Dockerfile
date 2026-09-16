@@ -1,24 +1,40 @@
-FROM node:24-slim AS base
-COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
+# syntax=docker/dockerfile:1.20
+# check=error=true
+
+FROM oven/bun:1.4.2 AS bun
+
+FROM node:26 AS build
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 
-ENV SKIP_ENV_VALIDATION=1
-ENV BETTER_AUTH_SECRET=build-time-placeholder-secret-not-used-at-runtime
-ENV BETTER_AUTH_URL=http://localhost:3001
-ENV CORS_ORIGIN=http://localhost:3001
-ENV DATABASE_URL=postgresql://postgres:password@postgres:5432/canary
-ENV ELECTRIC_URL=http://electric:3000
-ENV VITE_SERVER_URL=http://localhost:3001
-
 COPY . .
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install
+RUN --mount=type=cache,id=bun-install-cache,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile
 
-ENV NODE_ENV=production
-RUN cd apps/web && bun run build
+ENV DO_NOT_TRACK=1 \
+  NODE_ENV=production
 
-ENV HOST=0.0.0.0
-ENV PORT=3001
-EXPOSE 3001
+# Build-only secrets exist in this process. They never enter a file or image setting.
+RUN auth="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")" \
+  && db="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")" \
+  && cd apps/web \
+  && APP_ENV=build BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" ../../node_modules/.bin/varlock load --agent \
+  && APP_ENV=build BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" bun run build \
+  && ../../node_modules/.bin/varlock flatten
 
+FROM node:26-bookworm-slim AS runtime
+ENV APP_ENV=production \
+  DO_NOT_TRACK=1 \
+  HOST=0.0.0.0 \
+  NODE_ENV=production \
+  PORT=3001
 WORKDIR /app/apps/web
-CMD ["bun", ".output/server/index.mjs"]
+
+COPY --from=build --chown=node:node /app/apps/web/.output ./.output
+COPY --from=build --chown=node:node /app/apps/web/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/apps/web/.env-flat/ ./
+
+EXPOSE 3001
+USER node
+ENTRYPOINT ["./node_modules/.bin/varlock", "run", "--"]
+CMD ["node", ".output/server/index.mjs"]

@@ -156,12 +156,16 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()('@canary/api/Run') {}
 
+function millis(name: string, value: number) {
+  return Config.Number(name).pipe(Config.withDefault(value), Config.map(Duration.millis));
+}
+
 const settings = Config.all({
   batch: Config.Number('RUN_FLUSH_BATCH').pipe(Config.withDefault(32)),
-  flush: Config.Duration('RUN_FLUSH_INTERVAL').pipe(Config.withDefault(Duration.millis(60))),
+  flush: millis('RUN_FLUSH_INTERVAL', 60),
   model: Config.String('AGENT_MODEL').pipe(Config.withDefault('~moonshotai/kimi-latest')),
-  recover: Config.Duration('RUN_RECOVERY_INTERVAL').pipe(Config.withDefault(Duration.seconds(30))),
-  stale: Config.Duration('RUN_STALE_TTL').pipe(Config.withDefault(Duration.minutes(10))),
+  recover: millis('RUN_RECOVERY_INTERVAL', 30_000),
+  stale: millis('RUN_STALE_TTL', 600_000),
 });
 
 export const layer = Layer.effect(

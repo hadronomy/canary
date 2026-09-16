@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@canary/db": "workspace:*",
-    "@canary/env": "workspace:*",
     "@mastra/core": "^1.45.0",
     "@mastra/memory": "^1.21.0",
     "@mastra/pg": "^1.14.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "varlock": "1.19.0"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",

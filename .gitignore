@@ -11,6 +11,8 @@ build
 # Environment variables
 .env
 .env*.local
+**/src/env.ts
+!.env.schema
 
 # IDEs and editors
 .vscode/*

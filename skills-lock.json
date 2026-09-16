@@ -61,6 +61,12 @@
       "sourceType": "github",
       "computedHash": "414e17f6d29892ffe79f0284ec260b6dc7ab0a908c43614f46bba9b27497a7f1"
     },
+    "varlock": {
+      "source": "dmno-dev/varlock",
+      "sourceType": "github",
+      "skillPath": "skills/varlock/SKILL.md",
+      "computedHash": "2fe44911234ed0ac31f10d1127b8b6ea54ee1f51f11da4dfa70050ee4075ca9e"
+    },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

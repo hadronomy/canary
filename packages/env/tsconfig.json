@@ -1,3 +1,0 @@
-{
-  "extends": "@canary/config/tsconfig.base.json"
-}

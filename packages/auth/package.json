@@ -17,8 +17,8 @@
   "dependencies": {
     "@better-auth/oauth-provider": "^1.6.20",
     "@canary/db": "workspace:*",
-    "@canary/env": "workspace:*",
-    "better-auth": "^1.6.20"
+    "better-auth": "^1.6.20",
+    "varlock": "1.19.0"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",

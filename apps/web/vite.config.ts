@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import { varlockVitePlugin } from '@varlock/vite-integration';
 import viteReact from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
@@ -12,6 +13,8 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
+    // The parent process resolves the schema, so the plugin only installs the runtime guards.
+    varlockVitePlugin({ ssrInjectMode: 'init-only' }),
     devtools({
       eventBusConfig: {
         debug: false,
