@@ -18,9 +18,21 @@ ENV DO_NOT_TRACK=1 \
 RUN auth="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")" \
   && db="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))")" \
   && cd apps/web \
-  && APP_ENV=build BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" ../../node_modules/.bin/varlock load --agent \
+  && APP_ENV=build BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" ../../node_modules/.bin/varlock load --agent > /dev/null \
   && APP_ENV=build BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" bun run build \
-  && ../../node_modules/.bin/varlock flatten
+  && ../../node_modules/.bin/varlock flatten \
+  && ! grep -R -F -q "$auth" .output .env-flat \
+  && ! grep -R -F -q "$db" .output .env-flat
+
+# Bun copies dependency trees for self-contained workspaces but still links local packages.
+RUN dir="$(mktemp -d)" \
+  && for link in apps/web/node_modules/@canary/*; do \
+    name="$(basename "$link")"; \
+    cp -aL "$link" "$dir/$name"; \
+    rm "$link"; \
+    mv "$dir/$name" "$link"; \
+  done \
+  && test -z "$(find -L apps/web/node_modules -type l -print -quit)"
 
 FROM node:26-bookworm-slim AS runtime
 ENV APP_ENV=production \

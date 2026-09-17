@@ -23,7 +23,7 @@
     "check-types": "bun run env:codegen && turbo run check-types",
     "dev:tui": "turbo run dev --filter=tui",
     "dev:web": "turbo run dev --filter=web",
-    "auth:generate": "varlock run --path apps/web -- bun x --bun auth@latest generate --config packages/auth/src/index.ts --output packages/db/src/schema/auth.ts --yes",
+    "auth:generate": "bun run env:codegen && varlock run --path apps/web -- bun x --bun auth@latest generate --config packages/auth/src/index.ts --output packages/db/src/schema/auth.ts --yes",
     "db:generate": "turbo run db:generate --filter=@canary/db",
     "db:migrate": "turbo run db:migrate --filter=@canary/db",
     "db:push": "turbo run db:push --filter=@canary/db",

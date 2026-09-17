@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "varlock run -- vite dev",
-    "build": "APP_ENV=build varlock run -- vite build",
+    "dev": "bun run --cwd ../.. env:codegen && varlock run -- vite dev",
+    "build": "bun run --cwd ../.. env:codegen && APP_ENV=build varlock run -- vite build",
     "serve": "APP_ENV=build varlock run -- vite preview",
     "start": "APP_ENV=production varlock run -- node .output/server/index.mjs",
     "check-types": "tsc --noEmit"

@@ -25,3 +25,4 @@ docker-compose.yml
 **/.env.*
 !**/.env.schema
 !**/.env.build
+**/src/env.ts

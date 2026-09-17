@@ -13,7 +13,7 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "test": "APP_ENV=test varlock run -- vitest run"
+    "test": "bun run --cwd ../.. env:codegen && APP_ENV=test varlock run -- vitest run"
   },
   "dependencies": {
     "@canary/agents": "workspace:*",

@@ -13,10 +13,10 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "db:generate": "varlock run -- drizzle-kit generate",
-    "db:migrate": "varlock run -- drizzle-kit migrate",
-    "db:push": "varlock run -- drizzle-kit push",
-    "db:studio": "varlock run -- drizzle-kit studio"
+    "db:generate": "varlock codegen && varlock run -- drizzle-kit generate",
+    "db:migrate": "varlock codegen && varlock run -- drizzle-kit migrate",
+    "db:push": "varlock codegen && varlock run -- drizzle-kit push",
+    "db:studio": "varlock codegen && varlock run -- drizzle-kit studio"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
