@@ -23,6 +23,8 @@
     "check-types": "bun run env:codegen && turbo run check-types",
     "dev:tui": "turbo run dev --filter=tui",
     "dev:web": "turbo run dev --filter=web",
+    "docker:web": "APP_ENV=production varlock run --path apps/web -- docker compose up --build",
+    "env:verify-image": "bash scripts/verify-varlock-image.sh",
     "auth:generate": "bun run env:codegen && varlock run --path apps/web -- bun x --bun auth@latest generate --config packages/auth/src/index.ts --output packages/db/src/schema/auth.ts --yes",
     "db:generate": "turbo run db:generate --filter=@canary/db",
     "db:migrate": "turbo run db:migrate --filter=@canary/db",

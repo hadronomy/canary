@@ -11,4 +11,4 @@ taplo                 = { version = "latest", matching = "full" }
 DO_NOT_TRACK = "1"
 
 [hooks]
-enter = "varlock load --agent > /dev/null"
+enter = "bunx --no-install varlock load --agent > /dev/null"

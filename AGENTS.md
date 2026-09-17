@@ -1,3 +1,7 @@
+## Package executables
+
+Use `bunx` for package executables. Use `bunx --no-install` for executables pinned in this repository. If an installed skill shows `npx`, run the same command with `bunx`.
+
 <!-- effect-solutions:start -->
 
 ## Style Guide

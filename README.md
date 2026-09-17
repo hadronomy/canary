@@ -168,6 +168,16 @@ bun run dev:web
 bun --cwd apps/fumadocs dev
 ```
 
+### Run the web stack in Docker
+
+Set `BETTER_AUTH_SECRET` and `DB_PASSWORD` in the root `.env.local` file. Then run:
+
+```sh
+bun run docker:web
+```
+
+The script resolves the web contract before Compose reads its variables.
+
 ## Common commands
 
 - `just help`

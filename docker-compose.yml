@@ -19,7 +19,7 @@ services:
       CANARY_MCP_URL: ${CANARY_MCP_URL:-http://host.docker.internal:3000}
       CORS_ORIGIN: http://localhost:3001
       DB_HOST: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       DB_PORT: '5432'
       DB_USERNAME: postgres
       ELECTRIC_URL: http://electric:3000
@@ -38,7 +38,7 @@ services:
     container_name: canary-postgres
     environment:
       POSTGRES_DB: canary
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       POSTGRES_USER: postgres
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d canary']
@@ -55,7 +55,7 @@ services:
     image: electricsql/electric:latest
     container_name: canary-electric
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/canary
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:?Set DB_PASSWORD}@postgres:5432/canary
       ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
     depends_on:
       postgres:

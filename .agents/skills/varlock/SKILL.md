@@ -20,7 +20,6 @@ This skill helps securely manage env vars and secrets in your project using varl
 Varlock uses `.env.schema` (instead of `.env.example`) to provide a single source of truth for your project's env vars. Schema info is expressed using `@decorator` style comments. Sensitive values can be set in git-ignored `.env.local` files, passed in via the environment, or use functions to load from secure backends like 1Password, Vault, AWS, etc.
 
 Basic `.env.schema` example:
-
 ```env-spec
 # @defaultSensitive=false @defaultRequired=infer
 # @currentEnv=$APP_ENV
@@ -82,23 +81,21 @@ Do not read `.env` or `.env.local` directly. Instead run `varlock load` to show 
 ### When the user asks to "update/set a secret"
 
 Do not write secret values yourself. Tell the user to either:
-
 1. Update it in their secret provider (1Password, AWS, etc.) and then help them wire it up
 2. Edit the value in their `.env.local` file manually
-
-- ideally encrypt it by using `varlock(prompt)` as the value, then run `varlock load` to be prompted
+  - ideally encrypt it by using `varlock(prompt)` as the value, then run `varlock load` to be prompted
 
 Then run `varlock load --agent` to validate.
 
 ## File roles
 
-| File                 | Role                                                         | Agent may edit?        |
-| -------------------- | ------------------------------------------------------------ | ---------------------- |
-| `.env.schema`        | Schema, defaults, decorators, descriptions                   | Yes                    |
-| `.env.[env]`         | Environment-specific tracked config (e.g. `.env.production`) | Yes                    |
-| `.env`, `.env.local` | Local/gitignored values and overrides                        | No — tell user to edit |
-| `.env.[env].local`   | Environment-specific local overrides (gitignored)            | No — tell user to edit |
-| `.env.example`       | Legacy example file; migrate into schema                     | Review with user       |
+| File | Role | Agent may edit? |
+|------|------|-----------------|
+| `.env.schema` | Schema, defaults, decorators, descriptions | Yes |
+| `.env.[env]` | Environment-specific tracked config (e.g. `.env.production`) | Yes |
+| `.env`, `.env.local` | Local/gitignored values and overrides | No — tell user to edit |
+| `.env.[env].local` | Environment-specific local overrides (gitignored) | No — tell user to edit |
+| `.env.example` | Legacy example file; migrate into schema | Review with user |
 
 Ensure `.env.schema` and tracked env-specific files are not gitignored (`!.env.schema`, `!.env.production`, etc. in `.gitignore` if needed).
 
@@ -118,17 +115,17 @@ A bare `KEY=` sets no value at all, so it does not override a value from a lower
 
 Root decorators go in comment blocks at the top of the file, before the first item. A `# ---` divider usually separates the header from items.
 
-| Decorator                                                                                                                                 | Purpose                                                                                 | If absent |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------- |
-| `@currentEnv=$VAR`                                                                                                                        | Sets which item determines the active environment                                       | —         |
-| `@defaultRequired=bool\|infer`                                                                                                            | Default required state for items in this file                                           | `true`    |
-| `@defaultSensitive=bool\|inferFromPrefix(PREFIX)`                                                                                         | Default sensitive state for items in this file                                          | `true`    |
-| `@generateTsTypes(path=./env.d.ts)`                                                                                                       | Auto-generate TypeScript env declarations (deprecated alias: `@generateTypes(lang=ts)`) | —         |
-| `@generatePythonEnv` / `@generateRustEnv` / `@generateGoEnv` / `@generatePhpEnv` / `@generateJavaEnv` / `@generateCsharpEnv` `(path=...)` | Generate a typed env module for that language                                           | —         |
-| `@import(path, ...keys?)`                                                                                                                 | Import schema/values from another .env file or directory                                | —         |
-| `@plugin(@varlock/name-plugin)`                                                                                                           | Load a plugin                                                                           | —         |
-| `@setValuesBulk(resolver)`                                                                                                                | Inject multiple values from an external source                                          | —         |
-| `@disable`                                                                                                                                | Disable loading this file (can use `=forEnv(test)`)                                     | `false`   |
+| Decorator | Purpose | If absent |
+|-----------|---------|-----------|
+| `@currentEnv=$VAR` | Sets which item determines the active environment | — |
+| `@defaultRequired=bool\|infer` | Default required state for items in this file | `true` |
+| `@defaultSensitive=bool\|inferFromPrefix(PREFIX)` | Default sensitive state for items in this file | `true` |
+| `@generateTsTypes(path=./env.d.ts)` | Auto-generate TypeScript env declarations (deprecated alias: `@generateTypes(lang=ts)`) | — |
+| `@generatePythonEnv` / `@generateRustEnv` / `@generateGoEnv` / `@generatePhpEnv` / `@generateJavaEnv` / `@generateCsharpEnv` `(path=...)` | Generate a typed env module for that language | — |
+| `@import(path, ...keys?)` | Import schema/values from another .env file or directory | — |
+| `@plugin(@varlock/name-plugin)` | Load a plugin | — |
+| `@setValuesBulk(resolver)` | Inject multiple values from an external source | — |
+| `@disable` | Disable loading this file (can use `=forEnv(test)`) | `false` |
 
 - `@defaultSensitive` defaults to `true` — all items are sensitive unless explicitly marked `@public` or `@sensitive=false`. Set `@defaultSensitive=false` to flip the default.
 - `@defaultRequired=infer`: items with a value in the schema are required, items without are optional. Without this decorator, items default to required
@@ -141,15 +138,15 @@ Root decorators go in comment blocks at the top of the file, before the first it
 
 Decorators in comment lines directly preceding a config item are attached to that item. A blank line breaks the association.
 
-| Decorator                           | Purpose                                                    |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `@required` / `@optional`           | Override default required state                            |
-| `@sensitive` / `@public`            | Override default sensitive state                           |
-| `@type=dataType`                    | Set validation/coercion type                               |
-| `@example="value"`                  | Example value (for docs, not used at runtime)              |
+| Decorator | Purpose |
+|-----------|---------|
+| `@required` / `@optional` | Override default required state |
+| `@sensitive` / `@public` | Override default sensitive state |
+| `@type=dataType` | Set validation/coercion type |
+| `@example="value"` | Example value (for docs, not used at runtime) |
 | `@docs(url)` or `@docs(label, url)` | Link to related documentation (can be used multiple times) |
-| `@icon=collection:name`             | Iconify icon ID for generated docs                         |
-| `@auditIgnore`                      | Suppress "unused in code" warning from `varlock audit`     |
+| `@icon=collection:name` | Iconify icon ID for generated docs |
+| `@auditIgnore` | Suppress "unused in code" warning from `varlock audit` |
 
 Decorator values can use resolver functions: `@required=forEnv(prod)`, `@sensitive=not(forEnv(dev))`.
 
@@ -222,7 +219,6 @@ NEW_SECRET=varlock(prompt)
 ```
 
 **How to encrypt values:**
-
 - **Interactive prompt:** Set the value to `varlock(prompt)` and run `varlock load` — the user will be prompted securely, and the encrypted value replaces the placeholder automatically
 - **Encrypt in bulk:** `varlock encrypt --file .env.local` encrypts all sensitive plaintext values in-place
 - **Encrypt a single value:** `varlock encrypt` prompts for a value and prints the encrypted result to copy/paste
@@ -281,7 +277,6 @@ See https://varlock.dev/plugins/overview/ for setup details for each plugin.
 Pick the official integration for the project's framework — do not guess. Check https://varlock.dev/integrations/overview/ for the specific guide (Next.js, Vite, Astro, SvelteKit, Bun, Cloudflare, Expo, etc.).
 
 Typical steps:
-
 1. Confirm `varlock` is installed (`varlock init --agent` or existing dependency)
 2. Follow the integration guide for build/dev wiring, generated types, and any required config
 3. Prefer the integration's recommended entry point (`varlock/auto-load`, Vite plugin, etc.) over ad-hoc `process.env` usage
@@ -295,12 +290,10 @@ When a framework integration is active, it handles loading and injecting env var
 ## Setup
 
 **Installing varlock:**
-
 - **JS projects:** Install as a dev dependency — `npm install -D varlock` (or `bun add -D varlock`, `pnpm add -D varlock`)
 - **Standalone binary (non-JS or global use):** See https://varlock.dev/getting-started/installation/
 
 **Getting started:**
-
 1. Run `varlock init --agent` to auto-generate an initial `.env.schema` from existing `.env` / `.env.example` files
 2. Review the generated schema with the user — init heuristics are a draft, not final
 3. Optionally install this skill:
@@ -334,19 +327,19 @@ Fix schema and tracked env files based on validation errors. Do not patch gitign
 
 Run `varlock --help` or `varlock <command> --help` for full flags and options.
 
-| Command                     | Use when                                                                                                          |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `varlock init --agent`      | Setting up varlock non-interactively                                                                              |
-| `varlock load --agent`      | Validating config safely (JSON, sensitive values redacted)                                                        |
-| `varlock load`              | Showing human-readable validation to the user                                                                     |
-| `varlock run -- <cmd>`      | Injecting resolved env into a process                                                                             |
-| `varlock printenv VAR_NAME` | Print a single resolved env var to stdout                                                                         |
-| `varlock reveal`            | Securely view/copy a sensitive value                                                                              |
-| `varlock encrypt`           | Encrypt values (single or `--file` for bulk)                                                                      |
-| `varlock scan`              | Scan files for leaked secrets (`--staged` for pre-commit, `--install-hook` to set up)                             |
-| `varlock audit`             | Detect drift between schema and code usage                                                                        |
-| `varlock codegen`           | Explicitly trigger code generation from schema (usually triggered automatically; `typegen` is a deprecated alias) |
-| `varlock lock`              | Lock biometric session (requires re-auth on next decrypt)                                                         |
+| Command | Use when |
+|---------|----------|
+| `varlock init --agent` | Setting up varlock non-interactively |
+| `varlock load --agent` | Validating config safely (JSON, sensitive values redacted) |
+| `varlock load` | Showing human-readable validation to the user |
+| `varlock run -- <cmd>` | Injecting resolved env into a process |
+| `varlock printenv VAR_NAME` | Print a single resolved env var to stdout |
+| `varlock reveal` | Securely view/copy a sensitive value |
+| `varlock encrypt` | Encrypt values (single or `--file` for bulk) |
+| `varlock scan` | Scan files for leaked secrets (`--staged` for pre-commit, `--install-hook` to set up) |
+| `varlock audit` | Detect drift between schema and code usage |
+| `varlock codegen` | Explicitly trigger code generation from schema (usually triggered automatically; `typegen` is a deprecated alias) |
+| `varlock lock` | Lock biometric session (requires re-auth on next decrypt) |
 
 ## Updating an existing project
 

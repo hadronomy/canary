@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 . "$(dirname "$0")/_/h"
 
-mise exec -- bunx lint-staged
-mise exec -- bunx varlock scan --staged --path apps/web/ --path packages/db/
+mise exec -- bunx --no-install lint-staged
+mise exec -- bunx --no-install varlock scan --staged --path apps/web/ --path packages/db/
