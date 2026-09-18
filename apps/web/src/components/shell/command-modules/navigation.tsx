@@ -25,9 +25,9 @@ const navigationModule = defineCommandModule({
           return (
             <Command.Item
               icon={Icon}
-              id={ids.item(route.area)}
-              key={route.area}
-              keywords={[route.area, route.label, String(route.to)]}
+              id={ids.item(route.id)}
+              key={route.id}
+              keywords={[route.id, route.label, String(route.to)]}
               source="navigation"
               subtitle={active ? 'Current location' : 'Navigate'}
               title={route.label}

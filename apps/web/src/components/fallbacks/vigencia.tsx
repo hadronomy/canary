@@ -219,7 +219,7 @@ function Vigencia({ scope = 'page', path, asked }: Props) {
 
             <article
               className={cn(
-                'mt-4 transition-opacity duration-300 ease-[var(--ease-strong)]',
+                'mt-4 transition-opacity duration-300 ease-[var(--ease-out-strong)]',
                 live ? 'opacity-100' : 'opacity-30',
               )}
             >

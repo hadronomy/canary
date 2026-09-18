@@ -6,11 +6,11 @@ import { z } from 'zod';
 import { Backdrop } from '~/components/backdrop/backdrop';
 import { pageTexture } from '~/components/backdrop/page-texture';
 import shader from '~/components/backdrop/scout.wgsl';
-import { Check, Fade, Spin, Swap, jolt } from '~/components/login/bits';
+import { useField } from '~/components/backdrop/use-field';
 import { PROVIDERS, Providers } from '~/components/login/providers';
 import { useAuth } from '~/components/login/use-auth';
-import { useField } from '~/components/login/use-field';
 import { useValidate } from '~/components/login/validate';
+import { Check, Fade, Spin, Swap, jolt } from '~/lib/motion';
 
 export const Route = createFileRoute('/login')({
   // `?social=1` previews the page with the provider row in place. Coerced
@@ -258,7 +258,7 @@ function Login() {
                 edge is the same gesture as the rerank resolving outward. */}
                   <span
                     aria-hidden
-                    className="absolute inset-0 bg-[var(--ink)] transition-[clip-path] duration-300 [clip-path:inset(0_100%_0_0)] ease-[var(--ease-strong)] group-hover:[clip-path:inset(0_0_0_0)] group-focus-visible:[clip-path:inset(0_0_0_0)]"
+                    className="absolute inset-0 bg-[var(--ink)] transition-[clip-path] duration-300 [clip-path:inset(0_100%_0_0)] ease-[var(--ease-out-strong)] group-hover:[clip-path:inset(0_0_0_0)] group-focus-visible:[clip-path:inset(0_0_0_0)]"
                   />
                   <span className="relative flex w-full items-center justify-between px-4">
                     <span className="grid">
@@ -411,7 +411,7 @@ function Input({ label, name, field, check, className, ...rest }: InputProps) {
       >
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 transition-[width,background-color] duration-[250ms] ease-[var(--ease-strong)]"
+          className="absolute inset-y-0 left-0 transition-[width,background-color] duration-[250ms] ease-[var(--ease-out-strong)]"
           style={{
             width: wrong || on ? '100%' : '0%',
             background: wrong ? 'var(--bad)' : 'var(--ink)',

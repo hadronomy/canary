@@ -28,9 +28,11 @@ import { assign, setup, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import type { Part, Message as SyncMessage } from '@canary/sync';
 
 import { AgentPrompt } from '~/components/agent-prompt';
+import { TaskGroup, TaskList, type Task, type TaskStatus } from '~/components/agent/task-list';
 import { shellRoutes } from '~/components/shell/routes';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
 import { Message, MessageContent } from '~/components/ui/message';
+import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 import { active, failed, latest, messages, pieces, roster, transcript } from '~/utils/chat';
 import { client } from '~/utils/orpc';
@@ -607,7 +609,7 @@ export const Route = createFileRoute('/_auth/threads/$threadId')({
     return null;
   },
   staticData: {
-    shell: shellRoutes.chat,
+    shell: shellRoutes.conversation,
   },
   component: ThreadComponent,
 });
@@ -702,11 +704,25 @@ type ThreadHeaderProps = Omit<ComponentPropsWithoutRef<'header'>, 'children'> & 
 
 function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProps) {
   return (
-    <header className={cn('border-b border-border px-4 py-3', className)} {...props}>
-      <h1 id="thread-title" className="truncate text-sm font-semibold">
-        {title}
+    <header
+      className={cn(
+        'flex min-w-0 items-baseline gap-2 border-b border-border px-4 py-2.5',
+        className,
+      )}
+      {...props}
+    >
+      {/* Switching threads replaces this line rather than editing it, so the
+          whole title swaps out of a blur instead of morphing letter by letter
+          through an unrelated name. */}
+      <h1 id="thread-title" className="min-w-0 truncate text-[13px] font-medium">
+        <Swap value={title} />
       </h1>
-      <p className="truncate text-[11px] text-muted-foreground">{threadId}</p>
+
+      {/* Short id, not the full UUID: it is here to disambiguate two threads
+          with the same title, which eight characters already does. */}
+      <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/60">
+        {threadId.slice(0, 8)}
+      </span>
     </header>
   );
 }
@@ -2277,11 +2293,109 @@ function AssistantTurn({ segment }: AssistantTurnProps) {
 
   return (
     <div className="flow-root min-w-0 max-w-full space-y-3">
-      {segment.parts.map((part) => (
-        <AssistantPart key={part.id} live={part.status === 'running'} part={part} />
-      ))}
+      {runsOf(segment.parts).map((run) =>
+        run.kind === 'tasks' ? (
+          <TaskGroup key={run.id}>
+            {/* `revealed` is the whole group: a step appears when its event
+                lands, not on a timer. A timer would keep resizing the turn
+                after the run had already finished, and the transcript's scroll
+                anchoring measures every one of those frames. */}
+            <TaskList revealed={run.parts.length} tasks={run.parts.map(asTask)} />
+          </TaskGroup>
+        ) : (
+          <AssistantPart
+            key={run.parts[0]?.id}
+            live={run.parts[0]?.status === 'running'}
+            part={run.parts[0] as Part}
+          />
+        ),
+      )}
     </div>
   );
+}
+
+type PartRun =
+  | { id: string; kind: 'tasks'; parts: Part[] }
+  | { id: string; kind: 'prose'; parts: Part[] };
+
+/**
+ * Split a turn's parts into prose and stretches of tool work.
+ *
+ * Consecutive tool parts become one log instead of a stack of separate
+ * disclosures — a run that touched nine files was reading as nine unrelated
+ * panels rather than as one piece of work.
+ */
+function runsOf(parts: readonly Part[]): PartRun[] {
+  const runs: PartRun[] = [];
+
+  for (const part of parts) {
+    const kind = part.kind === 'text' || part.kind === 'reasoning' ? 'prose' : 'tasks';
+    const tail = runs.at(-1);
+
+    if (kind === 'tasks' && tail?.kind === 'tasks') {
+      tail.parts.push(part);
+      continue;
+    }
+
+    runs.push({ id: part.id, kind, parts: [part] });
+  }
+
+  return runs;
+}
+
+function asTask(part: Part): Task {
+  const body = structuredPartBody(part);
+
+  return {
+    detail: body || undefined,
+    id: part.id,
+    label: structuredPartTitle(part),
+    resources: resourcesOf(part),
+    status: taskStatus(part.status),
+  };
+}
+
+function taskStatus(status: Part['status']): TaskStatus {
+  if (status === 'running') {
+    return 'running';
+  }
+
+  if (status === 'completed') {
+    return 'done';
+  }
+
+  if (status === 'failed' || status === 'cancelled') {
+    return 'failed';
+  }
+
+  return 'pending';
+}
+
+// Tool arguments are free-form, so this reads the few keys that conventionally
+// carry a path and ignores everything else rather than guessing at the shape.
+function resourcesOf(part: Part) {
+  const data = 'data' in part && part.data && typeof part.data === 'object' ? part.data : null;
+
+  if (!data) {
+    return undefined;
+  }
+
+  const paths = ['path', 'file', 'filePath', 'file_path', 'dir', 'directory', 'command']
+    .map((key) => [key, (data as Record<string, unknown>)[key]] as const)
+    .filter(
+      (entry): entry is readonly [string, string] => typeof entry[1] === 'string' && !!entry[1],
+    )
+    .map(([key, value]) => ({
+      kind:
+        key === 'command'
+          ? ('command' as const)
+          : key.startsWith('dir')
+            ? ('dir' as const)
+            : ('file' as const),
+      name: value,
+    }));
+
+  return paths.length ? paths : undefined;
 }
 
 type AssistantPartProps = {
@@ -2294,11 +2408,7 @@ function AssistantPart({ live, part }: AssistantPartProps) {
     return <Markdown live={live} text={partContent(part)} />;
   }
 
-  if (part.kind === 'reasoning') {
-    return <ReasoningPart live={live} part={part} />;
-  }
-
-  return <StructuredPart part={part} />;
+  return <ReasoningPart live={live} part={part} />;
 }
 
 type DisclosureProps = Omit<ComponentPropsWithoutRef<'details'>, 'open'> & {
@@ -2351,36 +2461,6 @@ function ReasoningPart({ live, part }: ReasoningPartProps) {
     >
       <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
       <Markdown live={live} text={partContent(part)} />
-    </Disclosure>
-  );
-}
-
-type StructuredPartProps = {
-  part: Part;
-};
-
-function StructuredPart({ part }: StructuredPartProps) {
-  const body = structuredPartBody(part);
-  const running = part.status === 'running';
-
-  return (
-    <Disclosure
-      className="my-2 flow-root min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-card/85 text-xs shadow-surface-2"
-      defaultOpen={running}
-      forceOpen={running}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-card px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
-        <span className="min-w-0 truncate font-mono text-xs font-semibold">
-          {structuredPartTitle(part)}
-        </span>
-        <span className="shrink-0 text-[11px] text-muted-foreground">{part.status}</span>
-      </summary>
-
-      {body ? (
-        <pre className="m-0 max-h-80 max-w-full overflow-auto whitespace-pre-wrap border-t border-border bg-popover px-3 py-2.5 font-mono text-[12px] leading-5 wrap-anywhere">
-          {body}
-        </pre>
-      ) : null}
     </Disclosure>
   );
 }

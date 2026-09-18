@@ -8,22 +8,6 @@
 @source "../node_modules/@streamdown/code/dist/*.js";
 
 @font-face {
-  font-family: 'Satoshi';
-  src: url('/fonts/satoshi/Satoshi-Variable.woff2') format('woff2-variations');
-  font-weight: 300 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Satoshi';
-  src: url('/fonts/satoshi/Satoshi-VariableItalic.woff2') format('woff2-variations');
-  font-weight: 300 900;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'Erode';
   src: url('/fonts/erode/Erode-Variable.woff2') format('woff2');
   font-weight: 300 700;
@@ -84,31 +68,31 @@
     0 48px 48px -24px var(--shadow-color), 0 96px 96px -48px var(--shadow-color);
 
   --background: var(--surface-1);
-  --foreground: oklch(0.145 0.012 235);
+  --foreground: oklch(0.155 0.01 295);
   --card: var(--surface-3);
   --card-foreground: var(--foreground);
   --popover: var(--surface-5);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.42 0.115 188);
-  --primary-foreground: oklch(0.985 0.006 228);
-  --secondary: oklch(0.955 0.006 230);
-  --secondary-foreground: oklch(0.19 0.016 235);
-  --muted: oklch(0.94 0.007 230);
-  --muted-foreground: oklch(0.42 0.016 235);
-  --accent: oklch(0.91 0.01 230);
+  --primary: oklch(0.47 0.2 295);
+  --primary-foreground: oklch(0.985 0.004 295);
+  --secondary: oklch(0.955 0.005 295);
+  --secondary-foreground: oklch(0.2 0.014 295);
+  --muted: oklch(0.94 0.006 295);
+  --muted-foreground: oklch(0.44 0.014 295);
+  --accent: oklch(0.92 0.012 295);
   --accent-foreground: var(--foreground);
-  --destructive: oklch(0.58 0.2 27);
-  --destructive-foreground: oklch(0.985 0.006 228);
-  --border: oklch(0.36 0.016 235 / 16%);
-  --input: oklch(0.34 0.016 235 / 20%);
-  --ring: oklch(0.5 0.13 188);
-  --chart-1: oklch(0.58 0.14 188);
-  --chart-2: oklch(0.5 0.13 245);
-  --chart-3: oklch(0.64 0.14 63);
-  --chart-4: oklch(0.54 0.14 325);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(0.985 0.004 295);
+  --border: oklch(0.36 0.014 295 / 15%);
+  --input: oklch(0.34 0.014 295 / 19%);
+  --ring: oklch(0.47 0.2 295);
+  --chart-1: oklch(0.52 0.2 295);
+  --chart-2: oklch(0.52 0.15 262);
+  --chart-3: oklch(0.56 0.16 330);
+  --chart-4: oklch(0.64 0.13 88);
   --chart-5: oklch(0.58 0.19 27);
   --sidebar: var(--surface-2);
-  --sidebar-foreground: oklch(0.17 0.018 235);
+  --sidebar-foreground: oklch(0.18 0.014 295);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--accent);
@@ -131,26 +115,37 @@
   --ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-drawer: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* On-screen movement, where a thing travels rather than arrives. The built-in
+     ease-in-out is too weak to read as deliberate at UI durations. */
+  --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* Durations, so one change tunes every surface that shares a tempo. Entering
+     is slower than leaving throughout: arriving is watched, dismissing is not. */
+  --t-press: 120ms;
+  --t-fast: 160ms;
+  --t-base: 220ms;
+  --t-slow: 320ms;
+
   --scrollbar-size: 10px;
   --scrollbar-size-thin: 8px;
 
-  --scrollbar-thumb: oklch(0.28 0.016 235 / 18%);
-  --scrollbar-thumb-hover: oklch(0.28 0.016 235 / 30%);
-  --scrollbar-thumb-active: oklch(0.28 0.016 235 / 42%);
+  --scrollbar-thumb: oklch(0.28 0.014 295 / 18%);
+  --scrollbar-thumb-hover: oklch(0.28 0.014 295 / 30%);
+  --scrollbar-thumb-active: oklch(0.28 0.014 295 / 42%);
   --scrollbar-track: transparent;
 }
 
 .dark {
   color-scheme: dark;
 
-  --surface-1: #171717;
-  --surface-2: #1e1e1e;
-  --surface-3: #252525;
-  --surface-4: #2c2c2c;
-  --surface-5: #333333;
-  --surface-6: #3a3a3a;
-  --surface-7: #414141;
-  --surface-8: #484848;
+  --surface-1: oklch(0.125 0.006 295);
+  --surface-2: oklch(0.165 0.008 295);
+  --surface-3: oklch(0.2 0.009 295);
+  --surface-4: oklch(0.235 0.01 295);
+  --surface-5: oklch(0.27 0.011 295);
+  --surface-6: oklch(0.305 0.012 295);
+  --surface-7: oklch(0.34 0.012 295);
+  --surface-8: oklch(0.375 0.013 295);
   --dm-hi-base: rgba(255, 255, 255, 0.01);
   --dm-hi-mid: rgba(255, 255, 255, 0.02);
   --dm-hi-high: rgba(255, 255, 255, 0.04);
@@ -191,35 +186,35 @@
     0 96px 96px -48px var(--dm-drop);
 
   --background: var(--surface-1);
-  --foreground: oklch(0.925 0.006 235);
+  --foreground: oklch(0.93 0.004 295);
   --card: var(--surface-3);
   --card-foreground: var(--foreground);
   --popover: var(--surface-5);
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.72 0.15 188);
-  --primary-foreground: oklch(0.07 0.006 238);
+  --primary: oklch(0.64 0.19 295);
+  --primary-foreground: oklch(0.14 0.02 295);
   --secondary: var(--surface-3);
-  --secondary-foreground: oklch(0.91 0.006 235);
+  --secondary-foreground: oklch(0.91 0.004 295);
   --muted: var(--surface-3);
-  --muted-foreground: oklch(0.64 0.012 235);
+  --muted-foreground: oklch(0.63 0.01 295);
   --accent: var(--surface-4);
-  --accent-foreground: oklch(0.92 0.012 188);
-  --destructive: oklch(0.68 0.19 25);
-  --destructive-foreground: oklch(0.985 0.006 235);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.72 0.15 188);
-  --chart-1: oklch(0.72 0.15 188);
-  --chart-2: oklch(0.7 0.13 245);
-  --chart-3: oklch(0.8 0.14 63);
-  --chart-4: oklch(0.74 0.14 325);
-  --chart-5: oklch(0.7 0.2 25);
+  --accent-foreground: oklch(0.93 0.01 295);
+  --destructive: oklch(0.7 0.16 25);
+  --destructive-foreground: oklch(0.985 0.004 295);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.64 0.19 295);
+  --chart-1: oklch(0.64 0.19 295);
+  --chart-2: oklch(0.68 0.14 262);
+  --chart-3: oklch(0.72 0.15 330);
+  --chart-4: oklch(0.78 0.13 88);
+  --chart-5: oklch(0.7 0.16 25);
   --sidebar: var(--surface-2);
-  --sidebar-foreground: oklch(0.9 0.006 235);
+  --sidebar-foreground: oklch(0.9 0.004 295);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--surface-4);
-  --sidebar-accent-foreground: oklch(0.93 0.006 235);
+  --sidebar-accent-foreground: oklch(0.93 0.004 295);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
@@ -228,15 +223,15 @@
   --active: rgb(var(--overlay) / 0.1);
   --scrim: rgb(0 0 0 / 0.46);
 
-  --scrollbar-thumb: oklch(1 0 0 / 14%);
-  --scrollbar-thumb-hover: oklch(1 0 0 / 24%);
-  --scrollbar-thumb-active: oklch(1 0 0 / 34%);
+  --scrollbar-thumb: oklch(1 0 0 / 12%);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 22%);
+  --scrollbar-thumb-active: oklch(1 0 0 / 32%);
   --scrollbar-track: transparent;
 }
 
 @theme inline {
   --font-sans:
-    'Satoshi', 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Geist Variable', Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', sans-serif;
 
   --font-mono:
@@ -246,8 +241,7 @@
   --font-serif:
     'Erode', 'Source Serif 4', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
 
-  --font-display:
-    'Erode', 'Source Serif 4', 'Mona Sans Variable', 'Mona Sans', ui-serif, Georgia, serif;
+  --font-display: 'Erode', 'Source Serif 4', ui-serif, Georgia, serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -305,6 +299,7 @@
 
   --ease-out-strong: var(--ease-out-strong);
   --ease-drawer: var(--ease-drawer);
+  --ease-move: var(--ease-move);
 
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
@@ -341,14 +336,12 @@
   body {
     @apply min-h-svh bg-background font-sans text-foreground antialiased;
     font-feature-settings:
-      'cv02' 1,
-      'cv03' 1,
-      'cv04' 1,
-      'cv11' 1;
+      'ss01' 1,
+      'cv01' 1;
   }
 
   ::selection {
-    background: oklch(0.64 0.14 188 / 24%);
+    background: color-mix(in oklch, var(--primary) 26%, transparent);
     color: var(--foreground);
   }
 
@@ -456,10 +449,6 @@
   .canary-glass {
     @apply border border-border bg-popover/86 text-popover-foreground shadow-surface-4;
     backdrop-filter: blur(24px) saturate(1.08);
-  }
-
-  .canary-aquatic-glow {
-    box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
   }
 
   .scrollbar-gutter-both {
@@ -614,6 +603,146 @@
   }
 }
 
+@layer components {
+  /* The house reveal. A row arrives by settling into place out of a short blur
+     rather than by fading: the blur is what keeps a list of several rows from
+     reading as several separate objects sliding past each other.
+
+     Rows are legible the moment the animation ends and the fill holds them
+     there, so nothing here gates content on motion. Set `--i` on a row to place
+     it in the cascade; the step is deliberately short, because a list that
+     takes half a second to finish arriving reads as a slow app. */
+  .reveal {
+    animation: reveal var(--t-slow) var(--ease-out-strong) calc(var(--i, 0) * 34ms) both;
+  }
+
+  /* A sweep across a placeholder, for surfaces that are waiting on data. The
+     band is deliberately narrow: at half the width it stops reading as a moving
+     highlight and starts reading as a grey block with soft edges. */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklch, var(--foreground) 7%, transparent) 50%,
+      transparent 100%
+    );
+    background-repeat: no-repeat;
+    background-size: 22% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  /* Running work, not loading. The light travels through the label itself
+     rather than through a band behind it — a rectangle sweeping a whole row is
+     the shape of a skeleton, and this row already has its text. */
+  .shimmer-text {
+    background-image: linear-gradient(
+      90deg,
+      var(--muted-foreground) 0%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer-text 2.1s linear infinite;
+  }
+
+  /* A substrate, not an effect: very low opacity noise under content to keep
+     large flat fills and gradients from banding on wide gamut displays. Sits
+     behind everything it is applied to, never on top of type. */
+  .grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E");
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(4px);
+  }
+}
+
+/* Grow a disclosed region without animating height: a 0fr -> 1fr grid track
+   tweens, and the padding lives on the inner element so the closed state has no
+   residual strip.
+
+   Opening runs slower than closing. Revealing is the deliberate move and wants
+   to be watched; putting it away is not, and a slow retreat just holds the page
+   up. */
+.t-grow {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 190ms var(--ease-out-strong);
+}
+
+.t-grow[data-open='true'] {
+  grid-template-rows: 1fr;
+  transition-duration: 300ms;
+}
+
+.t-grow > * {
+  overflow: hidden;
+}
+
+/* The content settles instead of unrolling. Without this the clip edge simply
+   wipes it into view, which reads as a mask moving rather than as something
+   arriving — and the short delay on the way in means it lands in space that has
+   already started opening for it. */
+.t-grow > * > * {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 240ms ease 60ms,
+    transform 300ms var(--ease-out-strong) 60ms;
+}
+
+.t-grow[data-open='false'] > * > * {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms var(--ease-out-strong);
+}
+
+/* The stroke length is set from the path's own getTotalLength() at mount, so
+   this only has to hold the pre-draw state. */
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.t-check path {
+  stroke-dasharray: var(--len, 24);
+  stroke-dashoffset: var(--len, 24);
+  animation: draw 420ms var(--ease-out-strong) 80ms forwards;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -30% 0;
+  }
+  to {
+    background-position: 130% 0;
+  }
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 @layer utilities {
   .font-display {
     font-family: var(--font-display);
@@ -639,5 +768,26 @@
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .reveal,
+  .shimmer,
+  .shimmer-text {
+    animation: none !important;
+  }
+
+  .shimmer-text {
+    background-image: none;
+    color: var(--foreground);
+  }
+
+  .t-check path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .t-grow,
+  .t-grow > * > * {
+    transition: none;
   }
 }

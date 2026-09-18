@@ -112,7 +112,7 @@ function Sumario({ scope = 'page', path, asked }: Props) {
                       <svg
                         viewBox="0 0 16 16"
                         aria-hidden
-                        className="size-3.5 -translate-x-1 text-[var(--text)] opacity-0 transition-[opacity,transform] duration-200 ease-[var(--ease-strong)] group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100 motion-reduce:transition-none"
+                        className="size-3.5 -translate-x-1 text-[var(--text)] opacity-0 transition-[opacity,transform] duration-200 ease-[var(--ease-out-strong)] group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-visible/row:translate-x-0 group-focus-visible/row:opacity-100 motion-reduce:transition-none"
                       >
                         <path
                           d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"

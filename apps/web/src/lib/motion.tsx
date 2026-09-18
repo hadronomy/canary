@@ -1,9 +1,17 @@
+import type { ElementType, ReactNode } from 'react';
+
 import { useEffect, useRef, useState } from 'react';
+import { TextMorph } from 'torph/react';
+
+import { cn } from '~/lib/utils';
 
 /**
- * Swap text in place: the outgoing line leaves upward and blurred, the incoming
- * one arrives from below. Keying on the value is what restarts the animation;
- * the blur is what stops it reading as two separate objects passing.
+ * Swap a line of text in place: the incoming line arrives from below out of a
+ * short blur. Keying on the value is what restarts it; the blur is what stops
+ * the two lines reading as separate objects passing each other.
+ *
+ * This is for whole strings that replace each other — a heading, a status line.
+ * When the words stay and only a value inside them moves, reach for `Morph`.
  */
 function Swap({ value }: { value: string }) {
   return (
@@ -11,7 +19,7 @@ function Swap({ value }: { value: string }) {
       <span
         key={value}
         className="col-start-1 row-start-1 motion-reduce:!animate-none"
-        style={{ animation: 'swap-in 300ms var(--ease-strong) both' }}
+        style={{ animation: 'swap-in 300ms var(--ease-out-strong) both' }}
       >
         {value}
       </span>
@@ -20,12 +28,50 @@ function Swap({ value }: { value: string }) {
   );
 }
 
+/**
+ * Morph a value character by character: glyphs the two strings share travel to
+ * their new positions, the rest fade through. Numbers move by place value, so a
+ * count going 9 → 10 rolls rather than redrawing.
+ *
+ * Use it where the label is fixed and the value is not — counts, model names,
+ * elapsed time. A whole sentence morphing this way is noise, not motion.
+ */
+function Morph({
+  as = 'span',
+  className,
+  children,
+}: {
+  as?: ElementType;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <TextMorph
+      as={as}
+      className={className}
+      duration={320}
+      ease="cubic-bezier(0.16, 1, 0.3, 1)"
+      respectReducedMotion
+    >
+      {children}
+    </TextMorph>
+  );
+}
+
 /** Cross-blur one slot of a stack in or out. */
-function Fade({ show, children }: { show: boolean; children: React.ReactNode }) {
+function Fade({
+  show,
+  children,
+  className,
+}: {
+  show: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden={!show}
-      className="transition-[opacity,filter,transform] duration-200 ease-out"
+      className={cn('transition-[opacity,filter,transform] duration-200 ease-out', className)}
       style={{
         opacity: show ? 1 : 0,
         filter: show ? 'blur(0)' : 'blur(2px)',
@@ -81,7 +127,7 @@ function Check({ className }: { className?: string }) {
       className={`t-check ${className ?? 'size-4'}`}
       style={{ ['--len' as string]: len }}
       role="img"
-      aria-label="Signed in"
+      aria-label="Done"
     >
       <path
         ref={path}
@@ -122,4 +168,4 @@ function jolt(node: HTMLElement | null) {
   node.animate(SHAKE, { duration: 380, easing: 'cubic-bezier(0.36, 0, 0.66, -0.56)' });
 }
 
-export { Check, Fade, Spin, Swap, jolt };
+export { Check, Fade, Morph, Spin, Swap, jolt };

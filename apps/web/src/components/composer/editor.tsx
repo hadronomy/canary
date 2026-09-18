@@ -118,7 +118,7 @@ function ComposerEditor({
         'aria-label': 'Message Canary',
         class: cn(
           'canary-composer-editor min-h-12 max-h-48 overflow-y-auto px-3 py-3 text-[15px] leading-7 outline-none',
-          'selection:bg-aquatic/20',
+          'selection:bg-primary/25',
         ),
         role: 'textbox',
       },

@@ -1,48 +1,25 @@
-import type { ComponentPropsWithoutRef } from 'react';
-
 import { LightningIcon } from '@phosphor-icons/react';
 
 import { cn } from '~/lib/utils';
 
-type BrandProps = ComponentPropsWithoutRef<'div'> & {
-  compact?: boolean;
-};
-
-function Brand({ className, compact = false, ...props }: BrandProps) {
-  if (compact) {
-    return (
-      <div
-        aria-label="Canary"
-        className={cn('grid size-10 place-items-center overflow-hidden', className)}
-        role="img"
-        {...props}
+/**
+ * The mark and the name.
+ *
+ * Set at the same weight and size as a nav row rather than as a header: the
+ * sidebar has one job, and a logo shouting at the top of it is not part of it.
+ */
+function Brand({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex h-8 min-w-0 items-center gap-2 px-1', className)}>
+      <span
+        aria-hidden
+        className="grid size-6 shrink-0 place-items-center rounded-[0.5rem] bg-foreground text-background"
       >
-        <Mark />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn('flex h-10 min-w-0 items-center gap-3 overflow-hidden', className)}
-      {...props}
-    >
-      <Mark />
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">Canary</p>
-        <p className="truncate text-[11px] text-muted-foreground">Agent workspace</p>
-      </div>
-    </div>
-  );
-}
-
-function Mark() {
-  return (
-    <div className="grid size-10 shrink-0 place-items-center rounded-[0.8rem] bg-foreground text-background ring-1 ring-line">
-      <LightningIcon className="size-5" weight="fill" />
+        <LightningIcon className="size-3.5" weight="fill" />
+      </span>
+      <span className="truncate text-[13px] font-medium tracking-[-0.01em]">Canary</span>
     </div>
   );
 }
 
 export { Brand };
-export type { BrandProps };

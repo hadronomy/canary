@@ -111,7 +111,7 @@ function Action({ children, href, onClick, primary }: ActionProps) {
       {primary ? (
         <span
           aria-hidden
-          className="absolute inset-0 bg-[var(--ink)] transition-[clip-path] duration-300 [clip-path:inset(0_100%_0_0)] ease-[var(--ease-strong)] group-hover/a:[clip-path:inset(0_0_0_0)] group-focus-visible/a:[clip-path:inset(0_0_0_0)]"
+          className="absolute inset-0 bg-[var(--ink)] transition-[clip-path] duration-300 [clip-path:inset(0_100%_0_0)] ease-[var(--ease-out-strong)] group-hover/a:[clip-path:inset(0_0_0_0)] group-focus-visible/a:[clip-path:inset(0_0_0_0)]"
         />
       ) : null}
       <span

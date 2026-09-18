@@ -1,6 +1,6 @@
 import type { LinkProps, StaticDataRouteOption } from '@tanstack/react-router';
 
-import { ChatsIcon, HouseIcon, type Icon } from '@phosphor-icons/react';
+import { ChatsIcon, HouseIcon, NotePencilIcon, type Icon } from '@phosphor-icons/react';
 
 type ShellUser = {
   email?: null | string;
@@ -9,19 +9,14 @@ type ShellUser = {
   name?: null | string;
 };
 
-type ShellArea = 'chat' | 'home';
-
-type ShellAside = 'threads';
-
 type ShellNav = {
   exact?: boolean;
   order: number;
 };
 
 type ShellRoute = {
-  area: ShellArea;
-  aside?: ShellAside;
   icon: Icon;
+  id: string;
   label: string;
   nav?: ShellNav;
   to: NonNullable<LinkProps['to']>;
@@ -40,26 +35,37 @@ function isNavRoute(route: ShellRoute): route is ShellNavRoute {
 }
 
 const shellRoutes = defineShellRoutes({
-  home: {
-    area: 'home',
-    icon: HouseIcon,
-    label: 'Home',
+  // Starting a thread is the most common thing anyone does here, so it sits at
+  // the top of the nav as a destination rather than hiding behind a button.
+  thread: {
+    icon: NotePencilIcon,
+    id: 'thread',
+    label: 'New thread',
     nav: {
       exact: true,
       order: 10,
     },
+    to: '/threads',
+  },
+
+  home: {
+    icon: HouseIcon,
+    id: 'home',
+    label: 'Home',
+    nav: {
+      exact: true,
+      order: 20,
+    },
     to: '/',
   },
 
-  chat: {
-    area: 'chat',
-    aside: 'threads',
+  // An open conversation is a shell route without a nav entry: the sidebar
+  // already lists every thread, so a second way in would only be noise.
+  conversation: {
     icon: ChatsIcon,
-    label: 'Chat',
-    nav: {
-      order: 20,
-    },
-    to: '/threads',
+    id: 'conversation',
+    label: 'Thread',
+    to: '/threads/$threadId',
   },
 });
 
@@ -68,8 +74,6 @@ const shellRouteList: readonly ShellRoute[] = Object.values(shellRoutes);
 const primaryNav = shellRouteList
   .filter(isNavRoute)
   .sort((left, right) => left.nav.order - right.nav.order);
-
-const ease = { duration: 0.18, ease: [0.16, 1, 0.3, 1] } as const;
 
 declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
@@ -89,5 +93,5 @@ function shellFromMatches(matches: readonly { staticData: StaticDataRouteOption 
   return null;
 }
 
-export { ease, primaryNav, shellFromMatches, shellRoutes };
-export type { ShellArea, ShellAside, ShellNavRoute, ShellRoute, ShellUser };
+export { primaryNav, shellFromMatches, shellRoutes };
+export type { ShellNavRoute, ShellRoute, ShellUser };

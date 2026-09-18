@@ -32,12 +32,12 @@ function SheetContent({
 }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0" />
+      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-scrim ease-out-strong backdrop-blur-sm data-closed:animate-out data-closed:fade-out-0 data-closed:duration-160 data-open:animate-in data-open:fade-in-0 data-open:duration-260" />
       <DialogPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'fixed inset-y-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-lg border border-border bg-sidebar p-2 shadow-surface-6 outline-none data-closed:animate-out data-open:animate-in data-[side=left]:left-3 data-[side=left]:data-closed:slide-out-to-left-4 data-[side=left]:data-open:slide-in-from-left-4 data-[side=right]:right-3 data-[side=right]:data-closed:slide-out-to-right-4 data-[side=right]:data-open:slide-in-from-right-4',
+          'fixed inset-y-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-(--radius-shell) border border-sidebar-border bg-sidebar p-2 shadow-surface-6 outline-none ease-drawer data-closed:animate-out data-closed:duration-180 data-open:animate-in data-open:duration-300 data-[side=left]:left-3 data-[side=left]:data-closed:slide-out-to-left-4 data-[side=left]:data-open:slide-in-from-left-4 data-[side=right]:right-3 data-[side=right]:data-closed:slide-out-to-right-4 data-[side=right]:data-open:slide-in-from-right-4',
           className,
         )}
         {...props}

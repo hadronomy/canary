@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { Check, Fade } from '~/components/login/bits';
+import { Check, Fade } from '~/lib/motion';
 
 type Frame = {
   fn: string;
@@ -94,7 +94,7 @@ function Stack({ trace }: { trace: string }) {
           <svg
             viewBox="0 0 12 12"
             aria-hidden
-            className="size-3 transition-transform duration-[250ms] ease-[var(--ease-strong)] motion-reduce:transition-none"
+            className="size-3 transition-transform duration-[250ms] ease-[var(--ease-out-strong)] motion-reduce:transition-none"
             style={{ transform: open ? 'rotate(90deg)' : 'none' }}
           >
             <path
@@ -181,7 +181,9 @@ function Row({ frame, index }: { frame: Frame; index: number }) {
   return (
     <li
       // Frames land in the order you read them rather than all at once.
-      style={{ animation: `stack-in 260ms var(--ease-strong) ${Math.min(index, 8) * 28}ms both` }}
+      style={{
+        animation: `stack-in 260ms var(--ease-out-strong) ${Math.min(index, 8) * 28}ms both`,
+      }}
     >
       {frame.open ? (
         <a href={`/__open-in-editor?file=${encodeURIComponent(frame.open)}`} className={className}>

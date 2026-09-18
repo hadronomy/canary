@@ -2,11 +2,6 @@
    product shell — sign-in and the route fallbacks. Scoped to `.canary-ink` so
    none of it reaches the app itself, which runs on its own tokens. */
 
-:root {
-  /* transitions.dev motion scale, only the steps this page actually uses. */
-  --ease-strong: cubic-bezier(0.23, 1, 0.32, 1);
-}
-
 .canary-ink {
   --paper: #000;
   --text: #e9ebec;
@@ -80,7 +75,7 @@
   background-repeat: no-repeat;
   background-position: 0 58%;
   background-size: 100% 1px;
-  animation: t-strike 620ms var(--ease-strong) 240ms both;
+  animation: t-strike 620ms var(--ease-out-strong) 240ms both;
 }
 
 @keyframes t-strike {
@@ -92,55 +87,13 @@
 /* The note settles once the rule has reached it. Position only: the note is
    readable from the first frame, it just lands a beat after the strike. */
 .t-note {
-  animation: t-note 420ms var(--ease-strong) 700ms both;
+  animation: t-note 420ms var(--ease-out-strong) 700ms both;
 }
 
 @keyframes t-note {
   from {
     transform: translateX(6px);
   }
-}
-
-/* Grow a disclosed region without animating height: a 0fr -> 1fr grid track
-   tweens, and the padding lives on the inner element so the closed state has no
-   residual strip.
-
-   Opening runs slower than closing. Revealing is the deliberate move and wants
-   to be watched; putting it away is not, and a slow retreat just holds the page
-   up. */
-.t-grow {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 190ms var(--ease-strong);
-}
-
-.t-grow[data-open='true'] {
-  grid-template-rows: 1fr;
-  transition-duration: 300ms;
-}
-
-.t-grow > * {
-  overflow: hidden;
-}
-
-/* The content settles instead of unrolling. Without this the clip edge simply
-   wipes it into view, which reads as a mask moving rather than as something
-   arriving — and the short delay on the way in means it lands in space that has
-   already started opening for it. */
-.t-grow > * > * {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 240ms ease 60ms,
-    transform 300ms var(--ease-strong) 60ms;
-}
-
-.t-grow[data-open='false'] > * > * {
-  opacity: 0;
-  transform: translateY(-8px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms var(--ease-strong);
 }
 
 /* Frames arrive in the order you read them. Keyframes rather than a transition
@@ -153,31 +106,7 @@
   }
 }
 
-/* The stroke length is set from the path's own getTotalLength() at mount, so
-   this only has to hold the pre-draw state. */
-@keyframes t-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-.t-check path {
-  stroke-dasharray: var(--len, 24);
-  stroke-dashoffset: var(--len, 24);
-  animation: t-draw 420ms var(--ease-strong) 80ms forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .t-grow,
-  .t-grow > * > * {
-    transition: none;
-  }
-
-  .t-check path {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
-
   [style*='stack-in'] {
     animation: none !important;
   }

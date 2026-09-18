@@ -1,42 +1,38 @@
-import type { ComponentPropsWithoutRef } from 'react';
-
 import { PulseIcon } from '@phosphor-icons/react';
 
-import { Progress } from '~/components/ui/progress';
-import { Elevated } from '~/lib/elevated';
+import { Morph } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 
-type SyncStatusProps = ComponentPropsWithoutRef<'div'> & {
+type SyncStatusProps = {
+  className?: string;
   threads: number;
 };
 
-function SyncStatus({ className, threads, ...props }: SyncStatusProps) {
-  const value = Math.min(100, 44 + threads * 4);
-
+/**
+ * What the local cache actually holds.
+ *
+ * The count is the only number here because it is the only one that is real —
+ * a progress bar against an invented denominator looks like health reporting
+ * and tells nobody anything.
+ */
+function SyncStatus({ className, threads }: SyncStatusProps) {
   return (
-    <Elevated
-      shadowLevel={1}
-      className={cn(
-        'min-w-0 overflow-hidden rounded-[calc(var(--radius-shell)-0.375rem)] border border-input/70 p-3',
-        className,
-      )}
-      {...props}
-    >
-      <div className="flex items-center gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-(--radius-press) border border-input/60 bg-background/35 text-primary">
-          <PulseIcon className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium text-foreground">Realtime sync</p>
-          <p className="truncate text-[10px] text-muted-foreground">Electric local cache</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-medium text-foreground">{value}</p>
-          <p className="text-[10px] text-muted-foreground">/100</p>
-        </div>
-      </div>
-      <Progress className="mt-3 h-1 bg-input" value={value} />
-    </Elevated>
+    <div className={cn('flex items-center gap-2.5 px-2 py-1.5', className)}>
+      <span
+        aria-hidden
+        className="grid size-7 shrink-0 place-items-center rounded-(--radius-press) text-primary"
+      >
+        <PulseIcon className="size-4" />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-foreground">Realtime sync</span>
+        <span className="block truncate text-[11px] text-muted-foreground">
+          <Morph className="tabular-nums">{threads}</Morph>
+          {threads === 1 ? ' thread cached' : ' threads cached'}
+        </span>
+      </span>
+    </div>
   );
 }
 

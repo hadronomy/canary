@@ -1,101 +1,87 @@
+import type { ChangeEvent, ReactElement } from 'react';
+
+import {
+  ArrowsClockwiseIcon as CycleIcon,
+  FolderSimpleIcon,
+  MagnifyingGlassIcon,
+} from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import {
-  type ComponentPropsWithoutRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
 
-import { ThreadActions } from '~/components/shell/thread-actions';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '~/components/ui/empty';
+import { Input } from '~/components/ui/input';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { Skeleton } from '~/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
+import { Morph } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 import { list, roster } from '~/utils/chat';
 
-type ThreadRecord = Thread;
-
-type ThreadGroupId = 'today' | 'recent' | 'older';
-
 type ThreadGroup = {
-  id: ThreadGroupId;
+  id: 'today' | 'recent' | 'older';
   label: string;
-  threads: ThreadRecord[];
+  threads: Thread[];
 };
 
 const DAY_MS = 86_400_000;
 
-type ThreadSidebarProps = Omit<ComponentPropsWithoutRef<'aside'>, 'children'> & {
-  user: ShellUser;
-};
-
-function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
+/**
+ * Every thread the local cache holds, grouped by how recently it moved.
+ *
+ * Creating is not here: it is the first nav row, because naming a thread before
+ * you know what it is about produces worse names than the first message does.
+ */
+function Threads({ className, user }: { className?: string; user: ShellUser }) {
   const nav = useNavigate();
   const params = useParams({ strict: false });
 
-  const ownerId = user.id;
-  const activeThreadId = typeof params.threadId === 'string' ? params.threadId : null;
+  const owner = user.id;
+  const active = typeof params.threadId === 'string' ? params.threadId : null;
 
   const frame = useRef<number | null>(null);
+  const field = useRef<HTMLInputElement>(null);
 
-  const [title, setTitle] = useState('');
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const [debug, setDebug] = useState(false);
 
-  const threadCollection = list(ownerId);
-  const rosterCollection = roster(ownerId);
-  const rosterQuery = useLiveQuery(rosterCollection);
+  const threadCollection = list(owner);
+  const rosterQuery = useLiveQuery(roster(owner));
 
-  const threads = useMemo(() => sortedActiveThreads(rosterQuery.data), [rosterQuery.data]);
-  const search = useMemo(() => createThreadSearch(query), [query]);
+  const threads = useMemo(() => live(rosterQuery.data), [rosterQuery.data]);
+  const search = useMemo(() => matcher(query), [query]);
 
-  const visibleThreads = useMemo(
-    () => (search.active ? threads.filter((thread) => search.matches(thread)) : threads),
+  const visible = useMemo(
+    () => (search.on ? threads.filter((thread) => search.hit(thread)) : threads),
     [search, threads],
   );
 
-  const groups = useMemo(() => groupThreads(visibleThreads), [visibleThreads]);
-
-  const status = sidebarStatus({
-    filtered: visibleThreads.length,
-    filtering: search.active,
-    ready: rosterQuery.isReady,
-    total: threads.length,
-  });
+  const groups = useMemo(() => group(visible), [visible]);
 
   const jump = useCallback(
     (direction: number) => {
-      const nextThread = threadByOffset(visibleThreads, activeThreadId, direction);
+      const next = byOffset(visible, active, direction);
 
-      if (!nextThread) {
+      if (!next) {
         return;
       }
 
       nav({
         to: '/threads/$threadId',
         params: {
-          threadId: nextThread.id,
+          threadId: next.id,
         },
       }).catch((err: unknown) => {
         console.error('Thread hotkey navigation failed.', err);
       });
     },
-    [activeThreadId, nav, visibleThreads],
+    [active, nav, visible],
   );
 
   useHotkey('Alt+ArrowUp', () => jump(-1), {
@@ -109,12 +95,12 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   });
 
   const cycle = useCallback(() => {
-    if (debug || visibleThreads.length < 2) {
+    if (debug || visible.length < 2) {
       return;
     }
 
-    const ids = visibleThreads.map((thread) => thread.id);
-    const index = activeThreadId ? ids.indexOf(activeThreadId) : -1;
+    const ids = visible.map((thread) => thread.id);
+    const index = active ? ids.indexOf(active) : -1;
     const start = index >= 0 ? index : 0;
     const total = ids.length * 3;
 
@@ -153,55 +139,25 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
     }
 
     frame.current = requestAnimationFrame(next);
-  }, [activeThreadId, debug, nav, visibleThreads]);
-
-  const create = useCallback(() => {
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const name = title.trim() || 'New thread';
-
-    const tx = threadCollection.insert({
-      id,
-      ownerId,
-      title: name,
-      createdAt: now,
-      updatedAt: now,
-      archivedAt: null,
-    });
-
-    setTitle('');
-    setQuery('');
-
-    nav({
-      to: '/threads/$threadId',
-      params: {
-        threadId: id,
-      },
-    })
-      .then(() => tx.isPersisted.promise)
-      .catch((err: unknown) => {
-        setTitle((current) => current || name);
-        console.error('Thread create failed.', err);
-      });
-  }, [nav, ownerId, threadCollection, title]);
+  }, [active, debug, nav, visible]);
 
   const archive = useCallback(
     (id: string) => {
-      const fallbackThread = id === activeThreadId ? threadAfterRemoving(visibleThreads, id) : null;
+      const fallback = id === active ? afterRemoving(visible, id) : null;
 
       threadCollection.update(id, (draft) => {
         draft.archivedAt = new Date().toISOString();
       });
 
-      if (id !== activeThreadId) {
+      if (id !== active) {
         return;
       }
 
-      if (fallbackThread) {
+      if (fallback) {
         nav({
           to: '/threads/$threadId',
           params: {
-            threadId: fallbackThread.id,
+            threadId: fallback.id,
           },
           replace: true,
         }).catch((err: unknown) => {
@@ -218,7 +174,7 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
         console.error('Thread archive navigation failed.', err);
       });
     },
-    [activeThreadId, nav, threadCollection, visibleThreads],
+    [active, nav, threadCollection, visible],
   );
 
   useEffect(() => {
@@ -229,69 +185,113 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
     };
   }, []);
 
-  return (
-    <aside
-      className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3', className)}
-      {...props}
-    >
-      <header className="px-1">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground">
-              Chat
-            </h2>
-            <p className="truncate text-[11px] leading-4 text-muted-foreground">{status}</p>
-          </div>
+  function toggle() {
+    const next = !open;
+    setOpen(next);
 
-          <span
-            className="rounded-md border border-input/70 bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium leading-4 text-muted-foreground"
-            title="Alt + Arrow Up / Alt + Arrow Down"
-          >
-            ⌥↑↓
-          </span>
+    if (next) {
+      // After the track starts growing, so focus does not land in a zero-height
+      // field and scroll the sidebar to chase it.
+      requestAnimationFrame(() => field.current?.focus());
+      return;
+    }
+
+    setQuery('');
+  }
+
+  return (
+    <section className={cn('grid min-h-0 grid-rows-[auto_auto_1fr] gap-1', className)}>
+      <header className="flex h-7 items-center justify-between gap-2 px-2">
+        <h2 className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          Threads
+        </h2>
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Tip label={open ? 'Hide search' : 'Search threads'}>
+            <Button
+              aria-expanded={open}
+              aria-label={open ? 'Hide search' : 'Search threads'}
+              className="size-6 text-muted-foreground"
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+              onClick={toggle}
+            >
+              <MagnifyingGlassIcon />
+            </Button>
+          </Tip>
+
+          {threads.length > 1 ? (
+            <Tip label="Cycle threads">
+              <Button
+                aria-busy={debug || undefined}
+                aria-label="Cycle threads"
+                className={cn('size-6 text-muted-foreground', debug && 'animate-pulse')}
+                disabled={debug}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+                onClick={cycle}
+              >
+                <CycleIcon />
+              </Button>
+            </Tip>
+          ) : null}
         </div>
       </header>
 
-      <ThreadActions
-        cycleDisabled={visibleThreads.length < 2}
-        debug={debug}
-        query={query}
-        title={title}
-        onCreate={create}
-        onCycle={cycle}
-        onQuery={setQuery}
-        onTitle={setTitle}
-      />
+      <div className="t-grow px-1" data-open={open}>
+        <div>
+          <div className="pb-1.5">
+            <label className="sr-only" htmlFor="thread-search">
+              Search threads
+            </label>
+            <Input
+              ref={field}
+              id="thread-search"
+              autoComplete="off"
+              className="h-8"
+              placeholder="Search threads"
+              spellCheck={false}
+              tabIndex={open ? undefined : -1}
+              type="search"
+              value={query}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)}
+            />
+          </div>
+        </div>
+      </div>
 
-      <ScrollArea
-        className="-mx-1 min-h-0 rounded-lg"
-        cueSize="tight"
-        viewportClassName="px-1 pr-3"
-      >
-        <nav aria-label="Chat conversations">
+      <ScrollArea className="-mx-1 min-h-0" cueSize="tight" viewportClassName="px-1 pr-2">
+        <nav aria-label="Conversations">
           {!rosterQuery.isReady ? (
-            <ThreadSkeletonList />
-          ) : visibleThreads.length ? (
+            <Pending />
+          ) : visible.length ? (
             <div className="grid gap-3">
-              {groups.map((group) => (
-                <section key={group.id} aria-labelledby={`threads-${group.id}`}>
-                  <div className="mb-1.5 flex items-center justify-between px-1.5">
+              {groups.map((entry) => (
+                <section key={entry.id} aria-labelledby={`threads-${entry.id}`}>
+                  <div className="mb-1 flex items-center gap-1.5 px-2">
+                    <FolderSimpleIcon
+                      aria-hidden
+                      className="size-3.5 shrink-0 text-muted-foreground/70"
+                    />
                     <h3
-                      className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/72"
-                      id={`threads-${group.id}`}
+                      className="min-w-0 truncate text-[11px] font-medium text-muted-foreground"
+                      id={`threads-${entry.id}`}
                     >
-                      {group.label}
+                      {entry.label}
                     </h3>
-                    <span className="text-[10px] tabular-nums text-muted-foreground/62">
-                      {group.threads.length}
-                    </span>
+                    <Morph className="text-[11px] tabular-nums text-muted-foreground/60">
+                      {entry.threads.length}
+                    </Morph>
                   </div>
 
-                  <div className="grid gap-1.5">
-                    {group.threads.map((thread) => (
+                  <div className="grid gap-px">
+                    {entry.threads.map((thread, index) => (
                       <ThreadRow
-                        active={thread.id === activeThreadId}
+                        active={thread.id === active}
                         id={thread.id}
+                        index={index}
                         key={thread.id}
                         title={thread.title}
                         updated={thread.updatedAt}
@@ -303,87 +303,65 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
               ))}
             </div>
           ) : (
-            <EmptyState filtering={search.active} query={query} onClearQuery={() => setQuery('')} />
+            <Blank filtering={search.on} query={query} onClear={() => setQuery('')} />
           )}
         </nav>
       </ScrollArea>
-    </aside>
+    </section>
   );
 }
 
-function ThreadSkeletonList() {
+function Pending() {
   return (
-    <div className="grid gap-1.5" aria-hidden="true">
+    <div className="grid gap-px" aria-hidden="true">
       {Array.from({ length: 7 }).map((_, index) => (
-        <Skeleton
-          className="h-[3.35rem] rounded-(--radius-control) border border-input/50 bg-surface-3/70"
-          key={index}
-        />
+        <Skeleton className="h-[2.75rem] rounded-(--radius-control) bg-surface-3/60" key={index} />
       ))}
     </div>
   );
 }
 
-function EmptyState(props: { filtering: boolean; query: string; onClearQuery: () => void }) {
+function Blank(props: { filtering: boolean; query: string; onClear: () => void }) {
   if (props.filtering) {
     return (
-      <Empty className="items-start gap-2 rounded-(--radius-control) border border-input/60 bg-surface-3/70 p-3 text-left">
-        <EmptyHeader className="items-start gap-1">
-          <EmptyTitle className="truncate text-xs">No results</EmptyTitle>
-          <EmptyDescription className="truncate text-[11px]">
-            Nothing matches “{props.query.trim()}”.
-          </EmptyDescription>
-        </EmptyHeader>
-
-        <EmptyContent className="items-start">
-          <Button
-            className="h-7 rounded-(--radius-press) px-2 text-[11px]"
-            size="sm"
-            type="button"
-            variant="secondary"
-            onClick={props.onClearQuery}
-          >
-            Clear search
-          </Button>
-        </EmptyContent>
-      </Empty>
+      <div className="px-2 py-3">
+        <p className="text-xs text-foreground">No matches</p>
+        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+          Nothing here matches “{props.query.trim()}”.
+        </p>
+        <Button
+          className="mt-2 h-6 px-2 text-[11px]"
+          size="sm"
+          type="button"
+          variant="secondary"
+          onClick={props.onClear}
+        >
+          Clear search
+        </Button>
+      </div>
     );
   }
 
   return (
-    <Empty className="items-start gap-1 rounded-(--radius-control) border border-input/60 bg-surface-3/70 p-3 text-left">
-      <EmptyHeader className="items-start gap-1">
-        <EmptyTitle className="text-xs">No conversations yet</EmptyTitle>
-        <EmptyDescription className="text-[11px]">
-          Name one above, or press create to start with a default title.
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <div className="px-2 py-3">
+      <p className="text-xs text-foreground">No threads yet</p>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+        Start one from New thread and the first message names it.
+      </p>
+    </div>
   );
 }
 
-function sidebarStatus(input: {
-  filtered: number;
-  filtering: boolean;
-  ready: boolean;
-  total: number;
-}) {
-  if (!input.ready) {
-    return 'Syncing conversations…';
-  }
-
-  if (!input.total) {
-    return 'No conversations yet';
-  }
-
-  if (input.filtering) {
-    return `${input.filtered} of ${input.total} conversations`;
-  }
-
-  return `${input.total} synced conversations`;
+function Tip(props: { children: ReactElement; label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={props.children} />
+      <TooltipContent side="bottom">{props.label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
-function sortedActiveThreads(threads: ThreadRecord[]) {
+function live(threads: Thread[]) {
   return threads
     .filter((thread) => !thread.archivedAt)
     .toSorted(
@@ -395,19 +373,19 @@ function sortedActiveThreads(threads: ThreadRecord[]) {
     );
 }
 
-function createThreadSearch(query: string) {
-  const value = normalizeSearchText(query);
+function matcher(query: string) {
+  const value = flatten(query);
 
   return {
-    active: value.length > 0,
-    matches: (thread: ThreadRecord) =>
-      normalizeSearchText(
-        `${thread.title} ${thread.id} ${thread.createdAt} ${thread.updatedAt}`,
-      ).includes(value),
+    on: value.length > 0,
+    hit: (thread: Thread) =>
+      flatten(`${thread.title} ${thread.id} ${thread.createdAt} ${thread.updatedAt}`).includes(
+        value,
+      ),
   };
 }
 
-function normalizeSearchText(value: string) {
+function flatten(value: string) {
   return value
     .normalize('NFKD')
     .replace(/\p{Diacritic}/gu, '')
@@ -415,7 +393,7 @@ function normalizeSearchText(value: string) {
     .toLowerCase();
 }
 
-function groupThreads(threads: ThreadRecord[]) {
+function group(threads: Thread[]) {
   const groups: ThreadGroup[] = [
     { id: 'today', label: 'Today', threads: [] },
     { id: 'recent', label: 'Recent', threads: [] },
@@ -423,15 +401,15 @@ function groupThreads(threads: ThreadRecord[]) {
   ];
 
   for (const thread of threads) {
-    groups[groupIndex(thread.updatedAt)]?.threads.push(thread);
+    groups[bucket(thread.updatedAt)]?.threads.push(thread);
   }
 
-  return groups.filter((group) => group.threads.length > 0);
+  return groups.filter((entry) => entry.threads.length > 0);
 }
 
-function groupIndex(date: Date) {
-  const today = startOfLocalDay(new Date());
-  const updated = startOfLocalDay(date);
+function bucket(date: Date) {
+  const today = midnight(new Date());
+  const updated = midnight(date);
   const days = Math.floor((today.getTime() - updated.getTime()) / DAY_MS);
 
   if (days <= 0) {
@@ -445,29 +423,28 @@ function groupIndex(date: Date) {
   return 2;
 }
 
-function startOfLocalDay(date: Date) {
+function midnight(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function threadByOffset(threads: ThreadRecord[], activeThreadId: string | null, direction: number) {
+function byOffset(threads: Thread[], active: string | null, direction: number) {
   if (!threads.length) {
     return null;
   }
 
-  const index = activeThreadId ? threads.findIndex((thread) => thread.id === activeThreadId) : -1;
-
+  const index = active ? threads.findIndex((thread) => thread.id === active) : -1;
   const base = index >= 0 ? index : direction > 0 ? -1 : 0;
   const next = threads[(base + direction + threads.length) % threads.length];
 
-  if (!next || next.id === activeThreadId) {
+  if (!next || next.id === active) {
     return null;
   }
 
   return next;
 }
 
-function threadAfterRemoving(threads: ThreadRecord[], removedId: string) {
-  const index = threads.findIndex((thread) => thread.id === removedId);
+function afterRemoving(threads: Thread[], removed: string) {
+  const index = threads.findIndex((thread) => thread.id === removed);
 
   if (index < 0) {
     return threads[0] ?? null;
@@ -476,5 +453,4 @@ function threadAfterRemoving(threads: ThreadRecord[], removedId: string) {
   return threads[index + 1] ?? threads[index - 1] ?? null;
 }
 
-export { ThreadSidebar };
-export type { ThreadSidebarProps };
+export { Threads };
