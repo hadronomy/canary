@@ -2,6 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 
+@import './ink.css';
 @import 'streamdown/styles.css';
 @source "../node_modules/streamdown/dist/*.js";
 @source "../node_modules/@streamdown/code/dist/*.js";
@@ -164,34 +165,30 @@
     0 1px 1px -0.5px var(--dm-drop);
   --shadow-3:
     inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-base),
-    0 0 0 1px rgb(0 0 0 / 12%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 12%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop);
   --shadow-4:
     inset 0 1px 0 0 var(--dm-hi-mid), inset 0 0 0 1px var(--dm-ring-mid),
-    0 0 0 1px rgb(0 0 0 / 14%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 14%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop),
+    0 6px 6px -3px var(--dm-drop);
   --shadow-5:
     inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-mid),
-    0 0 0 1px rgb(0 0 0 / 16%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
-    0 12px 12px -6px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 16%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop),
+    0 6px 6px -3px var(--dm-drop), 0 12px 12px -6px var(--dm-drop);
   --shadow-6:
     inset 0 1px 0 0 var(--dm-hi-high), inset 0 0 0 1px var(--dm-ring-high),
-    0 0 0 1px rgb(0 0 0 / 18%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
-    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 18%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop),
+    0 6px 6px -3px var(--dm-drop), 0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop);
   --shadow-7:
     inset 0 1px 0 0 var(--dm-hi-peak), inset 0 0 0 1px var(--dm-ring-high),
-    0 0 0 1px rgb(0 0 0 / 20%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
-    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop),
-    0 48px 48px -24px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 20%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop),
+    0 6px 6px -3px var(--dm-drop), 0 12px 12px -6px var(--dm-drop),
+    0 24px 24px -12px var(--dm-drop), 0 48px 48px -24px var(--dm-drop);
   --shadow-8:
     inset 0 1px 0 0 var(--dm-hi-peak), inset 0 0 0 1px var(--dm-ring-high),
-    0 0 0 1px rgb(0 0 0 / 22%), 0 1px 1px -0.5px var(--dm-drop),
-    0 3px 3px -1.5px var(--dm-drop), 0 6px 6px -3px var(--dm-drop),
-    0 12px 12px -6px var(--dm-drop), 0 24px 24px -12px var(--dm-drop),
-    0 48px 48px -24px var(--dm-drop), 0 96px 96px -48px var(--dm-drop);
+    0 0 0 1px rgb(0 0 0 / 22%), 0 1px 1px -0.5px var(--dm-drop), 0 3px 3px -1.5px var(--dm-drop),
+    0 6px 6px -3px var(--dm-drop), 0 12px 12px -6px var(--dm-drop),
+    0 24px 24px -12px var(--dm-drop), 0 48px 48px -24px var(--dm-drop),
+    0 96px 96px -48px var(--dm-drop);
 
   --background: var(--surface-1);
   --foreground: oklch(0.925 0.006 235);

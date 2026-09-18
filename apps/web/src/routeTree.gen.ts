@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as DesignFallbackRouteImport } from './routes/design/fallback'
 import { Route as AuthThreadsRouteRouteImport } from './routes/_auth/threads/route'
 import { Route as AuthThreadsIndexRouteImport } from './routes/_auth/threads/index'
 import { Route as ApiSyncShapeRouteImport } from './routes/api/sync/$shape'
@@ -38,6 +39,11 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthRoute,
+} as any)
+const DesignFallbackRoute = DesignFallbackRouteImport.update({
+  id: '/design/fallback',
+  path: '/design/fallback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthThreadsRouteRoute = AuthThreadsRouteRouteImport.update({
   id: '/threads',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/design/fallback': typeof DesignFallbackRoute
   '/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
@@ -84,6 +91,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
+  '/design/fallback': typeof DesignFallbackRoute
   '/': typeof AuthIndexRoute
   '/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/_auth/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/design/fallback': typeof DesignFallbackRoute
   '/_auth/': typeof AuthIndexRoute
   '/_auth/threads/$threadId': typeof AuthThreadsThreadIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/threads'
+    | '/design/fallback'
     | '/threads/$threadId'
     | '/api/auth/$'
     | '/api/rpc/$'
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
   to:
     | '/consent'
     | '/login'
+    | '/design/fallback'
     | '/'
     | '/threads/$threadId'
     | '/api/auth/$'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/_auth/threads'
+    | '/design/fallback'
     | '/_auth/'
     | '/_auth/threads/$threadId'
     | '/api/auth/$'
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   LoginRoute: typeof LoginRoute
+  DesignFallbackRoute: typeof DesignFallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
   ApiSyncShapeRoute: typeof ApiSyncShapeRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/design/fallback': {
+      id: '/design/fallback'
+      path: '/design/fallback'
+      fullPath: '/design/fallback'
+      preLoaderRoute: typeof DesignFallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_auth/threads': {
       id: '/_auth/threads'
@@ -253,6 +273,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   ConsentRoute: ConsentRoute,
   LoginRoute: LoginRoute,
+  DesignFallbackRoute: DesignFallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
   ApiSyncShapeRoute: ApiSyncShapeRoute,

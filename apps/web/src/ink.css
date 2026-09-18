@@ -1,0 +1,189 @@
+/* The ink surface: type, palette and motion for the pages that sit outside the
+   product shell — sign-in and the route fallbacks. Scoped to `.canary-ink` so
+   none of it reaches the app itself, which runs on its own tokens. */
+
+:root {
+  /* transitions.dev motion scale, only the steps this page actually uses. */
+  --ease-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.canary-ink {
+  --paper: #000;
+  --text: #e9ebec;
+  --text-dim: #6a6f72;
+  --text-faint: #474b4d;
+  --ink: #ffffff;
+  /* What sits on top of an --ink fill. A token rather than "black" so the same
+     button works on the paper surface, where the ink is dark. */
+  --on-ink: #000000;
+  --line: rgb(233 235 236 / 0.16);
+
+  /* The one hue on an otherwise monochrome page, so it has to be earned and
+     restrained: warm enough to read as a fault at a glance, light enough to
+     clear contrast on black, and never used as a fill or a glow. */
+  --bad: #ef8176;
+  --bad-line: rgb(239 129 118 / 0.7);
+
+  background: var(--paper);
+  color: var(--text);
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings:
+    'ss01' 1,
+    'cv01' 1;
+}
+
+/* Mono is for field labels, provider captions and the commit. It is not the
+   house voice. */
+.canary-ink .code {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+}
+
+/* The paper surface: a consolidated text as the gazette sets it. Light because
+   print is light, and because the one fallback that is a document should look
+   like one rather than like another dark field.
+
+   Not cream. A warm off-white is the reflex for "editorial"; this is closer to
+   uncoated stock under daylight, slightly grey, so the black ink reads as ink. */
+.canary-paper {
+  --paper: #ebeae6;
+  --sheet: #f4f3f0;
+  --text: #16171a;
+  --text-dim: #55585d;
+  --text-faint: #8a8d91;
+  --ink: #16171a;
+  --on-ink: #f4f3f0;
+  --line: rgb(22 23 26 / 0.14);
+  /* Repeal notes are set in a dark vermilion, the only colour on the sheet. */
+  --bad: #b3372b;
+
+  background: var(--paper);
+  color: var(--text);
+  font-family: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+.canary-paper .code {
+  font-family: 'Geist Mono Variable', ui-monospace, monospace;
+}
+
+.canary-paper .serif {
+  font-family: 'Erode', 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+  font-feature-settings:
+    'onum' 1,
+    'kern' 1;
+}
+
+/* A repeal struck through as it is printed: one rule across the heading at the
+   x-height, drawn left to right once when the page arrives. It animates a line
+   that is already there — the heading is legible before, during and after. */
+.t-strike {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 58%;
+  background-size: 100% 1px;
+  animation: t-strike 620ms var(--ease-strong) 240ms both;
+}
+
+@keyframes t-strike {
+  from {
+    background-size: 0% 1px;
+  }
+}
+
+/* The note settles once the rule has reached it. Position only: the note is
+   readable from the first frame, it just lands a beat after the strike. */
+.t-note {
+  animation: t-note 420ms var(--ease-strong) 700ms both;
+}
+
+@keyframes t-note {
+  from {
+    transform: translateX(6px);
+  }
+}
+
+/* Grow a disclosed region without animating height: a 0fr -> 1fr grid track
+   tweens, and the padding lives on the inner element so the closed state has no
+   residual strip.
+
+   Opening runs slower than closing. Revealing is the deliberate move and wants
+   to be watched; putting it away is not, and a slow retreat just holds the page
+   up. */
+.t-grow {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 190ms var(--ease-strong);
+}
+
+.t-grow[data-open='true'] {
+  grid-template-rows: 1fr;
+  transition-duration: 300ms;
+}
+
+.t-grow > * {
+  overflow: hidden;
+}
+
+/* The content settles instead of unrolling. Without this the clip edge simply
+   wipes it into view, which reads as a mask moving rather than as something
+   arriving — and the short delay on the way in means it lands in space that has
+   already started opening for it. */
+.t-grow > * > * {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 240ms ease 60ms,
+    transform 300ms var(--ease-strong) 60ms;
+}
+
+.t-grow[data-open='false'] > * > * {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms var(--ease-strong);
+}
+
+/* Frames arrive in the order you read them. Keyframes rather than a transition
+   because each row mounts already in its final position — there is no previous
+   state to tween from. */
+@keyframes stack-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* The stroke length is set from the path's own getTotalLength() at mount, so
+   this only has to hold the pre-draw state. */
+@keyframes t-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.t-check path {
+  stroke-dasharray: var(--len, 24);
+  stroke-dashoffset: var(--len, 24);
+  animation: t-draw 420ms var(--ease-strong) 80ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-grow,
+  .t-grow > * > * {
+    transition: none;
+  }
+
+  .t-check path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  [style*='stack-in'] {
+    animation: none !important;
+  }
+
+  .t-strike,
+  .t-note {
+    animation: none;
+  }
+}

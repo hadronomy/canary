@@ -22,6 +22,7 @@ import { ThemeProvider } from '~/components/theme-provider';
 import { Toaster } from '~/components/ui/sonner';
 import { TooltipProvider } from '~/components/ui/tooltip';
 
+import '@fontsource-variable/geist/wght.css';
 import '@fontsource-variable/geist-mono/wght.css';
 import '@fontsource-variable/mona-sans/wght.css';
 import '@fontsource-variable/source-serif-4/wght.css';
