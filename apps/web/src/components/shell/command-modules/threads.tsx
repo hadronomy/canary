@@ -131,7 +131,13 @@ function threadItem(deps: ShellCommandDeps, row: ThreadRecord, scope = 'root') {
       icon={MagnifyingGlassIcon}
       id={ids.item(scope, row.id)}
       key={row.id}
-      keywords={[row.id, row.title, row.createdAt, row.updatedAt, short]}
+      keywords={[
+        row.id,
+        row.title,
+        row.createdAt.toISOString(),
+        row.updatedAt.toISOString(),
+        short,
+      ]}
       source="thread"
       subtitle={`${stamp(row.updatedAt)} · ${short}`}
       title={name}

@@ -13,7 +13,7 @@ type ThreadRowProps = Omit<ComponentPropsWithoutRef<'div'>, 'children' | 'id'> &
   id: string;
   onArchive: (id: string) => void;
   title: string;
-  updated: string;
+  updated: Date;
 };
 
 function ThreadRow({
@@ -61,7 +61,7 @@ function ThreadRow({
         </span>
 
         <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-          <time className="shrink-0 tabular-nums" dateTime={updated}>
+          <time className="shrink-0 tabular-nums" dateTime={updated.toISOString()}>
             {formatThreadTime(updated)}
           </time>
 
@@ -123,13 +123,7 @@ function ThreadRow({
   );
 }
 
-function formatThreadTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'unknown';
-  }
-
+function formatThreadTime(date: Date) {
   const now = new Date();
   const diff = Math.max(0, now.getTime() - date.getTime());
   const minutes = Math.floor(diff / 60_000);

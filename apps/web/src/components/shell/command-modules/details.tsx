@@ -25,8 +25,16 @@ function ThreadDetail(props: { row: ThreadRecord }) {
         title={props.row.title.trim() || 'Untitled thread'}
         value={props.row.id}
       />
-      <CommandCard label="Updated" title={stamp(props.row.updatedAt)} value={props.row.updatedAt} />
-      <CommandCard label="Created" title={stamp(props.row.createdAt)} value={props.row.createdAt} />
+      <CommandCard
+        label="Updated"
+        title={stamp(props.row.updatedAt)}
+        value={props.row.updatedAt.toISOString()}
+      />
+      <CommandCard
+        label="Created"
+        title={stamp(props.row.createdAt)}
+        value={props.row.createdAt.toISOString()}
+      />
     </div>
   );
 }

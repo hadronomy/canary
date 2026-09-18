@@ -1,8 +1,9 @@
 import { Context, Effect, Layer, Schema } from 'effect';
 
-import { db } from '@canary/db';
+import { db, txid } from '@canary/db';
 
 type Client = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx<A> = { rows: A; txid: number };
 
 export class Failure extends Schema.TaggedError<Failure>()('DatabaseFailure', {
   operation: Schema.String,
@@ -17,7 +18,7 @@ export interface Interface {
   readonly transact: <A>(
     operation: string,
     run: (client: Client) => Promise<A>,
-  ) => Effect.Effect<A, Failure>;
+  ) => Effect.Effect<Tx<A>, Failure>;
 }
 
 export class Service extends Context.Service<Service, Interface>()('@canary/api/Database') {}
@@ -29,13 +30,20 @@ function attempt<A>(operation: string, run: () => Promise<A>) {
   });
 }
 
+function withTransaction<A>(run: (client: Client) => Promise<A>) {
+  return db.transaction(async (client) => ({
+    rows: await run(client),
+    txid: await txid(client),
+  }));
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.acquireRelease(
     Effect.succeed(
       Service.of({
         query: (operation, run) => attempt(operation, () => run(db)),
-        transact: (operation, run) => attempt(operation, () => db.transaction(run)),
+        transact: (operation, run) => attempt(operation, () => withTransaction(run)),
       }),
     ),
     () =>

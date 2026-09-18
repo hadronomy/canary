@@ -164,7 +164,7 @@ type TranscriptRuntimeBridge = TranscriptRuntimeCommands & {
 };
 
 type AssistantTurnSegment = {
-  at: string;
+  at: Date;
   id: string;
   live: boolean;
   msg?: SyncMessage;
@@ -174,7 +174,7 @@ type AssistantTurnSegment = {
 
 type TranscriptTurn = {
   assistants: AssistantTurnSegment[];
-  at: string;
+  at: Date;
   id: string;
   live: boolean;
   user: SyncMessage;
@@ -638,11 +638,11 @@ type ThreadWorkspaceProps = {
 };
 
 function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
-  const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
-  const activeRunsCollection = useMemo(() => active(ownerId, threadId), [ownerId, threadId]);
-  const failedRunsCollection = useMemo(() => failed(ownerId, threadId), [ownerId, threadId]);
-  const latestRunCollection = useMemo(() => latest(ownerId, threadId), [ownerId, threadId]);
-  const transcriptCollection = useMemo(() => transcript(ownerId, threadId), [ownerId, threadId]);
+  const rosterCollection = roster(ownerId);
+  const activeRunsCollection = active(ownerId, threadId);
+  const failedRunsCollection = failed(ownerId, threadId);
+  const latestRunCollection = latest(ownerId, threadId);
+  const transcriptCollection = transcript(ownerId, threadId);
 
   const rosterQuery = useLiveQuery(rosterCollection);
   const activeRunsQuery = useLiveQuery(activeRunsCollection);
@@ -945,8 +945,8 @@ const TranscriptShell = memo(function TranscriptShell({
   scrollActor,
   threadId,
 }: TranscriptShellProps) {
-  const transcriptCollection = useMemo(() => transcript(ownerId, threadId), [ownerId, threadId]);
-  const partsCollection = useMemo(() => pieces(ownerId, threadId), [ownerId, threadId]);
+  const transcriptCollection = transcript(ownerId, threadId);
+  const partsCollection = pieces(ownerId, threadId);
 
   const transcriptQuery = useLiveQuery(transcriptCollection);
   const partsQuery = useLiveQuery(partsCollection);
@@ -2411,18 +2411,19 @@ function materializeTranscriptTurns(msgs: SyncMessage[], parts: Part[]): Transcr
   let currentTurn: TranscriptTurn | null = null;
 
   for (const msg of msgs.toSorted(
-    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
   )) {
     if (msg.role === 'user') {
-      currentTurn = {
+      const turn = {
         assistants: [],
         at: msg.createdAt,
         id: `turn:${msg.id}`,
         live: false,
         user: msg,
-      };
+      } satisfies TranscriptTurn;
 
-      turns.push(currentTurn);
+      currentTurn = turn;
+      turns.push(turn);
       continue;
     }
 
@@ -2520,11 +2521,11 @@ function attachLiveRunSegments(
   }
 }
 
-function findOwnerTurnForSegment(turns: TranscriptTurn[], at: string) {
+function findOwnerTurnForSegment(turns: TranscriptTurn[], at: Date) {
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index];
 
-    if (turn && turn.at <= at) {
+    if (turn && turn.at.getTime() <= at.getTime()) {
       return turn;
     }
   }
@@ -2541,7 +2542,7 @@ function upsertAssistantSegment(turn: TranscriptTurn, segment: AssistantTurnSegm
     turn.assistants.push(segment);
   }
 
-  turn.assistants.sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  turn.assistants.sort((a, b) => a.at.getTime() - b.at.getTime() || a.id.localeCompare(b.id));
 }
 
 function groupPartsByMessageId(parts: Part[]) {
@@ -2591,7 +2592,8 @@ function groupLiveRunParts(parts: Part[], visibleFinalRunIds: Set<string>) {
 
 function orderParts(parts: Part[]) {
   return parts.toSorted(
-    (a, b) => a.seq - b.seq || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    (a, b) =>
+      a.seq - b.seq || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
   );
 }
 

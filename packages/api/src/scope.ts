@@ -1,4 +1,4 @@
-import { and, eq, type AnyColumn, type SQL } from 'drizzle-orm';
+import { and, eq, type AnyColumn, type SQL } from '@canary/db/query';
 
 // Single owner guard for the api Module.
 // The auth middleware in index.ts rejects missing sessions.

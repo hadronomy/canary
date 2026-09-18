@@ -13,16 +13,14 @@ function sorted(rows: readonly ThreadRecord[]) {
     .filter((row) => !row.archivedAt)
     .toSorted(
       (a, b) =>
-        b.updatedAt.localeCompare(a.updatedAt) ||
-        b.createdAt.localeCompare(a.createdAt) ||
+        b.updatedAt.getTime() - a.updatedAt.getTime() ||
+        b.createdAt.getTime() - a.createdAt.getTime() ||
         a.title.localeCompare(b.title) ||
         a.id.localeCompare(b.id),
     );
 }
 
-function stamp(value: string) {
-  const date = new Date(value);
-
+function stamp(date: Date) {
   if (Number.isNaN(date.getTime())) return 'unknown';
 
   const now = new Date();

@@ -1,4 +1,3 @@
-import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from 'drizzle-orm';
 import {
   Cause,
   Clock,
@@ -18,70 +17,34 @@ import {
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
 import { own } from '@canary/api/scope';
-import { txid } from '@canary/db';
-import { event, message, part, run, thread } from '@canary/db/schema/app';
+import { schema } from '@canary/db/effect';
+import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from '@canary/db/query';
+import { event, member, message, part, run, thread } from '@canary/db/schema/app';
 
-const Uuid = Schema.String.check(Schema.isUUID());
+const ThreadRow = schema.thread.select;
+const ThreadInsert = schema.thread.insert;
+const MessageRow = schema.message.select;
+const MessageInsert = schema.message.insert;
+const RunRow = schema.run.select;
+const PartRow = schema.part.select;
 
-export const RunId = Uuid.pipe(Schema.brand('RunId'));
-export const ThreadId = Uuid.pipe(Schema.brand('ThreadId'));
-export const MessageId = Uuid.pipe(Schema.brand('MessageId'));
-export const OwnerId = Schema.String.check(Schema.isMinLength(1)).pipe(Schema.brand('OwnerId'));
-export const RunStatus = Schema.Literals(['queued', 'running', 'completed', 'cancelled', 'failed']);
-export const PartStatus = Schema.Literals([
-  'pending',
-  'running',
-  'completed',
-  'failed',
-  'cancelled',
-]);
-export const PartKind = Schema.Literals([
-  'text',
-  'reasoning',
-  'tool-call',
-  'tool-result',
-  'artifact',
-  'error',
-  'status',
-]);
+export const RunId = RunRow.fields.id.pipe(Schema.check(Schema.isUUID()), Schema.brand('RunId'));
+export const ThreadId = ThreadRow.fields.id.pipe(
+  Schema.check(Schema.isUUID()),
+  Schema.brand('ThreadId'),
+);
+export const MessageId = MessageRow.fields.id.pipe(
+  Schema.check(Schema.isUUID()),
+  Schema.brand('MessageId'),
+);
+export const OwnerId = ThreadRow.fields.ownerId.pipe(
+  Schema.check(Schema.isMinLength(1)),
+  Schema.brand('OwnerId'),
+);
+export const PartStatus = PartRow.fields.status;
+export const PartKind = PartRow.fields.kind;
 
 const Fields = Schema.Record(Schema.String, Schema.Unknown);
-
-export const MessageRow = Schema.Struct({
-  id: MessageId,
-  threadId: ThreadId,
-  ownerId: OwnerId,
-  runId: Schema.NullOr(RunId),
-  role: Schema.Literals(['user', 'assistant', 'system', 'tool']),
-  content: Schema.String,
-  metadata: Schema.NullOr(Fields),
-  createdAt: Schema.Date,
-  updatedAt: Schema.Date,
-});
-export const RunRow = Schema.Struct({
-  id: RunId,
-  threadId: ThreadId,
-  ownerId: OwnerId,
-  inputMessageId: Schema.NullOr(MessageId),
-  status: RunStatus,
-  model: Schema.String,
-  error: Schema.NullOr(Schema.String),
-  startedAt: Schema.NullOr(Schema.Date),
-  completedAt: Schema.NullOr(Schema.Date),
-  createdAt: Schema.Date,
-  updatedAt: Schema.Date,
-});
-export const ThreadRow = Schema.Struct({
-  id: ThreadId,
-  ownerId: OwnerId,
-  title: Schema.String,
-  createdAt: Schema.Date,
-  updatedAt: Schema.Date,
-  archivedAt: Schema.NullOr(Schema.Date),
-});
-export const Sent = Schema.Struct({ message: MessageRow, run: RunRow, txid: Schema.Int });
-export const Cancelled = Schema.Struct({ run: Schema.NullOr(RunRow), txid: Schema.Int });
-export const Archived = Schema.Struct({ thread: Schema.NullOr(ThreadRow), txid: Schema.Int });
 
 export const RunEvent = Schema.TaggedUnion({
   Queued: { model: Schema.String },
@@ -93,22 +56,33 @@ export const RunEvent = Schema.TaggedUnion({
 });
 
 export const Send = Schema.Struct({
-  content: Schema.String.check(Schema.isMinLength(1)),
-  id: Schema.optional(MessageId),
+  content: MessageInsert.fields.content.pipe(Schema.check(Schema.isMinLength(1))),
+  id: Schema.optionalKey(MessageId),
   owner: OwnerId,
   threadId: ThreadId,
 });
 export const Key = Schema.Struct({ id: RunId, owner: OwnerId });
 export const ThreadKey = Schema.Struct({ id: ThreadId, owner: OwnerId });
+export const Create = Schema.Struct({
+  id: Schema.optionalKey(ThreadId),
+  owner: OwnerId,
+  title: Schema.optionalKey(ThreadInsert.fields.title),
+});
 
 export type RunId = typeof RunId.Type;
 export type ThreadId = typeof ThreadId.Type;
 export type Send = typeof Send.Type;
 export type Key = typeof Key.Type;
 export type ThreadKey = typeof ThreadKey.Type;
-export type Sent = typeof Sent.Type;
-export type Cancelled = typeof Cancelled.Type;
-export type Archived = typeof Archived.Type;
+export type Create = typeof Create.Type;
+export type Sent = {
+  message: typeof message.$inferSelect;
+  run: typeof run.$inferSelect;
+  txid: number;
+};
+export type Cancelled = { run: typeof run.$inferSelect | null; txid: number };
+export type Archived = { thread: typeof thread.$inferSelect | null; txid: number };
+export type Created = { thread: typeof thread.$inferSelect; txid: number };
 export type RunEvent = typeof RunEvent.Type;
 
 const Ref = Schema.Struct({ ownerId: OwnerId, runId: RunId, threadId: ThreadId });
@@ -149,6 +123,7 @@ export class ThreadNotFound extends Schema.TaggedError<ThreadNotFound>()('Thread
 }) {}
 
 export interface Interface {
+  readonly create: (input: Create) => Effect.Effect<Created, Database.Failure>;
   readonly send: (input: Send) => Effect.Effect<Sent, ThreadNotFound | Database.Failure>;
   readonly cancel: (input: Key) => Effect.Effect<Cancelled, Database.Failure>;
   readonly archive: (input: ThreadKey) => Effect.Effect<Archived, Database.Failure>;
@@ -263,11 +238,12 @@ export const layer = Layer.effect(
     );
 
     return Service.of({
+      create: Effect.fn('Run.create')((input) => creating(database, input)),
       send: Effect.fn('Run.send')(function* (input) {
         const sent = yield* sending(database, cfg.model, input);
         yield* start({
           ownerId: input.owner,
-          runId: sent.run.id,
+          runId: RunId.make(sent.run.id),
           threadId: input.threadId,
         });
         return sent;
@@ -289,6 +265,30 @@ export const layer = Layer.effect(
     });
   }),
 );
+
+function creating(database: Database.Interface, input: Create) {
+  return database
+    .transact('create thread', async (client) => {
+      const rows = await client
+        .insert(thread)
+        .values({
+          ...(input.id ? { id: input.id } : {}),
+          ownerId: input.owner,
+          title: input.title ?? 'New thread',
+        })
+        .returning();
+      const row = rows[0];
+      if (!row) throw new Error('Thread insert failed.');
+
+      await client.insert(member).values({
+        threadId: row.id,
+        userId: input.owner,
+        role: 'owner',
+      });
+      return row;
+    })
+    .pipe(Effect.map((result) => ({ thread: result.rows, txid: result.txid })));
+}
 
 function sending(database: Database.Interface, model: string, input: Send) {
   return database
@@ -362,69 +362,75 @@ function sending(database: Database.Interface, model: string, input: Send) {
         .set({ updatedAt: new Date() })
         .where(own(thread, input.owner, eq(thread.id, input.threadId)));
 
-      return Schema.decodeUnknownSync(Sent)({
-        message: row,
-        run: item,
-        txid: await txid(client),
-      });
+      return { message: row, run: item };
     })
     .pipe(
-      Effect.flatMap((sent) =>
-        sent ? Effect.succeed(sent) : Effect.fail(new ThreadNotFound({ id: input.threadId })),
+      Effect.flatMap((result) =>
+        result.rows
+          ? Effect.succeed({ ...result.rows, txid: result.txid })
+          : Effect.fail(new ThreadNotFound({ id: input.threadId })),
       ),
     );
 }
 
 function cancelling(database: Database.Interface, input: Key) {
-  return database.transact('cancel run', async (client) => {
-    const rows = await client
-      .update(run)
-      .set({ status: 'cancelled', completedAt: new Date() })
-      .where(
-        own(run, input.owner, eq(run.id, input.id), inArray(run.status, ['queued', 'running'])),
-      )
-      .returning();
-    await cancelled(client, rows);
+  return database
+    .transact('cancel run', async (client) => {
+      const rows = await client
+        .update(run)
+        .set({ status: 'cancelled', completedAt: new Date() })
+        .where(
+          own(run, input.owner, eq(run.id, input.id), inArray(run.status, ['queued', 'running'])),
+        )
+        .returning();
+      await cancelled(client, rows);
 
-    return {
-      refs: rows.map(reference),
-      result: Schema.decodeUnknownSync(Cancelled)({
+      return {
+        refs: rows.map(reference),
         run: rows[0] ?? null,
-        txid: await txid(client),
-      }),
-    };
-  });
+      };
+    })
+    .pipe(
+      Effect.map((result) => ({
+        refs: result.rows.refs,
+        result: { run: result.rows.run, txid: result.txid },
+      })),
+    );
 }
 
 function archiving(database: Database.Interface, input: ThreadKey) {
-  return database.transact('archive thread', async (client) => {
-    const rows = await client
-      .update(thread)
-      .set({ archivedAt: new Date() })
-      .where(own(thread, input.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
-      .returning();
-    const active = await client
-      .update(run)
-      .set({ status: 'cancelled', completedAt: new Date() })
-      .where(
-        own(
-          run,
-          input.owner,
-          eq(run.threadId, input.id),
-          inArray(run.status, ['queued', 'running']),
-        ),
-      )
-      .returning();
-    await cancelled(client, active);
+  return database
+    .transact('archive thread', async (client) => {
+      const rows = await client
+        .update(thread)
+        .set({ archivedAt: new Date() })
+        .where(own(thread, input.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
+        .returning();
+      const active = await client
+        .update(run)
+        .set({ status: 'cancelled', completedAt: new Date() })
+        .where(
+          own(
+            run,
+            input.owner,
+            eq(run.threadId, input.id),
+            inArray(run.status, ['queued', 'running']),
+          ),
+        )
+        .returning();
+      await cancelled(client, active);
 
-    return {
-      refs: active.map(reference),
-      result: Schema.decodeUnknownSync(Archived)({
+      return {
+        refs: active.map(reference),
         thread: rows[0] ?? null,
-        txid: await txid(client),
-      }),
-    };
-  });
+      };
+    })
+    .pipe(
+      Effect.map((result) => ({
+        refs: result.rows.refs,
+        result: { thread: result.rows.thread, txid: result.txid },
+      })),
+    );
 }
 
 async function cancelled(client: Client, rows: readonly Row[]) {
@@ -488,27 +494,29 @@ async function record(client: Client, rows: readonly Log[]) {
 }
 
 function claim(database: Database.Interface, ref: Ref) {
-  return database.transact('claim run', async (client) => {
-    const rows = await client
-      .update(run)
-      .set({ status: 'running', startedAt: new Date() })
-      .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'queued')))
-      .returning();
-    const row = rows[0];
-    if (!row) return null;
+  return database
+    .transact('claim run', async (client) => {
+      const rows = await client
+        .update(run)
+        .set({ status: 'running', startedAt: new Date() })
+        .where(own(run, ref.ownerId, eq(run.id, ref.runId), eq(run.status, 'queued')))
+        .returning();
+      const row = rows[0];
+      if (!row) return null;
 
-    await client
-      .insert(event)
-      .values({
-        runId: row.id,
-        threadId: row.threadId,
-        ownerId: row.ownerId,
-        seq: 1,
-        ...entry({ _tag: 'Started', model: row.model }),
-      })
-      .onConflictDoNothing({ target: [event.runId, event.seq] });
-    return row;
-  });
+      await client
+        .insert(event)
+        .values({
+          runId: row.id,
+          threadId: row.threadId,
+          ownerId: row.ownerId,
+          seq: 1,
+          ...entry({ _tag: 'Started', model: row.model }),
+        })
+        .onConflictDoNothing({ target: [event.runId, event.seq] });
+      return row;
+    })
+    .pipe(Effect.map((result) => result.rows));
 }
 
 function initial(): State {

@@ -3,30 +3,44 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#replica": "./src/replica/index.ts",
+    "#replica/*": "./src/replica/*.ts",
+    "#schema/*": "./src/schema/*.ts"
+  },
   "exports": {
     ".": {
       "default": "./src/index.ts"
     },
-    "./*": {
-      "default": "./src/*.ts"
-    }
+    "./effect": "./src/effect.ts",
+    "./env": "./src/env.ts",
+    "./query": "./src/query.ts",
+    "./replica": "./src/replica.ts",
+    "./replica/manifest": "./src/replica-manifest.ts",
+    "./schema": "./src/schema/index.ts",
+    "./schema/app": "./src/schema/app.ts",
+    "./schema/auth": "./src/schema/auth.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit",
-    "db:generate": "varlock codegen && varlock run -- drizzle-kit generate",
+    "check-types": "bun run replica:check && tsc --noEmit",
+    "db:generate": "varlock codegen && varlock run -- bun scripts/replica.ts --generate",
     "db:migrate": "varlock codegen && varlock run -- drizzle-kit migrate",
     "db:push": "varlock codegen && varlock run -- drizzle-kit push",
-    "db:studio": "varlock codegen && varlock run -- drizzle-kit studio"
+    "db:studio": "varlock codegen && varlock run -- drizzle-kit studio",
+    "replica:check": "bun scripts/replica.ts --check",
+    "replica:generate": "bun scripts/replica.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "1.0.0-rc.4",
+    "effect": "^4.0.0-rc.115",
     "pg": "^8.22.0",
-    "varlock": "1.19.0"
+    "varlock": "1.19.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@types/pg": "^8.20.0",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^1.0.0-rc.4",
     "typescript": "catalog:"
   }
 }

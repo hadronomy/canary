@@ -1,12 +1,17 @@
-import { sql } from 'drizzle-orm';
+import { defineRelations, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { ENV } from '@canary/db/env';
 
 import * as schema from './schema';
+import { authRelations } from './schema/auth';
+
+const relations = defineRelations(schema);
 
 export function createDb() {
-  return drizzle(ENV.DATABASE_URL, { schema });
+  return drizzle(ENV.DATABASE_URL, {
+    relations: { ...relations, ...authRelations },
+  });
 }
 
 export const db = createDb();

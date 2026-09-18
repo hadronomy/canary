@@ -3,8 +3,8 @@ import {
   integer,
   jsonb,
   pgEnum,
-  pgTable,
   primaryKey,
+  snakeCase,
   text,
   timestamp,
   uniqueIndex,
@@ -38,20 +38,20 @@ export const status = pgEnum('run_status', [
   'failed',
 ]);
 
-export const thread = pgTable(
+export const thread = snakeCase.table(
   'thread',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    ownerId: text('owner_id')
+    id: uuid().defaultRandom().primaryKey(),
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    title: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedAt: timestamp({ withTimezone: true }),
   },
   (table) => [
     index('thread_owner_updated_idx').on(table.ownerId, table.updatedAt),
@@ -59,18 +59,18 @@ export const thread = pgTable(
   ],
 );
 
-export const member = pgTable(
+export const member = snakeCase.table(
   'thread_member',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    threadId: uuid('thread_id')
+    id: uuid().defaultRandom().primaryKey(),
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    userId: text('user_id')
+    userId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    role: text('role').default('owner').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    role: text().default('owner').notNull(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('thread_member_thread_idx').on(table.threadId),
@@ -78,22 +78,22 @@ export const member = pgTable(
   ],
 );
 
-export const message = pgTable(
+export const message = snakeCase.table(
   'message',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    threadId: uuid('thread_id')
+    id: uuid().defaultRandom().primaryKey(),
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    ownerId: text('owner_id')
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    runId: uuid('run_id'),
-    role: role('role').notNull(),
-    content: text('content').notNull(),
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    runId: uuid(),
+    role: role().notNull(),
+    content: text().notNull(),
+    metadata: jsonb().$type<Record<string, unknown>>(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -104,24 +104,24 @@ export const message = pgTable(
   ],
 );
 
-export const run = pgTable(
+export const run = snakeCase.table(
   'run',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    threadId: uuid('thread_id')
+    id: uuid().defaultRandom().primaryKey(),
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    ownerId: text('owner_id')
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    inputMessageId: uuid('input_message_id').references(() => message.id, { onDelete: 'set null' }),
-    status: status('status').default('queued').notNull(),
-    model: text('model').notNull(),
-    error: text('error'),
-    startedAt: timestamp('started_at', { withTimezone: true }),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    inputMessageId: uuid().references(() => message.id, { onDelete: 'set null' }),
+    status: status().default('queued').notNull(),
+    model: text().notNull(),
+    error: text(),
+    startedAt: timestamp({ withTimezone: true }),
+    completedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -133,23 +133,23 @@ export const run = pgTable(
   ],
 );
 
-export const event = pgTable(
+export const event = snakeCase.table(
   'run_event',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    runId: uuid('run_id')
+    id: uuid().defaultRandom().primaryKey(),
+    runId: uuid()
       .notNull()
       .references(() => run.id, { onDelete: 'cascade' }),
-    threadId: uuid('thread_id')
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    ownerId: text('owner_id')
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    type: text('type').notNull(),
-    data: jsonb('data').$type<Record<string, unknown>>(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    seq: integer().notNull(),
+    type: text().notNull(),
+    data: jsonb().$type<Record<string, unknown>>(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('run_event_run_seq_unique').on(table.runId, table.seq),
@@ -158,28 +158,28 @@ export const event = pgTable(
   ],
 );
 
-export const part = pgTable(
+export const part = snakeCase.table(
   'message_part',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    messageId: uuid('message_id').references(() => message.id, { onDelete: 'cascade' }),
-    runId: uuid('run_id')
+    id: uuid().defaultRandom().primaryKey(),
+    messageId: uuid().references(() => message.id, { onDelete: 'cascade' }),
+    runId: uuid()
       .notNull()
       .references(() => run.id, { onDelete: 'cascade' }),
-    threadId: uuid('thread_id')
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    ownerId: text('owner_id')
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    seq: integer('seq').notNull(),
-    kind: partKind('kind').notNull(),
-    status: partStatus('status').default('pending').notNull(),
-    toolName: text('tool_name'),
-    content: text('content').default('').notNull(),
-    data: jsonb('data').$type<Record<string, unknown>>(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    seq: integer().notNull(),
+    kind: partKind().notNull(),
+    status: partStatus().default('pending').notNull(),
+    toolName: text(),
+    content: text().default('').notNull(),
+    data: jsonb().$type<Record<string, unknown>>(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -191,22 +191,22 @@ export const part = pgTable(
   ],
 );
 
-export const artifact = pgTable(
+export const artifact = snakeCase.table(
   'artifact',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    threadId: uuid('thread_id')
+    id: uuid().defaultRandom().primaryKey(),
+    threadId: uuid()
       .notNull()
       .references(() => thread.id, { onDelete: 'cascade' }),
-    ownerId: text('owner_id')
+    ownerId: text()
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    runId: uuid('run_id').references(() => run.id, { onDelete: 'set null' }),
-    kind: text('kind').notNull(),
-    title: text('title').notNull(),
-    data: jsonb('data').$type<Record<string, unknown>>().notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
+    runId: uuid().references(() => run.id, { onDelete: 'set null' }),
+    kind: text().notNull(),
+    title: text().notNull(),
+    data: jsonb().$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
@@ -217,28 +217,28 @@ export const artifact = pgTable(
   ],
 );
 
-export const cache = pgTable('agent_cache', {
-  key: text('key').primaryKey(),
-  value: jsonb('value').notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
+export const cache = snakeCase.table('agent_cache', {
+  key: text().primaryKey(),
+  value: jsonb().$type<unknown>().notNull(),
+  expiresAt: timestamp({ withTimezone: true }),
+  updatedAt: timestamp({ withTimezone: true })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 });
 
-export const cacheList = pgTable(
+export const cacheList = snakeCase.table(
   'agent_cache_list',
   {
-    key: text('key').notNull(),
-    idx: integer('idx').notNull(),
-    value: jsonb('value').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    key: text().notNull(),
+    idx: integer().notNull(),
+    value: jsonb().$type<unknown>().notNull(),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.key, table.idx] })],
 );
 
-export const cacheCounter = pgTable('agent_cache_counter', {
-  key: text('key').primaryKey(),
-  value: integer('value').default(0).notNull(),
+export const cacheCounter = snakeCase.table('agent_cache_counter', {
+  key: text().primaryKey(),
+  value: integer().default(0).notNull(),
 });

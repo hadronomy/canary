@@ -50,6 +50,24 @@ describe('Run', () => {
     }),
   );
 
+  it.effect('creates a thread in one transaction', () =>
+    Effect.gen(function* () {
+      const input = yield* Schema.decodeUnknownEffect(Run.Create)({
+        id: ids.thread,
+        owner: ids.owner,
+        title: 'Created thread',
+      });
+      const result = yield* Run.Service.use((run) => run.create(input)).pipe(Effect.provide(layer));
+
+      expect(result.thread).toMatchObject({
+        id: ids.thread,
+        ownerId: ids.owner,
+        title: 'Created thread',
+      });
+      expect(result.txid).toBe(1);
+    }),
+  );
+
   it.effect('does not start a duplicate run', () =>
     Effect.gen(function* () {
       agent.mode = 'hold';

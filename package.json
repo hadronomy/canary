@@ -10,7 +10,7 @@
       "apps/web"
     ],
     "catalog": {
-      "zod": "^4.4.3",
+      "zod": "^4.6.5",
       "typescript": "^6.0.3",
       "@types/bun": "^1.3.14"
     }
@@ -25,8 +25,10 @@
     "dev:web": "turbo run dev --filter=web",
     "docker:web": "APP_ENV=production varlock run --path apps/web -- docker compose up --build",
     "env:verify-image": "bash scripts/verify-varlock-image.sh",
-    "auth:generate": "bun run env:codegen && varlock run --path apps/web -- bun x --bun auth@latest generate --config packages/auth/src/index.ts --output packages/db/src/schema/auth.ts --yes",
+    "auth:generate": "bun run env:codegen && varlock run --path apps/web -- bunx --no-install auth generate --config packages/auth/src/index.ts --output packages/db/src/schema/auth.ts --yes && bunx --no-install oxfmt --write packages/db/src/schema/auth.ts",
     "db:generate": "turbo run db:generate --filter=@canary/db",
+    "replica:generate": "bun run --cwd packages/db replica:generate",
+    "replica:check": "bun run --cwd packages/db replica:check",
     "db:migrate": "turbo run db:migrate --filter=@canary/db",
     "db:push": "turbo run db:push --filter=@canary/db",
     "db:studio": "turbo run db:studio --filter=@canary/db",
@@ -37,12 +39,13 @@
     "check:deps": "bun run check:knip; k=$?; bun run check:syncpack; s=$?; exit $((k||s))"
   },
   "dependencies": {
-    "effect": "^3.21.2"
+    "effect": "^4.0.0-rc.115"
   },
   "devDependencies": {
     "@canary/config": "workspace:*",
     "@effect/language-service": "^0.86.2",
     "@types/bun": "catalog:",
+    "auth": "1.7.5",
     "husky": "^9.1.7",
     "knip": "^6.34.0",
     "lint-staged": "^17.0.7",

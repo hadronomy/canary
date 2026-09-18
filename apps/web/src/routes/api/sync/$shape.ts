@@ -8,98 +8,6 @@ const pass = new Set(ELECTRIC_PROTOCOL_QUERY_PARAMS);
 const ping = new TextEncoder().encode(': keep-alive\n\n');
 const utf8 = new TextDecoder();
 
-type Shape = {
-  columns: string[];
-  params: string[];
-  table: string;
-  where: string;
-};
-
-function shape(name: string, uid: string): Shape | null {
-  if (name === 'threads') {
-    return {
-      table: 'thread',
-      where: 'owner_id = $1 and archived_at is null',
-      params: [uid],
-      columns: ['id', 'owner_id', 'title', 'created_at', 'updated_at', 'archived_at'],
-    };
-  }
-
-  if (name === 'messages') {
-    return {
-      table: 'message',
-      where: 'owner_id = $1',
-      params: [uid],
-      columns: [
-        'id',
-        'thread_id',
-        'owner_id',
-        'run_id',
-        'role',
-        'content',
-        'metadata',
-        'created_at',
-        'updated_at',
-      ],
-    };
-  }
-
-  if (name === 'runs') {
-    return {
-      table: 'run',
-      where: 'owner_id = $1',
-      params: [uid],
-      columns: [
-        'id',
-        'thread_id',
-        'owner_id',
-        'input_message_id',
-        'status',
-        'model',
-        'error',
-        'started_at',
-        'completed_at',
-        'created_at',
-        'updated_at',
-      ],
-    };
-  }
-
-  if (name === 'parts') {
-    return {
-      table: 'message_part',
-      where: 'owner_id = $1',
-      params: [uid],
-      columns: [
-        'id',
-        'message_id',
-        'run_id',
-        'thread_id',
-        'owner_id',
-        'seq',
-        'kind',
-        'status',
-        'tool_name',
-        'content',
-        'data',
-        'created_at',
-        'updated_at',
-      ],
-    };
-  }
-
-  if (name === 'events') {
-    return {
-      table: 'run_event',
-      where: 'owner_id = $1',
-      params: [uid],
-      columns: ['id', 'run_id', 'thread_id', 'owner_id', 'seq', 'type', 'data', 'created_at'],
-    };
-  }
-
-  return null;
-}
-
 async function handle({ params, request }: { params: { shape: string }; request: Request }) {
   const session = await auth.api.getSession({
     headers: request.headers,
@@ -110,12 +18,13 @@ async function handle({ params, request }: { params: { shape: string }; request:
   }
 
   const src = new URL(request.url);
-  const spec = shape(params.shape, session.user.id);
+  const { Replica } = await import('@canary/db/replica');
 
-  if (!spec) {
+  if (!Replica.has(params.shape)) {
     return new Response('Shape not found', { status: 404 });
   }
 
+  const replica = Replica.get(params.shape);
   const dst = new URL('/v1/shape', ENV.ELECTRIC_URL);
 
   src.searchParams.forEach((value, key) => {
@@ -124,12 +33,10 @@ async function handle({ params, request }: { params: { shape: string }; request:
     }
   });
 
-  dst.searchParams.set('table', spec.table);
-  dst.searchParams.set('where', spec.where);
-  dst.searchParams.set('columns', spec.columns.join(','));
-  spec.params.forEach((value, index) => {
-    dst.searchParams.set(`params[${index + 1}]`, value);
-  });
+  dst.searchParams.set('table', replica.table);
+  dst.searchParams.set('where', replica.where);
+  dst.searchParams.set('columns', replica.columns.join(','));
+  dst.searchParams.set('params[1]', session.user.id);
 
   if (ENV.ELECTRIC_SECRET) {
     dst.searchParams.set('secret', ENV.ELECTRIC_SECRET);

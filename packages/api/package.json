@@ -20,7 +20,6 @@
     "@canary/auth": "workspace:*",
     "@canary/db": "workspace:*",
     "@orpc/server": "^1.14.6",
-    "drizzle-orm": "^0.45.2",
     "effect": "^4.0.0-rc.115",
     "varlock": "1.19.0",
     "zod": "catalog:"

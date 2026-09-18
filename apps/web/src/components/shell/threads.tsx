@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 
+import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
 
 import { ThreadActions } from '~/components/shell/thread-actions';
@@ -27,14 +28,7 @@ import { Skeleton } from '~/components/ui/skeleton';
 import { cn } from '~/lib/utils';
 import { list, roster } from '~/utils/chat';
 
-type ThreadRecord = {
-  archivedAt: string | null;
-  createdAt: string;
-  id: string;
-  ownerId: string;
-  title: string;
-  updatedAt: string;
-};
+type ThreadRecord = Thread;
 
 type ThreadGroupId = 'today' | 'recent' | 'older';
 
@@ -63,8 +57,8 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   const [query, setQuery] = useState('');
   const [debug, setDebug] = useState(false);
 
-  const threadCollection = useMemo(() => list(ownerId), [ownerId]);
-  const rosterCollection = useMemo(() => roster(ownerId), [ownerId]);
+  const threadCollection = list(ownerId);
+  const rosterCollection = roster(ownerId);
   const rosterQuery = useLiveQuery(rosterCollection);
 
   const threads = useMemo(() => sortedActiveThreads(rosterQuery.data), [rosterQuery.data]);
@@ -394,8 +388,8 @@ function sortedActiveThreads(threads: ThreadRecord[]) {
     .filter((thread) => !thread.archivedAt)
     .toSorted(
       (a, b) =>
-        b.updatedAt.localeCompare(a.updatedAt) ||
-        b.createdAt.localeCompare(a.createdAt) ||
+        b.updatedAt.getTime() - a.updatedAt.getTime() ||
+        b.createdAt.getTime() - a.createdAt.getTime() ||
         a.title.localeCompare(b.title) ||
         a.id.localeCompare(b.id),
     );
@@ -435,13 +429,7 @@ function groupThreads(threads: ThreadRecord[]) {
   return groups.filter((group) => group.threads.length > 0);
 }
 
-function groupIndex(updatedAt: string) {
-  const date = new Date(updatedAt);
-
-  if (Number.isNaN(date.getTime())) {
-    return 2;
-  }
-
+function groupIndex(date: Date) {
   const today = startOfLocalDay(new Date());
   const updated = startOfLocalDay(date);
   const days = Math.floor((today.getTime() - updated.getTime()) / DAY_MS);

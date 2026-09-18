@@ -37,7 +37,7 @@ function ShellCommandPalette({ onOpenChange, open, user, ...props }: ShellComman
   const path = useRouterState({ select: (state) => state.location.pathname });
   const owner = user.id;
   const active = typeof params.threadId === 'string' ? params.threadId : null;
-  const col = useMemo(() => list(owner), [owner]);
+  const col = list(owner);
   const rows = useLiveQuery(roster(owner)).data;
   const threads = useMemo(() => sorted(rows), [rows]);
   const deps = useMemo(

@@ -1,7 +1,7 @@
 import { MastraServerCache } from '@mastra/core/cache';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
 
 import { db } from '@canary/db';
+import { and, eq, gte, lte, sql } from '@canary/db/query';
 import { cache as rows, cacheCounter as counters, cacheList as lists } from '@canary/db/schema/app';
 
 export class PostgresCache extends MastraServerCache {

@@ -6,6 +6,12 @@
       "dependencies": ["$LOCAL"],
       "dependencyTypes": ["dev", "prod"],
       "pinVersion": "workspace:*"
+    },
+    {
+      "label": "The legacy TUI stays on Effect 3",
+      "packages": ["tui"],
+      "dependencies": ["effect"],
+      "isIgnored": true
     }
   ]
 }
