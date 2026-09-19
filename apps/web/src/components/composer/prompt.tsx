@@ -51,6 +51,15 @@ type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onS
   error: null | string;
   pristine?: boolean;
   running?: boolean;
+  /**
+   * Hold the control tray open.
+   *
+   * For screens where the composer is the whole page rather than a bar under a
+   * transcript: there the tray opening on hover would resize a centred block
+   * under the pointer, and there is nothing else on screen for the space to
+   * belong to anyway.
+   */
+  tray?: boolean;
   value: string;
   onCancel?: () => void;
   onNew?: () => void;
@@ -69,6 +78,7 @@ function AgentPrompt({
   onValue,
   pristine,
   running,
+  tray,
   value,
   ...props
 }: AgentPromptProps) {
@@ -112,6 +122,7 @@ function AgentPrompt({
       : 'Message Canary...';
 
   const trayVisible =
+    tray ||
     hoveringComposer ||
     ui.focus === 'focused' ||
     draftState === 'drafting' ||

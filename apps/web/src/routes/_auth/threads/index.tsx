@@ -41,8 +41,8 @@ function NewThread() {
     const stage = host.current;
     if (!node || !stage) return;
 
-    // The field clears where the composer sits, measured rather than computed
-    // once: the composer grows as the tray opens and as an error line arrives.
+    // Measured rather than computed once: the block changes height when an
+    // error line arrives.
     function clear() {
       if (!node || !stage) return;
       // Measured against the canvas, not the window. The shader works in its
@@ -54,15 +54,16 @@ function NewThread() {
       const x = (value: number) => (value - frame.left) / frame.width;
       const y = (value: number) => (value - frame.top) / frame.height;
 
-      field.aim(x(box_.left + box_.width / 2), y(box_.top - 20));
+      field.aim(x(box_.left + box_.width / 2), y(box_.top + box_.height / 2));
 
-      // The clearing has to reach the heading, not just the composer: the line
-      // sits above the box, and that is the one place the type has to win.
+      // The measured block already contains the heading, so the clearing only
+      // needs a margin around it rather than a guess at how far the type
+      // reaches above the box.
       field.put('quiet', [
-        x(box_.left - 120),
-        y(box_.top - 150),
-        (box_.width + 240) / frame.width,
-        (box_.height + 210) / frame.height,
+        x(box_.left - 96),
+        y(box_.top - 56),
+        (box_.width + 192) / frame.width,
+        (box_.height + 112) / frame.height,
       ]);
     }
 
@@ -125,21 +126,26 @@ function NewThread() {
   );
 
   return (
-    <div ref={host} className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden">
+    <div
+      ref={host}
+      className="relative grid h-full min-h-0 grid-rows-[1fr_auto_0.62fr] overflow-hidden px-4"
+    >
       <Backdrop shader={shader} state={field.state} />
 
-      <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-10">
-        <h1 className="max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
+      {/* Heading and composer are one block, centred together. The tray is held
+          open so hovering the composer cannot resize the block and slide it out
+          from under the pointer. */}
+      <div ref={box} className="relative z-10 row-start-2 w-full max-w-3xl justify-self-center">
+        <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
           <Swap value={busy ? 'Opening the thread…' : 'What are we working on?'} />
         </h1>
-      </div>
 
-      <div ref={box} className="relative z-10 px-3 pb-3">
         <AgentPrompt
-          className="mx-auto max-w-3xl rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 backdrop-blur-none"
+          className="rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 pb-0 backdrop-blur-none"
           disabled={busy}
           error={err}
           pristine
+          tray
           value={draft}
           onSubmit={(body) => {
             start(body).catch((cause: unknown) => {

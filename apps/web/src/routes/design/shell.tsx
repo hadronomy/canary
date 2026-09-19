@@ -15,6 +15,7 @@ import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
 import { Swap } from '~/lib/motion';
+import { cn } from '~/lib/utils';
 
 // Preview-only. The shell with fixture data, so the redesign can be looked at
 // without the sync stack running. Delete once it has served its purpose.
@@ -98,15 +99,13 @@ function Preview() {
       const x = (value: number) => (value - frame.left) / frame.width;
       const y = (value: number) => (value - frame.top) / frame.height;
 
-      field.aim(x(box_.left + box_.width / 2), y(box_.top - 20));
+      field.aim(x(box_.left + box_.width / 2), y(box_.top + box_.height / 2));
 
-      // The clearing has to reach the heading, not just the composer: the line
-      // sits above the box, and that is the one place the type has to win.
       field.put('quiet', [
-        x(box_.left - 120),
-        y(box_.top - 150),
-        (box_.width + 240) / frame.width,
-        (box_.height + 210) / frame.height,
+        x(box_.left - 96),
+        y(box_.top - 56),
+        (box_.width + 192) / frame.width,
+        (box_.height + 112) / frame.height,
       ]);
     }
 
@@ -189,31 +188,43 @@ function Preview() {
         <main className="min-h-0 overflow-hidden rounded-(--radius-shell) border border-border bg-surface-2 shadow-surface-2">
           <div
             ref={host}
-            className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden"
+            className={cn(
+              'relative h-full min-h-0 overflow-hidden px-4',
+              params.v === 'tasks'
+                ? 'grid grid-rows-[1fr_auto]'
+                : 'grid grid-rows-[1fr_auto_0.62fr]',
+            )}
           >
             <Backdrop shader={shader} state={field.state} />
 
             {params.v === 'tasks' ? (
-              <div className="relative z-10 min-h-0 overflow-y-auto px-6 py-8">
+              <div className="relative z-10 min-h-0 overflow-y-auto py-8">
                 <div className="mx-auto w-full max-w-3xl">
                   <TaskGroup>
                     <TaskList revealed={TASKS.length} tasks={TASKS} />
                   </TaskGroup>
                 </div>
               </div>
-            ) : (
-              <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-10">
-                <h1 className="max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
+            ) : null}
+
+            <div
+              ref={box}
+              className={cn(
+                'relative z-10 w-full max-w-3xl pb-3',
+                params.v !== 'tasks' && 'row-start-2 justify-self-center',
+              )}
+            >
+              {params.v === 'tasks' ? null : (
+                <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
                   <Swap value="What are we working on?" />
                 </h1>
-              </div>
-            )}
+              )}
 
-            <div ref={box} className="relative z-10 px-3 pb-3">
               <AgentPrompt
-                className="mx-auto max-w-3xl rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 backdrop-blur-none"
+                className="rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 pb-0 backdrop-blur-none"
                 error={null}
                 pristine
+                tray
                 value=""
                 onSubmit={() => undefined}
                 onValue={() => field.beat()}
