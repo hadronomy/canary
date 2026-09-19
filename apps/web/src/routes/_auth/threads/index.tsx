@@ -132,9 +132,7 @@ function NewThread() {
     >
       <Backdrop shader={shader} state={field.state} />
 
-      {/* Heading and composer are one block, centred together. The tray is held
-          open so hovering the composer cannot resize the block and slide it out
-          from under the pointer. */}
+      {/* Heading and composer are one block, centred together. */}
       <div ref={box} className="relative z-10 row-start-2 w-full max-w-3xl justify-self-center">
         <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
           <Swap value={busy ? 'Opening the thread…' : 'What are we working on?'} />
@@ -145,7 +143,6 @@ function NewThread() {
           disabled={busy}
           error={err}
           pristine
-          tray
           value={draft}
           onSubmit={(body) => {
             start(body).catch((cause: unknown) => {

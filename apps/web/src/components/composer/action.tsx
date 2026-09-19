@@ -36,7 +36,7 @@ function ComposerAction({
       aria-label={action.label}
       animate={visual}
       className={cn(
-        'relative isolate mb-1 grid size-10 shrink-0 place-items-center overflow-hidden rounded-[0.95rem]',
+        'relative isolate grid size-9 shrink-0 place-items-center overflow-hidden rounded-full',
         'border bg-muted text-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
         'disabled:cursor-not-allowed',
@@ -193,9 +193,9 @@ function hoverTone(visual: ButtonVisual) {
 
   if (visual === 'send') {
     return {
-      backgroundColor: 'var(--accent)',
-      borderColor: 'var(--input)',
-      color: 'var(--foreground)',
+      backgroundColor: 'color-mix(in oklch, var(--primary) 88%, white)',
+      borderColor: 'transparent',
+      color: 'var(--primary-foreground)',
       transition: { duration: 0.16, ease },
     } as const;
   }
@@ -222,9 +222,9 @@ const buttonToneVariants = {
     transition: { duration: 0.28, ease },
   },
   send: {
-    backgroundColor: 'var(--card)',
-    borderColor: 'var(--border)',
-    color: 'var(--foreground)',
+    backgroundColor: 'var(--primary)',
+    borderColor: 'transparent',
+    color: 'var(--primary-foreground)',
     transition: { duration: 0.28, ease },
   },
   stop: {

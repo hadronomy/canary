@@ -52,7 +52,7 @@ function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
     };
   }, []);
 
-  const sidebar = <Sidebar ready={ready} user={user} onCommand={() => setPalette(true)} />;
+  const sidebar = <Sidebar ready={ready} user={user} />;
 
   return (
     <div

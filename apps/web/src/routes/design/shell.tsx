@@ -1,6 +1,6 @@
 import { FolderSimpleIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { AgentPrompt } from '~/components/agent-prompt';
@@ -80,6 +80,7 @@ const TASKS = [
 function Preview() {
   const params = Route.useSearch();
   const field = useField({ quiet: [0, 0, 0, 0] });
+  const [draft, setDraft] = useState('');
   const box = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
 
@@ -124,11 +125,8 @@ function Preview() {
       <>
         <aside className="h-full min-h-0 pr-2">
           <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2">
-            <header className="flex h-9 items-center justify-between gap-2">
+            <header className="flex h-9 items-center">
               <Brand />
-              <Button className="size-8 text-muted-foreground" size="icon" variant="ghost">
-                <MagnifyingGlassIcon />
-              </Button>
             </header>
 
             <Nav />
@@ -224,10 +222,12 @@ function Preview() {
                 className="rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 pb-0 backdrop-blur-none"
                 error={null}
                 pristine
-                tray
-                value=""
-                onSubmit={() => undefined}
-                onValue={() => field.beat()}
+                value={draft}
+                onSubmit={() => setDraft('')}
+                onValue={(value) => {
+                  setDraft(value);
+                  field.beat();
+                }}
               />
             </div>
           </div>

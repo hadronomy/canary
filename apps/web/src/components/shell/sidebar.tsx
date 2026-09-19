@@ -5,11 +5,9 @@ import type { ShellUser } from '~/components/shell/routes';
 
 import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
-import { ShellCommandTrigger } from '~/components/shell/command-palette';
 import { Nav } from '~/components/shell/nav';
 import { Threads } from '~/components/shell/threads';
 import { Separator } from '~/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 import { cn } from '~/lib/utils';
@@ -17,7 +15,6 @@ import { roster } from '~/utils/chat';
 
 type SidebarProps = {
   className?: string;
-  onCommand: () => void;
   ready: boolean;
   user: ShellUser;
 };
@@ -30,7 +27,7 @@ type SidebarProps = {
  * only thing here that lifts off it is whichever row is active — which is what
  * makes that row findable without a highlight colour doing the work.
  */
-function Sidebar({ className, onCommand, ready, user }: SidebarProps) {
+function Sidebar({ className, ready, user }: SidebarProps) {
   const router = useRouter();
   const threads = useLiveQuery(roster(user.id)).data;
 
@@ -42,15 +39,8 @@ function Sidebar({ className, onCommand, ready, user }: SidebarProps) {
 
   return (
     <div className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2', className)}>
-      <header className="flex h-9 items-center justify-between gap-2">
+      <header className="flex h-9 items-center">
         <Brand />
-
-        <Tooltip>
-          <TooltipTrigger
-            render={<ShellCommandTrigger compact className="size-8" onOpen={onCommand} />}
-          />
-          <TooltipContent side="bottom">Command palette</TooltipContent>
-        </Tooltip>
       </header>
 
       <Nav />

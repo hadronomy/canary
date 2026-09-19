@@ -11,7 +11,6 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
 } from 'react';
 
 import type { Cmd, RunState } from '~/components/composer/commands';
@@ -20,20 +19,13 @@ import type {
   ComposerSurfaceState,
   DraftState,
 } from '~/components/composer/state';
-import type { TrayVisibility } from '~/components/composer/tray';
 
 import { ComposerAction } from '~/components/composer/action';
 import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
 import { ComposerMenu } from '~/components/composer/menu';
-import {
-  auraVariants,
-  composerMount,
-  ease,
-  railSectionVariants,
-  surfaceVariants,
-} from '~/components/composer/motion';
+import { auraVariants, composerMount, ease, surfaceVariants } from '~/components/composer/motion';
 import {
   action as actionFrom,
   enabled as hotkeyEnabled,
@@ -51,15 +43,6 @@ type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onS
   error: null | string;
   pristine?: boolean;
   running?: boolean;
-  /**
-   * Hold the control tray open.
-   *
-   * For screens where the composer is the whole page rather than a bar under a
-   * transcript: there the tray opening on hover would resize a centred block
-   * under the pointer, and there is nothing else on screen for the space to
-   * belong to anyway.
-   */
-  tray?: boolean;
   value: string;
   onCancel?: () => void;
   onNew?: () => void;
@@ -78,7 +61,6 @@ function AgentPrompt({
   onValue,
   pristine,
   running,
-  tray,
   value,
   ...props
 }: AgentPromptProps) {
@@ -91,7 +73,6 @@ function AgentPrompt({
   const composerRef = useRef<HTMLDivElement>(null);
 
   const [ui, dispatch] = useReducer(reduceUi, initialUi);
-  const [hoveringComposer, setHoveringComposer] = useState(false);
 
   const draftState: DraftState = value.trim() ? 'drafting' : 'empty';
   const runState: RunState = running ? 'running' : 'idle';
@@ -120,17 +101,6 @@ function AgentPrompt({
     pristine && draftState === 'empty' && ui.focus === 'blurred'
       ? hintCopy(ui.hint)
       : 'Message Canary...';
-
-  const trayVisible =
-    tray ||
-    hoveringComposer ||
-    ui.focus === 'focused' ||
-    draftState === 'drafting' ||
-    ui.tooling === 'enabled' ||
-    ui.mode !== 'agent';
-
-  const trayVisibility: TrayVisibility = trayVisible ? 'expanded' : 'collapsed';
-  const trayExpanded = trayVisibility === 'expanded';
 
   useEffect(() => {
     if (!pristine || draftState !== 'empty' || ui.focus !== 'blurred') {
@@ -285,12 +255,7 @@ function AgentPrompt({
         initial={reduce ? 'reducedHidden' : 'hidden'}
         variants={composerMount}
       >
-        <div
-          ref={composerRef}
-          className="relative overflow-visible"
-          onPointerEnter={() => setHoveringComposer(true)}
-          onPointerLeave={() => setHoveringComposer(false)}
-        >
+        <div ref={composerRef} className="relative overflow-visible">
           <ComposerMenu
             commands={cmds}
             state={menuFrom(ui.slash)}
@@ -298,9 +263,21 @@ function AgentPrompt({
             onPick={pickSlashCommand}
           />
 
+          {/* Tucked behind the box and inset from it, so the run state reads as
+              a label on the composer rather than as a second control bar. */}
+          <div className="canary-composer-strip relative z-10 mx-5 flex items-center justify-between gap-3 rounded-t-(--radius-composer) border border-b-0 px-3 pb-3 pt-1.5">
+            <ComposerStatus runState={runState} surfaceState={surfaceState} />
+
+            <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
+              <span className="text-foreground/70">Enter</span> to send ·{' '}
+              <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
+              <span className="text-foreground/70">/</span> for commands
+            </p>
+          </div>
+
           <motion.div
             animate={surfaceState}
-            className="canary-composer relative z-30 overflow-hidden rounded-(--radius-composer) border"
+            className="canary-composer relative z-30 -mt-2 overflow-hidden rounded-(--radius-composer) border"
             variants={surfaceVariants}
           >
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
@@ -311,17 +288,7 @@ function AgentPrompt({
               variants={auraVariants}
             />
 
-            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/5 bg-white/[0.02] px-3 py-2">
-              <ComposerStatus runState={runState} surfaceState={surfaceState} />
-
-              <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
-                <span className="text-foreground/70">Enter</span> to send ·{' '}
-                <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
-                <span className="text-foreground/70">/</span> for commands
-              </p>
-            </div>
-
-            <div className="relative z-20 grid min-w-0 grid-cols-[1fr_auto] items-end gap-2 p-2">
+            <div className="relative z-20 grid min-w-0 gap-1 p-2">
               <ComposerEditor
                 commands={cmds}
                 disabled={availability === 'disabled'}
@@ -337,11 +304,19 @@ function AgentPrompt({
                 onValue={onValue}
               />
 
-              <ComposerAction
-                action={action}
-                enabled={canUsePrimaryAction}
-                onCancelRun={activatePrimaryAction}
-              />
+              <ComposerTray
+                chars={value.length}
+                mode={ui.mode}
+                tooling={ui.tooling}
+                onMode={(mode) => dispatch({ type: 'mode-change', mode })}
+                onTools={() => dispatch({ type: 'tools-toggle' })}
+              >
+                <ComposerAction
+                  action={action}
+                  enabled={canUsePrimaryAction}
+                  onCancelRun={activatePrimaryAction}
+                />
+              </ComposerTray>
             </div>
 
             <AnimatePresence initial={false}>
@@ -358,33 +333,6 @@ function AgentPrompt({
                 </motion.p>
               ) : null}
             </AnimatePresence>
-          </motion.div>
-
-          <motion.div
-            aria-hidden={!trayExpanded}
-            animate={trayExpanded ? 'open' : 'closed'}
-            className={cn(
-              'relative z-20 overflow-hidden p-4',
-              !trayExpanded && 'pointer-events-none',
-            )}
-            initial={false}
-            variants={railSectionVariants}
-          >
-            <div
-              aria-hidden
-              className="canary-composer-skirt pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-(--radius-composer) border-x border-b"
-            />
-
-            <div className="relative z-10 px-4">
-              <ComposerTray
-                chars={value.length}
-                mode={ui.mode}
-                tooling={ui.tooling}
-                visibility={trayVisibility}
-                onMode={(mode) => dispatch({ type: 'mode-change', mode })}
-                onTools={() => dispatch({ type: 'tools-toggle' })}
-              />
-            </div>
           </motion.div>
         </div>
       </motion.div>

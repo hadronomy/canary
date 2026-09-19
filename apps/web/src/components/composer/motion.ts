@@ -93,24 +93,4 @@ const auraVariants = {
   },
 };
 
-const railSectionVariants = {
-  closed: {
-    opacity: 0,
-    height: 0,
-    transition: { duration: 0.14, ease },
-  },
-  open: {
-    opacity: 1,
-    height: 'auto',
-    transition: { duration: 0.18, ease },
-  },
-};
-
-export {
-  auraVariants,
-  composerMount,
-  ease,
-  instantTransition,
-  railSectionVariants,
-  surfaceVariants,
-};
+export { auraVariants, composerMount, ease, instantTransition, surfaceVariants };
