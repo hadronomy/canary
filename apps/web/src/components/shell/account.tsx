@@ -52,7 +52,7 @@ function Account({ className, onSignout, ready, threads, user }: AccountProps) {
           <span className="block truncate text-[13px] font-medium leading-4 text-foreground">
             {user.name ?? 'Canary user'}
           </span>
-          <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+          <span className="block truncate text-xs leading-4 text-muted-foreground">
             {user.email ?? 'Local session'}
           </span>
         </span>

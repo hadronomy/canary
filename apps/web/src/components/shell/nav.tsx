@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router';
 import type { ShellNavRoute } from '~/components/shell/routes';
 
 import { primaryNav } from '~/components/shell/routes';
-import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
 
 /**
@@ -29,18 +28,17 @@ function NavLink({ item }: { item: ShellNavRoute }) {
     <Link
       activeOptions={{ exact: item.nav.exact }}
       activeProps={{
-        // The active row is a surface, not a highlight: one step up the ladder
-        // plus the hairline that comes with it, so it reads as raised rather
-        // than as coloured-in.
-        className: 'border-input/60 bg-surface-3 text-foreground shadow-surface-1',
+        // The sidebar has no surface of its own, so the active row is the only
+        // thing on it that is raised: one step up the ladder and the hairline
+        // that comes with it.
+        className: 'border-input/50 bg-surface-3 text-foreground shadow-surface-1',
       }}
       className={cn(
-        'group flex h-8 items-center gap-2.5 rounded-(--radius-control) border border-transparent px-2',
-        'text-[13px] font-medium text-muted-foreground',
+        'group flex h-9 items-center gap-2.5 rounded-(--radius-control) border border-transparent px-2.5',
+        'text-sm text-muted-foreground',
         'transition-[background-color,border-color,color,box-shadow] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-        surfaceState.hover,
-        surfaceState.focus,
-        'focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20',
+        'hover:bg-hover hover:text-foreground',
+        'focus-visible:border-ring/50 focus-visible:bg-hover focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20',
       )}
       to={item.to}
     >

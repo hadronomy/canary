@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { z } from 'zod';
 
 import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 
 const search = z.object({
   client_id: z.string().optional(),
@@ -61,24 +60,39 @@ function ConsentComponent() {
   }
 
   return (
-    <main className="canary-shell grid min-h-svh place-items-center px-4 py-8">
-      <Card className="canary-panel w-full max-w-md rounded-lg border-border bg-card/95">
-        <CardHeader className="gap-3 px-5 pt-5">
-          <div className="grid size-11 place-items-center rounded-md bg-foreground text-background">
-            <LightningIcon className="size-5" weight="fill" />
-          </div>
-          <CardTitle className="text-base">Authorize MCP access</CardTitle>
-          <CardDescription>
-            {params.client_id ?? 'A client'} is requesting {params.scope ?? 'default'} scopes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 px-5 pb-5">
-          {err ? <p className="text-destructive text-xs">{err}</p> : null}
-          <Button disabled={busy} onClick={accept}>
-            {busy ? 'Authorizing...' : 'Authorize'}
-          </Button>
-        </CardContent>
-      </Card>
+    <main className="canary-ink grid min-h-svh place-items-center px-6 py-10">
+      <div className="w-full max-w-[21rem]">
+        <span
+          aria-hidden
+          className="mb-6 grid size-9 place-items-center rounded-[0.6rem] bg-[var(--ink)] text-[var(--on-ink)]"
+        >
+          <LightningIcon className="size-5" weight="fill" />
+        </span>
+
+        <h1 className="text-[26px] leading-[1.18] tracking-[-0.025em] text-balance text-[var(--text)]">
+          Authorize access
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-[var(--text-dim)]">
+          <span className="code text-[var(--text)]">{params.client_id ?? 'A client'}</span> is
+          asking for <span className="code text-[var(--text)]">{params.scope ?? 'default'}</span>{' '}
+          scopes on your account.
+        </p>
+
+        {err ? (
+          <p className="mt-4 border-l pl-3 text-sm text-[var(--bad)] [border-color:var(--bad-line)]">
+            {err}
+          </p>
+        ) : null}
+
+        <Button
+          className="mt-7 h-10 w-full bg-[var(--ink)] text-[var(--on-ink)] hover:bg-[var(--ink)]"
+          disabled={busy}
+          onClick={accept}
+        >
+          {busy ? 'Authorizing…' : 'Authorize'}
+        </Button>
+      </div>
     </main>
   );
 }

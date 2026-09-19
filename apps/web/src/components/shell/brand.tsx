@@ -10,14 +10,14 @@ import { cn } from '~/lib/utils';
  */
 function Brand({ className }: { className?: string }) {
   return (
-    <div className={cn('flex h-8 min-w-0 items-center gap-2 px-1', className)}>
+    <div className={cn('flex h-9 min-w-0 items-center gap-2 px-1', className)}>
       <span
         aria-hidden
-        className="grid size-6 shrink-0 place-items-center rounded-[0.5rem] bg-foreground text-background"
+        className="grid size-7 shrink-0 place-items-center rounded-[0.55rem] bg-foreground text-background"
       >
-        <LightningIcon className="size-3.5" weight="fill" />
+        <LightningIcon className="size-4" weight="fill" />
       </span>
-      <span className="truncate text-[13px] font-medium tracking-[-0.01em]">Canary</span>
+      <span className="truncate text-sm font-medium tracking-[-0.01em]">Canary</span>
     </div>
   );
 }

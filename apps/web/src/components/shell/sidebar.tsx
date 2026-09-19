@@ -26,9 +26,9 @@ type SidebarProps = {
  * One column for everything that is not the conversation: who you are, where
  * you can go, and what you have already said.
  *
- * It replaced an icon rail plus a separate thread panel. Two columns meant the
- * sidebar's width changed depending on the route, which made the main panel
- * jump on every navigation between a thread and anything else.
+ * It draws no surface of its own. The window behind it is the surface, and the
+ * only thing here that lifts off it is whichever row is active — which is what
+ * makes that row findable without a highlight colour doing the work.
  */
 function Sidebar({ className, onCommand, ready, user }: SidebarProps) {
   const router = useRouter();
@@ -42,7 +42,7 @@ function Sidebar({ className, onCommand, ready, user }: SidebarProps) {
 
   return (
     <div className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2', className)}>
-      <header className="flex items-center justify-between gap-2">
+      <header className="flex h-9 items-center justify-between gap-2">
         <Brand />
 
         <Tooltip>
@@ -57,7 +57,7 @@ function Sidebar({ className, onCommand, ready, user }: SidebarProps) {
 
       <Threads user={user} />
 
-      <footer className="grid gap-1">
+      <footer className="grid gap-1.5">
         <Separator />
         <Account
           ready={ready}

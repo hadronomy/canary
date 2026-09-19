@@ -18,6 +18,7 @@ const texts = new Map<string, ReturnType<typeof makeTranscript>>();
 const works = new Map<string, ReturnType<typeof makeActive>>();
 const fails = new Map<string, ReturnType<typeof makeFailed>>();
 const lasts = new Map<string, ReturnType<typeof makeLatest>>();
+const runsets = new Map<string, ReturnType<typeof makeStates>>();
 const docs = new Map<string, ReturnType<typeof makePieces>>();
 
 if (import.meta.hot) {
@@ -28,6 +29,7 @@ if (import.meta.hot) {
     works.clear();
     fails.clear();
     lasts.clear();
+    runsets.clear();
     docs.clear();
   });
 }
@@ -81,6 +83,35 @@ export function roster(ownerId: string) {
   rosters.set(key, col);
 
   return col;
+}
+
+/**
+ * Every run this owner has, newest first.
+ *
+ * One collection for the whole sidebar rather than one per row: the per-thread
+ * queries above are right for an open conversation, but forty of them standing
+ * open just to draw forty status dots is forty live queries too many.
+ */
+export function states(ownerId: string) {
+  const key = `runs:${ownerId}:states`;
+  const hit = runsets.get(key);
+
+  if (hit) {
+    return hit;
+  }
+
+  const col = makeStates(ownerId);
+  runsets.set(key, col);
+  return col;
+}
+
+function makeStates(ownerId: string) {
+  const col = runs(ownerId);
+
+  return createLiveQueryCollection({
+    id: `runs:${ownerId}:states`,
+    query: (q) => q.from({ run: col }).orderBy(({ run }) => run.updatedAt, 'desc'),
+  });
 }
 
 function makeRoster(ownerId: string) {

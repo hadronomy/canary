@@ -276,7 +276,7 @@ function AgentPrompt({
       >
         <div
           ref={composerRef}
-          className="relative isolate overflow-visible"
+          className="relative overflow-visible"
           onPointerEnter={() => setHoveringComposer(true)}
           onPointerLeave={() => setHoveringComposer(false)}
         >
@@ -289,7 +289,7 @@ function AgentPrompt({
 
           <motion.div
             animate={surfaceState}
-            className="relative z-30 isolate overflow-hidden rounded-[1.35rem] border bg-card shadow-surface-2"
+            className="canary-composer relative z-30 overflow-hidden rounded-(--radius-composer) border"
             variants={surfaceVariants}
           >
             <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
@@ -300,7 +300,7 @@ function AgentPrompt({
               variants={auraVariants}
             />
 
-            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-border bg-surface-4/35 px-3 py-2">
+            <div className="relative z-10 flex items-center justify-between gap-3 border-b border-white/5 bg-white/[0.02] px-3 py-2">
               <ComposerStatus runState={runState} surfaceState={surfaceState} />
 
               <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
@@ -361,7 +361,7 @@ function AgentPrompt({
           >
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-[1.35rem] border-x border-b border-border"
+              className="canary-composer-skirt pointer-events-none absolute inset-x-4 -top-px bottom-0 rounded-b-(--radius-composer) border-x border-b"
             />
 
             <div className="relative z-10 px-4">

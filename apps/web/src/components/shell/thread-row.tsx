@@ -1,22 +1,39 @@
 import type { MouseEvent } from 'react';
 
-import { TrayArrowDownIcon as ArchiveIcon } from '@phosphor-icons/react';
+import {
+  CheckCircleIcon,
+  CircleHalfIcon,
+  CircleIcon,
+  TrayArrowDownIcon as ArchiveIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { Link } from '@tanstack/react-router';
 
 import { Button } from '~/components/ui/button';
-import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
+
+/** What the thread's most recent run is doing, if it has had one. */
+type ThreadState = 'running' | 'failed' | 'done' | 'idle';
 
 type ThreadRowProps = {
   active: boolean;
   id: string;
   index?: number;
   onArchive: (id: string) => void;
+  state?: ThreadState;
   title: string;
   updated: Date;
 };
 
-function ThreadRow({ active, id, index = 0, onArchive, title: label, updated }: ThreadRowProps) {
+function ThreadRow({
+  active,
+  id,
+  index = 0,
+  onArchive,
+  state = 'idle',
+  title: label,
+  updated,
+}: ThreadRowProps) {
   const title = label.trim() || 'Untitled thread';
 
   function archive(event: MouseEvent<HTMLButtonElement>) {
@@ -31,51 +48,58 @@ function ThreadRow({ active, id, index = 0, onArchive, title: label, updated }: 
         'reveal group/item relative grid grid-cols-[minmax(0,1fr)_auto] items-center rounded-(--radius-control) border',
         'transition-[background-color,border-color,box-shadow] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
         active
-          ? 'border-input/60 bg-surface-3 shadow-surface-1'
-          : cn('border-transparent', surfaceState.hover, surfaceState.focusWithin),
+          ? 'border-input/50 bg-surface-3 shadow-surface-1'
+          : 'border-transparent hover:bg-hover focus-within:bg-hover',
       )}
       style={{ ['--i' as string]: index }}
     >
       <Link
         aria-current={active ? 'page' : undefined}
-        className="min-w-0 rounded-(--radius-control) px-2 py-1.5 outline-none"
+        className="min-w-0 rounded-(--radius-control) px-2.5 py-2 outline-none"
         params={{ threadId: id }}
         preload={false}
         to="/threads/$threadId"
       >
         <span
           className={cn(
-            'block truncate text-[13px] leading-5',
-            active ? 'font-medium text-foreground' : 'text-foreground/90',
+            'block truncate text-sm leading-5',
+            active ? 'text-foreground' : 'text-foreground/90',
           )}
         >
           {title}
         </span>
 
-        <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
-          <time className="shrink-0 tabular-nums" dateTime={updated.toISOString()}>
-            {when(updated)}
-          </time>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs leading-5 text-muted-foreground">
+          <span className="shrink-0 font-mono tabular-nums">{id.slice(0, 8)}</span>
           <span aria-hidden className="text-muted-foreground/40">
             ·
           </span>
-          <span className="truncate font-mono text-[10px] tabular-nums">{id.slice(0, 8)}</span>
+          <time className="shrink-0 tabular-nums" dateTime={updated.toISOString()}>
+            {when(updated)}
+          </time>
         </span>
       </Link>
 
-      {/* Held out of the layout so the title keeps the full row width until the
-          pointer is actually here. It fades and slides rather than popping,
-          because a control appearing under a moving cursor reads as a misclick
-          waiting to happen. */}
-      <div className="pr-1">
+      {/* The status and the archive control share one slot. Status is what you
+          want at rest; the control is what you want once the pointer is here,
+          and stacking them keeps the title's width from changing on hover. */}
+      <div className="relative grid size-8 shrink-0 place-items-center">
+        <span
+          aria-hidden
+          className={cn(
+            'col-start-1 row-start-1 transition-opacity duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+            'group-hover/item:opacity-0 group-focus-within/item:opacity-0',
+          )}
+        >
+          <State state={state} />
+        </span>
+
         <Button
           aria-label={`Archive ${title}`}
           className={cn(
-            'size-6 translate-x-1 text-muted-foreground opacity-0',
-            'transition-[background-color,color,opacity,transform] duration-(--t-fast) ease-out-strong',
-            'motion-reduce:translate-x-0 motion-reduce:transition-none',
-            'group-hover/item:translate-x-0 group-hover/item:opacity-100',
-            'focus-visible:translate-x-0 focus-visible:opacity-100',
+            'col-start-1 row-start-1 size-6 text-muted-foreground opacity-0',
+            'transition-[background-color,color,opacity] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+            'group-hover/item:opacity-100 focus-visible:opacity-100',
             'active:scale-[0.96]',
           )}
           size="icon-sm"
@@ -88,6 +112,24 @@ function ThreadRow({ active, id, index = 0, onArchive, title: label, updated }: 
       </div>
     </div>
   );
+}
+
+function State({ state }: { state: ThreadState }) {
+  if (state === 'running') {
+    return <CircleHalfIcon className="size-3.5 text-chart-4" weight="fill" />;
+  }
+
+  if (state === 'failed') {
+    return <WarningCircleIcon className="size-3.5 text-destructive" weight="fill" />;
+  }
+
+  if (state === 'done') {
+    return <CheckCircleIcon className="size-3.5 text-success" weight="fill" />;
+  }
+
+  // A thread nothing has run on yet still gets a mark, so the column has a
+  // consistent left edge and an empty slot never reads as a missing icon.
+  return <CircleIcon className="size-3.5 text-muted-foreground/35" />;
 }
 
 function when(date: Date) {
@@ -133,4 +175,4 @@ function sameDay(left: Date, right: Date) {
 }
 
 export { ThreadRow };
-export type { ThreadRowProps };
+export type { ThreadRowProps, ThreadState };

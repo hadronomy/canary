@@ -29,6 +29,7 @@ function NewThread() {
   const field = useField({ quiet: [0, 0, 0, 0] });
 
   const box = useRef<HTMLDivElement>(null);
+  const host = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState('');
   const [err, setErr] = useState<null | string>(null);
   const [busy, setBusy] = useState(false);
@@ -37,28 +38,38 @@ function NewThread() {
 
   useLayoutEffect(() => {
     const node = box.current;
-    if (!node) return;
+    const stage = host.current;
+    if (!node || !stage) return;
 
     // The field clears where the composer sits, measured rather than computed
     // once: the composer grows as the tray opens and as an error line arrives.
     function clear() {
-      if (!node) return;
-      const rect = node.getBoundingClientRect();
-      field.aim(
-        (rect.left + rect.width / 2) / innerWidth,
-        (rect.top + rect.height / 2) / innerHeight,
-      );
+      if (!node || !stage) return;
+      // Measured against the canvas, not the window. The shader works in its
+      // own surface's coordinates, and the panel is inset — reading these off
+      // `innerWidth` put the clearing a couple of hundred pixels left of the
+      // composer and left the type sitting on the busiest part of the field.
+      const box_ = node.getBoundingClientRect();
+      const frame = stage.getBoundingClientRect();
+      const x = (value: number) => (value - frame.left) / frame.width;
+      const y = (value: number) => (value - frame.top) / frame.height;
+
+      field.aim(x(box_.left + box_.width / 2), y(box_.top - 20));
+
+      // The clearing has to reach the heading, not just the composer: the line
+      // sits above the box, and that is the one place the type has to win.
       field.put('quiet', [
-        (rect.left - 120) / innerWidth,
-        (rect.top - 60) / innerHeight,
-        (rect.width + 240) / innerWidth,
-        (rect.height + 120) / innerHeight,
+        x(box_.left - 120),
+        y(box_.top - 150),
+        (box_.width + 240) / frame.width,
+        (box_.height + 210) / frame.height,
       ]);
     }
 
     clear();
     const ro = new ResizeObserver(clear);
     ro.observe(node);
+    ro.observe(stage);
     ro.observe(document.documentElement);
     return () => ro.disconnect();
   }, [field]);
@@ -114,11 +125,11 @@ function NewThread() {
   );
 
   return (
-    <div className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden bg-surface-1">
+    <div ref={host} className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden">
       <Backdrop shader={shader} state={field.state} />
 
-      <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-4">
-        <h1 className="max-w-lg text-center text-[22px] leading-[1.25] tracking-[-0.02em] text-balance">
+      <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-10">
+        <h1 className="max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
           <Swap value={busy ? 'Opening the thread…' : 'What are we working on?'} />
         </h1>
       </div>

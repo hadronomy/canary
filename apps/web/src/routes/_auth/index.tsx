@@ -54,9 +54,7 @@ function Home() {
 
         <section className="grid gap-2">
           <div className="flex items-center justify-between gap-3 px-2">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-              Continue
-            </h2>
+            <h2 className="text-xs font-medium text-muted-foreground">Continue</h2>
             <Button
               className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
               render={<Link to="/threads" />}

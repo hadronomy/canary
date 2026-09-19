@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
+import type { ThreadState } from '~/components/shell/thread-row';
 
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
@@ -21,7 +22,7 @@ import { Skeleton } from '~/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { Morph } from '~/lib/motion';
 import { cn } from '~/lib/utils';
-import { list, roster } from '~/utils/chat';
+import { list, roster, states } from '~/utils/chat';
 
 type ThreadGroup = {
   id: 'today' | 'recent' | 'older';
@@ -53,6 +54,21 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
 
   const threadCollection = list(owner);
   const rosterQuery = useLiveQuery(roster(owner));
+  const runs = useLiveQuery(states(owner)).data;
+
+  // Newest run wins. The query is already ordered, so the first row seen for a
+  // thread is its current state and every later one is history.
+  const marks = useMemo(() => {
+    const seen = new Map<string, ThreadState>();
+
+    for (const run of runs) {
+      if (!seen.has(run.threadId)) {
+        seen.set(run.threadId, mark(run.status));
+      }
+    }
+
+    return seen;
+  }, [runs]);
 
   const threads = useMemo(() => live(rosterQuery.data), [rosterQuery.data]);
   const search = useMemo(() => matcher(query), [query]);
@@ -201,10 +217,8 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
 
   return (
     <section className={cn('grid min-h-0 grid-rows-[auto_auto_1fr] gap-1', className)}>
-      <header className="flex h-7 items-center justify-between gap-2 px-2">
-        <h2 className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          Threads
-        </h2>
+      <header className="flex h-8 items-center justify-between gap-2 px-2.5">
+        <h2 className="truncate text-sm text-muted-foreground">Threads</h2>
 
         <div className="flex shrink-0 items-center gap-0.5">
           <Tip label={open ? 'Hide search' : 'Search threads'}>
@@ -262,7 +276,11 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
         </div>
       </div>
 
-      <ScrollArea className="-mx-1 min-h-0" cueSize="tight" viewportClassName="px-1 pr-2">
+      <ScrollArea
+        className="-mx-1 min-h-0 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]"
+        cueSize="tight"
+        viewportClassName="px-1 pr-2 pb-8"
+      >
         <nav aria-label="Conversations">
           {!rosterQuery.isReady ? (
             <Pending />
@@ -270,18 +288,18 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
             <div className="grid gap-3">
               {groups.map((entry) => (
                 <section key={entry.id} aria-labelledby={`threads-${entry.id}`}>
-                  <div className="mb-1 flex items-center gap-1.5 px-2">
+                  <div className="mb-0.5 flex items-center gap-1.5 px-2.5">
                     <FolderSimpleIcon
                       aria-hidden
                       className="size-3.5 shrink-0 text-muted-foreground/70"
                     />
                     <h3
-                      className="min-w-0 truncate text-[11px] font-medium text-muted-foreground"
+                      className="min-w-0 truncate text-xs text-muted-foreground"
                       id={`threads-${entry.id}`}
                     >
                       {entry.label}
                     </h3>
-                    <Morph className="text-[11px] tabular-nums text-muted-foreground/60">
+                    <Morph className="text-xs tabular-nums text-muted-foreground/60">
                       {entry.threads.length}
                     </Morph>
                   </div>
@@ -293,6 +311,7 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
                         id={thread.id}
                         index={index}
                         key={thread.id}
+                        state={marks.get(thread.id)}
                         title={thread.title}
                         updated={thread.updatedAt}
                         onArchive={archive}
@@ -359,6 +378,22 @@ function Tip(props: { children: ReactElement; label: string }) {
       <TooltipContent side="bottom">{props.label}</TooltipContent>
     </Tooltip>
   );
+}
+
+function mark(status: string): ThreadState {
+  if (status === 'running' || status === 'queued') {
+    return 'running';
+  }
+
+  if (status === 'failed') {
+    return 'failed';
+  }
+
+  if (status === 'completed') {
+    return 'done';
+  }
+
+  return 'idle';
 }
 
 function live(threads: Thread[]) {

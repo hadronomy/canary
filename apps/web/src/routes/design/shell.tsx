@@ -14,7 +14,6 @@ import { Nav } from '~/components/shell/nav';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
-import { Elevated } from '~/lib/elevated';
 import { Swap } from '~/lib/motion';
 
 // Preview-only. The shell with fixture data, so the redesign can be looked at
@@ -37,18 +36,18 @@ const GROUPS = [
   {
     label: 'Today',
     rows: [
-      ['Rewrite the sync keepalive proxy', 3],
-      ['Why does the composer drop focus on send?', 18],
-      ['Draft the varlock migration notes', 64],
-      ['Electric shape ownership', 190],
+      ['Rewrite the sync keepalive proxy', 3, 'done'],
+      ['Why does the composer drop focus on send?', 18, 'running'],
+      ['Draft the varlock migration notes', 64, 'idle'],
+      ['Electric shape ownership', 190, 'failed'],
     ] as const,
   },
   {
     label: 'Recent',
     rows: [
-      ['Token exchange RFC 8693 plan', 1500],
-      ['Rust rate limiting with tower_governor', 2600],
-      ['Effect v4 migration sweep', 4300],
+      ['Token exchange RFC 8693 plan', 1500, 'done'],
+      ['Rust rate limiting with tower_governor', 2600, 'done'],
+      ['Effect v4 migration sweep', 4300, 'idle'],
     ] as const,
   },
 ];
@@ -81,29 +80,40 @@ function Preview() {
   const params = Route.useSearch();
   const field = useField({ quiet: [0, 0, 0, 0] });
   const box = useRef<HTMLDivElement>(null);
+  const host = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const node = box.current;
-    if (!node) return;
+    const stage = host.current;
+    if (!node || !stage) return;
 
     function clear() {
-      if (!node) return;
-      const rect = node.getBoundingClientRect();
-      field.aim(
-        (rect.left + rect.width / 2) / innerWidth,
-        (rect.top + rect.height / 2) / innerHeight,
-      );
+      if (!node || !stage) return;
+      // Measured against the canvas, not the window. The shader works in its
+      // own surface's coordinates, and the panel is inset — reading these off
+      // `innerWidth` put the clearing a couple of hundred pixels left of the
+      // composer and left the type sitting on the busiest part of the field.
+      const box_ = node.getBoundingClientRect();
+      const frame = stage.getBoundingClientRect();
+      const x = (value: number) => (value - frame.left) / frame.width;
+      const y = (value: number) => (value - frame.top) / frame.height;
+
+      field.aim(x(box_.left + box_.width / 2), y(box_.top - 20));
+
+      // The clearing has to reach the heading, not just the composer: the line
+      // sits above the box, and that is the one place the type has to win.
       field.put('quiet', [
-        (rect.left - 120) / innerWidth,
-        (rect.top - 60) / innerHeight,
-        (rect.width + 240) / innerWidth,
-        (rect.height + 120) / innerHeight,
+        x(box_.left - 120),
+        y(box_.top - 150),
+        (box_.width + 240) / frame.width,
+        (box_.height + 210) / frame.height,
       ]);
     }
 
     clear();
     const ro = new ResizeObserver(clear);
     ro.observe(node);
+    ro.observe(stage);
     ro.observe(document.documentElement);
     return () => ro.disconnect();
   }, [field]);
@@ -111,14 +121,11 @@ function Preview() {
   let seq = 0;
 
   return (
-    <div className="canary-shell h-svh overflow-hidden p-3 text-foreground">
-      <div className="flex h-full min-h-0 gap-(--shell-gap)">
-        <Elevated
-          shadowLevel={2}
-          className="h-full min-h-0 w-[16.5rem] shrink-0 overflow-hidden rounded-(--radius-shell) border border-sidebar-border p-2 text-sidebar-foreground"
-        >
+    <div className="grid h-svh grid-cols-[15.5rem_minmax(0,1fr)] overflow-hidden bg-background p-2 text-foreground">
+      <>
+        <aside className="h-full min-h-0 pr-2">
           <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2">
-            <header className="flex items-center justify-between gap-2">
+            <header className="flex h-9 items-center justify-between gap-2">
               <Brand />
               <Button className="size-8 text-muted-foreground" size="icon" variant="ghost">
                 <MagnifyingGlassIcon />
@@ -128,39 +135,38 @@ function Preview() {
             <Nav />
 
             <section className="grid min-h-0 grid-rows-[auto_1fr] gap-1">
-              <header className="flex h-7 items-center justify-between gap-2 px-2">
-                <h2 className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Threads
-                </h2>
+              <header className="flex h-8 items-center justify-between gap-2 px-2.5">
+                <h2 className="truncate text-sm text-muted-foreground">Threads</h2>
                 <Button className="size-6 text-muted-foreground" size="icon-sm" variant="ghost">
                   <MagnifyingGlassIcon />
                 </Button>
               </header>
 
-              <div className="min-h-0 overflow-y-auto pr-1">
+              <div className="min-h-0 overflow-y-auto pr-1 pb-8 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]">
                 <div className="grid gap-3">
                   {GROUPS.map((entry) => (
                     <section key={entry.label}>
-                      <div className="mb-1 flex items-center gap-1.5 px-2">
+                      <div className="mb-0.5 flex items-center gap-1.5 px-2.5">
                         <FolderSimpleIcon
                           aria-hidden
                           className="size-3.5 shrink-0 text-muted-foreground/70"
                         />
-                        <h3 className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
+                        <h3 className="min-w-0 truncate text-xs text-muted-foreground">
                           {entry.label}
                         </h3>
-                        <span className="text-[11px] tabular-nums text-muted-foreground/60">
+                        <span className="text-xs tabular-nums text-muted-foreground/60">
                           {entry.rows.length}
                         </span>
                       </div>
 
                       <div className="grid gap-px">
-                        {entry.rows.map(([title, minutes], index) => (
+                        {entry.rows.map(([title, minutes, state], index) => (
                           <ThreadRow
                             active={seq++ === 1}
                             id={`preview-${title.length}-${minutes}`}
                             index={index}
                             key={title}
+                            state={state}
                             title={title}
                             updated={ago(minutes)}
                             onArchive={() => undefined}
@@ -173,15 +179,18 @@ function Preview() {
               </div>
             </section>
 
-            <footer className="grid gap-1">
+            <footer className="grid gap-1.5">
               <Separator />
               <Account ready threads={7} user={USER} onSignout={() => undefined} />
             </footer>
           </div>
-        </Elevated>
+        </aside>
 
-        <main className="canary-panel min-h-0 flex-1 overflow-hidden rounded-(--radius-shell)">
-          <div className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden bg-surface-1">
+        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) border border-border bg-surface-2 shadow-surface-2">
+          <div
+            ref={host}
+            className="relative grid h-full min-h-0 grid-rows-[1fr_auto] overflow-hidden"
+          >
             <Backdrop shader={shader} state={field.state} />
 
             {params.v === 'tasks' ? (
@@ -193,8 +202,8 @@ function Preview() {
                 </div>
               </div>
             ) : (
-              <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-4">
-                <h1 className="max-w-lg text-center text-[22px] leading-[1.25] tracking-[-0.02em] text-balance">
+              <div className="relative z-10 grid min-h-0 place-items-end justify-items-center px-6 pb-10">
+                <h1 className="max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
                   <Swap value="What are we working on?" />
                 </h1>
               </div>
@@ -212,7 +221,7 @@ function Preview() {
             </div>
           </div>
         </main>
-      </div>
+      </>
     </div>
   );
 }

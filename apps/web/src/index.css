@@ -86,6 +86,7 @@
   --border: oklch(0.36 0.014 295 / 15%);
   --input: oklch(0.34 0.014 295 / 19%);
   --ring: oklch(0.47 0.2 295);
+  --success: oklch(0.55 0.15 155);
   --chart-1: oklch(0.52 0.2 295);
   --chart-2: oklch(0.52 0.15 262);
   --chart-3: oklch(0.56 0.16 330);
@@ -110,7 +111,7 @@
   --radius-control: calc(var(--radius) - 2px);
   --radius-press: calc(var(--radius) - 2px);
 
-  --shell-gap: 0.625rem;
+  --radius-composer: calc(var(--radius) + 12px);
 
   --ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-drawer: cubic-bezier(0.22, 1, 0.36, 1);
@@ -204,6 +205,7 @@
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 11%);
   --ring: oklch(0.64 0.19 295);
+  --success: oklch(0.72 0.15 155);
   --chart-1: oklch(0.64 0.19 295);
   --chart-2: oklch(0.68 0.14 262);
   --chart-3: oklch(0.72 0.15 330);
@@ -274,6 +276,7 @@
   --color-active: var(--active);
   --color-scrim: var(--scrim);
 
+  --color-success: var(--success);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -426,29 +429,24 @@
 }
 
 @layer components {
-  .canary-shell {
-    @apply bg-background;
+  /* Glass, built rather than blurred: the fill is translucent so the field
+     behind it actually comes through, two hairlines in the surface's own colour
+     draw the edge, an inset highlight catches the top lip, and the cast shadow
+     is tinted to the surface instead of being black. A plain `backdrop-blur`
+     with an opaque fill is just a lighter box. */
+  .canary-composer {
+    background: color-mix(in oklch, var(--surface-4) 88%, transparent);
+    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
+    backdrop-filter: blur(20px) saturate(1.3);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+      inset 0 0 0 1px rgb(255 255 255 / 0.02),
+      0 1px 2px -1px rgb(0 0 0 / 0.5),
+      0 12px 28px -12px rgb(0 0 0 / 0.55);
   }
 
-  .canary-panel {
-    @apply border border-border bg-card text-card-foreground shadow-surface-2;
-  }
-
-  .canary-panel-raised {
-    @apply border border-border bg-surface-4 text-foreground shadow-surface-3;
-  }
-
-  .canary-control {
-    @apply bg-muted text-foreground;
-  }
-
-  .canary-control:hover {
-    @apply bg-accent;
-  }
-
-  .canary-glass {
-    @apply border border-border bg-popover/86 text-popover-foreground shadow-surface-4;
-    backdrop-filter: blur(24px) saturate(1.08);
+  .canary-composer-skirt {
+    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
   }
 
   .scrollbar-gutter-both {

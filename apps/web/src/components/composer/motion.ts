@@ -8,7 +8,6 @@ const composerMount = {
   hidden: {
     opacity: 0,
     y: 8,
-    filter: 'blur(2px)',
   },
   reducedHidden: {
     opacity: 0,
@@ -16,7 +15,6 @@ const composerMount = {
   show: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: {
       duration: 0.22,
       ease,
@@ -24,53 +22,44 @@ const composerMount = {
   },
 };
 
+// The surface's fill, blur and edge live in `.canary-composer`; these variants
+// only say what changes with state. They deliberately do not set `boxShadow`:
+// an inline `none` here was flattening the layered glass the class builds.
 const surfaceVariants = {
   commanding: {
-    borderColor: 'var(--input)',
+    borderColor: 'color-mix(in oklch, var(--primary) 34%, transparent)',
     borderTopLeftRadius: '0px',
     borderTopRightRadius: '0px',
-    boxShadow: 'none',
-    y: 0,
     transition: { duration: 0.2, ease },
   },
   disabled: {
-    borderColor: 'var(--border)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
+    borderColor: 'color-mix(in oklch, var(--surface-6) 40%, transparent)',
+    borderTopLeftRadius: 'var(--radius-composer)',
+    borderTopRightRadius: 'var(--radius-composer)',
     transition: { duration: 0.18, ease },
   },
   error: {
-    borderColor: 'color-mix(in oklch, var(--destructive) 34%, transparent)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
+    borderColor: 'color-mix(in oklch, var(--destructive) 46%, transparent)',
+    borderTopLeftRadius: 'var(--radius-composer)',
+    borderTopRightRadius: 'var(--radius-composer)',
     transition: { duration: 0.18, ease },
   },
   focused: {
-    borderColor: 'var(--input)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
+    borderColor: 'color-mix(in oklch, var(--primary) 34%, transparent)',
+    borderTopLeftRadius: 'var(--radius-composer)',
+    borderTopRightRadius: 'var(--radius-composer)',
     transition: { duration: 0.18, ease },
   },
   resting: {
-    borderColor: 'var(--border)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
+    borderColor: 'color-mix(in oklch, var(--surface-6) 60%, transparent)',
+    borderTopLeftRadius: 'var(--radius-composer)',
+    borderTopRightRadius: 'var(--radius-composer)',
     transition: { duration: 0.18, ease },
   },
   running: {
-    borderColor: 'var(--input)',
-    borderTopLeftRadius: '1.35rem',
-    borderTopRightRadius: '1.35rem',
-    boxShadow: 'none',
-    y: 0,
+    borderColor: 'color-mix(in oklch, var(--primary) 26%, transparent)',
+    borderTopLeftRadius: 'var(--radius-composer)',
+    borderTopRightRadius: 'var(--radius-composer)',
     transition: { duration: 0.18, ease },
   },
 };
