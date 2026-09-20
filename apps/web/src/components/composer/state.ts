@@ -1,7 +1,6 @@
 import type { Cmd, Mode, RunState } from '~/components/composer/commands';
 import type { ComposerSlashState, FocusState } from '~/components/composer/editor';
 import type { ComposerMenuState } from '~/components/composer/menu';
-import type { ToolingState } from '~/components/composer/tray';
 
 const hints = [
   'Ask Canary to investigate...',
@@ -26,7 +25,6 @@ type ComposerUiState = {
   hint: number;
   mode: Mode;
   slash: ComposerSlashState;
-  tooling: ToolingState;
 };
 
 type ComposerUiEvent =
@@ -34,15 +32,13 @@ type ComposerUiEvent =
   | { type: 'focus-change'; focus: FocusState }
   | { type: 'mode-change'; mode: Mode }
   | { type: 'slash-active'; index: number }
-  | { type: 'slash-change'; slash: ComposerSlashState }
-  | { type: 'tools-toggle' };
+  | { type: 'slash-change'; slash: ComposerSlashState };
 
 const initialUi: ComposerUiState = {
   focus: 'blurred',
   hint: 0,
   mode: 'agent',
   slash: { kind: 'closed' },
-  tooling: 'enabled',
 };
 
 function enabled(
@@ -83,25 +79,14 @@ function reduce(state: ComposerUiState, event: ComposerUiEvent): ComposerUiState
   }
 
   if (event.type === 'mode-change') {
-    return {
-      ...state,
-      mode: event.mode,
-      tooling: event.mode === 'tools' ? 'enabled' : state.tooling,
-    };
+    return { ...state, mode: event.mode };
   }
 
   if (event.type === 'slash-change') {
     return { ...state, slash: event.slash };
   }
 
-  if (event.type === 'slash-active') {
-    return { ...state, slash: active(state.slash, event.index) };
-  }
-
-  return {
-    ...state,
-    tooling: state.tooling === 'enabled' ? 'disabled' : 'enabled',
-  };
+  return { ...state, slash: active(state.slash, event.index) };
 }
 
 function active(slash: ComposerSlashState, index: number): ComposerSlashState {

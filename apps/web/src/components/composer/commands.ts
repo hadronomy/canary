@@ -143,15 +143,3 @@ export function filter(cmds: Cmd[], query: string) {
     [cmd.slash, cmd.label, cmd.desc].some((part) => part.toLowerCase().includes(term)),
   );
 }
-
-export function modeLabel(mode: Mode) {
-  if (mode === 'tools') {
-    return 'Tools';
-  }
-
-  if (mode === 'compact') {
-    return 'Compact';
-  }
-
-  return 'Agent';
-}

@@ -41,7 +41,6 @@ import {
   reduce as reduceUi,
   surface as surfaceFrom,
 } from '~/components/composer/state';
-import { ComposerTray } from '~/components/composer/tray';
 import { cn } from '~/lib/utils';
 
 type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
@@ -321,19 +320,22 @@ function AgentPrompt({
                   onValue={onValue}
                 />
 
-                <ComposerTray
-                  chars={value.length}
-                  mode={ui.mode}
-                  tooling={ui.tooling}
-                  onMode={(mode) => dispatch({ type: 'mode-change', mode })}
-                  onTools={() => dispatch({ type: 'tools-toggle' })}
-                >
+                <div className="flex min-w-0 items-center justify-end gap-2.5">
+                  {/* Only worth the space once there is enough text for the
+                      number to mean something. Below that it is a zero taking
+                      up a column. */}
+                  {value.length > 0 ? (
+                    <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:block">
+                      {count(value.length)}
+                    </span>
+                  ) : null}
+
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}
                     onCancelRun={activatePrimaryAction}
                   />
-                </ComposerTray>
+                </div>
               </div>
 
               <AnimatePresence initial={false}>
@@ -356,6 +358,14 @@ function AgentPrompt({
       </motion.div>
     </form>
   );
+}
+
+function count(chars: number) {
+  if (chars < 1000) {
+    return `${chars}`;
+  }
+
+  return `${(chars / 1000).toFixed(1)}k`;
 }
 
 function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfaceState }) {
