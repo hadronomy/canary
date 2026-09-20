@@ -1,4 +1,4 @@
-import { grain, ign, quantise } from "./ink.wgsl";
+import { bayer, grain, quantise } from "./ink.wgsl";
 import { fbmSimplex3d } from "@vgpu/wgsl-std/noise/simplex";
 
 // PROMPT — the page before anything has been asked of it.
@@ -16,12 +16,13 @@ import { fbmSimplex3d } from "@vgpu/wgsl-std/noise/simplex";
 // being far from. The warp amplitude is what the composer relaxes, so order is
 // the absence of warping rather than a second drawing fading in over the first.
 //
-// Tone is carried by dithering, not by a gradient. The field is quantised to
-// six steps against an interleaved gradient noise threshold, so what reaches
-// the screen is scattered pixels at a handful of levels. A backdrop this dark
-// has perhaps twenty 8-bit codes to work with, and an undithered ramp across
-// that spends them on visible bands; dithering trades the banding for grain,
-// which is the trade every printing process has ever made.
+// Tone is carried by an ordered screen, not by a gradient. The field is
+// quantised to a handful of levels against a Bayer matrix read on a coarse
+// lattice, so what reaches the screen is a visible grid of dots that opens and
+// closes with the tone — a halftone, the way tone has been carried on paper
+// since the 1880s. The pattern is meant to be seen. A dither fine enough to
+// disappear is only an anti-banding measure, and this is meant to be the
+// texture of the thing.
 //
 // Decorative only: the screen is complete and legible with this absent, and it
 // is absent on every device without WebGPU or with reduced motion asked for.
@@ -43,12 +44,22 @@ struct Params {
 // a filter sitting on top of one.
 const TINT = vec3f(0.55, 0.40, 1.0);
 
-// Steps across the whole 0..1 output range. The field only ever reaches about
-// a third of that, so this leaves roughly six levels for it to land on: fewer
-// and the dither becomes the subject, more and there is nothing left for it to
-// do. Counted in output space rather than field space because that is where the
-// quantising has to happen — see the tail of fs_main.
-const STEPS = 18.0;
+// Steps across the whole 0..1 output range. The field reaches about half of
+// that at its brightest, so this leaves five or six levels for it to land on —
+// few enough that the screen has to open and close to carry a gradient, which
+// is the whole point of it. Counted in output space rather than field space
+// because that is where the quantising has to happen; see the tail of fs_main.
+const STEPS = 11.0;
+
+/// How many device pixels across one cell of the screen.
+///
+/// Derived from the surface width rather than fixed. A constant in device
+/// pixels halves the pitch on a 2x display, which is how the first attempt at
+/// this ended up screening at one device pixel and disappearing into a flat
+/// panel on exactly the machines it was being looked at on.
+fn pitch(res: vec2f) -> f32 {
+  return max(2.0, round(res.x / 780.0));
+}
 
 /// One octave stack, at a point and a moment.
 fn layer(p: vec2f, t: f32) -> f32 {
@@ -92,13 +103,13 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   //
   // The offsets are Quilez's. They carry no meaning beyond pulling unrelated
   // values out of one noise function.
-  let base = q * 1.35;
+  let base = q * 0.85;
   let w = vec2f(
     layer(base, params.time * 0.021),
     layer(base + vec2f(5.2, 1.3), params.time * 0.017),
   );
 
-  let turbulence = layer(base + 4.0 * w * warp + vec2f(1.7, 9.2), params.time * 0.011) * 3.4;
+  let turbulence = layer(base + 2.6 * w * warp + vec2f(1.7, 9.2), params.time * 0.011) * 1.7;
 
   // The ordered term keeps a trace of the turbulence so the straightening reads
   // as the same field settling rather than as a second drawing fading in.
@@ -112,7 +123,7 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 
   // The exponent pushes most of the screen to the dark end. Without it every
   // pixel carries ink and the field reads as a fog rather than as a drawing.
-  var tone = pow(band, 2.4) * (0.5 + near * 0.5);
+  var tone = pow(band, 1.6) * (0.5 + near * 0.5);
   tone += near * near * 0.1;
 
   // Ease proportionally to the region rather than by a fixed distance: a fixed
@@ -133,14 +144,22 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // steps and throws the dither away. It has to land on the values that are
   // actually written to the framebuffer, which is the same reason every source
   // on this says to dither immediately before the output quantises.
-  let value = clamp(tone, 0.0, 1.0) * (0.14 + near * 0.17);
+  // Brighter than a backdrop strictly needs to be, because a screen has nothing
+  // to say across four 8-bit codes. The peak sits under the composer, which is
+  // cleared, so what is on screen is the ring around it falling away to black —
+  // a gradient long enough for the dots to work through.
+  let value = clamp(tone, 0.0, 1.0) * (0.15 + near * 0.32);
   var color = vec3f(value) * mix(vec3f(1.0), TINT, 0.45 + near * 0.35);
   color += vec3f(grain(px, params.time) * 0.005);
 
-  // One threshold for all three channels. Per-channel thresholds dither the
-  // hue as well as the level, which shows up as colour speckle on a tint this
+  // One threshold for all three channels. Per-channel thresholds screen the hue
+  // as well as the level, which shows up as colour speckle on a tint this
   // saturated.
-  let d = ign(px);
+  //
+  // Ordered rather than blue-noise-like: a scattered threshold hides itself by
+  // design, and the job here is a pattern you can see. The 8x8 matrix is read
+  // on the coarse lattice, so one cell of the screen carries one threshold.
+  let d = bayer(vec2u(vec2i(floor(px / pitch(res))) & vec2i(7)), 3u);
   return vec4f(
     quantise(color.r, STEPS, d),
     quantise(color.g, STEPS, d),

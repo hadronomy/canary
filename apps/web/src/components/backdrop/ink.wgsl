@@ -30,24 +30,6 @@ export fn quantise(value: f32, steps: f32, threshold: f32) -> f32 {
   return floor((value + (threshold - 0.5) / steps) * steps + 0.5) / steps;
 }
 
-/// Interleaved gradient noise in [0, 1), from the pixel coordinate alone.
-///
-/// Jorge Jimenez's sequence (Next Generation Post Processing in Call of Duty:
-/// Advanced Warfare, SIGGRAPH 2014). Every 3x3 block of pixels — including
-/// overlapping ones — carries a low-discrepancy spread of values, so it dithers
-/// close to blue noise without the texture fetch blue noise needs. White noise
-/// clumps and leaves holes at this amplitude; Bayer lays a crosshatch over
-/// everything, which fights a field that has structure of its own to show.
-///
-/// Deliberately not animated. Jimenez advances it 5.588238 pixels a frame so a
-/// temporal accumulator can average it away, but nothing here accumulates: a
-/// threshold that moves every frame reads as static crawling over the picture.
-/// Held still it reads as a screen the image is printed through, and the image
-/// moves underneath it.
-export fn ign(px: vec2f) -> f32 {
-  return fract(52.9829189 * fract(0.06711056 * px.x + 0.00583715 * px.y));
-}
-
 // Per-pixel film grain in [-0.5, 0.5], reseeded every frame.
 export fn grain(px: vec2f, time: f32) -> f32 {
   return hash2(px + vec2f(time * 71.3, time * 37.9)).x - 0.5;
