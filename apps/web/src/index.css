@@ -456,6 +456,40 @@
     box-shadow: var(--glass-lip), var(--glass-ring), var(--shadow-glass);
   }
 
+  /* The composer's edge, by state. In CSS rather than in Motion variants
+     because `color-mix()` is not something Motion can interpolate — it warned
+     and snapped on every state change. A plain transition handles it. */
+  .canary-composer {
+    transition: border-color var(--t-base) var(--ease-out-strong);
+  }
+
+  .canary-composer[data-state='resting'] {
+    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
+  }
+
+  .canary-composer[data-state='focused'],
+  .canary-composer[data-state='commanding'] {
+    border-color: color-mix(in oklch, var(--primary) 34%, transparent);
+  }
+
+  .canary-composer[data-state='running'] {
+    border-color: color-mix(in oklch, var(--primary) 26%, transparent);
+  }
+
+  .canary-composer[data-state='error'] {
+    border-color: color-mix(in oklch, var(--destructive) 46%, transparent);
+  }
+
+  .canary-composer[data-state='disabled'] {
+    border-color: color-mix(in oklch, var(--surface-6) 40%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .canary-composer {
+      transition: none;
+    }
+  }
+
   /* The slash menu, which meets the composer edge to edge. Same fill, same
      blur, same edge — two materials meeting on a shared border is the one
      place the seam between them becomes visible. Its shadow throws upward

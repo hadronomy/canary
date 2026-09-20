@@ -294,6 +294,7 @@ function AgentPrompt({
             <motion.div
               animate={surfaceState}
               className="canary-composer relative z-30 overflow-hidden rounded-(--radius-composer) border"
+              data-state={surfaceState}
               variants={surfaceVariants}
             >
               <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
