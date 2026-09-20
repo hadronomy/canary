@@ -183,7 +183,7 @@ function Preview() {
           </div>
         </aside>
 
-        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) border border-border bg-surface-2 shadow-surface-2">
+        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2">
           <div
             ref={host}
             className={cn(

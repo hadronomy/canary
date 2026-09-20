@@ -19,9 +19,10 @@ type ShellFrameProps = ComponentPropsWithoutRef<'div'> & {
  *
  * The sidebar has no surface of its own — it sits directly on the window, so
  * the navigation reads as part of the frame rather than as another card. Only
- * the conversation is a panel: inset on every side, its own corners, one
- * hairline. That is the whole hierarchy, and it means the panel can hold
- * full-bleed artwork without a second background showing through behind it.
+ * the conversation is a panel: inset on every side, its own corners, and a
+ * tonal step up from the window with the shadow that comes with it. No drawn
+ * border — an edge you feel rather than a line, which is also what keeps a
+ * rule from cutting across the artwork it holds.
  *
  * Giving the sidebar a fill and a divider instead put three surfaces on screen
  * to express a split that this expresses with one.
@@ -67,7 +68,7 @@ function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
 
       <aside className="hidden h-full min-h-0 pr-2 md:block">{sidebar}</aside>
 
-      <main className="min-h-0 overflow-hidden rounded-(--radius-shell) border border-border bg-surface-2 shadow-surface-2">
+      <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2">
         {ready ? children : <Sync />}
       </main>
 
