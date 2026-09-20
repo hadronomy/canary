@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import {
+  CaretRightIcon,
   CircleNotchIcon,
   FileTextIcon,
   FolderSimpleIcon,
@@ -110,7 +111,12 @@ function Row({ task }: { task: Task }) {
     <div
       className={cn(
         'flex min-w-0 items-start gap-2 rounded-(--radius-control) px-2 py-1.5',
-        task.detail && 'cursor-pointer list-none',
+        'transition-colors duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+        task.detail && 'cursor-pointer list-none hover:bg-hover',
+        // A step that failed is the one you came to read. Tinting the row is
+        // what separates it from a list of things that went fine, at the
+        // distance you actually scan a log from.
+        task.status === 'failed' && 'bg-destructive/8',
       )}
     >
       <span className="mt-px grid size-4 shrink-0 place-items-center">
@@ -139,6 +145,20 @@ function Row({ task }: { task: Task }) {
           </span>
         ) : null}
       </span>
+
+      {/* Only rows that have something to open say so. Without it the ones
+          that do are indistinguishable from the ones that do not, and the
+          output may as well not be there. */}
+      {task.detail ? (
+        <CaretRightIcon
+          aria-hidden
+          className={cn(
+            'mt-0.5 size-3 shrink-0 text-muted-foreground/60',
+            'transition-transform duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+            'group-open/step:rotate-90',
+          )}
+        />
+      ) : null}
     </div>
   );
 
@@ -147,11 +167,25 @@ function Row({ task }: { task: Task }) {
   }
 
   return (
-    <details className="min-w-0 [&[open]_summary]:text-foreground">
+    // A failure opens itself. Everything else is there to be asked for, but a
+    // step that failed is the reason the log is being read at all, and making
+    // someone click to find out why is the log withholding its own point.
+    <details
+      className="group/step min-w-0 [&[open]_summary]:text-foreground"
+      open={task.status === 'failed'}
+    >
       <summary className="list-none outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
         {head}
       </summary>
-      <pre className="m-0 mx-2 mb-1.5 max-h-72 max-w-full overflow-auto whitespace-pre-wrap rounded-(--radius-press) bg-surface-2 px-2 py-1.5 font-mono text-[11px] leading-5 text-muted-foreground wrap-anywhere">
+      <pre
+        className={cn(
+          'm-0 mx-2 mb-1.5 max-h-72 max-w-full overflow-auto whitespace-pre-wrap rounded-(--radius-press)',
+          'px-2 py-1.5 font-mono text-[11px] leading-5 wrap-anywhere',
+          task.status === 'failed'
+            ? 'bg-destructive/8 text-destructive/90'
+            : 'bg-surface-2 text-muted-foreground',
+        )}
+      >
         {task.detail}
       </pre>
     </details>
