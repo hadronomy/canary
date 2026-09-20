@@ -67,6 +67,16 @@
     0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color),
     0 48px 48px -24px var(--shadow-color), 0 96px 96px -48px var(--shadow-color);
 
+  /* Glass is its own material, so it gets its own rung rather than borrowing
+     one. The ladder's drops are tuned for a surface sitting on another surface;
+     these sit over artwork, where a 0.18 drop is not there at all. Defined once
+     here because three classes were each carrying their own copy. */
+  --glass-blur: blur(20px) saturate(1.3);
+  --glass-lip: inset 0 1px 0 0 rgb(255 255 255 / 0.55);
+  --glass-ring: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+  --shadow-glass: 0 1px 2px -1px rgb(0 0 0 / 0.1), 0 12px 28px -12px rgb(0 0 0 / 0.16);
+  --shadow-glass-up: 0 -1px 2px -1px rgb(0 0 0 / 0.1), 0 -14px 32px -14px rgb(0 0 0 / 0.16);
+
   --background: var(--surface-1);
   --foreground: oklch(0.155 0.01 295);
   --card: var(--surface-3);
@@ -185,6 +195,11 @@
     0 6px 6px -3px var(--dm-drop), 0 12px 12px -6px var(--dm-drop),
     0 24px 24px -12px var(--dm-drop), 0 48px 48px -24px var(--dm-drop),
     0 96px 96px -48px var(--dm-drop);
+
+  --glass-lip: inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+  --glass-ring: inset 0 0 0 1px rgb(255 255 255 / 0.02);
+  --shadow-glass: 0 1px 2px -1px rgb(0 0 0 / 0.5), 0 12px 28px -12px rgb(0 0 0 / 0.55);
+  --shadow-glass-up: 0 -1px 2px -1px rgb(0 0 0 / 0.5), 0 -14px 32px -14px rgb(0 0 0 / 0.55);
 
   --background: var(--surface-1);
   --foreground: oklch(0.93 0.004 295);
@@ -437,12 +452,8 @@
   .canary-composer {
     background: color-mix(in oklch, var(--surface-4) 88%, transparent);
     border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
-    backdrop-filter: blur(20px) saturate(1.3);
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
-      inset 0 0 0 1px rgb(255 255 255 / 0.02),
-      0 1px 2px -1px rgb(0 0 0 / 0.5),
-      0 12px 28px -12px rgb(0 0 0 / 0.55);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-lip), var(--glass-ring), var(--shadow-glass);
   }
 
   /* The slash menu, which meets the composer edge to edge. Same fill, same
@@ -452,12 +463,8 @@
   .canary-menu {
     background: color-mix(in oklch, var(--surface-4) 88%, transparent);
     border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
-    backdrop-filter: blur(20px) saturate(1.3);
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
-      inset 0 0 0 1px rgb(255 255 255 / 0.02),
-      0 -1px 2px -1px rgb(0 0 0 / 0.5),
-      0 -14px 32px -14px rgb(0 0 0 / 0.55);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-lip), var(--glass-ring), var(--shadow-glass-up);
   }
 
   /* The strip behind the composer. One step down the ladder from the box in
@@ -465,7 +472,7 @@
   .canary-composer-strip {
     background: color-mix(in oklch, var(--surface-3) 82%, transparent);
     border-color: color-mix(in oklch, var(--surface-6) 55%, transparent);
-    backdrop-filter: blur(16px) saturate(1.2);
+    backdrop-filter: var(--glass-blur);
   }
 
   .scrollbar-gutter-both {

@@ -244,8 +244,8 @@ function MenuHeader(props: { shown: number; total: number }) {
     props.shown === props.total ? `${props.total} commands` : `${props.shown} of ${props.total}`;
 
   return (
-    <div className="flex h-8 min-w-0 items-center gap-2 rounded-t-[calc(var(--radius-composer)-1px)] border-b border-border/70 px-3">
-      <span className="grid size-4 shrink-0 place-items-center text-muted-foreground/70">
+    <div className="flex h-8 min-w-0 items-center gap-2.5 rounded-t-[calc(var(--radius-composer)-1px)] border-b border-border/70 px-4.5">
+      <span className="grid size-5 shrink-0 place-items-center text-muted-foreground/70">
         <CommandIcon aria-hidden className="size-3.5" />
       </span>
 
