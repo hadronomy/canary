@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as DesignShellRouteImport } from './routes/design/shell'
 import { Route as DesignFallbackRouteImport } from './routes/design/fallback'
+import { Route as DesignChatRouteImport } from './routes/design/chat'
 import { Route as AuthThreadsRouteRouteImport } from './routes/_auth/threads/route'
 import { Route as AuthThreadsIndexRouteImport } from './routes/_auth/threads/index'
 import { Route as ApiSyncShapeRouteImport } from './routes/api/sync/$shape'
@@ -49,6 +50,11 @@ const DesignShellRoute = DesignShellRouteImport.update({
 const DesignFallbackRoute = DesignFallbackRouteImport.update({
   id: '/design/fallback',
   path: '/design/fallback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignChatRoute = DesignChatRouteImport.update({
+  id: '/design/chat',
+  path: '/design/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthThreadsRouteRoute = AuthThreadsRouteRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/design/chat': typeof DesignChatRoute
   '/design/fallback': typeof DesignFallbackRoute
   '/design/shell': typeof DesignShellRoute
   '/threads/$threadId': typeof AuthThreadsThreadIdRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
+  '/design/chat': typeof DesignChatRoute
   '/design/fallback': typeof DesignFallbackRoute
   '/design/shell': typeof DesignShellRoute
   '/': typeof AuthIndexRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/_auth/threads': typeof AuthThreadsRouteRouteWithChildren
+  '/design/chat': typeof DesignChatRoute
   '/design/fallback': typeof DesignFallbackRoute
   '/design/shell': typeof DesignShellRoute
   '/_auth/': typeof AuthIndexRoute
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/threads'
+    | '/design/chat'
     | '/design/fallback'
     | '/design/shell'
     | '/threads/$threadId'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
   to:
     | '/consent'
     | '/login'
+    | '/design/chat'
     | '/design/fallback'
     | '/design/shell'
     | '/'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/consent'
     | '/login'
     | '/_auth/threads'
+    | '/design/chat'
     | '/design/fallback'
     | '/design/shell'
     | '/_auth/'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   LoginRoute: typeof LoginRoute
+  DesignChatRoute: typeof DesignChatRoute
   DesignFallbackRoute: typeof DesignFallbackRoute
   DesignShellRoute: typeof DesignShellRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       path: '/design/fallback'
       fullPath: '/design/fallback'
       preLoaderRoute: typeof DesignFallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/design/chat': {
+      id: '/design/chat'
+      path: '/design/chat'
+      fullPath: '/design/chat'
+      preLoaderRoute: typeof DesignChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/threads': {
@@ -293,6 +313,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   ConsentRoute: ConsentRoute,
   LoginRoute: LoginRoute,
+  DesignChatRoute: DesignChatRoute,
   DesignFallbackRoute: DesignFallbackRoute,
   DesignShellRoute: DesignShellRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
