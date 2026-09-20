@@ -25,7 +25,13 @@ import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
 import { ComposerMenu } from '~/components/composer/menu';
-import { auraVariants, composerMount, ease, surfaceVariants } from '~/components/composer/motion';
+import {
+  auraVariants,
+  composerMount,
+  ease,
+  stripVariants,
+  surfaceVariants,
+} from '~/components/composer/motion';
 import {
   action as actionFrom,
   enabled as hotkeyEnabled,
@@ -256,16 +262,16 @@ function AgentPrompt({
         variants={composerMount}
       >
         <div ref={composerRef} className="relative overflow-visible">
-          <ComposerMenu
-            commands={cmds}
-            state={menuFrom(ui.slash)}
-            onActive={(index) => dispatch({ type: 'slash-active', index })}
-            onPick={pickSlashCommand}
-          />
-
           {/* Tucked behind the box and inset from it, so the run state reads as
-              a label on the composer rather than as a second control bar. */}
-          <div className="canary-composer-strip relative z-10 mx-5 flex items-center justify-between gap-3 rounded-t-(--radius-composer) border border-b-0 px-3 pb-3 pt-1.5">
+              a label on the composer rather than as a second control bar. Its
+              corners are a step down the radius scale: at the box's 22px a
+              strip this short is all corner and reads as a pill. */}
+          <motion.div
+            animate={surfaceState === 'commanding' ? 'hidden' : 'shown'}
+            className="canary-composer-strip relative z-10 mx-5 flex items-center justify-between gap-3 rounded-t-(--radius-panel) border border-b-0 px-3 pb-3 pt-1.5"
+            initial={false}
+            variants={stripVariants}
+          >
             <ComposerStatus runState={runState} surfaceState={surfaceState} />
 
             <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
@@ -273,67 +279,79 @@ function AgentPrompt({
               <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
               <span className="text-foreground/70">/</span> for commands
             </p>
-          </div>
+          </motion.div>
 
-          <motion.div
-            animate={surfaceState}
-            className="canary-composer relative z-30 -mt-2 overflow-hidden rounded-(--radius-composer) border"
-            variants={surfaceVariants}
-          >
-            <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
-
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute -inset-px -z-10 rounded-[inherit]"
-              variants={auraVariants}
+          {/* The menu anchors to the box, not to the whole composer. Anchored
+              further out it opened above the strip, leaving the two of them
+              stacked with a gap where they are meant to meet. */}
+          <div className="relative -mt-2">
+            <ComposerMenu
+              commands={cmds}
+              state={menuFrom(ui.slash)}
+              onActive={(index) => dispatch({ type: 'slash-active', index })}
+              onPick={pickSlashCommand}
             />
 
-            <div className="relative z-20 grid min-w-0 gap-1 p-2">
-              <ComposerEditor
-                commands={cmds}
-                disabled={availability === 'disabled'}
-                placeholder={placeholder}
-                slashState={ui.slash}
-                value={value}
-                onCommand={runCommand}
-                onEscape={runState === 'running' ? stopRun : undefined}
-                onFocusChange={(focus) => dispatch({ type: 'focus-change', focus })}
-                onHistory={moveHistory}
-                onSlashChange={(slash) => dispatch({ type: 'slash-change', slash })}
-                onSubmit={submit}
-                onValue={onValue}
+            <motion.div
+              animate={surfaceState}
+              className="canary-composer relative z-30 overflow-hidden rounded-(--radius-composer) border"
+              variants={surfaceVariants}
+            >
+              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
+
+              <motion.div
+                aria-hidden
+                className="pointer-events-none absolute -inset-px -z-10 rounded-[inherit]"
+                variants={auraVariants}
               />
 
-              <ComposerTray
-                chars={value.length}
-                mode={ui.mode}
-                tooling={ui.tooling}
-                onMode={(mode) => dispatch({ type: 'mode-change', mode })}
-                onTools={() => dispatch({ type: 'tools-toggle' })}
-              >
-                <ComposerAction
-                  action={action}
-                  enabled={canUsePrimaryAction}
-                  onCancelRun={activatePrimaryAction}
+              <div className="relative z-20 grid min-w-0 gap-1 p-2">
+                <ComposerEditor
+                  commands={cmds}
+                  disabled={availability === 'disabled'}
+                  placeholder={placeholder}
+                  slashState={ui.slash}
+                  value={value}
+                  onCommand={runCommand}
+                  onEscape={runState === 'running' ? stopRun : undefined}
+                  onFocusChange={(focus) => dispatch({ type: 'focus-change', focus })}
+                  onHistory={moveHistory}
+                  onSlashChange={(slash) => dispatch({ type: 'slash-change', slash })}
+                  onSubmit={submit}
+                  onValue={onValue}
                 />
-              </ComposerTray>
-            </div>
 
-            <AnimatePresence initial={false}>
-              {error ? (
-                <motion.p
-                  id={errorId}
-                  animate={{ opacity: 1, height: 'auto', y: 0 }}
-                  className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-4 py-2 text-xs text-destructive"
-                  exit={{ opacity: 0, height: 0, y: -4 }}
-                  initial={{ opacity: 0, height: 0, y: -4 }}
-                  transition={{ duration: 0.18, ease }}
+                <ComposerTray
+                  chars={value.length}
+                  mode={ui.mode}
+                  tooling={ui.tooling}
+                  onMode={(mode) => dispatch({ type: 'mode-change', mode })}
+                  onTools={() => dispatch({ type: 'tools-toggle' })}
                 >
-                  {error}
-                </motion.p>
-              ) : null}
-            </AnimatePresence>
-          </motion.div>
+                  <ComposerAction
+                    action={action}
+                    enabled={canUsePrimaryAction}
+                    onCancelRun={activatePrimaryAction}
+                  />
+                </ComposerTray>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {error ? (
+                  <motion.p
+                    id={errorId}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-4 py-2 text-xs text-destructive"
+                    exit={{ opacity: 0, height: 0, y: -4 }}
+                    initial={{ opacity: 0, height: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease }}
+                  >
+                    {error}
+                  </motion.p>
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+          </div>
         </div>
       </motion.div>
     </form>

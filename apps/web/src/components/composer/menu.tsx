@@ -21,6 +21,15 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const COMMAND_ROW_HEIGHT = 34;
 const COMMAND_ROW_GAP = 3;
 
+/**
+ * The composer's corner radius, as a length `clip-path` can interpolate.
+ *
+ * Framer animates `clipPath` by parsing the string, so the `round` leg cannot
+ * be a `var()`. If `--radius-composer` moves, move this with it — the menu
+ * meets the box edge to edge and a mismatch shows as a step in the corner.
+ */
+const RADIUS = '1.375rem';
+
 export type ComposerMenuState =
   | { kind: 'closed' }
   | {
@@ -103,7 +112,7 @@ function ComposerMenu({
           >
             <Command
               className={cn(
-                'relative overflow-hidden rounded-t-[1.35rem] rounded-b-none p-0',
+                'relative overflow-hidden rounded-t-(--radius-composer) rounded-b-none p-0',
                 'border-x border-t border-border/80 border-b-0',
                 'bg-card text-card-foreground shadow-[0_-18px_44px_-32px_rgb(0_0_0/0.55)]',
                 className,
@@ -215,7 +224,7 @@ function MenuHeader(props: { query: string }) {
   const value = props.query ? `/${props.query}` : 'Type to filter slash commands';
 
   return (
-    <div className="flex h-8 min-w-0 items-center gap-3 rounded-t-[calc(1.35rem-1px)] border-b border-border/70 bg-surface-4/45 px-3">
+    <div className="flex h-8 min-w-0 items-center gap-3 rounded-t-[calc(var(--radius-composer)-1px)] border-b border-border/70 bg-surface-4/45 px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="grid size-5 shrink-0 place-items-center text-muted-foreground/72">
           <CommandIcon aria-hidden className="size-3.5" />
@@ -354,7 +363,7 @@ const sheetVariants = {
     scaleY: 0.05,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(96% 0% 0% 0% round 1.35rem 1.35rem 0 0)',
+    clipPath: `inset(96% 0% 0% 0% round ${RADIUS} ${RADIUS} 0 0)`,
     transition: { duration: 0.14, ease },
   },
   open: {
@@ -364,7 +373,7 @@ const sheetVariants = {
     scaleY: 1,
     y: 0,
     filter: 'blur(0px)',
-    clipPath: 'inset(0% 0% 0% 0% round 1.35rem 1.35rem 0 0)',
+    clipPath: `inset(0% 0% 0% 0% round ${RADIUS} ${RADIUS} 0 0)`,
     transition: { duration: 0.22, ease },
     transitionEnd: { clipPath: 'none' },
   },

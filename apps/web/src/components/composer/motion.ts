@@ -64,6 +64,23 @@ const surfaceVariants = {
   },
 };
 
+// The strip and the slash menu want the same slot above the box, so the strip
+// steps aside when the menu takes it. The menu is opaque and would cover it
+// regardless; without this the strip is still there underneath, peeking around
+// the menu's edges while it scales open.
+const stripVariants = {
+  hidden: {
+    opacity: 0,
+    y: 4,
+    transition: { duration: 0.14, ease },
+  },
+  shown: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.18, ease },
+  },
+};
+
 const auraVariants = {
   commanding: {
     opacity: 0.68,
@@ -93,4 +110,4 @@ const auraVariants = {
   },
 };
 
-export { auraVariants, composerMount, ease, instantTransition, surfaceVariants };
+export { auraVariants, composerMount, ease, instantTransition, stripVariants, surfaceVariants };
