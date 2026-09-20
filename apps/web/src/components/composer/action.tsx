@@ -194,7 +194,7 @@ function hoverTone(visual: ButtonVisual) {
   if (visual === 'send') {
     return {
       backgroundColor: 'color-mix(in oklch, var(--primary) 88%, white)',
-      borderColor: 'transparent',
+      borderColor: 'color-mix(in oklch, var(--primary) 88%, white)',
       color: 'var(--primary-foreground)',
       transition: { duration: 0.16, ease },
     } as const;
@@ -223,7 +223,7 @@ const buttonToneVariants = {
   },
   send: {
     backgroundColor: 'var(--primary)',
-    borderColor: 'transparent',
+    borderColor: 'var(--primary)',
     color: 'var(--primary-foreground)',
     transition: { duration: 0.28, ease },
   },
