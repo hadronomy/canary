@@ -20,7 +20,9 @@ function Command({ className, ...props }: CommandProps) {
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        'flex size-full flex-col overflow-hidden rounded-xl bg-popover p-1 text-popover-foreground',
+        // No fill here. Both callers draw their own surface and were each
+        // having to undo this one to do it.
+        'flex size-full flex-col overflow-hidden rounded-xl p-1 text-popover-foreground',
         className,
       )}
       {...props}

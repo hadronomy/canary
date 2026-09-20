@@ -59,6 +59,16 @@ function ComposerMenu({
   const reduce = useReducedMotion();
   const itemRefs = useRef<Array<HTMLDivElement | null>>([]);
 
+  /**
+   * Where the pointer actually was, so a scroll cannot pose as a hover.
+   *
+   * Arrowing through the list scrolls it, which slides a new row under a
+   * stationary cursor and fires the pointer events as if the person had moved
+   * there — the selection jumps back to wherever the mouse happens to rest.
+   * A move only counts when the coordinates change.
+   */
+  const spot = useRef<null | { x: number; y: number }>(null);
+
   const menu = state.kind === 'open' ? state : null;
 
   const items = useMemo(() => {
@@ -88,19 +98,18 @@ function ComposerMenu({
       return;
     }
 
-    item.scrollIntoView({
-      block: 'nearest',
-      inline: 'nearest',
-      behavior: reduce ? 'auto' : 'smooth',
-    });
-  }, [active, menu, reduce]);
+    // Never smooth. Arrow keys are held down, and a smoothed scroll cannot
+    // keep up with the repeat rate — the list falls behind the selection and
+    // the menu feels like it is lagging the keyboard.
+    item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active, menu]);
 
   return (
     <AnimatePresence initial={false}>
       {menu ? (
         <motion.div
           animate="open"
-          className="pointer-events-auto absolute inset-x-0 bottom-[calc(100%-1px)] z-50 w-full perspective-distant"
+          className="pointer-events-auto absolute inset-x-0 bottom-[calc(100%-1px)] z-50 w-full"
           exit={reduce ? 'reduced' : 'closed'}
           initial={reduce ? false : 'closed'}
           variants={rootVariants}
@@ -112,9 +121,8 @@ function ComposerMenu({
           >
             <Command
               className={cn(
-                'relative overflow-hidden rounded-t-(--radius-composer) rounded-b-none p-0',
-                'border-x border-t border-border/80 border-b-0',
-                'bg-card text-card-foreground shadow-[0_-18px_44px_-32px_rgb(0_0_0/0.55)]',
+                'canary-menu relative overflow-hidden rounded-t-(--radius-composer) rounded-b-none p-0',
+                'border-x border-t border-b-0 text-card-foreground',
                 className,
               )}
               shouldFilter={false}
@@ -126,10 +134,17 @@ function ComposerMenu({
                 className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent"
               />
 
-              <motion.div variants={contentVariants}>
-                <MenuHeader query={menu.query} />
+              <div>
+                <MenuHeader shown={items.length} total={commands.length} />
 
-                <CommandList className="max-h-56 scroll-py-1 overflow-y-auto bg-card px-2 pb-2 pt-1.5 scrollbar-gutter-stable">
+                <CommandList
+                  className={cn(
+                    'max-h-56 scroll-py-1 overflow-y-auto px-2 pb-2 pt-1.5 scrollbar-gutter-stable',
+                    // Ten commands do not fit, and a hard cut through a row
+                    // reads as a rendering fault rather than as more below.
+                    '[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]',
+                  )}
+                >
                   <CommandEmpty className="px-3 py-7 text-center text-xs text-muted-foreground">
                     No slash commands found.
                   </CommandEmpty>
@@ -176,13 +191,14 @@ function ComposerMenu({
                               'data-[disabled=disabled]:pointer-events-none data-[disabled=disabled]:opacity-45',
                             )}
                             style={{ height: COMMAND_ROW_HEIGHT }}
-                            onMouseEnter={() => {
-                              if (idx !== active) {
-                                onActive(idx);
-                              }
-                            }}
-                            onPointerMove={() => {
-                              if (idx !== active) {
+                            onPointerMove={(event) => {
+                              const last = spot.current;
+                              const moved =
+                                !last || last.x !== event.clientX || last.y !== event.clientY;
+
+                              spot.current = { x: event.clientX, y: event.clientY };
+
+                              if (moved && idx !== active) {
                                 onActive(idx);
                               }
                             }}
@@ -211,7 +227,7 @@ function ComposerMenu({
                     </div>
                   </CommandGroup>
                 </CommandList>
-              </motion.div>
+              </div>
             </Command>
           </motion.div>
         </motion.div>
@@ -220,38 +236,38 @@ function ComposerMenu({
   );
 }
 
-function MenuHeader(props: { query: string }) {
-  const value = props.query ? `/${props.query}` : 'Type to filter slash commands';
+function MenuHeader(props: { shown: number; total: number }) {
+  // The query is already on screen in the composer a few pixels below, so
+  // echoing it here says nothing. What is not visible anywhere else is how
+  // much the filter has cut, which is the one thing worth the row.
+  const label =
+    props.shown === props.total ? `${props.total} commands` : `${props.shown} of ${props.total}`;
 
   return (
-    <div className="flex h-8 min-w-0 items-center gap-3 rounded-t-[calc(var(--radius-composer)-1px)] border-b border-border/70 bg-surface-4/45 px-3">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="grid size-5 shrink-0 place-items-center text-muted-foreground/72">
-          <CommandIcon aria-hidden className="size-3.5" />
-        </span>
+    <div className="flex h-8 min-w-0 items-center gap-2 rounded-t-[calc(var(--radius-composer)-1px)] border-b border-border/70 px-3">
+      <span className="grid size-4 shrink-0 place-items-center text-muted-foreground/70">
+        <CommandIcon aria-hidden className="size-3.5" />
+      </span>
 
-        <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">
-          Commands
-        </span>
+      <span className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground">
+        {label}
+      </span>
 
-        <span className="h-3.5 w-px shrink-0 bg-border" />
-
-        <span
-          className="block min-w-0 truncate whitespace-nowrap text-[12px] text-muted-foreground"
-          title={value}
-        >
-          {value}
-        </span>
-      </div>
-
-      <div className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 sm:flex">
-        <span className="font-mono">↑↓</span>
-        <span>navigate</span>
-        <span className="mx-1 h-3 w-px bg-border" />
-        <span className="font-mono">Enter</span>
-        <span>select</span>
-      </div>
+      <span className="ml-auto hidden shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground/70 sm:flex">
+        <Hint keys="↑↓">navigate</Hint>
+        <span aria-hidden className="h-3 w-px bg-border" />
+        <Hint keys="↵">select</Hint>
+      </span>
     </div>
+  );
+}
+
+function Hint(props: { children: string; keys: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="font-mono text-foreground/60">{props.keys}</span>
+      {props.children}
+    </span>
   );
 }
 
@@ -329,11 +345,15 @@ const kbdClass = cn(
   'group-data-[state=active]/command-item:text-foreground/82',
 );
 
+// Overdamped at the old figures (zeta about 1.4), which reads as the highlight
+// dragging itself to the next row. Stated as duration and bounce instead: no
+// overshoot, but it arrives instead of easing in forever. A spring rather than
+// a tween because holding an arrow key retargets it mid-flight, and a spring
+// keeps its velocity across the interruption where a tween restarts.
 const selectionTransition = {
   type: 'spring',
-  stiffness: 760,
-  damping: 58,
-  mass: 0.58,
+  duration: 0.19,
+  bounce: 0,
 } as const;
 
 const instantTransition = {
@@ -342,12 +362,12 @@ const instantTransition = {
 
 const rootVariants = {
   closed: {
-    opacity: 1,
-    transition: { duration: 0.12, ease },
+    opacity: 0,
+    transition: { duration: 0.11, ease },
   },
   open: {
     opacity: 1,
-    transition: { duration: 0.18, ease },
+    transition: { duration: 0.14, ease },
   },
   reduced: {
     opacity: 0,
@@ -355,47 +375,26 @@ const rootVariants = {
   },
 };
 
+// One mechanism for the reveal, not three. This used to run a clip-path wipe,
+// a scaleY to 0.05 and a rotateX together: the scale crushed every row to a
+// fifth of a line of text on the way in, which is why a separate fade had to
+// be layered over the content to hide it. The wipe alone is honest — rows are
+// full size for every frame they are visible — and it needs nothing hiding it.
 const sheetVariants = {
   closed: {
-    opacity: 1,
-    rotateX: -4,
-    scaleX: 0.98,
-    scaleY: 0.05,
-    y: 0,
-    filter: 'blur(0px)',
-    clipPath: `inset(96% 0% 0% 0% round ${RADIUS} ${RADIUS} 0 0)`,
-    transition: { duration: 0.14, ease },
+    y: 4,
+    clipPath: `inset(100% 0% 0% 0% round ${RADIUS} ${RADIUS} 0 0)`,
+    transition: { duration: 0.13, ease },
   },
   open: {
-    opacity: 1,
-    rotateX: 0,
-    scaleX: 1,
-    scaleY: 1,
     y: 0,
-    filter: 'blur(0px)',
     clipPath: `inset(0% 0% 0% 0% round ${RADIUS} ${RADIUS} 0 0)`,
-    transition: { duration: 0.22, ease },
+    transition: { duration: 0.2, ease },
+    // Released once open so the shadow is not clipped at rest.
     transitionEnd: { clipPath: 'none' },
   },
   reduced: {
-    opacity: 0,
-    transition: instantTransition,
-  },
-};
-
-const contentVariants = {
-  closed: {
-    opacity: 0,
-    y: 5,
-    transition: { duration: 0.08, ease },
-  },
-  open: {
-    opacity: 1,
     y: 0,
-    transition: { delay: 0.06, duration: 0.14, ease },
-  },
-  reduced: {
-    opacity: 0,
     transition: instantTransition,
   },
 };

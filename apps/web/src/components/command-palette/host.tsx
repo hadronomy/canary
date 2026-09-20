@@ -232,7 +232,7 @@ function CommandPalette({
             loop
             shouldFilter={false}
             value={item?.id ?? ''}
-            className="bg-transparent p-0"
+            className="p-0"
             onKeyDown={key}
             onMouseDown={mouse}
             onValueChange={(id) => dispatch({ type: 'select', id: itemId(id) })}
