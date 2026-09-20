@@ -1,32 +1,33 @@
 import { bayer, grain, quantise } from "./ink.wgsl";
 import { fbmSimplex3d } from "@vgpu/wgsl-std/noise/simplex";
+import { hash2 } from "@vgpu/wgsl-std/hash";
 
 // PROMPT — the page before anything has been asked of it.
 //
-// A pool of light around the composer, textured by a slow field, printed
-// through a coarse screen.
+// A corpus as a night sky: documents as stars, citations as the lines between
+// them. Far from the composer the stars are scattered and nothing links them.
+// Near it they brighten and the links resolve. That is the claim the product
+// makes — scattered in, connected out — and `uncited.wgsl` already draws the
+// other half of it, so this is the same corpus seen before anything is asked
+// rather than a second visual language.
 //
-// Three layers, and the order of them is the whole design:
+// Four layers, in this order, and the order is the design:
 //
-//   1. A static radial falloff from the composer. It never moves. This is the
-//      composition — the thing that is the same shape every time you open the
-//      page, and the reason the screen reads as a picture rather than as an
-//      area of activity.
-//   2. A domain-warped field (Quilez) that *modulates* that falloff rather than
-//      replacing it. Texture, not subject. Because the static term dominates,
-//      the field can drift without the picture appearing to change.
-//   3. A Bayer screen on a coarse lattice, which is what makes tone visible as
-//      dots opening and closing rather than as a gradient.
+//   1. A nebula. Domain-warped fbm (Quilez), very dim and very wide. It is not
+//      really there to be seen — it is the density function the stars are
+//      placed against, which is what keeps them from reading as a grid.
+//   2. Stars on a jittered lattice, magnitude from a hash raised to a power so
+//      a few are bright and most are faint. A uniform field of equal dots is a
+//      texture; an uneven one is a sky.
+//   3. Links between neighbouring stars, and this is where the taste goes. A
+//      line to every neighbour is a wireframe. A line only where both ends are
+//      bright and the gap is short is a constellation — something picked out
+//      rather than something meshed.
+//   4. The halftone screen, which is what turns all of it into print.
 //
-// The field is solved once per screen cell, at its centre, not per pixel. This
-// is the difference between a picture printed through a screen and a screen
-// laid on top of a picture: sampling per pixel leaves full-resolution detail
-// under the dots, and that detail is what reads as noise. One value per cell
-// means the dots *are* the image.
-//
-// Everything moves slowly and on one clock. Layers on separate clocks
-// reorganise continuously, which is motion without composition — the page is
-// never doing anything in particular but is never still either.
+// Everything is solved once per screen cell, at its centre. Sampling per pixel
+// leaves full-resolution detail under the dots, and that detail is what reads
+// as noise rather than as a picture.
 //
 // Decorative only: the screen is complete and legible with this absent, and it
 // is absent on every device without WebGPU or with reduced motion asked for.
@@ -36,9 +37,9 @@ struct Params {
   quiet: vec4f,  // x, y, w, h in viewport fractions — where the composer sits
   focus: vec2f,  // 0..1 viewport position the field organises toward
   time: f32,
-  amp: f32,      // 0..1, widens the ordered region while the composer holds focus
+  amp: f32,      // 0..1, widens the connected region while the composer holds focus
   pulse: f32,    // 0..1, decaying kick per keystroke
-  glitch: f32,   // 0..1, collapses the ordering when a send is rejected
+  glitch: f32,   // 0..1, scatters the links when a send is rejected
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -49,10 +50,12 @@ struct Params {
 const TINT = vec3f(0.55, 0.40, 1.0);
 
 // Steps across the whole 0..1 output range. Few enough that the screen has to
-// open and close to carry a gradient, which is the whole point of it. Counted
-// in output space rather than field space because that is where the quantising
-// has to happen; see the tail of fs_main.
+// open and close to carry a gradient, which is the whole point of it.
 const STEPS = 9.0;
+
+// Lattice pitch in device pixels. Wide enough that a star is an event rather
+// than a texel, tight enough that the 3x3 search still reaches its neighbours.
+const CELL = 148.0;
 
 /// How many device pixels across one cell of the screen.
 ///
@@ -69,6 +72,34 @@ fn layer(p: vec2f, t: f32) -> f32 {
   return fbmSimplex3d(vec3f(p, t), 3, 2.13, 0.5);
 }
 
+/// Where this cell's star sits, in lattice units.
+///
+/// Jittered off the lattice so the sky never reads as a grid, and swaying on
+/// its own phase — enough to be alive, not enough to look simulated.
+fn star(c: vec2f, time: f32) -> vec2f {
+  let h = hash2(c * 1.7 + 4.2);
+  let sway = vec2f(sin(time * 0.13 + h.x * 6.28), cos(time * 0.11 + h.y * 6.28)) * 0.03;
+  return c + vec2f(0.22, 0.22) + h * 0.56 + sway;
+}
+
+/// How bright this cell's star is, in [0, 1].
+///
+/// Squaring is what makes it a sky. Flat random gives every star the same
+/// weight and the lattice shows through; skewed toward the dim end, most cells
+/// hold something faint and the few that survive read as actual stars. A
+/// fourth power skews so hard that nothing survives and the sky goes empty.
+fn mag(c: vec2f) -> f32 {
+  let h = hash2(c * 3.1 - 1.7).x;
+  return h * h;
+}
+
+fn segment(p: vec2f, a: vec2f, b: vec2f) -> f32 {
+  let pa = p - a;
+  let ba = b - a;
+  let t = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  return length(pa - ba * t);
+}
+
 @fragment
 fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let res = 1.0 / params.texel;
@@ -82,46 +113,83 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let at = (cell + 0.5) * size * params.texel;
   let q = vec2f(at.x * aspect, at.y);
 
-  // How far the light reaches. The keystroke kick is small on purpose: it
-  // should register as the field noticing, not as the page lurching.
-  let reach = (0.52 + params.amp * 0.14 + params.pulse * 0.03) * (1.0 - params.glitch * 0.4);
+  // How far the organising reaches. Wide on purpose — the sky is the page, not
+  // a pool in the middle of it. The keystroke kick is small: it should register
+  // as the field noticing, not as the page lurching.
+  let reach = (1.05 + params.amp * 0.18 + params.pulse * 0.04) * (1.0 - params.glitch * 0.3);
 
-  // LAYER 1 — the composition, and the only term that carries real weight.
-  // Static, radial, centred on the composer. Squared falloff so the pool has a
-  // bright middle and a long dark edge rather than a linear ramp that reads as
-  // a circle drawn on the page.
   let r = length((at - params.focus) * vec2f(aspect, 1.0)) / reach;
-  let glow = pow(clamp(1.0 - r, 0.0, 1.0), 2.2);
 
-  // `settled` straightens the field along the composer's line, the way ruled
-  // paper does. Radial instead drew concentric rings centred on the composer,
-  // which reads as a target rather than as anything settling.
-  let settled = smoothstep(0.0, 1.0, clamp(1.0 - abs(at.y - params.focus.y) / reach, 0.0, 1.0));
+  // A long, shallow falloff rather than a tight pool. The exponent is low so
+  // the sky still carries light out at the corners instead of ending in a ring.
+  let glow = pow(clamp(1.0 - r, 0.0, 1.0), 1.5);
 
-  // LAYER 2 — texture. The warp is the one thing the composer relaxes, so order
-  // is the absence of warping rather than a second drawing fading in over the
-  // first.
-  let warp = (1.0 - settled * settled) * (1.0 + params.glitch * 1.6);
+  // How resolved things are here. This is what gathers the constellation
+  // around the composer and lets it fall apart at the edges.
+  let bound = clamp(1.0 - r * 0.85, 0.0, 1.0) * (1.0 - params.glitch * 0.7);
 
-  // One clock, slow. The offsets are Quilez's and carry no meaning beyond
-  // pulling unrelated values out of one noise function.
+  // LAYER 1 — the nebula, and the density the stars are placed against. One
+  // clock, slow: layers on separate clocks reorganise continuously, which is
+  // motion without composition.
   let t = params.time * 0.012;
-  let base = q * 0.8;
+  let base = q * 0.7;
   let w = vec2f(layer(base, t), layer(base + vec2f(5.2, 1.3), t));
-  let turbulence = layer(base + 2.2 * w * warp + vec2f(1.7, 9.2), t) * 1.4;
+  let cloud = layer(base + 2.0 * w + vec2f(1.7, 9.2), t) * 0.5 + 0.5;
 
-  // The ordered term keeps a trace of the turbulence so the straightening reads
-  // as the same field settling rather than as a second drawing fading in.
-  let psi = mix(turbulence, q.y * 5.0 + turbulence * 0.1, settled * settled);
+  // LAYERS 2 AND 3 — stars and the lines between them, over the 3x3
+  // neighbourhood of the lattice cell this screen cell falls in.
+  let p = px / CELL;
+  let home = floor(p);
+  let hair = 1.0 / CELL;
 
-  // A triangle wave across the field: what a screen needs is a smooth quantity
-  // to open and close against.
-  let band = 1.0 - abs(fract(psi) - 0.5) * 2.0;
+  var lit = 0.0;
+  var link = 0.0;
 
-  // The field never sets the level, only varies it. Held between 0.55 and 1.0
-  // the picture stays the pool of light it was, and the drift reads as the
-  // texture of that light rather than as something happening.
-  var tone = glow * (0.55 + 0.45 * pow(band, 1.4));
+  for (var i = -1; i <= 1; i = i + 1) {
+    for (var j = -1; j <= 1; j = j + 1) {
+      let c = home + vec2f(f32(i), f32(j));
+      let a = star(c, params.time);
+      let ma = mag(c);
+
+      // The nebula gates the field, hard. Stars thin out to almost nothing
+      // where the cloud is thin, so they arrive in drifts with clearings
+      // between them rather than scattered evenly across the page.
+      let live = ma * (0.18 + 0.82 * smoothstep(0.2, 0.85, cloud));
+
+      // Bright stars are wider as well as brighter, which is how magnitude
+      // actually reads on paper — and the screen needs a couple of cells of
+      // width before it has anything to print.
+      let halo = hair * (2.0 + live * 11.0);
+      lit = max(lit, live * (1.0 - smoothstep(hair * 0.8, halo, length(p - a))));
+
+      // Two edges per cell — right and below — so each edge is drawn once.
+      for (var k = 0; k < 2; k = k + 1) {
+        let d = c + select(vec2f(0.0, 1.0), vec2f(1.0, 0.0), k == 0);
+        let b = star(d, params.time);
+        let mb = mag(d);
+
+        // The selective bit, and the whole difference between a constellation
+        // and a mesh. Both ends have to be worth joining, and the gap has to be
+        // short — a line drawn to every neighbour is a wireframe of the
+        // lattice, which is exactly the grid the jitter exists to hide.
+        let pair = min(ma, mb);
+        let span = 1.0 - smoothstep(0.95, 1.6, length(b - a));
+        let worth = smoothstep(0.2, 0.55, pair) * span;
+
+        if (worth > 0.001) {
+          link = max(
+            link,
+            worth * (1.0 - smoothstep(hair * 0.7, hair * 2.8, segment(p, a, b))),
+          );
+        }
+      }
+    }
+  }
+
+  // Links are bound to the composer, stars are not. The sky is there the whole
+  // way out; what the composer does is draw the lines in.
+  let tone = glow * (0.05 + pow(cloud, 1.7) * 0.2) + lit * (0.5 + glow * 0.5)
+    + link * bound * 0.42;
 
   // Ease proportionally to the region rather than by a fixed distance: a fixed
   // falloff wider than the region's half-width never reaches full clearing, so
@@ -132,7 +200,6 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let k = params.quiet;
   let room = smoothstep(0.0, k.z * 0.42, min(at.x - k.x, k.x + k.z - at.x))
     * smoothstep(0.0, k.w * 1.6, min(at.y - k.y, k.y + k.w - at.y));
-  tone *= 1.0 - room;
 
   // Everything continuous happens first, and the quantising happens last.
   //
@@ -140,7 +207,7 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // smooth functions of position — reconstructs a continuous gradient out of
   // the steps and throws the screen away. It has to land on the values actually
   // written to the framebuffer.
-  let value = clamp(tone, 0.0, 1.0) * 0.46;
+  let value = clamp(tone * (1.0 - room), 0.0, 1.0) * 0.62;
   var color = vec3f(value) * mix(vec3f(1.0), TINT, 0.5 + glow * 0.3);
 
   // Grain on the pixel rather than the cell, and barely there. It is the only
