@@ -4,15 +4,22 @@ import Avvvatars from 'avvvatars-react';
 
 import type { ShellUser } from '~/components/shell/routes';
 
-import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
 import { cn } from '~/lib/utils';
 
 type UserAvatarProps = Omit<ComponentPropsWithoutRef<typeof Avatar>, 'children'> & {
-  ready?: boolean;
   user: ShellUser;
 };
 
-function UserAvatar({ className, ready, size, user, ...props }: UserAvatarProps) {
+/**
+ * The person, and only the person.
+ *
+ * It used to carry a status badge driven by whether the local cache was warm.
+ * A dot on an avatar means presence to everyone who has used chat software,
+ * so it was answering a question nobody asked with information about something
+ * else entirely. Sync state is reported in words, next to the name.
+ */
+function UserAvatar({ className, size, user, ...props }: UserAvatarProps) {
   const seed = user.email ?? user.name ?? user.id;
   const pixels = size === 'lg' ? 40 : size === 'sm' ? 24 : 32;
 
@@ -33,9 +40,6 @@ function UserAvatar({ className, ready, size, user, ...props }: UserAvatarProps)
           value={seed}
         />
       </AvatarFallback>
-      {ready ? (
-        <AvatarBadge className="border border-background/70 bg-primary text-transparent ring-2 ring-card" />
-      ) : null}
     </Avatar>
   );
 }

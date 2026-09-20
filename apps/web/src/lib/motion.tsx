@@ -12,6 +12,10 @@ import { cn } from '~/lib/utils';
  *
  * This is for whole strings that replace each other — a heading, a status line.
  * When the words stay and only a value inside them moves, reach for `Morph`.
+ *
+ * The keyframes live in the stylesheet. They used to be a `<style>` element
+ * inside every instance, which meant the same rule once per swapping string on
+ * screen and the CSS text landing in the element's own `textContent`.
  */
 function Swap({ value }: { value: string }) {
   return (
@@ -23,7 +27,6 @@ function Swap({ value }: { value: string }) {
       >
         {value}
       </span>
-      <style>{`@keyframes swap-in{from{opacity:0;transform:translateY(0.45em);filter:blur(3px)}to{opacity:1;transform:none;filter:blur(0)}}`}</style>
     </span>
   );
 }

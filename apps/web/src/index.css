@@ -443,6 +443,22 @@
   }
 }
 
+/* Used by `Swap`. Declared once here rather than emitted inside each instance,
+   which duplicated the rule per element and put CSS into their text content. */
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
 @layer components {
   /* Glass, built rather than blurred: the fill is translucent so the field
      behind it actually comes through, two hairlines in the surface's own colour
