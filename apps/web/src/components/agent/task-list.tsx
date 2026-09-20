@@ -1,16 +1,13 @@
 import type { ReactNode } from 'react';
 
 import {
-  CaretRightIcon,
-  CircleNotchIcon,
+  CaretDownIcon,
   FileTextIcon,
   FolderSimpleIcon,
   TerminalWindowIcon,
-  WarningIcon,
 } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 
-import { Check } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 
 type TaskStatus = 'pending' | 'running' | 'done' | 'failed';
@@ -37,11 +34,6 @@ type Task = {
 type TaskListProps = {
   className?: string;
   /**
-   * Fold finished tasks away. `true` collapses each one as it completes;
-   * `'all'` waits until every task is done and closes them together.
-   */
-  collapseOnComplete?: boolean | 'all';
-  /**
    * How many tasks are allowed to be on screen, when the caller is driving the
    * reveal from a real event stream. Leave it off and the list paces itself
    * from `startDelay` and `stepInterval` instead.
@@ -58,16 +50,21 @@ type TaskListProps = {
 /**
  * A streaming log of what an agent actually did.
  *
- * Tasks arrive one at a time, each opening its own height out of a short blur
- * and lift, so the thread grows the way the work does instead of jumping to its
- * final size. A running task shimmers; a finished one settles and stops.
+ * Each step is a capsule that opens in place. The row is a button rather than
+ * a `<summary>` because a `<details>` cannot animate its own height — it snaps
+ * — and the snap is worst exactly where it matters, on a failure whose output
+ * runs to twenty lines. Opening is a grid row going `0fr` to `1fr`, which gets
+ * the height animation without anyone measuring anything.
+ *
+ * The capsule flattens as it opens: 999px at rest, the panel radius once there
+ * is a body under the row. A pill that stays a pill while a block of output
+ * hangs off it reads as two separate objects.
  *
  * Every row is in the DOM from the start and is only clipped, so a reveal that
  * never fires costs a person nothing — the log is readable either way.
  */
 function TaskList({
   className,
-  collapseOnComplete = false,
   revealed,
   startDelay = 260,
   stepInterval = 420,
@@ -81,53 +78,57 @@ function TaskList({
   });
 
   const shown = revealed ?? paced;
-  const finished = tasks.every((task) => task.status === 'done' || task.status === 'failed');
 
   return (
-    <ol className={cn('grid gap-px', className)}>
-      {tasks.map((task, index) => {
-        const open = index < shown;
-        const folded =
-          collapseOnComplete === 'all'
-            ? finished
-            : collapseOnComplete && (task.status === 'done' || task.status === 'failed');
-
-        return (
-          <li key={task.id} className="t-grow" data-open={open && !folded}>
-            <div>
-              <Row task={task} />
-            </div>
-          </li>
-        );
-      })}
+    <ol className={cn('grid gap-1', className)}>
+      {tasks.map((task, index) => (
+        <li key={task.id} className="t-grow" data-open={index < shown}>
+          <div>
+            <Row index={index} task={task} />
+          </div>
+        </li>
+      ))}
     </ol>
   );
 }
 
-function Row({ task }: { task: Task }) {
-  const running = task.status === 'running';
+function Row({ index, task }: { index: number; task: Task }) {
+  // A failure opens itself. Everything else is there to be asked for, but a
+  // step that failed is the reason the log is being read at all.
+  const [open, setOpen] = useState(task.status === 'failed');
+  const failed = task.status === 'failed';
+  const body = task.detail;
 
-  const head = (
+  return (
     <div
       className={cn(
-        'flex min-w-0 items-start gap-2 rounded-(--radius-control) px-2 py-1.5',
-        'transition-colors duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-        task.detail && 'cursor-pointer list-none hover:bg-hover',
-        // A step that failed is the one you came to read. Tinting the row is
-        // what separates it from a list of things that went fine, at the
-        // distance you actually scan a log from.
-        task.status === 'failed' && 'bg-destructive/8',
+        'reveal overflow-hidden border',
+        'transition-[background-color,border-color,border-radius] duration-(--t-base) ease-out-strong motion-reduce:transition-none',
+        open ? 'rounded-(--radius-panel)' : 'rounded-full',
+        failed
+          ? 'border-destructive/25 bg-destructive/8'
+          : 'border-transparent bg-surface-3/70 hover:border-input/40',
       )}
+      style={{ ['--i' as string]: index }}
     >
-      <span className="mt-px grid size-4 shrink-0 place-items-center">
-        <Status status={task.status} />
-      </span>
+      <button
+        aria-expanded={body ? open : undefined}
+        className={cn(
+          'flex h-9 w-full min-w-0 items-center gap-2.5 px-2.5 text-left',
+          'transition-colors duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+          body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+        )}
+        disabled={!body}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Status index={index} status={task.status} />
 
-      <span className="min-w-0 flex-1">
         <span
           className={cn(
-            'block truncate text-[13px] leading-5',
-            running
+            'min-w-0 truncate text-[13px] leading-5',
+            task.status === 'running'
               ? 'shimmer-text'
               : task.status === 'pending'
                 ? 'text-muted-foreground'
@@ -138,76 +139,157 @@ function Row({ task }: { task: Task }) {
         </span>
 
         {task.resources?.length ? (
-          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+          <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
             {task.resources.map((resource) => (
               <Chip key={resource.name} resource={resource} />
             ))}
           </span>
-        ) : null}
-      </span>
-
-      {/* Only rows that have something to open say so. Without it the ones
-          that do are indistinguishable from the ones that do not, and the
-          output may as well not be there. */}
-      {task.detail ? (
-        <CaretRightIcon
-          aria-hidden
-          className={cn(
-            'mt-0.5 size-3 shrink-0 text-muted-foreground/60',
-            'transition-transform duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-            'group-open/step:rotate-90',
-          )}
-        />
-      ) : null}
-    </div>
-  );
-
-  if (!task.detail) {
-    return head;
-  }
-
-  return (
-    // A failure opens itself. Everything else is there to be asked for, but a
-    // step that failed is the reason the log is being read at all, and making
-    // someone click to find out why is the log withholding its own point.
-    <details
-      className="group/step min-w-0 [&[open]_summary]:text-foreground"
-      open={task.status === 'failed'}
-    >
-      <summary className="list-none outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
-        {head}
-      </summary>
-      <pre
-        className={cn(
-          'm-0 mx-2 mb-1.5 max-h-72 max-w-full overflow-auto whitespace-pre-wrap rounded-(--radius-press)',
-          'px-2 py-1.5 font-mono text-[11px] leading-5 wrap-anywhere',
-          task.status === 'failed'
-            ? 'bg-destructive/8 text-destructive/90'
-            : 'bg-surface-2 text-muted-foreground',
+        ) : (
+          <span className="flex-1" />
         )}
-      >
-        {task.detail}
-      </pre>
-    </details>
+
+        {failed ? <Pill>Failed</Pill> : null}
+
+        {body ? (
+          <CaretDownIcon
+            aria-hidden
+            className={cn(
+              'size-3.5 shrink-0 text-muted-foreground/60',
+              'transition-transform duration-(--t-base) ease-out-strong motion-reduce:transition-none',
+              open && 'rotate-180',
+            )}
+          />
+        ) : null}
+      </button>
+
+      {/* `0fr` to `1fr` is the height animation, without measuring anything.
+          The guide column keeps the output tied to the row that produced it
+          rather than floating loose under the capsule. */}
+      <div className="t-grow" data-open={open && !!body}>
+        <div>
+          <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2 px-2.5 pb-2.5">
+            <span aria-hidden className="mx-auto w-px bg-border" />
+            <pre
+              className={cn(
+                'm-0 max-h-72 max-w-full overflow-auto whitespace-pre-wrap rounded-(--radius-press)',
+                'px-2.5 py-2 font-mono text-[11px] leading-5 wrap-anywhere',
+                failed
+                  ? 'bg-destructive/10 text-destructive/90'
+                  : 'bg-surface-2 text-muted-foreground',
+              )}
+            >
+              {body}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function Status({ status }: { status: TaskStatus }) {
+/**
+ * The step's state, in a fixed slot so the labels share a left edge.
+ *
+ * A running step shows its own number inside the ring rather than a bare
+ * spinner: in a log of nine steps, which one is turning is the thing you want
+ * to know, and a spinner alone cannot say it.
+ */
+function Status({ index, status }: { index: number; status: TaskStatus }) {
   if (status === 'running') {
-    return <CircleNotchIcon className="size-3.5 animate-spin text-primary" />;
+    return (
+      <span className="relative grid size-5 shrink-0 place-items-center">
+        <svg
+          aria-hidden
+          className="absolute inset-0 size-5 animate-spin motion-reduce:animate-none"
+          viewBox="0 0 20 20"
+        >
+          <circle cx="10" cy="10" r="9" fill="none" stroke="var(--border)" strokeWidth="1.5" />
+          <circle
+            cx="10"
+            cy="10"
+            r="9"
+            fill="none"
+            stroke="var(--primary)"
+            strokeDasharray="16 41"
+            strokeLinecap="round"
+            strokeWidth="1.5"
+          />
+        </svg>
+        <span className="relative text-[9px] font-semibold tabular-nums text-foreground">
+          {index + 1}
+        </span>
+      </span>
+    );
   }
 
   if (status === 'done') {
-    return <Check className="size-3.5 text-primary" />;
+    return (
+      <Badge tone="success">
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="size-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </Badge>
+    );
   }
 
   if (status === 'failed') {
-    return <WarningIcon className="size-3.5 text-destructive" />;
+    return (
+      <Badge tone="destructive">
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="size-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        >
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </Badge>
+    );
   }
 
-  // Pending is a ring rather than an empty box: something is queued here, and a
-  // blank slot reads as a rendering mistake.
-  return <span className="size-2 rounded-full border border-muted-foreground/50" />;
+  // Pending is a ring with its number, not an empty box: something is queued
+  // here, and a blank slot reads as a rendering mistake.
+  return (
+    <span className="grid size-5 shrink-0 place-items-center rounded-full border border-muted-foreground/30">
+      <span className="text-[9px] font-semibold tabular-nums text-muted-foreground">
+        {index + 1}
+      </span>
+    </span>
+  );
+}
+
+function Badge({ children, tone }: { children: ReactNode; tone: 'success' | 'destructive' }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'pop grid size-5 shrink-0 place-items-center rounded-full text-background',
+        tone === 'success' ? 'bg-success' : 'bg-destructive',
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-destructive/15 px-2 text-[11px] font-medium text-destructive">
+      {children}
+    </span>
+  );
 }
 
 function Chip({ resource }: { resource: Resource }) {
@@ -219,7 +301,7 @@ function Chip({ resource }: { resource: Resource }) {
         : FileTextIcon;
 
   return (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-(--radius-press) bg-surface-4/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-surface-5/60 px-1.5 py-0.5 text-[11px] text-muted-foreground">
       <Icon aria-hidden className="size-3 shrink-0" />
       <span className="truncate font-mono">{resource.name}</span>
     </span>
@@ -274,16 +356,7 @@ function usePacing(input: {
 }
 
 function TaskGroup({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        'min-w-0 overflow-hidden rounded-(--radius-panel) border border-border bg-surface-3/60 p-1',
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn('min-w-0', className)}>{children}</div>;
 }
 
 export { TaskGroup, TaskList };

@@ -459,7 +459,32 @@
   }
 }
 
+/* A status badge landing. Used where a step resolves: the mark arrives rather
+   than being swapped in, which is what makes a completion register at all when
+   it happens halfway down a log you are not looking at. */
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
 @layer components {
+  .pop {
+    animation: pop 300ms var(--ease-out-strong) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pop {
+      animation: none;
+    }
+  }
+
   /* Glass, built rather than blurred: the fill is translucent so the field
      behind it actually comes through, two hairlines in the surface's own colour
      draw the edge, an inset highlight catches the top lip, and the cast shadow
