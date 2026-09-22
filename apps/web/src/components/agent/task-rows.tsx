@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { useState } from 'react';
 
+import { Caret as Mark } from '~/components/agent/glyphs';
 import { cn } from '~/lib/utils';
 
 /**
@@ -308,22 +309,7 @@ function Caret({ hidden, open }: { hidden: boolean; open: boolean }) {
         hidden && 'opacity-0',
       )}
     >
-      <svg
-        className={cn(
-          'transition-transform duration-(--t-base) ease-out-strong motion-reduce:transition-none',
-          open && 'rotate-180',
-        )}
-        fill="none"
-        height="15"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.2"
-        viewBox="0 0 24 24"
-        width="15"
-      >
-        <path d="M6 9l6 6 6-6" />
-      </svg>
+      <Mark className={cn('size-[15px] motion-reduce:transition-none', open && 'rotate-180')} />
     </span>
   );
 }

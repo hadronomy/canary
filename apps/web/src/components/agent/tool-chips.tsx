@@ -12,6 +12,7 @@ import {
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 
+import { Caret } from '~/components/agent/glyphs';
 import { cn } from '~/lib/utils';
 
 /**
@@ -100,7 +101,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
         type="button"
         onClick={() => setOpen(!open)}
       >
-        <Chevron className={cn('size-3', open ? 'rotate-0' : '-rotate-90')} />
+        <Caret className={cn('size-3', open ? 'rotate-0' : '-rotate-90')} />
 
         <span className="truncate tabular-nums">
           {steps.length === 1 ? '1 tool call' : `${steps.length} tool calls`}
@@ -253,7 +254,7 @@ function Slot({
       />
 
       {body ? (
-        <Chevron
+        <Caret
           className={cn(
             'absolute size-3',
             'transition-[opacity,rotate] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
@@ -263,23 +264,6 @@ function Slot({
         />
       ) : null}
     </span>
-  );
-}
-
-function Chevron({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden
-      className={cn('transition-transform duration-(--t-fast) ease-out-strong', className)}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.2"
-      viewBox="0 0 24 24"
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
   );
 }
 

@@ -1,12 +1,11 @@
-import type { ComponentPropsWithoutRef } from 'react';
-
 import { code } from '@streamdown/code';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { Part } from '@canary/sync';
 import type { ToolState, ToolStep } from '~/components/agent/tool-chips';
 
+import { Reasoning } from '~/components/agent/reasoning';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
 import { Message, MessageContent } from '~/components/ui/message';
@@ -96,52 +95,27 @@ function AssistantPart({ live, part }: { live?: boolean; part: Part }) {
   return <ReasoningPart live={live} part={part} />;
 }
 
-type DisclosureProps = Omit<ComponentPropsWithoutRef<'details'>, 'open'> & {
-  defaultOpen?: boolean;
-  forceOpen?: boolean;
-};
-
-function Disclosure({
-  children,
-  defaultOpen = false,
-  forceOpen = false,
-  onToggle,
-  ...props
-}: DisclosureProps) {
-  const [open, setOpen] = useState(defaultOpen);
-
+function ReasoningPart({ live, part }: { live?: boolean; part: Part }) {
   return (
-    <details
-      {...props}
-      open={forceOpen || open}
-      onToggle={(event) => {
-        onToggle?.(event);
-
-        if (forceOpen || event.defaultPrevented) {
-          return;
-        }
-
-        setOpen(event.currentTarget.open);
-      }}
-    >
-      {children}
-    </details>
+    <Reasoning duration={secondsOf(part)} running={part.status === 'running'}>
+      <Markdown live={live} text={partContent(part)} />
+    </Reasoning>
   );
 }
 
-function ReasoningPart({ live, part }: { live?: boolean; part: Part }) {
-  const running = part.status === 'running';
+/**
+ * How long the model spent on this part.
+ *
+ * Both stamps are real: the row is created when the first token of the trace
+ * lands and touched on every one after, so the gap between them is the time
+ * the model actually spent, not the time the turn took.
+ */
+function secondsOf(part: Part) {
+  if (part.status === 'running' || !part.createdAt || !part.updatedAt) {
+    return undefined;
+  }
 
-  return (
-    <Disclosure
-      className="flow-root min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-card/80 p-3 text-xs shadow-surface-1"
-      defaultOpen={running}
-      forceOpen={running}
-    >
-      <summary className="cursor-pointer text-muted-foreground">Reasoning</summary>
-      <Markdown live={live} text={partContent(part)} />
-    </Disclosure>
-  );
+  return (part.updatedAt.getTime() - part.createdAt.getTime()) / 1000;
 }
 
 const Markdown = memo(function Markdown(props: {
@@ -326,7 +300,6 @@ export {
   AssistantMessage,
   AssistantPart,
   AssistantTurn,
-  Disclosure,
   Markdown,
   ReasoningPart,
   UserMessage,

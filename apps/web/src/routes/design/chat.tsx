@@ -105,7 +105,15 @@ const SCENES = [
     user: 'What made you look at the phase instead of the code?',
     segment: {
       live: false,
-      parts: [part({ kind: 'reasoning', status: 'completed', content: REASONING })],
+      parts: [
+        part({
+          kind: 'reasoning',
+          status: 'completed',
+          content: REASONING,
+          createdAt: new Date(Date.now() - 4200),
+          updatedAt: new Date(),
+        }),
+      ],
       text: '',
     },
   },
