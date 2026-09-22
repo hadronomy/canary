@@ -79,11 +79,15 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
 
   return (
     <div className={cn('min-w-0', className)}>
+      {/* Every hover fill in this component bleeds the same 6px, so they all
+          share one left edge while their content stays on the text column. A
+          header that bleeds further than its own rows reads as falling out of
+          the block rather than heading it. */}
       <button
         aria-expanded={open}
         className={cn(
-          '-mx-2 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-2 py-1',
-          'text-[12.5px] text-muted-foreground',
+          '-mx-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-1.5 py-1',
+          'text-[12.5px] leading-4 text-muted-foreground',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
@@ -105,9 +109,8 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
 
       <div className="t-grow" data-open={open}>
         <div>
-          {/* The negative margin gives each row's hover fill room to sit
-              outside the text column without the clip box cutting it. */}
-          <div className="-mx-1 mt-1 flex min-w-0 flex-col gap-1 px-1 pb-0.5">
+          {/* Matches the bleed so the clip box never cuts a row's fill. */}
+          <div className="-mx-1.5 mt-1 flex min-w-0 flex-col gap-1 px-1.5 pb-0.5">
             {steps.map((step, index) => (
               <Row key={step.id} index={index} step={step} />
             ))}
@@ -130,7 +133,7 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
       <button
         aria-expanded={body ? shown : undefined}
         className={cn(
-          'group/row -mx-[3px] flex min-h-7 w-[calc(100%+6px)] min-w-0 items-center gap-2 rounded-(--radius-press) px-[3px] text-left',
+          'group/row -mx-1.5 flex min-h-7 w-[calc(100%+12px)] min-w-0 items-center gap-2 rounded-(--radius-press) px-1.5 text-left',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
           body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
