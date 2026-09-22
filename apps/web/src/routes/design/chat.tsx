@@ -3,7 +3,8 @@ import { useState } from 'react';
 
 import type { Part } from '@canary/sync';
 
-import { TaskGroup, TaskList } from '~/components/agent/task-list';
+import { TaskRows } from '~/components/agent/task-rows';
+import { ToolChips } from '~/components/agent/tool-chips';
 import { AssistantMessage, UserMessage } from '~/components/agent/turn';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
@@ -243,6 +244,45 @@ const wide = { alpha: 1, beta: 2, gamma: 3, delta: 4, epsilon: 5, zeta: 6, eta: 
   },
 ] as const;
 
+const PLAN = [
+  {
+    id: 'verify',
+    label: 'Indexed consolidated texts',
+    amount: '1 284 docs',
+    status: 'done' as const,
+    details: [
+      { label: 'Matched BOE identifiers', meta: '1284/1284' },
+      { label: 'Skipped superseded versions', meta: '37' },
+    ],
+  },
+  {
+    id: 'embed',
+    label: 'Embed article bodies',
+    amount: '96 412 chunks',
+    status: 'running' as const,
+    details: [
+      { label: 'Reading consolidated XML', meta: '12 files' },
+      { label: 'Batches written', meta: '68%' },
+    ],
+  },
+  {
+    id: 'links',
+    label: 'Resolve cross-references',
+    amount: '8 907 links',
+    status: 'failed' as const,
+    details: [
+      { label: 'Unresolved target', meta: 'BOE-A-1978-31229' },
+      { label: 'Retried', meta: '3×' },
+    ],
+  },
+  {
+    id: 'publish',
+    label: 'Publish search index',
+    status: 'pending' as const,
+    details: [{ label: 'Waiting on cross-references' }],
+  },
+] as const;
+
 function Gallery() {
   const [wide, setWide] = useState(false);
 
@@ -283,41 +323,80 @@ function Gallery() {
 
           <section className="space-y-4">
             <div className="space-y-1">
-              <h2 className="text-xs font-medium text-foreground">Log, paced</h2>
+              <h2 className="text-xs font-medium text-foreground">Tool chips, every state</h2>
               <p className="text-xs text-muted-foreground">
-                The task log revealing on its own timer, which is what a run looks like before the
-                events arrive to drive it.
+                One run, with a call still out, one that failed, and one carrying nothing to open.
+                Hover a row: the tool's mark trades places with the caret in the same slot, so
+                nothing reflows.
               </p>
             </div>
 
             <Separator />
 
-            <TaskGroup>
-              <TaskList
-                tasks={[
-                  {
-                    id: 'a',
-                    label: 'read',
-                    status: 'done',
-                    resources: [{ name: 'src/index.ts', kind: 'file' }],
-                  },
-                  {
-                    id: 'b',
-                    label: 'grep',
-                    status: 'done',
-                    resources: [{ name: 'src/', kind: 'dir' }],
-                  },
-                  {
-                    id: 'c',
-                    label: 'bash',
-                    status: 'running',
-                    resources: [{ name: 'bun test', kind: 'command' }],
-                  },
-                  { id: 'd', label: 'edit', status: 'pending' },
-                  { id: 'e', label: 'verify', status: 'failed', detail: 'exit 1' },
-                ]}
-              />
-            </TaskGroup>
+            <ToolChips
+              steps={[
+                { id: 't1', name: 'read', status: 'done', chip: 'packages/sync/src/keepalive.ts' },
+                {
+                  id: 't2',
+                  name: 'grep',
+                  status: 'done',
+                  chip: 'SocketClose',
+                  detail:
+                    'keepalive.ts:58  socket.on("close", ...)\nsocket.ts:112  throw new SocketClose(...)',
+                },
+                {
+                  id: 't3',
+                  name: 'search_boe',
+                  status: 'done',
+                  chip: 'disposiciones sobre contratación pública de 2024',
+                  mono: false,
+                  detail: '14 disposiciones · BOE-A-2024-1234 … BOE-A-2024-9981',
+                },
+                {
+                  id: 't4',
+                  name: 'bash',
+                  status: 'failed',
+                  chip: 'bun test packages/sync',
+                  detail:
+                    'keepalive > retries a mid-flight close\n\n  expected: 2 attempts\n  received: 1 attempt\n\n  at packages/sync/test/keepalive.test.ts:41:7\n\n 1 fail, 24 pass',
+                },
+                {
+                  id: 't5',
+                  name: 'edit',
+                  status: 'running',
+                  chip: 'packages/sync/src/keepalive.ts',
+                },
+                { id: 't6', name: 'write_report', status: 'pending' },
+              ]}
+            />
+          </section>
+
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xs font-medium text-foreground">Task rows, capsules</h2>
+              <p className="text-xs text-muted-foreground">
+                A plan rather than a tool log. Each capsule flattens as it opens; the failed row
+                opens itself.
+              </p>
+            </div>
+
+            <Separator />
+
+            <TaskRows rows={PLAN} />
+          </section>
+
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xs font-medium text-foreground">Task rows, list</h2>
+              <p className="text-xs text-muted-foreground">
+                The same plan as one card. For a list long enough that eight separate shadows stops
+                reading as eight steps and starts reading as noise.
+              </p>
+            </div>
+
+            <Separator />
+
+            <TaskRows rows={PLAN} variant="list" />
           </section>
         </div>
       </main>

@@ -5,9 +5,9 @@ import { memo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { Part } from '@canary/sync';
-import type { Task, TaskStatus } from '~/components/agent/task-list';
+import type { ToolState, ToolStep } from '~/components/agent/tool-chips';
 
-import { TaskGroup, TaskList } from '~/components/agent/task-list';
+import { ToolChips } from '~/components/agent/tool-chips';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
 import { Message, MessageContent } from '~/components/ui/message';
 import { cn } from '~/lib/utils';
@@ -71,13 +71,11 @@ function AssistantTurn({ segment }: { segment: Segment }) {
     <div className="flow-root min-w-0 max-w-full space-y-3">
       {runsOf(segment.parts).map((run) =>
         run.kind === 'tasks' ? (
-          <TaskGroup key={run.id}>
-            {/* `revealed` is the whole group: a step appears when its event
-                lands, not on a timer. A timer would keep resizing the turn
-                after the run had already finished, and the transcript's scroll
-                anchoring measures every one of those frames. */}
-            <TaskList revealed={run.parts.length} tasks={run.parts.map(asTask)} />
-          </TaskGroup>
+          /* One group per stretch of tool work, and no timed reveal: a step
+             appears when its event lands. A timer would keep resizing the turn
+             after the run had already finished, and the transcript's scroll
+             anchoring measures every one of those frames. */
+          <ToolChips key={run.id} steps={run.parts.map(asStep)} />
         ) : (
           <AssistantPart
             key={run.parts[0]?.id}
@@ -191,59 +189,88 @@ function runsOf(parts: readonly Part[]): PartRun[] {
   return runs;
 }
 
-function asTask(part: Part): Task {
-  const body = structuredPartBody(part);
+function asStep(part: Part): ToolStep {
+  const arg = argOf(part);
 
   return {
-    detail: body || undefined,
+    chip: arg?.value,
+    detail: structuredPartBody(part),
     id: part.id,
-    label: structuredPartTitle(part),
-    resources: resourcesOf(part),
-    status: taskStatus(part.status),
+    mono: arg?.mono ?? true,
+    name: structuredPartTitle(part),
+    status: toolState(part),
   };
 }
 
-function taskStatus(status: Part['status']): TaskStatus {
-  if (status === 'running') {
+/**
+ * The status a tool row should read as.
+ *
+ * A result carrying `isError` arrives with a `completed` status, because the
+ * call itself did complete — the tool ran and came back. What came back was a
+ * failure, and that is the thing a person is scanning the log for, so it is
+ * what the row reports.
+ */
+function toolState(part: Part): ToolState {
+  const data = fields(part);
+
+  if (part.status === 'failed' || part.status === 'cancelled' || data?.isError === true) {
+    return 'failed';
+  }
+
+  if (part.status === 'running') {
     return 'running';
   }
 
-  if (status === 'completed') {
+  if (part.status === 'completed') {
     return 'done';
-  }
-
-  if (status === 'failed' || status === 'cancelled') {
-    return 'failed';
   }
 
   return 'pending';
 }
 
 // Tool arguments are free-form, so this reads the few keys that conventionally
-// carry a path and ignores everything else rather than guessing at the shape.
-function resourcesOf(part: Part) {
-  const data = 'data' in part && part.data && typeof part.data === 'object' ? part.data : null;
+// carry the one value worth showing inline and ignores the rest rather than
+// guessing at the shape. Prose keys come last and turn mono off, because a
+// sentence set in mono reads as output rather than as something written.
+const KEYS = [
+  ['command', true],
+  ['path', true],
+  ['file', true],
+  ['filePath', true],
+  ['file_path', true],
+  ['dir', true],
+  ['directory', true],
+  ['url', true],
+  ['pattern', true],
+  ['query', false],
+  ['prompt', false],
+] as const;
 
-  if (!data) {
+function argOf(part: Part) {
+  const data = fields(part);
+  const args = data?.args && typeof data.args === 'object' ? (data.args as Fields) : data;
+
+  if (!args) {
     return undefined;
   }
 
-  const paths = ['path', 'file', 'filePath', 'file_path', 'dir', 'directory', 'command']
-    .map((key) => [key, (data as Record<string, unknown>)[key]] as const)
-    .filter(
-      (entry): entry is readonly [string, string] => typeof entry[1] === 'string' && !!entry[1],
-    )
-    .map(([key, value]) => ({
-      kind:
-        key === 'command'
-          ? ('command' as const)
-          : key.startsWith('dir')
-            ? ('dir' as const)
-            : ('file' as const),
-      name: value,
-    }));
+  for (const [key, mono] of KEYS) {
+    const value = args[key];
 
-  return paths.length ? paths : undefined;
+    if (typeof value === 'string' && value.trim()) {
+      return { mono, value: value.trim() };
+    }
+  }
+
+  return undefined;
+}
+
+type Fields = Record<string, unknown>;
+
+function fields(part: Part): Fields | null {
+  return 'data' in part && part.data && typeof part.data === 'object'
+    ? (part.data as Fields)
+    : null;
 }
 
 function structuredPartTitle(part: Part) {
@@ -262,6 +289,13 @@ function structuredPartTitle(part: Part) {
   return part.kind;
 }
 
+/**
+ * What a tool actually returned, as text.
+ *
+ * A result part wraps its payload in `{ result, isError }`, so the wrapper is
+ * unwrapped first — printing it whole buries three lines of output under two
+ * lines of bookkeeping the reader already knows.
+ */
 function structuredPartBody(part: Part) {
   const content = partContent(part).trim();
 
@@ -269,13 +303,19 @@ function structuredPartBody(part: Part) {
     return content;
   }
 
-  const data = 'data' in part ? part.data : undefined;
+  const data = fields(part);
 
-  if (data === undefined || data === null) {
+  if (!data) {
     return '';
   }
 
-  return JSON.stringify(data, null, 2) ?? String(data);
+  const body = 'result' in data ? data.result : 'args' in data ? data.args : data;
+
+  if (body === undefined || body === null || body === '') {
+    return '';
+  }
+
+  return typeof body === 'string' ? body.trim() : (JSON.stringify(body, null, 2) ?? String(body));
 }
 
 function partContent(part: Part) {
@@ -290,11 +330,11 @@ export {
   Markdown,
   ReasoningPart,
   UserMessage,
-  asTask,
+  asStep,
   partContent,
   runsOf,
   structuredPartBody,
   structuredPartTitle,
-  taskStatus,
+  toolState,
 };
 export type { Segment };

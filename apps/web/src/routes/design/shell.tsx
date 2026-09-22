@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { AgentPrompt } from '~/components/agent-prompt';
-import { TaskGroup, TaskList } from '~/components/agent/task-list';
+import { ToolChips } from '~/components/agent/tool-chips';
 import { Backdrop } from '~/components/backdrop/backdrop';
 import shader from '~/components/backdrop/prompt.wgsl';
 import { useField } from '~/components/backdrop/use-field';
@@ -56,25 +56,20 @@ const GROUPS = [
 const TASKS = [
   {
     id: '1',
-    label: 'read',
+    name: 'read',
     status: 'done' as const,
-    resources: [{ name: 'packages/sync/src/index.ts', kind: 'file' as const }],
+    chip: 'packages/sync/src/index.ts',
   },
   {
     id: '2',
-    label: 'grep',
+    name: 'grep',
     status: 'done' as const,
-    resources: [{ name: 'apps/web/src/components/shell', kind: 'dir' as const }],
+    chip: 'apps/web/src/components/shell',
     detail:
       'apps/web/src/components/shell/threads.tsx:58\napps/web/src/components/shell/sidebar.tsx:37',
   },
-  {
-    id: '3',
-    label: 'bash',
-    status: 'running' as const,
-    resources: [{ name: 'bun run check-types', kind: 'command' as const }],
-  },
-  { id: '4', label: 'edit', status: 'pending' as const },
+  { id: '3', name: 'bash', status: 'running' as const, chip: 'bun run check-types' },
+  { id: '4', name: 'edit', status: 'pending' as const },
 ] as const;
 
 function Preview() {
@@ -198,9 +193,7 @@ function Preview() {
             {params.v === 'tasks' ? (
               <div className="relative z-10 min-h-0 overflow-y-auto py-8">
                 <div className="mx-auto w-full max-w-3xl">
-                  <TaskGroup>
-                    <TaskList revealed={TASKS.length} tasks={TASKS} />
-                  </TaskGroup>
+                  <ToolChips steps={TASKS} />
                 </div>
               </div>
             ) : null}

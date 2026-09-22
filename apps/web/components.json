@@ -21,6 +21,7 @@
     "hooks": "~/hooks"
   },
   "registries": {
-    "@cardcn": "https://cardcn.dev/r/{name}.json"
+    "@cardcn": "https://cardcn.dev/r/{name}.json",
+    "@beautifului": "https://www.beautifului.dev/r/{name}.json"
   }
 }
