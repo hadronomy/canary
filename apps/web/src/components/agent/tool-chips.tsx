@@ -17,19 +17,24 @@ import { cn } from '~/lib/utils';
 /**
  * An agent's tool work, as compact rows under one collapsible header.
  *
- * Based on `@beautifului/tool-chips`. The registry version reveals its rows on
- * a `setTimeout` because a gallery tile has no run to follow; here the rows are
- * the run, so they arrive when their events do.
+ * Based on `@beautifului/tool-chips`, and its measurements are kept: 3px of
+ * bleed on a row, 6px on the header, a 28px row holding a 22px chip, and the
+ * registry's two radii — 8px on anything that behaves like a control, 6px on
+ * the chip nested inside one. Radii step down as they nest, which is what
+ * makes the chip read as sitting in the row rather than beside it.
  *
- * What is kept is the row grammar — a mark, a verb, and the argument in a chip
- * — and the interaction that makes it work: at rest the mark says what kind of
- * tool this was, and on hover or focus it becomes the caret that says the row
- * opens. One slot, answering "what is this" until you reach for it and "what
- * can I do with it" once you have.
+ * The argument chip takes the remaining width rather than hugging its text, so
+ * every chip in a run ends on the same right edge. A column of ragged pills
+ * reads as a list of unrelated values; one edge reads as a table.
  *
- * Status is ours. A registry demo has no failing tools; a transcript is mostly
- * read because something failed, so a failed row is tinted and named rather
- * than being one more grey line.
+ * The registry reveals its rows on a `setTimeout` because a gallery tile has
+ * no run to follow. Here the rows are the run, so they arrive when their
+ * events do.
+ *
+ * Two things are ours. The icon slot trades the tool's mark for a caret on
+ * hover, so one slot says "what is this" until you reach for it and "this
+ * opens" once you have. And status: a registry demo has no failing tools,
+ * while a transcript is mostly read because something failed.
  */
 
 type ToolState = 'pending' | 'running' | 'done' | 'failed';
@@ -78,12 +83,16 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
   const failures = steps.filter((step) => step.status === 'failed').length;
 
   return (
-    <div className={cn('min-w-0', className)}>
+    /* The registry caps this block at 320px, which is what keeps a stretched
+       chip reading as a value rather than as an empty input. Our transcript
+       column is more than twice that, so the cap is widened to fit a real
+       path and no further. */
+    <div className={cn('min-w-0 max-w-lg', className)}>
       <button
         aria-expanded={open}
         className={cn(
-          '-mx-2.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-2.5 py-1.5',
-          'text-[12.5px] leading-4 text-muted-foreground',
+          '-mx-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-control) py-1 pl-1.5 pr-2',
+          'text-[12.5px]/[1.5] text-muted-foreground',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
@@ -91,7 +100,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
         type="button"
         onClick={() => setOpen(!open)}
       >
-        <Chevron className={cn('size-1.5', open ? 'rotate-0' : '-rotate-90')} />
+        <Chevron className={cn('size-3', open ? 'rotate-0' : '-rotate-90')} />
 
         <span className="truncate tabular-nums">
           {steps.length === 1 ? '1 tool call' : `${steps.length} tool calls`}
@@ -105,11 +114,14 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
 
       <div className="t-grow" data-open={open}>
         <div>
-          {/* Matches the bleed so the clip box never cuts a row's fill. */}
-          <div className="-mx-2.5 mt-1 flex min-w-0 flex-col gap-1 px-2.5 pb-0.5">
-            {steps.map((step, index) => (
-              <Row key={step.id} index={index} step={step} />
-            ))}
+          {/* Wider padding than the pull-back, which sets the rows two pixels
+              in from the header and reads as one level of nesting. */}
+          <div className="-mx-1 overflow-hidden px-1.5 pb-1">
+            <div className="mt-1.5 flex min-w-0 flex-col gap-1">
+              {steps.map((step, index) => (
+                <Row key={step.id} index={index} step={step} />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -129,7 +141,7 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
       <button
         aria-expanded={body ? shown : undefined}
         className={cn(
-          'group/row -mx-2.5 flex min-h-7 w-[calc(100%+20px)] min-w-0 items-center gap-2 rounded-(--radius-press) px-2.5 text-left',
+          'group/row -mx-[3px] flex h-7 w-[calc(100%+6px)] min-w-0 items-center gap-2 rounded-(--radius-control) px-[3px] text-left',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
           body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
@@ -150,13 +162,10 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
           {step.name}
         </span>
 
-        {/* The chip is sized by its argument, not by the row. A path in a pill
-            stretched across 600px of empty space stops reading as a value and
-            starts reading as an input someone forgot to fill in. */}
         {step.chip ? (
           <span
             className={cn(
-              'inline-flex h-5.5 min-w-0 shrink items-center overflow-hidden rounded-(--radius-press) px-2 text-[11.5px]',
+              'inline-flex h-5.5 min-w-0 flex-1 items-center rounded-sm px-1.5 text-[11.5px]',
               'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
               step.mono && 'font-mono',
               failed
@@ -166,8 +175,8 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
           >
             {/* `min-w-0` is what keeps the right padding: without it this
                 cannot shrink under its own text, so it overruns the chip's
-                content box and gets clipped at the border instead of
-                ellipsing inside it.
+                content box and the ellipsis lands on the border instead of
+                inside the padding.
 
                 The shimmer goes here and never on the chip, because it clips
                 the background to the glyphs — a chip wearing it loses its own
@@ -176,11 +185,9 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
               {step.chip}
             </span>
           </span>
-        ) : null}
-
-        {step.status === 'running' ? <Dots /> : null}
-
-        <span className="min-w-0 flex-1" />
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
       </button>
 
       <div className="t-grow" data-open={shown}>
@@ -230,7 +237,7 @@ function Slot({
   return (
     <span
       className={cn(
-        'relative grid size-4 shrink-0 place-items-center',
+        'relative flex size-4 shrink-0 items-center justify-center',
         failed ? 'text-destructive' : 'text-muted-foreground/70',
       )}
     >
@@ -259,15 +266,6 @@ function Slot({
   );
 }
 
-/**
- * A caret whose box is the size of the caret.
- *
- * On the stock 24 grid this glyph inks about half its viewBox. That slack is
- * useful where icons sit in a column and it is what lines them up, but it also
- * means padding beside one does not measure what it says. The viewBox is
- * tightened to the path plus its stroke, so the space around this is the space
- * the class asked for.
- */
 function Chevron({ className }: { className?: string }) {
   return (
     <svg
@@ -278,25 +276,10 @@ function Chevron({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2.2"
-      viewBox="4.8 4.8 14.4 14.4"
+      viewBox="0 0 24 24"
     >
       <path d="M6 9l6 6 6-6" />
     </svg>
-  );
-}
-
-/** Three dots keeping time, for a call that has not come back yet. */
-function Dots() {
-  return (
-    <span aria-hidden className="flex shrink-0 items-center gap-[3px] pr-1">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="size-[3px] rounded-full bg-muted-foreground/70 motion-safe:animate-pulse"
-          style={{ animationDelay: `${i * 160}ms`, animationDuration: '1.1s' }}
-        />
-      ))}
-    </span>
   );
 }
 
