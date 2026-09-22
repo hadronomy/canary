@@ -79,14 +79,10 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
 
   return (
     <div className={cn('min-w-0', className)}>
-      {/* Every hover fill in this component bleeds the same 6px, so they all
-          share one left edge while their content stays on the text column. A
-          header that bleeds further than its own rows reads as falling out of
-          the block rather than heading it. */}
       <button
         aria-expanded={open}
         className={cn(
-          '-mx-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-1.5 py-1',
+          '-mx-2.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-2.5 py-1.5',
           'text-[12.5px] leading-4 text-muted-foreground',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover hover:text-foreground',
@@ -110,7 +106,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
       <div className="t-grow" data-open={open}>
         <div>
           {/* Matches the bleed so the clip box never cuts a row's fill. */}
-          <div className="-mx-1.5 mt-1 flex min-w-0 flex-col gap-1 px-1.5 pb-0.5">
+          <div className="-mx-2.5 mt-1 flex min-w-0 flex-col gap-1 px-2.5 pb-0.5">
             {steps.map((step, index) => (
               <Row key={step.id} index={index} step={step} />
             ))}
@@ -133,7 +129,7 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
       <button
         aria-expanded={body ? shown : undefined}
         className={cn(
-          'group/row -mx-1.5 flex min-h-7 w-[calc(100%+12px)] min-w-0 items-center gap-2 rounded-(--radius-press) px-1.5 text-left',
+          'group/row -mx-2.5 flex min-h-7 w-[calc(100%+20px)] min-w-0 items-center gap-2 rounded-(--radius-press) px-2.5 text-left',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
           body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
@@ -266,11 +262,11 @@ function Slot({
 /**
  * A caret whose box is the size of the caret.
  *
- * On the usual 24 grid this glyph inks about half its viewBox, which is fine
- * where icons sit in a row and that dead margin is what lines them up. At the
- * start of a pill it is not a margin, it is padding nobody asked for — the
- * left gap reads three pixels wider than the right one. The viewBox is
- * tightened to the path plus its stroke, so `size-*` means the size it draws.
+ * On the stock 24 grid this glyph inks about half its viewBox. That slack is
+ * useful where icons sit in a column and it is what lines them up, but it also
+ * means padding beside one does not measure what it says. The viewBox is
+ * tightened to the path plus its stroke, so the space around this is the space
+ * the class asked for.
  */
 function Chevron({ className }: { className?: string }) {
   return (
