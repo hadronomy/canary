@@ -157,7 +157,7 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
         {step.chip ? (
           <span
             className={cn(
-              'inline-flex h-5.5 min-w-0 shrink items-center truncate rounded-(--radius-press) px-1.5 text-[11.5px]',
+              'inline-flex h-5.5 min-w-0 shrink items-center overflow-hidden rounded-(--radius-press) px-2 text-[11.5px]',
               'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
               step.mono && 'font-mono',
               failed
@@ -165,10 +165,15 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
                 : 'bg-surface-2 text-muted-foreground shadow-surface-1',
             )}
           >
-            {/* The shimmer goes on the text, never on the chip: it clips the
-                background to the glyphs, so a chip wearing it loses its own
+            {/* `min-w-0` is what keeps the right padding: without it this
+                cannot shrink under its own text, so it overruns the chip's
+                content box and gets clipped at the border instead of
+                ellipsing inside it.
+
+                The shimmer goes here and never on the chip, because it clips
+                the background to the glyphs — a chip wearing it loses its own
                 fill and the row stops looking like a row. */}
-            <span className={cn('truncate', step.status === 'running' && 'shimmer-text')}>
+            <span className={cn('min-w-0 truncate', step.status === 'running' && 'shimmer-text')}>
               {step.chip}
             </span>
           </span>

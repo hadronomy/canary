@@ -95,7 +95,12 @@ function Row({
           ? 'border-b border-border last:border-0'
           : cn(
               'bg-surface-3 shadow-surface-2',
-              shown ? 'rounded-(--radius-panel)' : 'rounded-full',
+              // 22px is half the 44px row, so closed is a true pill. It has to
+              // be written out rather than `rounded-full`: that resolves to a
+              // number in the tens of millions, and every value past 22px
+              // renders identically here, so a tween from it sits on "round"
+              // for the whole duration and then collapses in one frame.
+              shown ? 'rounded-(--radius-panel)' : 'rounded-[22px]',
             ),
       )}
       style={{ ['--i' as string]: index }}
