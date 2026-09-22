@@ -82,7 +82,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
       <button
         aria-expanded={open}
         className={cn(
-          '-mx-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-1.5 py-1',
+          '-mx-2 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-press) px-2 py-1',
           'text-[12.5px] text-muted-foreground',
           'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover hover:text-foreground',
@@ -91,7 +91,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
         type="button"
         onClick={() => setOpen(!open)}
       >
-        <Chevron className={cn('size-3', open ? 'rotate-0' : '-rotate-90')} />
+        <Chevron className={cn('size-2.5', open ? 'rotate-0' : '-rotate-90')} />
 
         <span className="truncate tabular-nums">
           {steps.length === 1 ? '1 tool call' : `${steps.length} tool calls`}
@@ -260,6 +260,15 @@ function Slot({
   );
 }
 
+/**
+ * A caret whose box is the size of the caret.
+ *
+ * On the usual 24 grid this glyph inks about half its viewBox, which is fine
+ * where icons sit in a row and that dead margin is what lines them up. At the
+ * start of a pill it is not a margin, it is padding nobody asked for — the
+ * left gap reads three pixels wider than the right one. The viewBox is
+ * tightened to the path plus its stroke, so `size-*` means the size it draws.
+ */
 function Chevron({ className }: { className?: string }) {
   return (
     <svg
@@ -270,7 +279,7 @@ function Chevron({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2.2"
-      viewBox="0 0 24 24"
+      viewBox="4.8 4.8 14.4 14.4"
     >
       <path d="M6 9l6 6 6-6" />
     </svg>

@@ -308,19 +308,21 @@ function Caret({ hidden, open }: { hidden: boolean; open: boolean }) {
         hidden && 'opacity-0',
       )}
     >
+      {/* The viewBox is tightened to the path plus its stroke so the mark is
+          the size it says it is. On the stock 24 grid this glyph inks about
+          half its box, which throws off anything that measures from the box
+          edge. */}
       <svg
         className={cn(
-          'transition-transform duration-(--t-base) ease-out-strong motion-reduce:transition-none',
+          'size-2.5 transition-transform duration-(--t-base) ease-out-strong motion-reduce:transition-none',
           open && 'rotate-180',
         )}
         fill="none"
-        height="15"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="2.2"
-        viewBox="0 0 24 24"
-        width="15"
+        viewBox="4.8 4.8 14.4 14.4"
       >
         <path d="M6 9l6 6 6-6" />
       </svg>
