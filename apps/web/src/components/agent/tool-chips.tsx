@@ -91,7 +91,7 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
         type="button"
         onClick={() => setOpen(!open)}
       >
-        <Chevron className={cn('size-2.5', open ? 'rotate-0' : '-rotate-90')} />
+        <Chevron className={cn('size-1.5', open ? 'rotate-0' : '-rotate-90')} />
 
         <span className="truncate tabular-nums">
           {steps.length === 1 ? '1 tool call' : `${steps.length} tool calls`}
