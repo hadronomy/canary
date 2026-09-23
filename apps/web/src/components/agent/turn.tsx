@@ -146,7 +146,11 @@ function AssistantPart({ live, part }: { live?: boolean; part: Part }) {
 
 function ReasoningPart({ live, part }: { live?: boolean; part: Part }) {
   return (
-    <Reasoning duration={secondsOf(part)} running={part.status === 'running'}>
+    <Reasoning
+      duration={secondsOf(part)}
+      running={part.status === 'running'}
+      since={part.createdAt?.getTime()}
+    >
       <Markdown className="canary-trace" live={live} text={partContent(part)} />
     </Reasoning>
   );

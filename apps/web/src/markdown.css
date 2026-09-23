@@ -277,6 +277,8 @@
 
 .canary-markdown [data-streamdown='table'] {
   width: 100%;
+  /* Digits of equal width, so a column of numbers lines up by place. */
+  font-variant-numeric: tabular-nums lining-nums;
   border-collapse: collapse;
   font-size: 13.5px;
   line-height: 1.5;

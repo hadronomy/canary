@@ -1,9 +1,5 @@
 const ease = [0.16, 1, 0.3, 1] as const;
 
-const instantTransition = {
-  duration: 0,
-} as const;
-
 const composerMount = {
   hidden: {
     opacity: 0,
@@ -65,50 +61,4 @@ const surfaceVariants = {
   },
 };
 
-// The strip and the slash menu want the same slot above the box, so the strip
-// steps aside when the menu takes it. The menu is opaque and would cover it
-// regardless; without this the strip is still there underneath, peeking around
-// the menu's edges while it scales open.
-const stripVariants = {
-  hidden: {
-    opacity: 0,
-    y: 4,
-    transition: { duration: 0.14, ease },
-  },
-  shown: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.18, ease },
-  },
-};
-
-const auraVariants = {
-  commanding: {
-    opacity: 0.68,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 42%)',
-  },
-  disabled: { opacity: 0 },
-  error: {
-    opacity: 1,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--destructive) 12%, transparent), transparent 38%, transparent)',
-  },
-  focused: {
-    opacity: 0.7,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 7%, transparent), transparent 44%)',
-  },
-  resting: {
-    opacity: 0.45,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 4.5%, transparent), transparent 42%)',
-  },
-  running: {
-    opacity: 0.65,
-    background:
-      'linear-gradient(135deg, color-mix(in oklch, var(--foreground) 6.5%, transparent), transparent 42%)',
-  },
-};
-
-export { auraVariants, composerMount, ease, instantTransition, stripVariants, surfaceVariants };
+export { composerMount, ease, surfaceVariants };

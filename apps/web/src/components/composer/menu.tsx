@@ -28,7 +28,7 @@ const COMMAND_ROW_GAP = 3;
  * be a `var()`. If `--radius-composer` moves, move this with it — the menu
  * meets the box edge to edge and a mismatch shows as a step in the corner.
  */
-const RADIUS = '1.375rem';
+const RADIUS = '1.5rem';
 
 export type ComposerMenuState =
   | { kind: 'closed' }
@@ -129,11 +129,6 @@ function ComposerMenu({
               onMouseDown={(event) => event.preventDefault()}
               {...props}
             >
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-5 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent"
-              />
-
               <div>
                 <MenuHeader shown={items.length} total={commands.length} />
 

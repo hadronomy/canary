@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Caret, Sparkle } from '~/components/agent/glyphs';
 import { cn } from '~/lib/utils';
@@ -29,9 +29,11 @@ type ReasoningProps = {
   /** Seconds spent, for the settled label. Left off while it runs. */
   duration?: number;
   running?: boolean;
+  /** When the trace began, in epoch milliseconds, for the count while it runs. */
+  since?: number;
 };
 
-function Reasoning({ children, className, duration, running = false }: ReasoningProps) {
+function Reasoning({ children, className, duration, running = false, since }: ReasoningProps) {
   // `null` means nobody has pressed it, so the disclosure follows the run.
   const [pinned, setPinned] = useState<boolean | null>(null);
   const open = pinned ?? running;
@@ -65,6 +67,8 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
         >
           {running ? 'Thinking' : label(duration)}
         </span>
+
+        {running && since !== undefined ? <Elapsed since={since} /> : null}
 
         <Caret
           className={cn(
@@ -112,6 +116,8 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
  * its place.
  */
 function Thinking({ className }: { className?: string }) {
+  const [since] = useState(() => Date.now());
+
   return (
     <div
       className={cn('-mx-1.5 flex w-fit items-center gap-2 py-1 pl-1.5 pr-2', className)}
@@ -119,8 +125,32 @@ function Thinking({ className }: { className?: string }) {
     >
       <Sparkle className="size-4 shrink-0 text-muted-foreground" />
       <span className="shimmer-text text-[13px] font-medium whitespace-nowrap">Thinking</span>
+      <Elapsed since={since} />
     </div>
   );
+}
+
+/**
+ * Seconds since `since`, once there are enough of them to be worth saying.
+ *
+ * Nothing for the first two seconds, so a quick reply never flashes a counter.
+ * Tabular figures, so nothing beside it shifts as the digits change.
+ */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const seconds = Math.floor((now - since) / 1000);
+
+  if (seconds < 2) {
+    return null;
+  }
+
+  return <span className="text-[12px] tabular-nums text-muted-foreground/70">{seconds}s</span>;
 }
 
 /** How long it thought, in words rather than a bare number. */

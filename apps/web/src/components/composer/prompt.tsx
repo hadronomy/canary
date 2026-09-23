@@ -1,6 +1,5 @@
 import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
 
-import { FunctionIcon } from '@phosphor-icons/react';
 import { useHotkeys } from '@tanstack/react-hotkeys';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
@@ -14,24 +13,14 @@ import {
 } from 'react';
 
 import type { Cmd, RunState } from '~/components/composer/commands';
-import type {
-  AvailabilityState,
-  ComposerSurfaceState,
-  DraftState,
-} from '~/components/composer/state';
+import type { AvailabilityState, DraftState } from '~/components/composer/state';
 
 import { ComposerAction } from '~/components/composer/action';
 import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
 import { ComposerMenu } from '~/components/composer/menu';
-import {
-  auraVariants,
-  composerMount,
-  ease,
-  stripVariants,
-  surfaceVariants,
-} from '~/components/composer/motion';
+import { composerMount, ease, surfaceVariants } from '~/components/composer/motion';
 import {
   action as actionFrom,
   enabled as hotkeyEnabled,
@@ -258,29 +247,14 @@ function AgentPrompt({
         variants={composerMount}
       >
         <div ref={composerRef} className="relative overflow-visible">
-          {/* Tucked behind the box and inset from it, so the run state reads as
-              a label on the composer rather than as a second control bar. Its
-              corners are a step down the radius scale: at the box's 22px a
-              strip this short is all corner and reads as a pill. */}
-          <motion.div
-            animate={surfaceState === 'commanding' ? 'hidden' : 'shown'}
-            className="canary-composer-strip relative z-10 mx-5 flex items-center justify-between gap-3 rounded-t-(--radius-panel) border border-b-0 px-3 pb-3 pt-1.5"
-            initial={false}
-            variants={stripVariants}
-          >
-            <ComposerStatus runState={runState} surfaceState={surfaceState} />
+          {/* Read to screen readers with the field; sighted users get the same
+              keys from the slash menu and the placeholder. */}
+          <p id={hintId} className="sr-only">
+            Enter to send, Shift Enter for a new line, slash for commands.
+          </p>
 
-            <p id={hintId} className="hidden text-[11px] text-muted-foreground sm:block">
-              <span className="text-foreground/70">Enter</span> to send ·{' '}
-              <span className="text-foreground/70">Shift Enter</span> for a new line ·{' '}
-              <span className="text-foreground/70">/</span> for commands
-            </p>
-          </motion.div>
-
-          {/* The menu anchors to the box, not to the whole composer. Anchored
-              further out it opened above the strip, leaving the two of them
-              stacked with a gap where they are meant to meet. */}
-          <div className="relative -mt-2">
+          {/* The menu anchors to the box, so it docks onto the box's top edge. */}
+          <div className="relative">
             <ComposerMenu
               commands={cmds}
               state={menuFrom(ui.slash)}
@@ -294,15 +268,10 @@ function AgentPrompt({
               data-state={surfaceState}
               variants={surfaceVariants}
             >
-              <div className="pointer-events-none absolute inset-x-4 top-0 h-px bg-linear-to-r from-transparent via-input to-transparent" />
-
-              <motion.div
-                aria-hidden
-                className="pointer-events-none absolute -inset-px -z-10 rounded-[inherit]"
-                variants={auraVariants}
-              />
-
-              <div className="relative z-20 grid min-w-0 gap-1 p-2">
+              {/* One inset on every side. The send button's 16px radius plus
+                  this 8px is the box's 24px, so its corner and the box's share
+                  a centre; the text sits a further 10px in. */}
+              <div className="relative z-20 grid min-w-0 p-2">
                 <ComposerEditor
                   commands={cmds}
                   disabled={availability === 'disabled'}
@@ -318,16 +287,7 @@ function AgentPrompt({
                   onValue={onValue}
                 />
 
-                <div className="flex min-w-0 items-center justify-end gap-2.5">
-                  {/* Only worth the space once there is enough text for the
-                      number to mean something. Below that it is a zero taking
-                      up a column. */}
-                  {value.length > 0 ? (
-                    <span className="hidden text-[11px] tabular-nums text-muted-foreground sm:block">
-                      {count(value.length)}
-                    </span>
-                  ) : null}
-
+                <div className="flex min-w-0 items-center justify-end">
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}
@@ -341,7 +301,7 @@ function AgentPrompt({
                   <motion.p
                     id={errorId}
                     animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-4 py-2 text-xs text-destructive"
+                    className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-[18px] py-2 text-xs text-destructive"
                     exit={{ opacity: 0, height: 0, y: -4 }}
                     initial={{ opacity: 0, height: 0, y: -4 }}
                     transition={{ duration: 0.18, ease }}
@@ -355,48 +315,6 @@ function AgentPrompt({
         </div>
       </motion.div>
     </form>
-  );
-}
-
-function count(chars: number) {
-  if (chars < 1000) {
-    return `${chars}`;
-  }
-
-  return `${(chars / 1000).toFixed(1)}k`;
-}
-
-function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfaceState }) {
-  const label =
-    props.surfaceState === 'disabled'
-      ? 'Composer paused'
-      : props.surfaceState === 'error'
-        ? 'Needs attention'
-        : props.surfaceState === 'commanding'
-          ? 'Command palette'
-          : props.runState === 'running'
-            ? 'Canary is working'
-            : 'Ready';
-
-  // Running shares the transcript's language for work in progress: the light
-  // travels through the label itself. A pulse on the icon as well would say the
-  // same thing twice, and a JavaScript-driven one competes for the main thread
-  // with the stream it is announcing.
-  return (
-    <div className="inline-flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
-      <span
-        aria-hidden
-        className={cn(
-          'grid size-6 place-items-center rounded-[0.65rem]',
-          props.runState === 'running' ? 'text-foreground' : 'opacity-80',
-        )}
-      >
-        <FunctionIcon className="size-3.5" />
-      </span>
-      <span className={cn('truncate', props.runState === 'running' && 'shimmer-text')}>
-        {label}
-      </span>
-    </div>
   );
 }
 
