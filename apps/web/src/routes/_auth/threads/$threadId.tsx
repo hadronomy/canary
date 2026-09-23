@@ -676,7 +676,7 @@ function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
   return (
     <section
       aria-labelledby="thread-title"
-      className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background"
+      className="grid h-full min-h-0 grid-rows-[auto_1fr_auto]"
       data-thread-id={threadId}
       data-thread-screen=""
     >
@@ -708,7 +708,7 @@ function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProp
   return (
     <header
       className={cn(
-        'flex min-w-0 items-baseline gap-2 border-b border-border px-4 py-2.5',
+        'flex min-w-0 items-baseline gap-2 px-4 py-2.5',
         className,
       )}
       {...props}
@@ -1201,7 +1201,13 @@ function TranscriptVirtuaList({
         aria-live="polite"
         aria-relevant="additions text"
         bufferSize={TRANSCRIPT_BUFFER_SIZE}
-        className="h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both"
+        className={cn(
+          'h-full min-h-0 overflow-y-auto px-3 pt-6 [overflow-anchor:none] scrollbar-gutter-both',
+          // The transcript dissolves into the header and the composer instead
+          // of being cut against a rule. The top fade is no deeper than the
+          // top padding, so the first message is never dimmed at rest.
+          '[mask-image:linear-gradient(to_bottom,transparent,black_1.5rem,black_calc(100%-2rem),transparent)]',
+        )}
         data-transcript-viewport=""
         keepMounted={keepMounted}
         role="log"

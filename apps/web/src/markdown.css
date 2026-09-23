@@ -170,14 +170,17 @@
 
 /* One surface per code block: a header carrying the language and the copy,
    a hairline, and the listing. Streamdown draws a card, a header, and then a
-   second bordered card for the body inside the first. */
+   second bordered card for the body inside the first.
+
+   The fill is `surface-3` so it lifts off both places a transcript is drawn:
+   the page, and the shell's floating panel, which is itself `surface-2`. */
 .canary-markdown [data-streamdown='code-block'] {
   display: block;
   gap: 0;
   padding: 0;
   border: 0;
   border-radius: var(--radius-panel);
-  background: var(--surface-2);
+  background: var(--surface-3);
   box-shadow: var(--shadow-2);
 }
 
@@ -208,7 +211,7 @@
   padding: 0;
   border: 0;
   border-radius: 7px;
-  background: var(--surface-2);
+  background: var(--surface-3);
   backdrop-filter: none;
 }
 
@@ -254,7 +257,7 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius-panel);
-  background: var(--surface-2);
+  background: var(--surface-3);
   box-shadow: var(--shadow-2);
 }
 

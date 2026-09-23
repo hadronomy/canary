@@ -312,7 +312,7 @@ function Composer(props: { error: string | null; running: boolean }) {
 
   return (
     <AgentPrompt
-      className="border-0 bg-transparent px-0 pb-0 pt-0 backdrop-blur-none"
+      className="p-0"
       error={props.error}
       running={props.running}
       value={value}
@@ -325,6 +325,9 @@ function Composer(props: { error: string | null; running: boolean }) {
 
 function Gallery() {
   const [wide, setWide] = useState(false);
+  // The transcript is drawn on the shell's floating panel, not on the page, so
+  // this puts the column on that surface to judge contrast where it matters.
+  const [framed, setFramed] = useState(false);
 
   return (
     <div className="h-svh overflow-y-auto bg-background text-foreground">
@@ -337,13 +340,24 @@ function Gallery() {
             </p>
           </div>
 
-          <Button size="sm" variant="secondary" onClick={() => setWide((v) => !v)}>
-            {wide ? 'Narrow column' : 'Wide column'}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="secondary" onClick={() => setFramed((v) => !v)}>
+              {framed ? 'On the page' : 'In the panel'}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setWide((v) => !v)}>
+              {wide ? 'Narrow column' : 'Wide column'}
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className={cn('mx-auto px-6 py-10', wide ? 'max-w-5xl' : 'max-w-3xl')}>
+      <main
+        className={cn(
+          'mx-auto px-6 py-10',
+          wide ? 'max-w-5xl' : 'max-w-3xl',
+          framed && 'my-2 rounded-(--radius-shell) bg-surface-2 shadow-surface-2',
+        )}
+      >
         <div className="space-y-14">
           {SCENES.map((scene) => (
             <section key={scene.id} className="space-y-4">

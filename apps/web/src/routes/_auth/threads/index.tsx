@@ -139,7 +139,7 @@ function NewThread() {
         </h1>
 
         <AgentPrompt
-          className="rounded-(--radius-shell) border-0 bg-transparent px-0 pt-0 pb-0 backdrop-blur-none"
+          className="p-0"
           disabled={busy}
           error={err}
           pristine

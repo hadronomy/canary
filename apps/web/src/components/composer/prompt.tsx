@@ -241,10 +241,7 @@ function AgentPrompt({
   return (
     <form
       aria-describedby={described}
-      className={cn(
-        'border-t border-border bg-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl',
-        className,
-      )}
+      className={cn('px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2', className)}
       {...props}
       onSubmit={(event) => {
         event.preventDefault();
