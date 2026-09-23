@@ -94,9 +94,7 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
               )}
             />
 
-            <div className="min-w-0 px-1.5 py-1">
-              {children}
-            </div>
+            <div className="min-w-0 px-1.5 py-1">{children}</div>
           </div>
         </div>
       </div>

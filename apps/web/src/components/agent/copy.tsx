@@ -14,7 +14,15 @@ import { cn } from '~/lib/utils';
  * Hover is instant. This sits under every reply, and a pointer on its way to
  * the composer crosses a column of them.
  */
-function Copy({ className, label = 'Copy', text }: { className?: string; label?: string; text: string }) {
+function Copy({
+  className,
+  label = 'Copy',
+  text,
+}: {
+  className?: string;
+  label?: string;
+  text: string;
+}) {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -39,7 +47,10 @@ function Copy({ className, label = 'Copy', text }: { className?: string; label?:
       title={done ? 'Copied' : label}
       type="button"
       onClick={() => {
-        navigator.clipboard.writeText(text).then(() => setDone(true), () => setDone(false));
+        navigator.clipboard.writeText(text).then(
+          () => setDone(true),
+          () => setDone(false),
+        );
       }}
     >
       <span aria-hidden className="t-icon-swap size-4" data-state={done ? 'b' : 'a'}>

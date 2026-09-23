@@ -313,7 +313,9 @@
 /* Every control Streamdown draws: code copy, table copy and download. Hover
    is instant. The icon swap on copy is not — the check arrives out of a
    short blur so the change registers without looking at it. */
-.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button {
+.canary-markdown
+  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
+  button {
   display: grid;
   place-items: center;
   width: 26px;
@@ -324,16 +326,22 @@
   transition: none;
 }
 
-.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button:hover {
+.canary-markdown
+  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
+  button:hover {
   background: var(--hover);
   color: var(--foreground);
 }
 
-.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button:active {
+.canary-markdown
+  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
+  button:active {
   scale: 0.94;
 }
 
-.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) svg {
+.canary-markdown
+  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
+  svg {
   transition:
     opacity 180ms var(--ease-out-strong),
     scale 180ms var(--ease-out-strong),
@@ -381,7 +389,9 @@
 /* Inside a filled bubble: already a surface, so blocks nested in it drop
    their own fill and keep only the hairline. Assistant replies render in a
    ghost bubble, which has no fill, and keep theirs. */
-[data-slot='bubble']:not([data-variant='ghost']) .canary-markdown :is([data-streamdown='code-block'], [data-streamdown='table-wrapper']) {
+[data-slot='bubble']:not([data-variant='ghost'])
+  .canary-markdown
+  :is([data-streamdown='code-block'], [data-streamdown='table-wrapper']) {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--border);
 }

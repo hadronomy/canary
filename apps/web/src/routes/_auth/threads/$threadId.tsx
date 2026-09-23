@@ -706,13 +706,7 @@ type ThreadHeaderProps = Omit<ComponentPropsWithoutRef<'header'>, 'children'> & 
 
 function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProps) {
   return (
-    <header
-      className={cn(
-        'flex min-w-0 items-baseline gap-2 px-4 py-2.5',
-        className,
-      )}
-      {...props}
-    >
+    <header className={cn('flex min-w-0 items-baseline gap-2 px-4 py-2.5', className)} {...props}>
       {/* Switching threads replaces this line rather than editing it, so the
           whole title swaps out of a blur instead of morphing letter by letter
           through an unrelated name. */}

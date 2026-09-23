@@ -303,7 +303,11 @@ const PLAN = [
 const COMPOSERS = [
   { id: 'resting', running: false, error: null },
   { id: 'running', running: true, error: null },
-  { id: 'error', running: false, error: 'Message send failed. The sync socket closed before it was written.' },
+  {
+    id: 'error',
+    running: false,
+    error: 'Message send failed. The sync socket closed before it was written.',
+  },
 ] as const;
 
 /** A composer with its own draft, so each state can be typed into. */
@@ -373,7 +377,9 @@ function Gallery() {
                 {'pending' in scene ? (
                   <AssistantPending />
                 ) : (
-                  <AssistantMessage segment={{ ...scene.segment, parts: [...scene.segment.parts] }} />
+                  <AssistantMessage
+                    segment={{ ...scene.segment, parts: [...scene.segment.parts] }}
+                  />
                 )}
               </div>
             </section>

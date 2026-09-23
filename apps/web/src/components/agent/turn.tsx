@@ -180,13 +180,20 @@ const CONTROLS = {
 
 const ICONS = {
   CopyIcon: (props: IconProps) => <CopyIcon {...props} size={15} />,
-  CheckIcon: (props: IconProps) => <CheckIcon {...props} className="text-success" size={15} weight="bold" />,
+  CheckIcon: (props: IconProps) => (
+    <CheckIcon {...props} className="text-success" size={15} weight="bold" />
+  ),
 };
 
 // Words resolve out of a short blur as they land, which is what keeps a fast
 // stream from reading as text flickering into place. Only new words animate;
 // what is already on screen is never replayed.
-const REVEAL = { animation: 'blurIn', duration: 260, easing: 'var(--ease-out-strong)', sep: 'word' } as const;
+const REVEAL = {
+  animation: 'blurIn',
+  duration: 260,
+  easing: 'var(--ease-out-strong)',
+  sep: 'word',
+} as const;
 
 const Markdown = memo(function Markdown(props: {
   className?: string;

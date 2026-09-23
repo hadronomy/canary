@@ -393,7 +393,9 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
       >
         <FunctionIcon className="size-3.5" />
       </span>
-      <span className={cn('truncate', props.runState === 'running' && 'shimmer-text')}>{label}</span>
+      <span className={cn('truncate', props.runState === 'running' && 'shimmer-text')}>
+        {label}
+      </span>
     </div>
   );
 }
