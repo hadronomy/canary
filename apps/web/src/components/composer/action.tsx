@@ -47,6 +47,7 @@ function ComposerAction({
       type={action.kind === 'send-ready' ? 'submit' : 'button'}
       variants={buttonToneVariants}
       whileHover={enabled ? hoverTone(visual) : undefined}
+      whileTap={enabled && !reduce ? { scale: 0.92 } : undefined}
       {...props}
       onClick={
         action.kind === 'cancel-run'
@@ -56,13 +57,6 @@ function ComposerAction({
           : undefined
       }
     >
-      <motion.span
-        aria-hidden
-        animate={{ opacity: stopSurfaceOpacity(visual) }}
-        className="absolute inset-0 z-0 bg-destructive/15"
-        transition={reduce ? instantTransition : surfaceTransition}
-      />
-
       <motion.span
         aria-hidden
         animate={{ opacity: disabledVeilOpacity(visual) }}
@@ -92,7 +86,7 @@ function ComposerAction({
           className="absolute inset-0 grid place-items-center"
           transition={reduce ? instantTransition : stopIconTransition(visual)}
         >
-          <StopIcon className="size-4" />
+          <StopIcon className="size-3.5" weight="fill" />
         </motion.span>
       </span>
     </motion.button>
@@ -113,10 +107,6 @@ function visualFromAction(kind: ComposerActionState['kind']): ButtonVisual {
   }
 
   return 'send';
-}
-
-function stopSurfaceOpacity(visual: ButtonVisual) {
-  return visual === 'stop' ? 1 : 0;
 }
 
 function disabledVeilOpacity(visual: ButtonVisual) {
@@ -184,9 +174,9 @@ function stopIconTransition(visual: ButtonVisual) {
 function hoverTone(visual: ButtonVisual) {
   if (visual === 'stop') {
     return {
-      backgroundColor: 'color-mix(in oklch, var(--destructive) 5%, var(--accent))',
-      borderColor: 'var(--destructive)',
-      color: 'var(--destructive)',
+      backgroundColor: 'color-mix(in oklch, var(--foreground) 86%, var(--background))',
+      borderColor: 'color-mix(in oklch, var(--foreground) 86%, var(--background))',
+      color: 'var(--background)',
       transition: { duration: 0.16, ease },
     } as const;
   }
@@ -227,10 +217,13 @@ const buttonToneVariants = {
     color: 'var(--primary-foreground)',
     transition: { duration: 0.28, ease },
   },
+  // Stopping is the one thing to do while a run is out, not a mistake to warn
+  // about, so it takes the highest contrast on the page rather than the
+  // destructive red, which would read as an error the moment a run begins.
   stop: {
-    backgroundColor: 'var(--accent)',
-    borderColor: 'var(--destructive)',
-    color: 'var(--destructive)',
+    backgroundColor: 'var(--foreground)',
+    borderColor: 'var(--foreground)',
+    color: 'var(--background)',
     transition: { duration: 0.28, ease },
   },
 };

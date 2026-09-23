@@ -110,7 +110,6 @@ function Row({
         aria-expanded={body ? shown : undefined}
         className={cn(
           'flex h-11 w-full min-w-0 items-center gap-2.5 px-2.5 text-left',
-          'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset',
           body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
         )}

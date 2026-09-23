@@ -94,7 +94,6 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
         className={cn(
           '-mx-1.5 flex w-fit max-w-full items-center gap-1.5 rounded-(--radius-control) py-1 pl-1.5 pr-2',
           'text-[12.5px]/[1.5] text-muted-foreground',
-          'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
         )}
@@ -130,6 +129,9 @@ function ToolChips({ className, defaultOpen = true, steps }: ToolChipsProps) {
   );
 }
 
+// Hover fills across the log switch on with no transition. A pointer on its way
+// down the transcript crosses every row, and a fade on each one leaves the
+// highlight trailing a few frames behind the cursor.
 function Row({ index, step }: { index: number; step: ToolStep }) {
   const [open, setOpen] = useState(step.status === 'failed');
   const body = step.detail?.trim();
@@ -143,7 +145,6 @@ function Row({ index, step }: { index: number; step: ToolStep }) {
         aria-expanded={body ? shown : undefined}
         className={cn(
           'group/row -mx-[3px] flex h-7 w-[calc(100%+6px)] min-w-0 items-center gap-2 rounded-(--radius-control) px-[3px] text-left',
-          'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
           body ? 'cursor-pointer hover:bg-hover' : 'cursor-default',
         )}

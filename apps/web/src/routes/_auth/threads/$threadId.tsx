@@ -2177,7 +2177,7 @@ function AssistantSegments({ segments }: AssistantSegmentsProps) {
  * The air above a turn, read off the turn before it.
  *
  * A settled reply ends in its actions row, and that row already carries most
- * of the space between two exchanges; stacking the full gap under it pushed
+ * of the space between two exchanges; the full gap under it as well would push
  * the next question a long way from the answer it follows. Only the previous
  * turn is consulted, so a message you just sent does not move when its own
  * reply begins.
@@ -2217,8 +2217,12 @@ function JumpToLatestHud({
       aria-hidden={!show}
       className={cn(
         'pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4',
-        'transition duration-200 ease-out',
-        show ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
+        // Arriving is watched and leaving is not, so it settles in and gets
+        // out of the way faster than it came.
+        'transition-[opacity,translate] ease-out-strong motion-reduce:transition-none',
+        show
+          ? 'translate-y-0 opacity-100 duration-(--t-base)'
+          : 'translate-y-2 opacity-0 duration-(--t-fast)',
         className,
       )}
       data-state={show ? 'open' : 'closed'}
@@ -2229,12 +2233,11 @@ function JumpToLatestHud({
         type="button"
         aria-label={buttonPropsRest['aria-label'] ?? 'Jump to latest'}
         className={cn(
-          'grid size-10 place-items-center rounded-full border border-border',
-          'bg-background/90 text-foreground shadow-sm backdrop-blur',
-          'transition duration-200 ease-out',
-          'hover:bg-popover hover:shadow-md',
-          'active:translate-y-0.5',
-          show ? 'pointer-events-auto scale-100' : 'pointer-events-none scale-95',
+          'grid size-9 place-items-center rounded-full bg-popover text-foreground shadow-surface-4',
+          'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.94] motion-reduce:transition-none',
+          'hover:bg-[color-mix(in_oklch,var(--popover),var(--foreground)_6%)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+          show ? 'pointer-events-auto' : 'pointer-events-none',
           buttonClassName,
         )}
         tabIndex={show ? (buttonPropsRest.tabIndex ?? 0) : -1}

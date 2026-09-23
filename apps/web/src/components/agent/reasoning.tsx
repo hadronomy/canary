@@ -42,7 +42,6 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
         aria-expanded={open}
         className={cn(
           '-mx-1.5 flex w-fit max-w-full items-center gap-2 rounded-(--radius-control) py-1 pl-1.5 pr-2',
-          'transition-colors duration-(--t-press) ease-out-strong motion-reduce:transition-none',
           'hover:bg-hover',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
         )}

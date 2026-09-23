@@ -3,8 +3,8 @@
    Unlayered on purpose. Streamdown ships its own utility classes on every
    element it renders (`list-inside`, `py-1`, `text-xl`, a bordered wrapper
    around every code block and another around every table), and utilities
-   outrank anything in `@layer components`. Fighting them from inside a layer
-   is what left three nested boxes around a code block. Out here the rules
+   outrank anything in `@layer components`, so rules written inside a layer
+   lose to them and a code block ends up in three nested boxes. Out here the rules
    below win without `!important`, keyed on the `data-streamdown` hooks rather
    than on tag names so a stray `<pre>` from somewhere else is left alone.
 
@@ -40,7 +40,7 @@
 }
 
 /* Headings are signposts inside an answer, not display type. A serif at 700
-   beside a 15px sans read as a second author, so they stay in the body face
+   beside a 15px sans reads as a second author, so they stay in the body face
    and carry weight and a small step in size instead. */
 .canary-markdown [data-streamdown^='heading-'] {
   font-family: var(--font-sans);
@@ -146,8 +146,8 @@
 }
 
 /* Inline code is a tint, not a box. A bordered chip in the middle of a line
-   is taller than the line it sits in, so every sentence with a symbol in it
-   got pushed apart. Mono runs wide, so it is set a step smaller to keep the
+   is taller than the line it sits in and pushes apart every sentence with a
+   symbol in it. Mono runs wide, so it is set a step smaller to keep the
    x-heights level with the text around it. */
 .canary-markdown [data-streamdown='inline-code'] {
   border: 0;

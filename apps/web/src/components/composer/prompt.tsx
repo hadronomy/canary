@@ -381,24 +381,22 @@ function ComposerStatus(props: { runState: RunState; surfaceState: ComposerSurfa
             ? 'Canary is working'
             : 'Ready';
 
+  // Running shares the transcript's language for work in progress: the light
+  // travels through the label itself. A pulse on the icon as well would say the
+  // same thing twice, and a JavaScript-driven one competes for the main thread
+  // with the stream it is announcing.
   return (
     <div className="inline-flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
-      <motion.span
+      <span
         aria-hidden
-        animate={props.runState === 'running' ? { opacity: [0.55, 1, 0.55] } : { opacity: 0.8 }}
         className={cn(
           'grid size-6 place-items-center rounded-[0.65rem]',
-          props.runState === 'running' && 'text-foreground',
+          props.runState === 'running' ? 'text-foreground' : 'opacity-80',
         )}
-        transition={
-          props.runState === 'running'
-            ? { duration: 1.6, ease: 'easeInOut', repeat: Number.POSITIVE_INFINITY }
-            : { duration: 0.18, ease }
-        }
       >
         <FunctionIcon className="size-3.5" />
-      </motion.span>
-      <span className="truncate">{label}</span>
+      </span>
+      <span className={cn('truncate', props.runState === 'running' && 'shimmer-text')}>{label}</span>
     </div>
   );
 }
