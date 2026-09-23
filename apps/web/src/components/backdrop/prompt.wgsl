@@ -198,14 +198,14 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // reads; a constant-speed ring reads as a radar sweep. It fades as it goes,
   // so it thins out at the edges of the page instead of hitting them.
   let l = params.launch;
-  let d = length((at - params.focus) * vec2f(aspect, 1.0));
+  let away = length((at - params.focus) * vec2f(aspect, 1.0));
   let front = (1.0 - pow(1.0 - l, 3.0)) * 1.5;
   let fade = pow(1.0 - l, 1.5) * step(0.0001, l);
   // Squared by hand: `pow` with a negative base is undefined in WGSL, and
   // behind the front the base is negative.
-  let z = (d - front) / 0.1;
+  let z = (away - front) / 0.1;
   let wave = exp(-z * z) * fade;
-  let wake = (1.0 - smoothstep(front - 0.5, front, d)) * fade * 0.35;
+  let wake = (1.0 - smoothstep(front - 0.5, front, away)) * fade * 0.35;
 
   // Links are bound to the composer, stars are not. The sky is there the whole
   // way out; what the composer does is draw the lines in.

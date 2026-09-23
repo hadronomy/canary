@@ -79,6 +79,27 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
       if (!gpu) return;
       if (dead) return gpu.dispose();
 
+      // A shader that fails to compile draws nothing and throws nothing: the
+      // error arrives asynchronously and the page just shows an empty panel.
+      // In development every stage is compiled once more on its own so a
+      // mistake is reported with its line, not discovered as a missing sky.
+      if (import.meta.env.DEV) {
+        for (const source of [shader, ...(prepass ?? []).map((spec) => spec.shader)]) {
+          void gpu.gpu
+            .createShaderModule({ code: source.wgsl })
+            .getCompilationInfo()
+            .then((info) => {
+              const errors = info.messages.filter((message) => message.type === 'error');
+              if (!errors.length) return;
+              console.error(
+                `Backdrop shader failed to compile:\n${errors
+                  .map((message) => `${message.lineNum}:${message.linePos} ${message.message}`)
+                  .join('\n')}`,
+              );
+            });
+        }
+      }
+
       const surf = surface(gpu, node, { dpr: [1, 2] });
       const samp = sampler(gpu, {
         minFilter: 'linear',
