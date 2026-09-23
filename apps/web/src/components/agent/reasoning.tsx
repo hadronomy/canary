@@ -95,7 +95,7 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
               )}
             />
 
-            <div className="min-w-0 py-1 pr-1.5 pl-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+            <div className="min-w-0 px-1.5 py-1">
               {children}
             </div>
           </div>

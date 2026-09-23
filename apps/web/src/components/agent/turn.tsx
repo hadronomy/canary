@@ -1,4 +1,5 @@
-import { code } from '@streamdown/code';
+import { CheckIcon, CopyIcon, type IconProps } from '@phosphor-icons/react';
+import { createCodePlugin } from '@streamdown/code';
 import { memo } from 'react';
 import { Streamdown } from 'streamdown';
 
@@ -98,7 +99,7 @@ function AssistantPart({ live, part }: { live?: boolean; part: Part }) {
 function ReasoningPart({ live, part }: { live?: boolean; part: Part }) {
   return (
     <Reasoning duration={secondsOf(part)} running={part.status === 'running'}>
-      <Markdown live={live} text={partContent(part)} />
+      <Markdown className="canary-trace" live={live} text={partContent(part)} />
     </Reasoning>
   );
 }
@@ -118,6 +119,28 @@ function secondsOf(part: Part) {
   return (part.updatedAt.getTime() - part.createdAt.getTime()) / 1000;
 }
 
+// Vitesse over the default GitHub pair: its keywords are a muted teal rather
+// than a saturated red, so a listing sits in the answer instead of shouting
+// over it.
+const highlighter = createCodePlugin({ themes: ['vitesse-light', 'vitesse-dark'] });
+
+// Copy only. A snippet is pasted far more often than it is saved, and a
+// fullscreen table in a chat column is a modal for four rows.
+const CONTROLS = {
+  code: { copy: true, download: false },
+  table: { copy: true, download: false, fullscreen: false },
+} as const;
+
+const ICONS = {
+  CopyIcon: (props: IconProps) => <CopyIcon {...props} size={15} />,
+  CheckIcon: (props: IconProps) => <CheckIcon {...props} className="text-success" size={15} weight="bold" />,
+};
+
+// Words resolve out of a short blur as they land, which is what keeps a fast
+// stream from reading as text flickering into place. Only new words animate;
+// what is already on screen is never replayed.
+const REVEAL = { animation: 'blurIn', duration: 260, easing: 'var(--ease-out-strong)', sep: 'word' } as const;
+
 const Markdown = memo(function Markdown(props: {
   className?: string;
   live?: boolean;
@@ -125,9 +148,14 @@ const Markdown = memo(function Markdown(props: {
 }) {
   return (
     <Streamdown
+      animated={REVEAL}
+      caret={props.live ? 'block' : undefined}
       className={cn('canary-markdown', props.className)}
+      controls={CONTROLS}
+      icons={ICONS}
+      isAnimating={props.live}
       mode={props.live ? 'streaming' : 'static'}
-      plugins={{ code }}
+      plugins={{ code: highlighter }}
     >
       {props.text}
     </Streamdown>

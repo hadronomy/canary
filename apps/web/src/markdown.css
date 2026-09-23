@@ -1,0 +1,390 @@
+/* The reading surface: every block an answer can contain, set as one voice.
+
+   Unlayered on purpose. Streamdown ships its own utility classes on every
+   element it renders (`list-inside`, `py-1`, `text-xl`, a bordered wrapper
+   around every code block and another around every table), and utilities
+   outrank anything in `@layer components`. Fighting them from inside a layer
+   is what left three nested boxes around a code block. Out here the rules
+   below win without `!important`, keyed on the `data-streamdown` hooks rather
+   than on tag names so a stray `<pre>` from somewhere else is left alone.
+
+   Rhythm is set on a 24px line: 15px type at 1.6. Blocks sit one line apart,
+   a heading takes a line and a half above and a third of one below, so it
+   reads as belonging to what follows it rather than to what came before. */
+
+.canary-markdown {
+  display: flow-root;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1,
+    'calt' 1;
+  font-variant-numeric: lining-nums;
+}
+
+.canary-markdown > * {
+  margin-block: 0;
+}
+
+.canary-markdown > * + * {
+  margin-top: 1em;
+}
+
+.canary-markdown p {
+  text-wrap: pretty;
+}
+
+/* Headings are signposts inside an answer, not display type. A serif at 700
+   beside a 15px sans read as a second author, so they stay in the body face
+   and carry weight and a small step in size instead. */
+.canary-markdown [data-streamdown^='heading-'] {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+.canary-markdown > * + [data-streamdown^='heading-'] {
+  margin-top: 1.5em;
+}
+
+.canary-markdown > [data-streamdown^='heading-'] + * {
+  margin-top: 0.4em;
+}
+
+.canary-markdown [data-streamdown='heading-1'] {
+  font-size: 20px;
+}
+
+.canary-markdown [data-streamdown='heading-2'] {
+  font-size: 17px;
+}
+
+.canary-markdown [data-streamdown='heading-3'],
+.canary-markdown [data-streamdown='heading-4'] {
+  font-size: 15px;
+}
+
+.canary-markdown :is([data-streamdown='heading-5'], [data-streamdown='heading-6']) {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.canary-markdown [data-streamdown='strong'] {
+  font-weight: 600;
+}
+
+/* Markers hang outside the text so a wrapped item keeps its left edge.
+   Streamdown sets them inside, which pushes a second line back under the
+   number and turns a list into a ragged paragraph. */
+.canary-markdown :is([data-streamdown='ordered-list'], [data-streamdown='unordered-list']) {
+  padding-left: 1.4em;
+  list-style-position: outside;
+}
+
+.canary-markdown [data-streamdown='ordered-list'] {
+  list-style-type: decimal;
+}
+
+.canary-markdown [data-streamdown='unordered-list'] {
+  list-style-type: disc;
+}
+
+.canary-markdown [data-streamdown='list-item'] {
+  padding: 0 0 0 0.2em;
+}
+
+.canary-markdown [data-streamdown='list-item'] + [data-streamdown='list-item'],
+.canary-markdown [data-streamdown='list-item'] > :is(ol, ul) {
+  margin-top: 0.35em;
+}
+
+.canary-markdown [data-streamdown='list-item']::marker {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.canary-markdown [data-streamdown='blockquote'] {
+  border-left: 2px solid var(--border);
+  padding-left: 14px;
+  color: var(--muted-foreground);
+  font-style: normal;
+}
+
+.canary-markdown [data-streamdown='horizontal-rule'] {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin-block: 1.5em;
+}
+
+/* Links read as text that happens to go somewhere: the ink stays, and only
+   the underline says so. A coloured link in every other sentence of an
+   answer turns the paragraph into a list of things to click. The underline
+   changes on hover with no transition, since a pointer sweeping a paragraph
+   crosses a dozen of these a second. */
+.canary-markdown [data-streamdown='link'] {
+  display: inline;
+  color: inherit;
+  font-weight: inherit;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklch, currentColor 32%, transparent);
+  text-underline-offset: 0.2em;
+  text-decoration-skip-ink: auto;
+  cursor: pointer;
+}
+
+.canary-markdown [data-streamdown='link']:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Inline code is a tint, not a box. A bordered chip in the middle of a line
+   is taller than the line it sits in, so every sentence with a symbol in it
+   got pushed apart. Mono runs wide, so it is set a step smaller to keep the
+   x-heights level with the text around it. */
+.canary-markdown [data-streamdown='inline-code'] {
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--foreground) 7%, transparent);
+  padding: 0.12em 0.34em;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  font-feature-settings: normal;
+  font-variant-ligatures: none;
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.canary-markdown :is(img, video, canvas) {
+  height: auto;
+  max-width: 100%;
+}
+
+/* One surface per code block: a header carrying the language and the copy,
+   a hairline, and the listing. Streamdown draws a card, a header, and then a
+   second bordered card for the body inside the first. */
+.canary-markdown [data-streamdown='code-block'] {
+  display: block;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+
+.canary-markdown [data-streamdown='code-block-header'] {
+  height: 36px;
+  padding-inline: 14px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.canary-markdown [data-streamdown='code-block-header'] > span {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+/* The actions sit in the header row and stay pinned while a long listing
+   scrolls past. They take the block's own fill, so pinned over code they read
+   as a small tab of the same material rather than as icons floating on text. */
+.canary-markdown [data-streamdown='code-block-header'] + div {
+  top: 0;
+  height: 36px;
+  margin-top: -36px;
+  padding-right: 6px;
+}
+
+.canary-markdown [data-streamdown='code-block-actions'] {
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surface-2);
+  backdrop-filter: none;
+}
+
+.canary-markdown [data-streamdown='code-block-body'] {
+  border: 0;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  background: transparent;
+  padding: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  font-feature-settings: normal;
+  font-variant-ligatures: none;
+}
+
+.canary-markdown [data-streamdown='code-block-body'] pre {
+  margin: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.canary-markdown [data-streamdown='code-block-body'] code {
+  display: block;
+  min-width: max-content;
+  padding-inline: 14px;
+  font: inherit;
+}
+
+.canary-markdown [data-streamdown='code-block-body'] code > span::before {
+  width: 2ch;
+  margin-right: 1.25rem;
+  font-size: inherit;
+  color: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+}
+
+/* Tables get the same material and nothing else. The copy control floats over
+   the end of the header row instead of taking a row of its own, and the table
+   scrolls sideways inside the wrapper when it is wider than the column. */
+.canary-markdown [data-streamdown='table-wrapper'] {
+  position: relative;
+  display: block;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child {
+  position: absolute;
+  z-index: 1;
+  top: 5px;
+  right: 6px;
+  gap: 2px;
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:last-child {
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.canary-markdown [data-streamdown='table'] {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.canary-markdown [data-streamdown='table-header'] {
+  background: transparent;
+}
+
+.canary-markdown [data-streamdown='table-header-cell'] {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Room for the copy control, which sits over the end of the header row. */
+.canary-markdown [data-streamdown='table-header-cell']:last-child {
+  padding-right: 44px;
+}
+
+.canary-markdown [data-streamdown='table-cell'] {
+  padding: 8px 14px;
+  font-size: inherit;
+  vertical-align: top;
+}
+
+.canary-markdown [data-streamdown='table-body'] > tr + tr {
+  border-top: 1px solid var(--border);
+}
+
+/* Every control Streamdown draws: code copy, table copy and download. Hover
+   is instant. The icon swap on copy is not — the check arrives out of a
+   short blur so the change registers without looking at it. */
+.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  transition: none;
+}
+
+.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button:hover {
+  background: var(--hover);
+  color: var(--foreground);
+}
+
+.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) button:active {
+  scale: 0.94;
+}
+
+.canary-markdown :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child) svg {
+  transition:
+    opacity 180ms var(--ease-out-strong),
+    scale 180ms var(--ease-out-strong),
+    filter 180ms var(--ease-out-strong);
+
+  @starting-style {
+    opacity: 0;
+    scale: 0.6;
+    filter: blur(2px);
+  }
+}
+
+/* A slim bar in place of Streamdown's block glyph. Held solid while text is
+   arriving — a blinking caret says "waiting for you", which is the opposite
+   of what is happening. */
+.canary-markdown[style*='--streamdown-caret'] > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  vertical-align: text-bottom;
+  translate: 0 -0.1em;
+}
+
+/* The reasoning trace: the same grammar, a step quieter. Smaller, muted, and
+   tighter, because it is a margin note to the answer rather than part of it. */
+.canary-markdown.canary-trace {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+.canary-markdown.canary-trace [data-streamdown^='heading-'],
+.canary-markdown.canary-trace [data-streamdown='strong'] {
+  color: color-mix(in oklch, var(--foreground) 80%, var(--muted-foreground));
+}
+
+.canary-markdown.canary-trace [data-streamdown^='heading-'] {
+  font-size: 13px;
+}
+
+/* Inside a filled bubble: already a surface, so blocks nested in it drop
+   their own fill and keep only the hairline. Assistant replies render in a
+   ghost bubble, which has no fill, and keep theirs. */
+[data-slot='bubble']:not([data-variant='ghost']) .canary-markdown :is([data-streamdown='code-block'], [data-streamdown='table-wrapper']) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canary-markdown svg {
+    transition: none;
+  }
+}

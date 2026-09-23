@@ -4,6 +4,7 @@
 
 @import './ink.css';
 @import 'streamdown/styles.css';
+@import './markdown.css';
 @source "../node_modules/streamdown/dist/*.js";
 @source "../node_modules/@streamdown/code/dist/*.js";
 
@@ -376,33 +377,6 @@
     flex-shrink: 0;
   }
 
-  [data-streamdown^='heading-'] {
-    font-family: var(--font-display);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    text-wrap: balance;
-  }
-
-  [data-streamdown='root'] {
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-
-    font-feature-settings:
-      'kern' 1,
-      'liga' 1,
-      'calt' 1;
-    font-variant-numeric: tabular-nums lining-nums;
-
-    font-family: var(--font-sans);
-    line-height: 1.625;
-    color: var(--foreground);
-  }
-
-  [data-streamdown='code-block-body'] {
-    border: none !important;
-  }
-
   /* Scrollbar styling */
   * {
     scrollbar-width: thin;
@@ -570,109 +544,6 @@
   .scrollbar-visible::-webkit-scrollbar,
   .no-scrollbar.scrollbar-visible::-webkit-scrollbar {
     display: block !important;
-  }
-
-  .canary-markdown {
-    @apply flow-root min-w-0 max-w-full wrap-break-word text-sm leading-7 text-foreground;
-    overflow-wrap: anywhere;
-  }
-
-  .canary-markdown > :first-child {
-    margin-top: 0;
-  }
-
-  .canary-markdown > :last-child {
-    margin-bottom: 0;
-  }
-
-  .canary-markdown p {
-    font-family: var(--font-sans);
-
-    /* Overrides the static line-height to a relaxed, proportional spacing */
-    line-height: 1.625 !important;
-
-    /* Adds crucial vertical separation so paragraphs are no longer glued together */
-    margin-bottom: 1.25rem;
-
-    /* Dynamically prevents awkward single-word wrap-arounds at the end of lines */
-    text-wrap: pretty;
-  }
-
-  .canary-markdown :where(h1, h2, h3, h4) {
-    @apply mb-2 mt-5 font-semibold leading-tight tracking-[-0.02em] text-foreground;
-  }
-
-  .canary-markdown h1 {
-    @apply text-xl;
-  }
-
-  .canary-markdown h2 {
-    @apply text-lg;
-  }
-
-  .canary-markdown h3 {
-    @apply text-base;
-  }
-
-  .canary-markdown ul {
-    @apply my-3 list-disc pl-6;
-  }
-
-  .canary-markdown ol {
-    @apply my-3 list-decimal pl-6;
-  }
-
-  .canary-markdown li {
-    @apply my-1 pl-1;
-  }
-
-  .canary-markdown li::marker {
-    color: var(--muted-foreground);
-  }
-
-  .canary-markdown blockquote {
-    @apply my-4 border-l border-border pl-3 text-muted-foreground;
-  }
-
-  .canary-markdown a {
-    @apply text-foreground underline decoration-border underline-offset-4;
-  }
-
-  .canary-markdown a:hover {
-    @apply decoration-primary;
-  }
-
-  .canary-markdown :where(code, kbd, samp) {
-    @apply wrap-break-word rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.85em];
-    overflow-wrap: anywhere;
-  }
-
-  .canary-markdown pre {
-    @apply my-4 max-w-full overflow-x-auto rounded-lg border border-border bg-popover p-3 shadow-surface-2;
-  }
-
-  .canary-markdown pre code {
-    @apply border-0 bg-transparent p-0;
-    overflow-wrap: normal;
-  }
-
-  .canary-markdown img,
-  .canary-markdown video,
-  .canary-markdown canvas,
-  .canary-markdown svg {
-    @apply h-auto max-w-full;
-  }
-
-  .canary-markdown table {
-    @apply my-4 block max-w-full overflow-x-auto rounded-lg border border-border;
-  }
-
-  .canary-markdown :where(th, td) {
-    @apply border-b border-border px-3 py-2 text-left align-top;
-  }
-
-  .canary-markdown th {
-    @apply bg-muted text-xs font-medium text-muted-foreground;
   }
 
   .canary-composer-editor {
