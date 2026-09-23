@@ -254,6 +254,48 @@ function AgentPrompt({
             Enter to send, Shift Enter for a new line, slash for commands.
           </p>
 
+          {/* An error rises out from behind the box's top edge as a tab, and
+              sinks back into it when it clears. Inset by the box's own 24px
+              radius, so its sides land on the straight run of the edge rather
+              than on the curve; its 12px corners have 12px of padding inside
+              them, so the text never meets a curve. The last 12px tuck behind
+              the box. The height grows from the bottom, which is what makes it
+              read as coming out of the box rather than dropping onto it.
+
+              It steps aside while the slash menu is open, since the menu takes
+              the same edge. */}
+          <AnimatePresence initial={false}>
+            {error && ui.slash.kind !== 'open' ? (
+              <motion.div
+                key="error"
+                animate={{ height: 'auto', marginBottom: -12, opacity: 1 }}
+                className="relative z-20 mx-6 flex flex-col justify-end overflow-hidden"
+                exit={{
+                  height: 0,
+                  marginBottom: 0,
+                  opacity: 0,
+                  transition: { duration: 0.16, ease },
+                }}
+                initial={
+                  reduce
+                    ? { height: 'auto', marginBottom: -12, opacity: 0 }
+                    : { height: 0, marginBottom: 0, opacity: 0 }
+                }
+                transition={{ duration: 0.26, ease }}
+              >
+                <p
+                  id={errorId}
+                  className="canary-error-tab flex min-w-0 items-center gap-1.5 rounded-t-[12px] border border-b-0 px-3 pt-1.5 pb-[18px] text-[12.5px]/5 text-destructive"
+                  role="alert"
+                  title={error}
+                >
+                  <WarningCircleIcon aria-hidden className="size-3.5 shrink-0" weight="bold" />
+                  <span className="truncate">{error}</span>
+                </p>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
           {/* The menu anchors to the box, so it docks onto the box's top edge. */}
           <div className="relative">
             <ComposerMenu
@@ -289,42 +331,9 @@ function AgentPrompt({
                   onValue={onValue}
                 />
 
-                {/* The controls row doubles as the status line. An error sits here,
-                    on the text's left edge and level with the button, rather
-                    than in a band across the bottom of the box: a flat-topped
-                    band inside a rounded corner is a shape with two square
-                    corners and two round ones, and its text runs into the
-                    curve. Here the nearest corner is 24px below the line. */}
+                {/* Kept clear for the controls that belong here: model and mode
+                    pickers sit left of the send button as they arrive. */}
                 <div className="flex min-h-8 min-w-0 items-center justify-end gap-3">
-                  <AnimatePresence initial={false}>
-                    {error ? (
-                      <motion.p
-                        key="error"
-                        id={errorId}
-                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                        className="flex min-w-0 flex-1 items-center gap-1.5 pl-2.5 text-[12.5px]/5 text-destructive"
-                        exit={{
-                          opacity: 0,
-                          filter: 'blur(2px)',
-                          transition: { duration: 0.14, ease },
-                        }}
-                        initial={
-                          reduce ? { opacity: 0 } : { opacity: 0, y: 4, filter: 'blur(2px)' }
-                        }
-                        role="alert"
-                        title={error}
-                        transition={{ duration: 0.24, ease }}
-                      >
-                        <WarningCircleIcon
-                          aria-hidden
-                          className="size-3.5 shrink-0"
-                          weight="bold"
-                        />
-                        <span className="line-clamp-2">{error}</span>
-                      </motion.p>
-                    ) : null}
-                  </AnimatePresence>
-
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}
