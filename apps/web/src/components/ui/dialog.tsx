@@ -37,10 +37,14 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
 function DialogContent({
   className,
   children,
+  closeClassName,
   motion = true,
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  /** Placement for the close button, which should sit on the title's centre
+   *  line and the content's right edge — both depend on the dialog's padding. */
+  closeClassName?: string;
   motion?: boolean;
   showCloseButton?: boolean;
 }) {
@@ -63,9 +67,17 @@ function DialogContent({
         {showCloseButton ? (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            render={<Button variant="ghost" className="absolute right-2 top-2" size="icon-sm" />}
+            render={
+              <Button
+                className={cn('absolute right-2 top-2', closeClassName)}
+                size="icon-sm"
+                variant="ghost"
+              />
+            }
           >
-            <XIcon />
+            {/* Bold, not the app's duotone: the duotone X sits on a tinted
+                square and reads as a checkbox rather than a close. */}
+            <XIcon weight="bold" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         ) : null}

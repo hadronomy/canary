@@ -1,12 +1,13 @@
 import { CheckIcon, CopyIcon, type IconProps } from '@phosphor-icons/react';
 import { createCodePlugin } from '@streamdown/code';
 import { memo } from 'react';
-import { Streamdown } from 'streamdown';
+import { Streamdown, type LinkSafetyModalProps } from 'streamdown';
 
 import type { Part } from '@canary/sync';
 import type { ToolState, ToolStep } from '~/components/agent/tool-chips';
 
 import { Copy } from '~/components/agent/copy';
+import { LinkDialog } from '~/components/agent/link-dialog';
 import { Reasoning, Thinking } from '~/components/agent/reasoning';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
@@ -185,6 +186,11 @@ const ICONS = {
   ),
 };
 
+const SAFETY = {
+  enabled: true,
+  renderModal: (props: LinkSafetyModalProps) => <LinkDialog {...props} />,
+};
+
 // Words resolve out of a short blur as they land, which is what keeps a fast
 // stream from reading as text flickering into place. Only new words animate;
 // what is already on screen is never replayed.
@@ -208,6 +214,7 @@ const Markdown = memo(function Markdown(props: {
       controls={CONTROLS}
       icons={ICONS}
       isAnimating={props.live}
+      linkSafety={SAFETY}
       mode={props.live ? 'streaming' : 'static'}
       plugins={{ code: highlighter }}
     >

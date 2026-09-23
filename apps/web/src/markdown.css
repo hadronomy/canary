@@ -310,12 +310,14 @@
   border-top: 1px solid var(--border);
 }
 
-/* Every control Streamdown draws: code copy, table copy and download. Hover
-   is instant. The icon swap on copy is not — the check arrives out of a
+/* The icon buttons Streamdown draws: code copy and table copy. Hover is
+   instant. The icon swap on copy is not — the check arrives out of a
    short blur so the change registers without looking at it. */
 .canary-markdown
-  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
-  button {
+  :is(
+    [data-streamdown='code-block-actions'] > button,
+    [data-streamdown='table-wrapper'] > div:first-child > div > button
+  ) {
   display: grid;
   place-items: center;
   width: 26px;
@@ -327,20 +329,27 @@
 }
 
 .canary-markdown
-  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
-  button:hover {
+  :is(
+    [data-streamdown='code-block-actions'] > button,
+    [data-streamdown='table-wrapper'] > div:first-child > div > button
+  ):hover {
   background: var(--hover);
   color: var(--foreground);
 }
 
 .canary-markdown
-  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
-  button:active {
+  :is(
+    [data-streamdown='code-block-actions'] > button,
+    [data-streamdown='table-wrapper'] > div:first-child > div > button
+  ):active {
   scale: 0.94;
 }
 
 .canary-markdown
-  :is([data-streamdown='code-block-actions'], [data-streamdown='table-wrapper'] > div:first-child)
+  :is(
+    [data-streamdown='code-block-actions'] > button,
+    [data-streamdown='table-wrapper'] > div:first-child > div > button
+  )
   svg {
   transition:
     opacity 180ms var(--ease-out-strong),
@@ -352,6 +361,87 @@
     scale: 0.6;
     filter: blur(2px);
   }
+}
+
+/* The table's copy trigger stays pressed while its menu is open, so the
+   menu reads as coming from it. */
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > button:has(+ div) {
+  background: var(--active);
+  color: var(--foreground);
+}
+
+/* The table copy menu: three formats, each with the place it pastes well.
+   Radii nest: 10px outside, 4px of padding, so 6px on the rows.
+
+   It grows from the trigger's corner on the transitions.dev dropdown curve.
+   Streamdown mounts it on open and drops it on close, so only the arrival
+   animates; that is the half anyone watches. */
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div {
+  top: calc(100% + 4px);
+  /* Cancels the controls' 6px inset so the menu's edge lands on the table's. */
+  right: -6px;
+  min-width: 184px;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--popover);
+  box-shadow: var(--shadow-5);
+  transform-origin: top right;
+  transition:
+    scale 250ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 250ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  @starting-style {
+    scale: 0.97;
+    opacity: 0;
+  }
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div::before {
+  content: 'Copy as';
+  display: block;
+  padding: 5px 8px 3px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--foreground);
+  transition: none;
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div > button:hover {
+  background: var(--hover);
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div > button::after {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* Where each format pastes cleanly. TSV is the one that lands in separate
+   spreadsheet cells on paste; CSV is for a file or an import. */
+.canary-markdown [data-streamdown='table-wrapper'] button[title$='Markdown']::after {
+  content: 'Docs, chat';
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] button[title$='CSV']::after {
+  content: 'Files';
+}
+
+.canary-markdown [data-streamdown='table-wrapper'] button[title$='TSV']::after {
+  content: 'Spreadsheets';
 }
 
 /* A slim bar in place of Streamdown's block glyph. Held solid while text is
@@ -396,105 +486,9 @@
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-/* The confirmation Streamdown puts in front of every external link. It opens
-   on each link click, so it arrives quickly and says little: the destination,
-   one quiet way to copy it, one clear way to go. The entrance is the
-   transitions.dev modal: a short scale up from 0.96 on its smoothest ease-out,
-   centred, since it is not anchored to anything.
-
-   Not scoped to `.canary-markdown`: the dialog is fixed to the viewport and
-   is styled wherever it is mounted. */
-[data-streamdown='link-safety-modal'] {
-  background: var(--scrim);
-  backdrop-filter: blur(2px);
-  animation: link-scrim 200ms var(--ease-out-strong) both;
-}
-
-[data-streamdown='link-safety-modal'] > div {
-  max-width: 400px;
-  gap: 14px;
-  padding: 20px;
-  border: 0;
-  border-radius: var(--radius-shell);
-  background: var(--popover);
-  box-shadow: var(--shadow-6);
-  animation: link-dialog 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(1) > div {
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(1) > p {
-  font-size: 13px;
-}
-
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(2) {
-  border-radius: var(--radius-control);
-  background: color-mix(in oklch, var(--foreground) 6%, transparent);
-  padding: 10px 12px;
-  font-size: 12.5px;
-  font-feature-settings: normal;
-  font-variant-ligatures: none;
-}
-
-[data-streamdown='link-safety-modal'] button {
-  transition: scale var(--t-press) var(--ease-out-strong);
-}
-
-[data-streamdown='link-safety-modal'] button:active {
-  scale: 0.97;
-}
-
-[data-streamdown='link-safety-modal'] > div > button {
-  top: 12px;
-  right: 12px;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: var(--radius-control);
-}
-
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(3) button {
-  height: 32px;
-  padding-block: 0;
-  border-radius: var(--radius-control);
-  font-size: 13px;
-}
-
-/* Copying is the side door, so it is a quiet text button rather than an
-   outlined twin of the primary one. */
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(3) button:first-child {
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-}
-
-[data-streamdown='link-safety-modal'] > div > div:nth-of-type(3) button:first-child:hover {
-  background: var(--hover);
-  color: var(--foreground);
-}
-
-@keyframes link-scrim {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes link-dialog {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .canary-markdown svg {
+  .canary-markdown svg,
+  .canary-markdown [data-streamdown='table-wrapper'] > div:first-child > div > div {
     transition: none;
   }
 }
