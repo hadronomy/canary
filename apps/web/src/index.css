@@ -138,6 +138,11 @@
   --t-base: 220ms;
   --t-slow: 320ms;
 
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+
   --scrollbar-size: 10px;
   --scrollbar-size-thin: 8px;
 
@@ -681,6 +686,39 @@
     transform 140ms var(--ease-out-strong);
 }
 
+/* Two icons in one slot, trading places: the leaving one shrinks into a blur
+   while the arriving one grows out of it. Both stay mounted and stacked in one
+   grid cell, so the swap never moves anything around it. From transitions.dev.
+
+   Set `data-state` on the slot to the `data-icon` that should show. */
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--icon-swap-dur) var(--icon-swap-ease),
+    filter var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+
+.t-icon-swap[data-state='a'] .t-icon[data-icon='a'],
+.t-icon-swap[data-state='b'] .t-icon[data-icon='b'] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+
+.t-icon-swap[data-state='a'] .t-icon[data-icon='b'],
+.t-icon-swap[data-state='b'] .t-icon[data-icon='a'] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
 /* The stroke length is set from the path's own getTotalLength() at mount, so
    this only has to hold the pre-draw state. */
 @keyframes draw {
@@ -757,7 +795,8 @@
   }
 
   .t-grow,
-  .t-grow > * > * {
+  .t-grow > * > *,
+  .t-icon-swap .t-icon {
     transition: none;
   }
 }

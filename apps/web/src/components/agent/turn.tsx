@@ -6,10 +6,11 @@ import { Streamdown } from 'streamdown';
 import type { Part } from '@canary/sync';
 import type { ToolState, ToolStep } from '~/components/agent/tool-chips';
 
-import { Reasoning } from '~/components/agent/reasoning';
+import { Copy } from '~/components/agent/copy';
+import { Reasoning, Thinking } from '~/components/agent/reasoning';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { Bubble, BubbleContent } from '~/components/ui/bubble';
-import { Message, MessageContent } from '~/components/ui/message';
+import { Message, MessageContent, MessageFooter } from '~/components/ui/message';
 import { cn } from '~/lib/utils';
 
 /**
@@ -30,32 +31,78 @@ type Segment = {
   text: string;
 };
 
+// Actions show on hover or focus rather than under every turn at once, where a
+// column of identical icons turns the transcript into a form. Touch has no
+// hover to reveal them with, so there they are always on.
+const HOVER_ONLY =
+  'opacity-0 group-hover/message:opacity-100 group-focus-within/message:opacity-100 [@media(hover:none)]:opacity-100';
+
 function UserMessage({ content }: { content: string }) {
   return (
-    <Message align="end" className="px-0">
-      <MessageContent className="max-w-[min(80%,44rem)]">
+    <Message align="end" className="items-end px-0">
+      <MessageContent className="w-fit max-w-[min(80%,44rem)]">
         <Bubble align="end" className="max-w-none" variant="secondary">
           <BubbleContent>
             <Markdown text={content} />
           </BubbleContent>
         </Bubble>
       </MessageContent>
+
+      <Copy className={HOVER_ONLY} label="Copy message" text={content} />
     </Message>
   );
 }
 
 function AssistantMessage({ segment }: { segment: Segment }) {
+  const text = textOf(segment);
+
   return (
     <Message align="start" className="px-0">
-      <MessageContent className="w-full min-w-0">
+      <MessageContent className="w-full min-w-0 gap-1.5">
         <Bubble className="w-full max-w-none" variant="ghost">
           <BubbleContent className="w-full max-w-none p-0">
             <AssistantTurn segment={segment} />
           </BubbleContent>
         </Bubble>
+
+        {/* Nothing to act on until the reply has settled. The row is pulled
+            left by the button's own inset so the icon, not its hit area,
+            lines up with the text above it. */}
+        {!segment.live && text ? (
+          <MessageFooter className={cn('-ml-1.5', HOVER_ONLY)}>
+            <Copy label="Copy reply" text={text} />
+          </MessageFooter>
+        ) : null}
       </MessageContent>
     </Message>
   );
+}
+
+/**
+ * A run that has started and not yet said anything.
+ *
+ * Without this the transcript shows your message and then nothing, and the
+ * only sign that anything is happening is a label down in the composer.
+ */
+function AssistantPending() {
+  return (
+    <Message align="start" className="px-0">
+      <Thinking />
+    </Message>
+  );
+}
+
+/** What a reply says, as plain markdown, for the clipboard. */
+function textOf(segment: Segment) {
+  if (!segment.parts.length) {
+    return segment.text.trim();
+  }
+
+  return segment.parts
+    .filter((part) => part.kind === 'text')
+    .map((part) => partContent(part).trim())
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 function AssistantTurn({ segment }: { segment: Segment }) {
@@ -196,12 +243,30 @@ function asStep(part: Part): ToolStep {
 
   return {
     chip: arg?.value,
-    detail: structuredPartBody(part),
+    detail: echoes(part) ? undefined : structuredPartBody(part),
     id: part.id,
     mono: arg?.mono ?? true,
     name: structuredPartTitle(part),
     status: toolState(part),
   };
+}
+
+/**
+ * Whether the only thing to open is the argument the chip already shows.
+ *
+ * A call with no output yet falls back to printing its arguments, and for a
+ * `read` of one path that is the path again, wrapped in braces. The row would
+ * offer a caret that opens onto nothing new.
+ */
+function echoes(part: Part) {
+  const data = fields(part);
+
+  if (partContent(part).trim() || !data || 'result' in data) {
+    return false;
+  }
+
+  const args = data.args && typeof data.args === 'object' ? (data.args as Fields) : data;
+  return Object.keys(args).length <= 1;
 }
 
 /**
@@ -326,6 +391,7 @@ function partContent(part: Part) {
 
 export {
   AssistantMessage,
+  AssistantPending,
   AssistantPart,
   AssistantTurn,
   Markdown,
@@ -336,6 +402,7 @@ export {
   runsOf,
   structuredPartBody,
   structuredPartTitle,
+  textOf,
   toolState,
 };
 export type { Segment };

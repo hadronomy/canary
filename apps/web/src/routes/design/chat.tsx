@@ -5,7 +5,8 @@ import type { Part } from '@canary/sync';
 
 import { TaskRows } from '~/components/agent/task-rows';
 import { ToolChips } from '~/components/agent/tool-chips';
-import { AssistantMessage, UserMessage } from '~/components/agent/turn';
+import { AssistantMessage, AssistantPending, UserMessage } from '~/components/agent/turn';
+import { AgentPrompt } from '~/components/composer/prompt';
 import { Button } from '~/components/ui/button';
 import { Separator } from '~/components/ui/separator';
 import { cn } from '~/lib/utils';
@@ -97,6 +98,14 @@ const SCENES = [
       parts: [],
       text: '**Working through it now.** The guard reads `err.code`, but a mid-flight close carries\n\n```ts\nexport function retryable(err: unknown) {\n  return err instanceof SocketClose',
     },
+  },
+  {
+    id: 'pending',
+    title: 'Waiting on the first part',
+    note: 'The run has started and nothing has arrived. This header sits exactly where a reasoning header would, so a trace that lands next does not move it.',
+    user: 'Why is the keepalive test flaky?',
+    pending: true,
+    segment: { live: true, parts: [], text: '' },
   },
   {
     id: 'reasoning',
@@ -291,6 +300,29 @@ const PLAN = [
   },
 ] as const;
 
+const COMPOSERS = [
+  { id: 'resting', running: false, error: null },
+  { id: 'running', running: true, error: null },
+  { id: 'error', running: false, error: 'Message send failed. The sync socket closed before it was written.' },
+] as const;
+
+/** A composer with its own draft, so each state can be typed into. */
+function Composer(props: { error: string | null; running: boolean }) {
+  const [value, setValue] = useState('');
+
+  return (
+    <AgentPrompt
+      className="border-0 bg-transparent px-0 pb-0 pt-0 backdrop-blur-none"
+      error={props.error}
+      running={props.running}
+      value={value}
+      onCancel={() => {}}
+      onSubmit={() => setValue('')}
+      onValue={setValue}
+    />
+  );
+}
+
 function Gallery() {
   const [wide, setWide] = useState(false);
 
@@ -324,7 +356,11 @@ function Gallery() {
 
               <div className="space-y-8 pt-2">
                 <UserMessage content={scene.user} />
-                <AssistantMessage segment={{ ...scene.segment, parts: [...scene.segment.parts] }} />
+                {'pending' in scene ? (
+                  <AssistantPending />
+                ) : (
+                  <AssistantMessage segment={{ ...scene.segment, parts: [...scene.segment.parts] }} />
+                )}
               </div>
             </section>
           ))}
@@ -391,6 +427,24 @@ function Gallery() {
             <Separator />
 
             <TaskRows rows={PLAN} />
+          </section>
+
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xs font-medium text-foreground">Composer</h2>
+              <p className="text-xs text-muted-foreground">
+                Live instances, one per state. Type in the first; the second is mid-run, so its
+                action is stop; the third carries a send error.
+              </p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-6">
+              {COMPOSERS.map((props) => (
+                <Composer key={props.id} {...props} />
+              ))}
+            </div>
           </section>
 
           <section className="space-y-4">

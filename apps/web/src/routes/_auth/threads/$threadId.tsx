@@ -26,7 +26,13 @@ import { assign, setup, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 import type { Part, Message as SyncMessage } from '@canary/sync';
 
 import { AgentPrompt } from '~/components/agent-prompt';
-import { AssistantMessage, UserMessage, partContent } from '~/components/agent/turn';
+import {
+  AssistantMessage,
+  AssistantPending,
+  UserMessage,
+  partContent,
+  textOf,
+} from '~/components/agent/turn';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
@@ -962,6 +968,7 @@ const TranscriptShell = memo(function TranscriptShell({
 
   const transcriptQuery = useLiveQuery(transcriptCollection);
   const partsQuery = useLiveQuery(partsCollection);
+  const runsQuery = useLiveQuery(active(ownerId, threadId));
 
   const rawMessages = transcriptQuery.data;
   const rawParts = partsQuery.data;
@@ -1014,10 +1021,21 @@ const TranscriptShell = memo(function TranscriptShell({
     return <TranscriptLoadingFrame />;
   }
 
-  const busy = turns.some((turn) => turn.live);
+  // A run is out and the latest turn has nothing from it yet. Checked against
+  // the turn's segments rather than its `live` flag, so the moment the final
+  // message lands the placeholder is gone, even if the run row has not caught
+  // up to say it finished.
+  const pending = runsQuery.data.length > 0 && turns.at(-1)?.assistants.length === 0;
+  const busy = pending || turns.some((turn) => turn.live);
 
   return (
-    <TranscriptVirtuaList busy={busy} scrollActor={scrollActor} threadId={threadId} turns={turns} />
+    <TranscriptVirtuaList
+      busy={busy}
+      pending={pending}
+      scrollActor={scrollActor}
+      threadId={threadId}
+      turns={turns}
+    />
   );
 });
 
@@ -1033,6 +1051,7 @@ function TranscriptLoadingFrame({ className, ...props }: TranscriptLoadingFrameP
 
 type TranscriptVirtuaListProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   busy: boolean;
+  pending: boolean;
   scrollActor: TranscriptScrollActor;
   threadId: string;
   turns: TranscriptTurn[];
@@ -1045,6 +1064,7 @@ function TranscriptVirtuaList({
   onPointerDown,
   onTouchMove,
   onWheel,
+  pending,
   scrollActor,
   threadId,
   turns,
@@ -1194,6 +1214,7 @@ function TranscriptVirtuaList({
             key={turn.id}
             gap={turnGap(turn, turns[index - 1])}
             index={index}
+            pending={pending && index === latestTurnIndex}
             setSize={turns.length}
             turn={turn}
           />
@@ -2078,13 +2099,14 @@ function tailSpacerState(height: number): TranscriptTailSpacerState {
 type TranscriptTurnItemProps = Omit<ComponentPropsWithoutRef<'article'>, 'children'> & {
   gap: number;
   index: number;
+  pending: boolean;
   setSize: number;
   turn: TranscriptTurn;
 };
 
 const TranscriptTurnItem = memo(
   forwardRef<HTMLElement, TranscriptTurnItemProps>(function TranscriptTurnItem(
-    { className, gap, index, setSize, style, turn, ...props },
+    { className, gap, index, pending, setSize, style, turn, ...props },
     ref,
   ) {
     const turnNumber = index + 1;
@@ -2111,7 +2133,7 @@ const TranscriptTurnItem = memo(
         }
         {...props}
       >
-        <TranscriptTurnView turn={turn} />
+        <TranscriptTurnView pending={pending} turn={turn} />
       </article>
     );
   }),
@@ -2120,14 +2142,15 @@ const TranscriptTurnItem = memo(
 TranscriptTurnItem.displayName = 'TranscriptTurnItem';
 
 type TranscriptTurnViewProps = {
+  pending: boolean;
   turn: TranscriptTurn;
 };
 
-function TranscriptTurnView({ turn }: TranscriptTurnViewProps) {
+function TranscriptTurnView({ pending, turn }: TranscriptTurnViewProps) {
   return (
     <div className="space-y-8">
       <UserMessage content={turn.user.content} />
-      <AssistantSegments segments={turn.assistants} />
+      {pending ? <AssistantPending /> : <AssistantSegments segments={turn.assistants} />}
     </div>
   );
 }
@@ -2150,16 +2173,21 @@ function AssistantSegments({ segments }: AssistantSegmentsProps) {
   );
 }
 
+/**
+ * The air above a turn, read off the turn before it.
+ *
+ * A settled reply ends in its actions row, and that row already carries most
+ * of the space between two exchanges; stacking the full gap under it pushed
+ * the next question a long way from the answer it follows. Only the previous
+ * turn is consulted, so a message you just sent does not move when its own
+ * reply begins.
+ */
 function turnGap(turn: TranscriptTurn | undefined, previousTurn: TranscriptTurn | undefined) {
   if (!turn || !previousTurn) {
     return 0;
   }
 
-  if (turn.assistants.length === 0) {
-    return 28;
-  }
-
-  return 36;
+  return previousTurn.assistants.some((segment) => !segment.live && textOf(segment)) ? 20 : 36;
 }
 
 type JumpToLatestHudProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {

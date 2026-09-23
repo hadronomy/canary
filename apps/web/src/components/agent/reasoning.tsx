@@ -105,6 +105,27 @@ function Reasoning({ children, className, duration, running = false }: Reasoning
   );
 }
 
+/**
+ * The header on its own, for the moment between a run starting and its first
+ * part landing.
+ *
+ * It sits exactly where the reasoning header will, in the same box, so when a
+ * trace does arrive nothing moves: the caret appears beside a label that was
+ * already there. If the model answers without thinking, the text simply takes
+ * its place.
+ */
+function Thinking({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn('-mx-1.5 flex w-fit items-center gap-2 py-1 pl-1.5 pr-2', className)}
+      role="status"
+    >
+      <Sparkle className="size-4 shrink-0 text-muted-foreground" />
+      <span className="shimmer-text text-[13px] font-medium whitespace-nowrap">Thinking</span>
+    </div>
+  );
+}
+
 /** How long it thought, in words rather than a bare number. */
 function label(duration?: number) {
   if (duration === undefined || duration < 1) {
@@ -115,5 +136,5 @@ function label(duration?: number) {
   return n === 1 ? 'Thought for 1 second' : `Thought for ${n} seconds`;
 }
 
-export { Reasoning };
+export { Reasoning, Thinking };
 export type { ReasoningProps };
