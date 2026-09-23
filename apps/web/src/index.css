@@ -144,6 +144,10 @@
      ease-in-out is too weak to read as deliberate at UI durations. */
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
 
+  /* iOS sheet curve (Ionic): no run-up, a long settle. For something that has
+     to start moving the instant it is released. */
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
   /* Durations, so one change tunes every surface that shares a tempo. Entering
      is slower than leaving throughout: arriving is watched, dismissing is not. */
   --t-press: 120ms;
@@ -849,5 +853,111 @@
   .t-grow > * > *,
   .t-icon-swap .t-icon {
     transition: none;
+  }
+}
+
+/* Opening a thread from the new-thread screen.
+
+   Two layers, each with its own job, and nothing else on the page moves:
+
+   - The composer is the one object both screens share, so it travels. It goes
+     from the middle of the panel to its place under the conversation on the
+     sheet curve: it starts at once, because the person has already waited
+     through the hold after sending, and settles long. A touch under half a
+     second, because it crosses half the panel. It is the same
+     width on both screens, so the move is a translation and the text in it is
+     never stretched.
+   - The panel hands over: the heading leaves quickly, and the thread settles
+     in a moment later, from 8px below. The group keeps the panel's fill and
+     corners the whole way, so the window never shows through the crossfade.
+
+   The sky is not one of them. It has already gone by the time the transition
+   starts: it leaves during the hold after send, as a plain CSS transition on
+   the canvas, and the canvas is off the page before the snapshot is taken
+   (see the new-thread route for why).
+
+   The sidebar sits outside both and is left alone. Scoped to the
+   `open-thread` type, so no other navigation picks any of this up. */
+html:active-view-transition-type(open-thread)::view-transition-group(composer),
+html:active-view-transition-type(open-thread)::view-transition-old(composer),
+html:active-view-transition-type(open-thread)::view-transition-new(composer),
+html:active-view-transition-type(open-thread)::view-transition-group(composer-draft) {
+  animation-duration: 480ms;
+  animation-timing-function: var(--ease-sheet);
+}
+
+/* What is written in the box changes on the way: the question on one screen,
+   an empty field on the other. Crossfaded over the whole move, both are on
+   screen at once and read as two boxes. So the question lets go first, out of
+   a short blur, and the empty field arrives near the end, into one — the box
+   itself stays solid the whole way, because its two snapshots match. */
+html:active-view-transition-type(open-thread)::view-transition-old(composer-draft) {
+  animation: open-thread-draft-out 200ms var(--ease-out-strong) both;
+}
+
+html:active-view-transition-type(open-thread)::view-transition-new(composer-draft) {
+  animation: open-thread-draft-in 240ms var(--ease-out-strong) 260ms both;
+}
+
+@keyframes open-thread-draft-out {
+  to {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+@keyframes open-thread-draft-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+html:active-view-transition-type(open-thread)::view-transition-group(panel) {
+  border-radius: var(--radius-shell);
+  background: var(--surface-2);
+  overflow: clip;
+}
+
+html:active-view-transition-type(open-thread)::view-transition-old(panel) {
+  animation: open-thread-leave 180ms var(--ease-out-strong) both;
+}
+
+html:active-view-transition-type(open-thread)::view-transition-new(panel) {
+  animation: open-thread-arrive 360ms var(--ease-out-strong) 180ms both;
+}
+
+@keyframes open-thread-leave {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes open-thread-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Reduced motion keeps the handover and drops the travel: the composer is
+   simply in its new place, and everything else is a short crossfade. */
+@media (prefers-reduced-motion: reduce) {
+  html:active-view-transition-type(open-thread)::view-transition-group(composer) {
+    animation: none;
+  }
+
+  html:active-view-transition-type(open-thread)::view-transition-old(panel) {
+    animation: open-thread-leave 160ms ease both;
+  }
+
+  html:active-view-transition-type(open-thread)::view-transition-new(panel) {
+    animation: open-thread-arrive-still 160ms ease both;
+  }
+
+  @keyframes open-thread-arrive-still {
+    from {
+      opacity: 0;
+    }
   }
 }

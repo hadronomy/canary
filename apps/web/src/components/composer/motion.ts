@@ -1,23 +1,5 @@
 const ease = [0.16, 1, 0.3, 1] as const;
 
-const composerMount = {
-  hidden: {
-    opacity: 0,
-    y: 8,
-  },
-  reducedHidden: {
-    opacity: 0,
-  },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.22,
-      ease,
-    },
-  },
-};
-
 // The surface's fill, blur and edge live in `.canary-composer`; these variants
 // only say what changes with state. They deliberately do not set `boxShadow`:
 // an inline `none` here was flattening the layered glass the class builds.
@@ -61,4 +43,4 @@ const surfaceVariants = {
   },
 };
 
-export { composerMount, ease, surfaceVariants };
+export { ease, surfaceVariants };

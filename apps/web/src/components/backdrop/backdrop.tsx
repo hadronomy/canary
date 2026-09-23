@@ -209,5 +209,16 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
   );
 }
 
-export { Backdrop };
+/**
+ * The sky's exit on send. It pushes toward the viewer from about where the
+ * composer sits and fades, which reads as passing through it into the thread
+ * rather than as the lights going off. It waits a beat first so the wave is
+ * seen leaving the composer, then goes on the strong ease-out: it is an exit,
+ * and an exit should start fast. It ends inside the hold, so the page changes
+ * over an empty panel.
+ */
+const LEAVE =
+  'origin-[50%_58%] scale-[1.06] opacity-0 transition-[opacity,scale] delay-[120ms] duration-[260ms] ease-out-strong motion-reduce:transition-none';
+
+export { Backdrop, LEAVE };
 export type { Uniforms };

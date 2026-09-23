@@ -6,10 +6,23 @@ type State = {
   amp: number;
   pulse: number;
   glitch: number;
+  /** 0..1 progress of a sent message travelling out through the field; 0 at
+   *  rest. Linear here — the shader shapes it. */
+  launch: number;
   /** Mutated in place each frame — the shader reads this array, so replacing it
    *  would strand the reference the uniform write is holding. */
   focus: [number, number];
 };
+
+/** Seconds a launch takes to cross the field. */
+const LAUNCH = 0.9;
+
+/**
+ * How long a page holds after a launch before it changes, in milliseconds.
+ * About two fifths of the crossing: long enough for the front to be clearly
+ * on its way, short enough that nobody is left waiting on a sky.
+ */
+const HOLD = 380;
 
 /**
  * Bridges form interaction to the backdrop shader.
@@ -28,9 +41,11 @@ function useField(seed?: Uniforms) {
     amp: 0,
     pulse: 0,
     glitch: 0,
+    launch: 0,
     focus: [0.5, 0.5],
     ...seed,
   });
+  const going = useRef(false);
   const want = useRef({ amp: 0, glitch: 0, x: 0.5, y: 0.5 });
 
   useEffect(() => {
@@ -57,6 +72,13 @@ function useField(seed?: Uniforms) {
       at[1] += (want.current.y - at[1]) * (1 - Math.exp(-5.5 * dt));
       // Slower than the rise, so the swell reads as a breath rather than a blink.
       s.pulse *= Math.exp(-2.4 * dt);
+
+      // Played rather than eased toward a target: a launch has a start and an
+      // end, and it runs through once whatever else the field is doing.
+      if (going.current) {
+        s.launch = Math.min(s.launch + dt / LAUNCH, 1);
+        going.current = s.launch < 1;
+      }
 
       raf = requestAnimationFrame(tick);
     }
@@ -101,7 +123,13 @@ function useField(seed?: Uniforms) {
     want.current.glitch = on ? 1 : 0;
   }, []);
 
-  return { state: state as { current: Uniforms }, focus, beat, fault, put, aim, aimAt };
+  /** Send a wave out from the focus point, or put the field back at rest. */
+  const launch = useCallback((on: boolean) => {
+    state.current.launch = 0;
+    going.current = on;
+  }, []);
+
+  return { state: state as { current: Uniforms }, focus, beat, fault, put, aim, aimAt, launch };
 }
 
-export { useField };
+export { HOLD, useField };

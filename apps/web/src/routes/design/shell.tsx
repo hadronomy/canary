@@ -1,13 +1,16 @@
 import { FolderSimpleIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
+import { useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
 import { AgentPrompt } from '~/components/agent-prompt';
 import { ToolChips } from '~/components/agent/tool-chips';
-import { Backdrop } from '~/components/backdrop/backdrop';
+import { AssistantPending, UserMessage } from '~/components/agent/turn';
+import { Backdrop, LEAVE } from '~/components/backdrop/backdrop';
 import shader from '~/components/backdrop/prompt.wgsl';
-import { useField } from '~/components/backdrop/use-field';
+import { HOLD, useField } from '~/components/backdrop/use-field';
 import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
@@ -76,6 +79,32 @@ function Preview() {
   const params = Route.useSearch();
   const field = useField({ quiet: [0, 0, 0, 0] });
   const [draft, setDraft] = useState('');
+  const [sent, setSent] = useState<string | null>(null);
+  const [sky, setSky] = useState<'here' | 'leaving' | 'gone'>('here');
+  const reduce = useReducedMotion();
+
+  // The same sequence the new-thread route runs, against a mock thread, so the
+  // handover can be watched without a signed-in session: the wave goes out,
+  // the page holds, then the composer travels in a typed view transition.
+  function open(text: string) {
+    if (!reduce) field.launch(true);
+    setSky('leaving');
+
+    window.setTimeout(
+      () => {
+        flushSync(() => setSky('gone'));
+        const flip = () => flushSync(() => setSent(text));
+
+        if (!document.startViewTransition) {
+          flip();
+          return;
+        }
+
+        document.startViewTransition({ update: flip, types: ['open-thread'] });
+      },
+      reduce ? 0 : HOLD,
+    );
+  }
   const box = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
 
@@ -178,54 +207,105 @@ function Preview() {
           </div>
         </aside>
 
-        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2">
-          <div
-            ref={host}
-            className={cn(
-              'relative h-full min-h-0 overflow-hidden px-4',
-              params.v === 'tasks'
-                ? 'grid grid-rows-[1fr_auto]'
-                : 'grid grid-rows-[1fr_auto_0.62fr]',
-            )}
-          >
-            <Backdrop shader={shader} state={field.state} />
-
-            {params.v === 'tasks' ? (
-              <div className="relative z-10 min-h-0 overflow-y-auto py-8">
-                <div className="mx-auto w-full max-w-3xl">
-                  <ToolChips steps={TASKS} />
-                </div>
-              </div>
-            ) : null}
-
+        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2 [view-transition-name:panel]">
+          {sent !== null ? (
+            <Thread
+              text={sent}
+              onBack={() => {
+                setSent(null);
+                setSky('here');
+                field.launch(false);
+              }}
+            />
+          ) : (
             <div
-              ref={box}
+              ref={host}
               className={cn(
-                'relative z-10 w-full max-w-3xl pb-3',
-                params.v !== 'tasks' && 'row-start-2 justify-self-center',
+                'relative h-full min-h-0 overflow-hidden px-4',
+                params.v === 'tasks'
+                  ? 'grid grid-rows-[1fr_auto]'
+                  : 'grid grid-rows-[1fr_auto_0.62fr]',
               )}
             >
-              {params.v === 'tasks' ? null : (
-                <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
-                  <Swap value="What are we working on?" />
-                </h1>
+              {sky === 'gone' ? null : (
+                <Backdrop
+                  className={cn(sky === 'leaving' && LEAVE)}
+                  shader={shader}
+                  state={field.state}
+                />
               )}
 
-              <AgentPrompt
-                className="p-0"
-                error={null}
-                pristine
-                value={draft}
-                onSubmit={() => setDraft('')}
-                onValue={(value) => {
-                  setDraft(value);
-                  field.beat();
-                }}
-              />
+              {params.v === 'tasks' ? (
+                <div className="relative z-10 min-h-0 overflow-y-auto py-8">
+                  <div className="mx-auto w-full max-w-3xl">
+                    <ToolChips steps={TASKS} />
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                ref={box}
+                className={cn(
+                  'relative z-10 w-full max-w-3xl pb-3',
+                  params.v !== 'tasks' && 'row-start-2 justify-self-center',
+                )}
+              >
+                {params.v === 'tasks' ? null : (
+                  <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
+                    <Swap value="What are we working on?" />
+                  </h1>
+                )}
+
+                <AgentPrompt
+                  className="p-0"
+                  error={null}
+                  name="composer"
+                  pristine
+                  value={draft}
+                  onSubmit={open}
+                  onValue={(value) => {
+                    setDraft(value);
+                    field.beat();
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </main>
       </>
+    </div>
+  );
+}
+
+/** A thread as it looks the moment it opens: your message, and the wait. */
+function Thread({ onBack, text }: { onBack: () => void; text: string }) {
+  const [draft, setDraft] = useState('');
+
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto]">
+      <header className="flex min-w-0 items-center justify-between gap-2 px-4 py-2.5">
+        <h1 className="min-w-0 truncate text-[13px] font-medium">{text}</h1>
+        <Button size="sm" variant="ghost" onClick={onBack}>
+          Back
+        </Button>
+      </header>
+
+      <div className="min-h-0 overflow-y-auto px-3 pt-6">
+        <div className="mx-auto w-full max-w-3xl space-y-8">
+          <UserMessage content={text} />
+          <AssistantPending />
+        </div>
+      </div>
+
+      <AgentPrompt
+        error={null}
+        name="composer"
+        running
+        value={draft}
+        onCancel={() => undefined}
+        onSubmit={() => setDraft('')}
+        onValue={setDraft}
+      />
     </div>
   );
 }

@@ -852,6 +852,7 @@ function ThreadActions({
     <AgentPrompt
       disabled={disabled}
       error={sendError ?? runError}
+      name="composer"
       pristine={pristine}
       running={running}
       value={draft}

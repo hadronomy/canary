@@ -21,7 +21,7 @@ import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
 import { ComposerMenu } from '~/components/composer/menu';
-import { composerMount, ease, surfaceVariants } from '~/components/composer/motion';
+import { ease, surfaceVariants } from '~/components/composer/motion';
 import {
   action as actionFrom,
   enabled as hotkeyEnabled,
@@ -36,6 +36,10 @@ import { cn } from '~/lib/utils';
 type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
   disabled?: boolean;
   error: null | string;
+  /** A `view-transition-name` for the composer, so a navigation can carry it
+   *  from one screen to the next. One per page: two with the same name abort
+   *  the transition. */
+  name?: string;
   pristine?: boolean;
   running?: boolean;
   value: string;
@@ -50,6 +54,7 @@ function AgentPrompt({
   className,
   disabled: disabledProp,
   error,
+  name,
   onCancel,
   onNew,
   onSubmit,
@@ -241,12 +246,11 @@ function AgentPrompt({
         }
       }}
     >
-      <motion.div
-        animate="show"
-        className="mx-auto max-w-4xl"
-        initial={reduce ? 'reducedHidden' : 'hidden'}
-        variants={composerMount}
-      >
+      {/* The same width as the transcript column, so the composer lines up with
+          the conversation above it. It is also what lets the composer travel
+          between the new-thread screen and a thread as one object: at equal
+          widths the view transition only has to move it, never stretch it. */}
+      <div className="mx-auto max-w-3xl" style={{ viewTransitionName: name }}>
         <div ref={composerRef} className="relative overflow-visible">
           {/* Read to screen readers with the field; sighted users get the same
               keys from the slash menu and the placeholder. */}
@@ -321,6 +325,9 @@ function AgentPrompt({
                   disabled={availability === 'disabled'}
                   placeholder={placeholder}
                   slashState={ui.slash}
+                  // The text rides as its own layer, so a transition can swap
+                  // what is written without fading the box that carries it.
+                  style={name ? { viewTransitionName: `${name}-draft` } : undefined}
                   value={value}
                   onCommand={runCommand}
                   onEscape={runState === 'running' ? stopRun : undefined}
@@ -344,7 +351,7 @@ function AgentPrompt({
             </motion.div>
           </div>
         </div>
-      </motion.div>
+      </div>
     </form>
   );
 }

@@ -40,6 +40,7 @@ struct Params {
   amp: f32,      // 0..1, widens the connected region while the composer holds focus
   pulse: f32,    // 0..1, decaying kick per keystroke
   glitch: f32,   // 0..1, scatters the links when a send is rejected
+  launch: f32,   // 0..1, a sent message travelling out through the corpus
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -186,10 +187,30 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
     }
   }
 
+  // LAUNCH — the moment a message goes out. A front leaves the composer and
+  // crosses the sky, and what it passes lights up: stars flare, and links join
+  // up well past where the composer can normally reach, then let go again
+  // behind it. It is the claim of the page played once — the question going
+  // out into the corpus and the corpus answering — and it runs while the thread
+  // is being made, so the wait has something to say.
+  //
+  // The front decelerates (a cubic ease-out on distance), which is how a ripple
+  // reads; a constant-speed ring reads as a radar sweep. It fades as it goes,
+  // so it thins out at the edges of the page instead of hitting them.
+  let l = params.launch;
+  let d = length((at - params.focus) * vec2f(aspect, 1.0));
+  let front = (1.0 - pow(1.0 - l, 3.0)) * 1.5;
+  let fade = pow(1.0 - l, 1.5) * step(0.0001, l);
+  // Squared by hand: `pow` with a negative base is undefined in WGSL, and
+  // behind the front the base is negative.
+  let z = (d - front) / 0.1;
+  let wave = exp(-z * z) * fade;
+  let wake = (1.0 - smoothstep(front - 0.5, front, d)) * fade * 0.35;
+
   // Links are bound to the composer, stars are not. The sky is there the whole
   // way out; what the composer does is draw the lines in.
-  let tone = glow * (0.05 + pow(cloud, 1.7) * 0.2) + lit * (0.5 + glow * 0.5)
-    + link * bound * 0.42;
+  let tone = glow * (0.05 + pow(cloud, 1.7) * 0.2) + lit * (0.5 + glow * 0.5 + wave * 0.9)
+    + link * (bound + wave * 1.4 + wake) * 0.42;
 
   // Ease proportionally to the region rather than by a fixed distance: a fixed
   // falloff wider than the region's half-width never reaches full clearing, so
