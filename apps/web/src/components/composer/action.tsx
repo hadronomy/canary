@@ -21,8 +21,9 @@ import { cn } from '~/lib/utils';
  * screen, so a ring that animated at rest would keep the GPU busy for the
  * whole session to say nothing.
  *
- * The disc is the same near-black in both themes. It is an object on the
- * surface rather than part of it, and the metal reads on dark.
+ * The disc is a step lighter than the box it sits on, with a dark hairline
+ * between it and the metal: raised, and ringed, rather than a hole cut in the
+ * surface.
  */
 function ComposerAction(props: {
   action: ComposerActionState;
@@ -66,7 +67,7 @@ function ComposerAction(props: {
         // the disc's colour lives on the ring's root and the button stays
         // clear. Inline because the library's own stylesheet is unlayered and
         // outranks a utility class.
-        style={{ background: 'var(--metal-core)', color: 'white' }}
+        style={{ background: 'var(--metal-core)', color: 'var(--foreground)' }}
         theme={light ? 'light' : 'dark'}
         variant="circle"
         onPointerEnter={() => setAwake(true)}
@@ -75,7 +76,7 @@ function ComposerAction(props: {
         <button
           aria-label={props.action.label}
           className={cn(
-            'grid size-8 place-items-center rounded-full bg-transparent text-white',
+            'grid size-8 place-items-center rounded-full bg-transparent text-foreground',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-(--surface-4)',
             'disabled:cursor-not-allowed',
           )}

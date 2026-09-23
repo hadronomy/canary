@@ -1,5 +1,6 @@
 import type { UseHotkeyDefinition } from '@tanstack/react-hotkeys';
 
+import { WarningCircleIcon } from '@phosphor-icons/react';
 import { useHotkeys } from '@tanstack/react-hotkeys';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
@@ -265,6 +266,7 @@ function AgentPrompt({
             <motion.div
               animate={surfaceState}
               className="canary-composer relative z-30 overflow-hidden rounded-(--radius-composer) border"
+              data-focus={ui.focus}
               data-state={surfaceState}
               variants={surfaceVariants}
             >
@@ -287,7 +289,42 @@ function AgentPrompt({
                   onValue={onValue}
                 />
 
-                <div className="flex min-w-0 items-center justify-end">
+                {/* The controls row doubles as the status line. An error sits here,
+                    on the text's left edge and level with the button, rather
+                    than in a band across the bottom of the box: a flat-topped
+                    band inside a rounded corner is a shape with two square
+                    corners and two round ones, and its text runs into the
+                    curve. Here the nearest corner is 24px below the line. */}
+                <div className="flex min-h-8 min-w-0 items-center justify-end gap-3">
+                  <AnimatePresence initial={false}>
+                    {error ? (
+                      <motion.p
+                        key="error"
+                        id={errorId}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 pl-2.5 text-[12.5px]/5 text-destructive"
+                        exit={{
+                          opacity: 0,
+                          filter: 'blur(2px)',
+                          transition: { duration: 0.14, ease },
+                        }}
+                        initial={
+                          reduce ? { opacity: 0 } : { opacity: 0, y: 4, filter: 'blur(2px)' }
+                        }
+                        role="alert"
+                        title={error}
+                        transition={{ duration: 0.24, ease }}
+                      >
+                        <WarningCircleIcon
+                          aria-hidden
+                          className="size-3.5 shrink-0"
+                          weight="bold"
+                        />
+                        <span className="line-clamp-2">{error}</span>
+                      </motion.p>
+                    ) : null}
+                  </AnimatePresence>
+
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}
@@ -295,21 +332,6 @@ function AgentPrompt({
                   />
                 </div>
               </div>
-
-              <AnimatePresence initial={false}>
-                {error ? (
-                  <motion.p
-                    id={errorId}
-                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    className="relative z-10 border-t border-destructive/15 bg-destructive/10 px-[18px] py-2 text-xs text-destructive"
-                    exit={{ opacity: 0, height: 0, y: -4 }}
-                    initial={{ opacity: 0, height: 0, y: -4 }}
-                    transition={{ duration: 0.18, ease }}
-                  >
-                    {error}
-                  </motion.p>
-                ) : null}
-              </AnimatePresence>
             </motion.div>
           </div>
         </div>

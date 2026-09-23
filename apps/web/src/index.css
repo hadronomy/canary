@@ -78,6 +78,14 @@
   --shadow-glass: 0 1px 2px -1px rgb(0 0 0 / 0.1), 0 12px 28px -12px rgb(0 0 0 / 0.16);
   --shadow-glass-up: 0 -1px 2px -1px rgb(0 0 0 / 0.1), 0 -14px 32px -14px rgb(0 0 0 / 0.16);
 
+  /* The same glass a step nearer, for a surface that has your attention: the
+     edge a shade firmer, the top lip catching more light, the shadow falling
+     further. Focus reads as the thing coming forward, not as a colour. */
+  --glass-edge: rgb(0 0 0 / 0.08);
+  --glass-edge-lit: rgb(0 0 0 / 0.13);
+  --glass-lip-lit: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+  --shadow-glass-lit: 0 1px 2px -1px rgb(0 0 0 / 0.12), 0 18px 40px -16px rgb(0 0 0 / 0.24);
+
   --background: var(--surface-1);
   --foreground: oklch(0.155 0.01 295);
   --card: var(--surface-3);
@@ -124,10 +132,10 @@
 
   --radius-composer: calc(var(--radius) + 14px);
 
-  /* The send button's disc. One value for both themes: it is an object on the
-     composer, not part of its surface, and the metal ring around it reads on
-     dark. */
-  --metal-core: oklch(0.17 0.008 295);
+  /* The send button's disc: two steps up the surface ladder from the box, so
+     it sits on the composer as a raised object and the ring's dark inner
+     hairline has something lighter to separate it from. */
+  --metal-core: var(--surface-6);
 
   --ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-drawer: cubic-bezier(0.22, 1, 0.36, 1);
@@ -211,6 +219,11 @@
   --glass-ring: inset 0 0 0 1px rgb(255 255 255 / 0.02);
   --shadow-glass: 0 1px 2px -1px rgb(0 0 0 / 0.5), 0 12px 28px -12px rgb(0 0 0 / 0.55);
   --shadow-glass-up: 0 -1px 2px -1px rgb(0 0 0 / 0.5), 0 -14px 32px -14px rgb(0 0 0 / 0.55);
+
+  --glass-edge: rgb(255 255 255 / 0.07);
+  --glass-edge-lit: rgb(255 255 255 / 0.12);
+  --glass-lip-lit: inset 0 1px 0 0 rgb(255 255 255 / 0.11);
+  --shadow-glass-lit: 0 1px 2px -1px rgb(0 0 0 / 0.55), 0 18px 40px -16px rgb(0 0 0 / 0.75);
 
   --background: var(--surface-1);
   --foreground: oklch(0.93 0.004 295);
@@ -476,37 +489,30 @@
      with an opaque fill is just a lighter box. */
   .canary-composer {
     background: color-mix(in oklch, var(--surface-4) 88%, transparent);
-    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
+    border-color: var(--glass-edge);
     backdrop-filter: var(--glass-blur);
     box-shadow: var(--glass-lip), var(--glass-ring), var(--shadow-glass);
+    transition:
+      border-color var(--t-base) var(--ease-out-strong),
+      box-shadow var(--t-base) var(--ease-out-strong);
   }
 
-  /* The composer's edge, by state. In CSS rather than in Motion variants
-     because `color-mix()` is not something Motion can interpolate — it warned
-     and snapped on every state change. A plain transition handles it. */
-  .canary-composer {
-    transition: border-color var(--t-base) var(--ease-out-strong);
-  }
+  /* One edge for every state, in the surface's own neutral. Each state already
+     has a signal of its own — the send ring flows while a run is out, an error
+     is written in the controls row — and a hue on the border as well said each
+     thing twice, in the one colour that cheapens a dark surface fastest.
 
-  .canary-composer[data-state='resting'] {
-    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
-  }
-
-  .canary-composer[data-state='focused'],
-  .canary-composer[data-state='commanding'] {
-    border-color: color-mix(in oklch, var(--primary) 34%, transparent);
-  }
-
-  .canary-composer[data-state='running'] {
-    border-color: color-mix(in oklch, var(--primary) 26%, transparent);
-  }
-
-  .canary-composer[data-state='error'] {
-    border-color: color-mix(in oklch, var(--destructive) 46%, transparent);
+     Focus is the exception, and it is keyed on its own attribute rather than
+     on the state, because it is a separate axis: you can be typing into a
+     composer that is also running or showing an error. It lifts the surface
+     instead of outlining it. The caret is what says "type here". */
+  .canary-composer:is([data-focus='focused'], [data-state='commanding']) {
+    border-color: var(--glass-edge-lit);
+    box-shadow: var(--glass-lip-lit), var(--glass-ring), var(--shadow-glass-lit);
   }
 
   .canary-composer[data-state='disabled'] {
-    border-color: color-mix(in oklch, var(--surface-6) 40%, transparent);
+    border-color: transparent;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -521,9 +527,10 @@
      instead of down, because that is the direction it stands out from. */
   .canary-menu {
     background: color-mix(in oklch, var(--surface-4) 88%, transparent);
-    border-color: color-mix(in oklch, var(--surface-6) 60%, transparent);
+    /* Lit, like the box it docks onto: it only exists while the box is. */
+    border-color: var(--glass-edge-lit);
     backdrop-filter: var(--glass-blur);
-    box-shadow: var(--glass-lip), var(--glass-ring), var(--shadow-glass-up);
+    box-shadow: var(--glass-lip-lit), var(--glass-ring), var(--shadow-glass-up);
   }
 
   .scrollbar-gutter-both {
