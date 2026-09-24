@@ -44,6 +44,7 @@ struct Params {
   berth: vec4f,  // x, y, w, h — the composer itself, measured every frame
   spot: vec2f,   // where the current launch left from
   dock: f32,     // 0 on the new-thread screen, 1 in a thread, eased between
+  paper: f32,    // 1 in light mode: the sky is printed in ink rather than lit
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -52,6 +53,12 @@ struct Params {
 // laid over it as a wash, so it arrives as the colour of the mark instead of as
 // a filter sitting on top of one.
 const TINT = vec3f(0.55, 0.40, 1.0);
+
+// The ink the light-mode sky is printed in: a violet-slate that reads as the
+// same hue as TINT once it is dots on paper, and deepens toward the composer
+// the way the lit sky brightens there.
+const INK = vec3f(0.30, 0.27, 0.40);
+const DEEP = vec3f(0.33, 0.20, 0.72);
 
 // Steps across the whole 0..1 output range. Few enough that the screen has to
 // open and close to carry a gradient, which is the whole point of it.
@@ -282,6 +289,30 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // the steps and throws the screen away. It has to land on the values actually
   // written to the framebuffer.
   let value = clamp(tone * keep * (1.0 - room), 0.0, 1.0) * 0.62;
+
+  // The matrix is read on the cell, so one cell of the screen carries one
+  // threshold. Ordered rather than blue-noise-like: a scattered threshold hides
+  // itself by design, and the job here is a pattern you can see.
+  let d = bayer(vec2u(vec2i(cell) & vec2i(7)), 3u);
+
+  // PAPER — the light-mode sky. Light on a light page is invisible, and a dark
+  // sky on a light page is a black box with the heading lost in it. So the same
+  // field is printed instead: what was brightness becomes ink coverage, and the
+  // panel's own surface shows through as the paper. The canvas is premultiplied,
+  // so coverage is the alpha and the ink is scaled by it.
+  //
+  // Coverage is screened as one value, not per channel, so every dot is the
+  // same ink and only the screen opens and closes. The ramp is also reshaped:
+  // on black the nebula floor is a dim haze, but in ink the same level prints a
+  // dot in every other cell and the page turns to graph paper. Pushing the low
+  // end down leaves the floor as sparse drifts, while stars and links, which sit
+  // well up the ramp, keep their weight.
+  if (params.paper > 0.5) {
+    let cover = quantise(smoothstep(0.03, 0.7, value / 0.62) * 0.78, STEPS, d);
+    let ink = mix(INK, DEEP, clamp(0.25 + near * 0.55 + wave * 0.4, 0.0, 1.0));
+    return vec4f(ink * cover, cover);
+  }
+
   var color = vec3f(value) * mix(vec3f(1.0), TINT, 0.5 + near * 0.3);
 
   // Grain on the pixel rather than the cell, and barely there. It is the only
@@ -292,11 +323,6 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // One threshold for all three channels. Per-channel thresholds screen the hue
   // as well as the level, which shows up as colour speckle on a tint this
   // saturated.
-  //
-  // Ordered rather than blue-noise-like: a scattered threshold hides itself by
-  // design, and the job here is a pattern you can see. The matrix is read on
-  // the cell, so one cell of the screen carries one threshold.
-  let d = bayer(vec2u(vec2i(cell) & vec2i(7)), 3u);
   return vec4f(
     quantise(color.r, STEPS, d),
     quantise(color.g, STEPS, d),

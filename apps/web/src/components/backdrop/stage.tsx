@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from 'react';
 
 import { cubicBezier, useReducedMotion } from 'motion/react';
+import { useTheme } from 'next-themes';
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { Backdrop } from '~/components/backdrop/backdrop';
@@ -73,8 +74,10 @@ function Stage({ children }: { children: ReactNode }) {
     quiet: [0, 0, 0, 0],
     berth: [0, 0, 0, 0],
     dock: 0,
+    paper: 0,
     fps: 30,
   });
+  const light = useTheme().resolvedTheme === 'light';
   const reduce = useReducedMotion();
   const host = useRef<HTMLDivElement>(null);
   const held = useRef<{ node: HTMLElement; mode: Mode } | null>(null);
@@ -90,6 +93,10 @@ function Stage({ children }: { children: ReactNode }) {
   } | null>(null);
   const motion = useRef(reduce);
   motion.current = reduce;
+
+  useEffect(() => {
+    field.put('paper', light ? 1 : 0);
+  }, [field, light]);
 
   useEffect(() => {
     let raf = 0;
