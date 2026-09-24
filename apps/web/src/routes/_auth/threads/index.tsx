@@ -88,7 +88,8 @@ function NewThread() {
         title: name(content),
         createdAt: now,
         updatedAt: now,
-        archivedAt: null,
+        settledAt: null,
+        snoozedUntil: null,
       }).isPersisted.promise;
 
       messages(owner).insert({

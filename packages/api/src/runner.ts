@@ -18,7 +18,7 @@ import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
 import { own } from '@canary/api/scope';
 import { schema } from '@canary/db/effect';
-import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from '@canary/db/query';
+import { and, asc, desc, eq, inArray, lt, max, sql } from '@canary/db/query';
 import { event, member, message, part, run, thread } from '@canary/db/schema/app';
 
 const ThreadRow = schema.thread.select;
@@ -62,7 +62,16 @@ export const Send = Schema.Struct({
   threadId: ThreadId,
 });
 export const Key = Schema.Struct({ id: RunId, owner: OwnerId });
-export const ThreadKey = Schema.Struct({ id: ThreadId, owner: OwnerId });
+export const Settle = Schema.Struct({
+  id: ThreadId,
+  owner: OwnerId,
+  settled: Schema.Boolean,
+});
+export const Snooze = Schema.Struct({
+  id: ThreadId,
+  owner: OwnerId,
+  until: ThreadRow.fields.snoozedUntil,
+});
 export const Create = Schema.Struct({
   id: Schema.optionalKey(ThreadId),
   owner: OwnerId,
@@ -73,7 +82,8 @@ export type RunId = typeof RunId.Type;
 export type ThreadId = typeof ThreadId.Type;
 export type Send = typeof Send.Type;
 export type Key = typeof Key.Type;
-export type ThreadKey = typeof ThreadKey.Type;
+export type Settle = typeof Settle.Type;
+export type Snooze = typeof Snooze.Type;
 export type Create = typeof Create.Type;
 export type Sent = {
   message: typeof message.$inferSelect;
@@ -81,7 +91,7 @@ export type Sent = {
   txid: number;
 };
 export type Cancelled = { run: typeof run.$inferSelect | null; txid: number };
-export type Archived = { thread: typeof thread.$inferSelect | null; txid: number };
+export type Filed = { thread: typeof thread.$inferSelect | null; txid: number };
 export type Created = { thread: typeof thread.$inferSelect; txid: number };
 export type RunEvent = typeof RunEvent.Type;
 
@@ -126,7 +136,8 @@ export interface Interface {
   readonly create: (input: Create) => Effect.Effect<Created, Database.Failure>;
   readonly send: (input: Send) => Effect.Effect<Sent, ThreadNotFound | Database.Failure>;
   readonly cancel: (input: Key) => Effect.Effect<Cancelled, Database.Failure>;
-  readonly archive: (input: ThreadKey) => Effect.Effect<Archived, Database.Failure>;
+  readonly settle: (input: Settle) => Effect.Effect<Filed, Database.Failure>;
+  readonly snooze: (input: Snooze) => Effect.Effect<Filed, Database.Failure>;
 }
 
 export class Service extends Context.Service<Service, Interface>()('@canary/api/Run') {}
@@ -255,12 +266,17 @@ export const layer = Layer.effect(
           return state.result;
         }).pipe(Effect.uninterruptible),
       ),
-      archive: Effect.fn('Run.archive')((input) =>
-        Effect.gen(function* () {
-          const state = yield* archiving(database, input);
-          yield* halt(state.refs);
-          return state.result;
-        }).pipe(Effect.uninterruptible),
+      // Settling files a thread under Settled, and takes it out of any snooze
+      // on the way. Neither touches its runs: a thread put away mid-run still
+      // finishes, and is there to read when it is brought back.
+      settle: Effect.fn('Run.settle')((input) =>
+        filing(database, input.owner, input.id, {
+          settledAt: input.settled ? new Date() : null,
+          snoozedUntil: null,
+        }),
+      ),
+      snooze: Effect.fn('Run.snooze')((input) =>
+        filing(database, input.owner, input.id, { snoozedUntil: input.until }),
       ),
     });
   }),
@@ -296,7 +312,7 @@ function sending(database: Database.Interface, model: string, input: Send) {
       const rows = await client
         .select({ id: thread.id })
         .from(thread)
-        .where(own(thread, input.owner, eq(thread.id, input.threadId), isNull(thread.archivedAt)))
+        .where(own(thread, input.owner, eq(thread.id, input.threadId)))
         .limit(1);
       if (!rows[0]) return null;
 
@@ -357,9 +373,10 @@ function sending(database: Database.Interface, model: string, input: Send) {
           ...entry({ _tag: 'Queued', model }),
         })
         .onConflictDoNothing({ target: [event.runId, event.seq] });
+      // Writing in a thread picks it back up, wherever it was filed.
       await client
         .update(thread)
-        .set({ updatedAt: new Date() })
+        .set({ updatedAt: new Date(), settledAt: null, snoozedUntil: null })
         .where(own(thread, input.owner, eq(thread.id, input.threadId)));
 
       return { message: row, run: item };
@@ -398,39 +415,25 @@ function cancelling(database: Database.Interface, input: Key) {
     );
 }
 
-function archiving(database: Database.Interface, input: ThreadKey) {
+// Filing is bookkeeping, not activity, so it keeps `updatedAt` where it was:
+// a thread settled today and brought back next week returns in its old place
+// by recency, not at the top as if it had just moved.
+function filing(
+  database: Database.Interface,
+  owner: typeof OwnerId.Type,
+  id: ThreadId,
+  set: Partial<Pick<typeof thread.$inferInsert, 'settledAt' | 'snoozedUntil'>>,
+) {
   return database
-    .transact('archive thread', async (client) => {
+    .transact('file thread', async (client) => {
       const rows = await client
         .update(thread)
-        .set({ archivedAt: new Date() })
-        .where(own(thread, input.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
+        .set({ ...set, updatedAt: sql`${thread.updatedAt}` })
+        .where(own(thread, owner, eq(thread.id, id)))
         .returning();
-      const active = await client
-        .update(run)
-        .set({ status: 'cancelled', completedAt: new Date() })
-        .where(
-          own(
-            run,
-            input.owner,
-            eq(run.threadId, input.id),
-            inArray(run.status, ['queued', 'running']),
-          ),
-        )
-        .returning();
-      await cancelled(client, active);
-
-      return {
-        refs: active.map(reference),
-        thread: rows[0] ?? null,
-      };
+      return rows[0] ?? null;
     })
-    .pipe(
-      Effect.map((result) => ({
-        refs: result.rows.refs,
-        result: { thread: result.rows.thread, txid: result.txid },
-      })),
-    );
+    .pipe(Effect.map((result) => ({ thread: result.rows, txid: result.txid })));
 }
 
 async function cancelled(client: Client, rows: readonly Row[]) {

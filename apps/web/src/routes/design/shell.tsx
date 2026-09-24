@@ -1,4 +1,3 @@
-import { FolderSimpleIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
 import { useRef, useState } from 'react';
@@ -11,7 +10,7 @@ import { Stage, useStage } from '~/components/backdrop/stage';
 import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
-import { ThreadRow } from '~/components/shell/thread-row';
+import { ThreadList } from '~/components/shell/threads';
 import { Button } from '~/components/ui/button';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
@@ -32,25 +31,33 @@ const USER = {
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000);
 
-const GROUPS = [
-  {
-    label: 'Today',
-    rows: [
-      ['Rewrite the sync keepalive proxy', 3, 'done'],
-      ['Why does the composer drop focus on send?', 18, 'running'],
-      ['Draft the varlock migration notes', 64, 'idle'],
-      ['Electric shape ownership', 190, 'failed'],
-    ] as const,
-  },
-  {
-    label: 'Recent',
-    rows: [
-      ['Token exchange RFC 8693 plan', 1500, 'done'],
-      ['Rust rate limiting with tower_governor', 2600, 'done'],
-      ['Effect v4 migration sweep', 4300, 'idle'],
-    ] as const,
-  },
-];
+const hours = (count: number) => new Date(Date.now() + count * 3_600_000);
+
+const FIXTURES = [
+  ['Rewrite the sync keepalive proxy', 3, 'done'],
+  ['Why does the composer drop focus on send?', 18, 'running'],
+  ['Draft the varlock migration notes', 64, 'idle'],
+  ['Electric shape ownership', 190, 'failed'],
+  ['Token exchange RFC 8693 plan', 1500, 'done'],
+  ['Rust rate limiting with tower_governor', 2600, 'done'],
+  ['Effect v4 migration sweep', 4300, 'idle'],
+  ['Better Auth 1.7 session cookies', 900, 'done', 'snoozed'],
+  ['Surrealkit rollout checklist', 5200, 'done', 'settled'],
+  ['WGSL compile check in CI', 7000, 'done', 'settled'],
+  ['Replica manifest codegen', 9000, 'failed', 'settled'],
+] as const;
+
+const THREADS = FIXTURES.map(([title, minutes, , filed], index) => ({
+  id: `${String(index).padStart(8, '0')}-preview-${title.length}`,
+  ownerId: 'preview',
+  title,
+  createdAt: ago(minutes + 60),
+  updatedAt: ago(minutes),
+  settledAt: filed === 'settled' ? ago(minutes - 30) : null,
+  snoozedUntil: filed === 'snoozed' ? hours(20) : null,
+}));
+
+const MARKS = new Map(THREADS.map((thread, index) => [thread.id, FIXTURES[index]![2]]));
 
 const TASKS = [
   {
@@ -74,8 +81,7 @@ const TASKS = [
 function Preview() {
   const params = Route.useSearch();
   const [sent, setSent] = useState<string | null>(null);
-
-  let seq = 0;
+  const [threads, setThreads] = useState(THREADS);
 
   return (
     <div className="grid h-svh grid-cols-[15.5rem_minmax(0,1fr)] overflow-hidden bg-background p-2 text-foreground">
@@ -86,56 +92,26 @@ function Preview() {
 
             <Nav />
 
-            <section className="grid min-h-0 grid-rows-[auto_1fr] gap-1">
-              <header className="relative flex h-8 items-center justify-between">
-                <h2 className="px-2 text-[13px] text-muted-foreground">Threads</h2>
-                <Button
-                  aria-label="Search threads"
-                  className="mr-[9px] size-6 text-muted-foreground [&_svg]:translate-x-px"
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <MagnifyingGlassIcon weight="regular" />
-                </Button>
-              </header>
-
-              <div className="min-h-0 overflow-y-auto pr-1 pb-8 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]">
-                <div className="grid gap-3">
-                  {GROUPS.map((entry) => (
-                    <section key={entry.label}>
-                      <div className="flex h-7 items-center gap-1.5 px-2">
-                        <FolderSimpleIcon
-                          aria-hidden
-                          className="size-3.5 shrink-0 text-muted-foreground/70"
-                          weight="regular"
-                        />
-                        <h3 className="min-w-0 truncate text-[12.5px] text-muted-foreground">
-                          {entry.label}
-                        </h3>
-                        <span className="text-[12.5px] tabular-nums text-muted-foreground/60">
-                          {entry.rows.length}
-                        </span>
-                      </div>
-
-                      <div className="grid gap-px">
-                        {entry.rows.map(([title, minutes, state], index) => (
-                          <ThreadRow
-                            active={seq++ === 1}
-                            id={`preview-${title.length}-${minutes}`}
-                            index={index}
-                            key={title}
-                            state={state}
-                            title={title}
-                            updated={ago(minutes)}
-                            onArchive={() => undefined}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </div>
-            </section>
+            <ThreadList
+              active={threads[1]?.id ?? null}
+              marks={MARKS}
+              ready
+              threads={threads}
+              onSettle={(id, on) =>
+                setThreads((rows) =>
+                  rows.map((row) =>
+                    row.id === id
+                      ? { ...row, settledAt: on ? new Date() : null, snoozedUntil: null }
+                      : row,
+                  ),
+                )
+              }
+              onSnooze={(id, at) =>
+                setThreads((rows) =>
+                  rows.map((row) => (row.id === id ? { ...row, snoozedUntil: at } : row)),
+                )
+              }
+            />
 
             <footer>
               <Account ready threads={7} user={USER} onSignout={() => undefined} />

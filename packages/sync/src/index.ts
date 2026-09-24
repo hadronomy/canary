@@ -70,8 +70,9 @@ export function setup() {
 
 export function threads(
   opts: Scope & {
-    archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    settle: (input: { id: string; settled: boolean }) => Promise<Tx>;
+    snooze: (input: { id: string; until: Date | null }) => Promise<Tx>;
   },
 ) {
   const key = scope(opts);
@@ -89,15 +90,16 @@ export function threads(
 
 function makeThreads(
   opts: Scope & {
-    archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    settle: (input: { id: string; settled: boolean }) => Promise<Tx>;
+    snooze: (input: { id: string; until: Date | null }) => Promise<Tx>;
   },
 ) {
   const col = make(Replica.Thread, opts, {
     onInsert: async ({ transaction }) => {
       const rows = transaction.mutations
         .map((item) => item.modified)
-        .filter((item) => item.ownerId === opts.ownerId && item.archivedAt == null);
+        .filter((item) => item.ownerId === opts.ownerId);
 
       if (!rows.length) {
         return;
@@ -111,14 +113,28 @@ function makeThreads(
         txid: res.map((item) => item.txid),
       };
     },
+    // The list only ever edits how a thread is filed. Settling is one call
+    // that also clears a snooze, so a change to both goes out as a settle.
     onUpdate: async ({ transaction }) => {
-      const rows = transaction.mutations.filter((item) => item.changes.archivedAt != null);
+      const res = await Promise.all(
+        transaction.mutations.flatMap((item) => {
+          const id = item.original.id;
 
-      if (!rows.length) {
+          if ('settledAt' in item.changes) {
+            return [opts.settle({ id, settled: item.changes.settledAt != null })];
+          }
+
+          if ('snoozedUntil' in item.changes) {
+            return [opts.snooze({ id, until: item.changes.snoozedUntil ?? null })];
+          }
+
+          return [];
+        }),
+      );
+
+      if (!res.length) {
         return;
       }
-
-      const res = await Promise.all(rows.map((item) => opts.archive({ id: item.original.id })));
 
       return {
         txid: res.map((item) => item.txid),

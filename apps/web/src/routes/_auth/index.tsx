@@ -7,7 +7,8 @@ import { shellRoutes } from '~/components/shell/routes';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
 import { Morph } from '~/lib/motion';
-import { roster } from '~/utils/chat';
+import { list, roster } from '~/utils/chat';
+import { moved, settle, shelf, snooze } from '~/utils/filing';
 
 export const Route = createFileRoute('/_auth/')({
   loader: async ({ context }) => {
@@ -30,14 +31,15 @@ function Home() {
   const ctx = Route.useRouteContext();
   const query = useLiveQuery(roster(ctx.user.id));
 
-  const recent = useMemo(
-    () =>
-      query.data
-        .filter((thread) => !thread.archivedAt)
-        .toSorted((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-        .slice(0, 6),
-    [query.data],
-  );
+  const col = list(ctx.user.id);
+
+  const recent = useMemo(() => {
+    const now = Date.now();
+    return query.data
+      .filter((thread) => shelf(thread, now) === 'open')
+      .toSorted((a, b) => moved(b, now) - moved(a, now))
+      .slice(0, 6);
+  }, [query.data]);
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -69,15 +71,16 @@ function Home() {
           {recent.length ? (
             <div className="grid gap-px">
               {recent.map((thread, index) => (
-                <ThreadRow
-                  active={false}
-                  id={thread.id}
-                  index={index}
-                  key={thread.id}
-                  title={thread.title}
-                  updated={thread.updatedAt}
-                  onArchive={() => undefined}
-                />
+                <div className="reveal" key={thread.id} style={{ ['--i' as string]: index }}>
+                  <ThreadRow
+                    active={false}
+                    id={thread.id}
+                    title={thread.title}
+                    updated={thread.updatedAt}
+                    onSettle={(id, on) => settle(col, id, on)}
+                    onSnooze={(id, at) => snooze(col, id, at)}
+                  />
+                </div>
               ))}
             </div>
           ) : (

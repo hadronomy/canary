@@ -31,13 +31,16 @@ export const state = {
   scans: 0,
   stale: [] as Row[],
   thread: {
-    archivedAt: null as Date | null,
     createdAt: new Date(),
     id: ids.thread,
     ownerId: ids.owner,
+    settledAt: null as Date | null,
+    snoozedUntil: null as Date | null,
     title: 'Test thread',
     updatedAt: new Date(),
   },
+  // Stands in for a thread the caller cannot see: someone else's, or gone.
+  missing: false,
   failed: Deferred.makeUnsafe<void>(),
 };
 
@@ -60,13 +63,15 @@ export function reset(status: Status = 'queued') {
   state.scans = 0;
   state.stale = [];
   state.thread = {
-    archivedAt: null,
     createdAt: new Date(),
     id: ids.thread,
     ownerId: ids.owner,
+    settledAt: null,
+    snoozedUntil: null,
     title: 'Test thread',
     updatedAt: new Date(),
   };
+  state.missing = false;
   state.failed = Deferred.makeUnsafe();
 }
 
@@ -197,7 +202,7 @@ function select(table: unknown, fields: Record<string, unknown>) {
   }
 
   if (table === thread) {
-    if (Object.hasOwn(fields, 'id') && state.thread.archivedAt) return [];
+    if (Object.hasOwn(fields, 'id') && state.missing) return [];
     return [state.thread];
   }
 
@@ -222,7 +227,6 @@ function update(table: unknown, data: Row) {
   }
 
   if (table === thread) {
-    if (data.archivedAt && state.thread.archivedAt) return [];
     state.thread = { ...state.thread, ...data };
     return [state.thread];
   }

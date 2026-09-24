@@ -9,15 +9,13 @@ function currentTheme(value: string | undefined): ThemeChoice {
 }
 
 function sorted(rows: readonly ThreadRecord[]) {
-  return rows
-    .filter((row) => !row.archivedAt)
-    .toSorted(
-      (a, b) =>
-        b.updatedAt.getTime() - a.updatedAt.getTime() ||
-        b.createdAt.getTime() - a.createdAt.getTime() ||
-        a.title.localeCompare(b.title) ||
-        a.id.localeCompare(b.id),
-    );
+  return rows.toSorted(
+    (a, b) =>
+      b.updatedAt.getTime() - a.updatedAt.getTime() ||
+      b.createdAt.getTime() - a.createdAt.getTime() ||
+      a.title.localeCompare(b.title) ||
+      a.id.localeCompare(b.id),
+  );
 }
 
 function stamp(date: Date) {
@@ -64,14 +62,6 @@ function themeName(value: ThemeChoice) {
   }
 }
 
-function after(rows: readonly ThreadRecord[], id: string) {
-  const at = rows.findIndex((row) => row.id === id);
-
-  if (at < 0) return rows[0] ?? null;
-
-  return rows[at + 1] ?? rows[at - 1] ?? null;
-}
-
 function same(left: Date, right: Date) {
   return (
     left.getFullYear() === right.getFullYear() &&
@@ -80,4 +70,4 @@ function same(left: Date, right: Date) {
   );
 }
 
-export { after, currentTheme, sorted, stamp, themeIcon, themeName };
+export { currentTheme, sorted, stamp, themeIcon, themeName };

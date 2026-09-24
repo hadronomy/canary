@@ -3,8 +3,9 @@ import {
   CopyIcon,
   MagnifyingGlassIcon,
   PencilSimpleIcon,
+  ArrowCounterClockwiseIcon,
   PlusIcon,
-  TrayArrowDownIcon,
+  SealCheckIcon,
 } from '@phosphor-icons/react';
 
 import type { ShellCommandDeps, ThreadRecord } from '~/components/shell/command-modules/types';
@@ -16,7 +17,8 @@ import {
   defineCommandModule,
 } from '~/components/command-palette';
 import { ThreadDetail } from '~/components/shell/command-modules/details';
-import { after, stamp } from '~/components/shell/command-modules/utils';
+import { stamp } from '~/components/shell/command-modules/utils';
+import { settle } from '~/utils/filing';
 
 const ids = createCommandIds('threads');
 
@@ -168,13 +170,19 @@ function threadItem(deps: ShellCommandDeps, row: ThreadRecord, scope = 'root') {
       <Command.Action.Copy icon={CopyIcon} id="copy-id" value={row.id}>
         Copy id
       </Command.Action.Copy>
-      <Command.Action.Danger
-        icon={TrayArrowDownIcon}
-        id="archive"
-        run={() => archive(deps, row.id)}
-      >
-        Archive thread
-      </Command.Action.Danger>
+      {row.settledAt ? (
+        <Command.Action
+          icon={ArrowCounterClockwiseIcon}
+          id="reopen"
+          run={() => file(deps, row.id, false)}
+        >
+          Reopen thread
+        </Command.Action>
+      ) : (
+        <Command.Action icon={SealCheckIcon} id="settle" run={() => file(deps, row.id, true)}>
+          Settle thread
+        </Command.Action>
+      )}
     </Command.Item>
   );
 }
@@ -240,7 +248,8 @@ function createThread(deps: ShellCommandDeps, value: string) {
     title,
     createdAt: now,
     updatedAt: now,
-    archivedAt: null,
+    settledAt: null,
+    snoozedUntil: null,
   });
 
   deps.onOpenChange(false);
@@ -270,37 +279,9 @@ function rename(deps: ShellCommandDeps, id: string, value: string) {
   deps.onOpenChange(false);
 }
 
-function archive(deps: ShellCommandDeps, id: string) {
-  const fallback = id === deps.active ? after(deps.threads, id) : null;
-
-  deps.col.update(id, (draft) => {
-    draft.archivedAt = new Date().toISOString();
-  });
-
+function file(deps: ShellCommandDeps, id: string, on: boolean) {
+  settle(deps.col, id, on);
   deps.onOpenChange(false);
-
-  if (id !== deps.active) return;
-
-  if (fallback) {
-    return deps
-      .nav({
-        to: '/threads/$threadId',
-        params: { threadId: fallback.id },
-        replace: true,
-      })
-      .catch((err: unknown) => {
-        console.error('Command palette archive navigation failed.', err);
-      });
-  }
-
-  return deps
-    .nav({
-      to: '/threads',
-      replace: true,
-    })
-    .catch((err: unknown) => {
-      console.error('Command palette archive navigation failed.', err);
-    });
 }
 
 export { threadsModule };

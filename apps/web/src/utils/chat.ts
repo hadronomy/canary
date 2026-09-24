@@ -1,4 +1,4 @@
-import { and, createLiveQueryCollection, eq, isNull, or } from '@tanstack/react-db';
+import { and, createLiveQueryCollection, eq, or } from '@tanstack/react-db';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 
@@ -46,8 +46,9 @@ export function list(ownerId: string) {
   return threadCollection({
     base: sync(),
     ownerId,
-    archive: client.thread.archive,
     create: client.thread.create,
+    settle: client.thread.settle,
+    snooze: client.thread.snooze,
   });
 }
 
@@ -119,11 +120,7 @@ function makeRoster(ownerId: string) {
 
   return createLiveQueryCollection({
     id: `threads:${ownerId}:roster`,
-    query: (q) =>
-      q
-        .from({ thread: col })
-        .where(({ thread }) => isNull(thread.archivedAt))
-        .orderBy(({ thread }) => thread.updatedAt, 'desc'),
+    query: (q) => q.from({ thread: col }).orderBy(({ thread }) => thread.updatedAt, 'desc'),
   });
 }
 

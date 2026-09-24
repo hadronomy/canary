@@ -1,14 +1,32 @@
-import type { ReactElement } from 'react';
+import type { Icon } from '@phosphor-icons/react';
+import type { ReactElement, ReactNode } from 'react';
 
-import { FolderSimpleIcon, MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
+import {
+  CaretDownIcon,
+  FolderSimpleIcon,
+  MagnifyingGlassIcon,
+  MoonIcon,
+  SealCheckIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
 import type { ThreadState } from '~/components/shell/thread-row';
+import type { Shelf } from '~/utils/filing';
 
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
@@ -18,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip
 import { Morph } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 import { list, roster, states } from '~/utils/chat';
+import { moved, settle, shelf, snooze } from '~/utils/filing';
 
 type ThreadGroup = {
   id: 'today' | 'recent' | 'older';
@@ -27,27 +46,24 @@ type ThreadGroup = {
 
 const DAY_MS = 86_400_000;
 
+// The strong ease-out the rest of the app moves on.
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+// Whether a `Rows` list is still on its first paint.
+const Fresh = createContext<{ current: boolean }>({ current: false });
+
 /**
- * Every thread the local cache holds, grouped by how recently it moved.
+ * Every thread the local cache holds, and the run state of each.
  *
  * Creating is not here: it is the first nav row, because naming a thread before
  * you know what it is about produces worse names than the first message does.
  */
 function Threads({ className, user }: { className?: string; user: ShellUser }) {
-  const nav = useNavigate();
   const params = useParams({ strict: false });
 
-  const owner = user.id;
-  const active = typeof params.threadId === 'string' ? params.threadId : null;
-
-  const field = useRef<HTMLInputElement>(null);
-
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-
-  const threadCollection = list(owner);
-  const rosterQuery = useLiveQuery(roster(owner));
-  const runs = useLiveQuery(states(owner)).data;
+  const col = list(user.id);
+  const rosterQuery = useLiveQuery(roster(user.id));
+  const runs = useLiveQuery(states(user.id)).data;
 
   // Newest run wins. The query is already ordered, so the first row seen for a
   // thread is its current state and every later one is history.
@@ -63,15 +79,66 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
     return seen;
   }, [runs]);
 
-  const threads = useMemo(() => live(rosterQuery.data), [rosterQuery.data]);
+  // Filing a thread leaves it open where it is. It is still there to read,
+  // and moving someone off the page they are on to say so would be louder
+  // than the action itself.
+  const onSettle = useCallback((id: string, on: boolean) => settle(col, id, on), [col]);
+  const onSnooze = useCallback((id: string, at: Date | null) => snooze(col, id, at), [col]);
+
+  return (
+    <ThreadList
+      active={typeof params.threadId === 'string' ? params.threadId : null}
+      className={className}
+      marks={marks}
+      ready={rosterQuery.isReady}
+      threads={rosterQuery.data}
+      onSettle={onSettle}
+      onSnooze={onSnooze}
+    />
+  );
+}
+
+type ThreadListProps = {
+  active: string | null;
+  className?: string;
+  marks: ReadonlyMap<string, ThreadState>;
+  ready: boolean;
+  threads: Thread[];
+  onSettle: (id: string, on: boolean) => void;
+  onSnooze: (id: string, at: Date | null) => void;
+};
+
+/**
+ * The list itself. Open threads are grouped by how recently they moved;
+ * snoozed and settled ones wait in their own folded sections at its foot.
+ */
+function ThreadList({
+  active,
+  className,
+  marks,
+  ready,
+  threads,
+  onSettle,
+  onSnooze,
+}: ThreadListProps) {
+  const nav = useNavigate();
+  const field = useRef<HTMLInputElement>(null);
+
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const now = useClock(threads);
   const search = useMemo(() => matcher(query), [query]);
 
-  const visible = useMemo(
-    () => (search.on ? threads.filter((thread) => search.hit(thread)) : threads),
-    [search, threads],
+  const shelves = useMemo(
+    () => split(search.on ? threads.filter((thread) => search.hit(thread)) : threads, now),
+    [now, search, threads],
   );
 
-  const groups = useMemo(() => group(visible), [visible]);
+  const visible = shelves.open;
+  const groups = useMemo(() => group(visible, now), [now, visible]);
+
+  const [folds, setFolds] = useState({ snoozed: false, settled: false });
 
   const jump = useCallback(
     (direction: number) => {
@@ -103,41 +170,21 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
     preventDefault: true,
   });
 
-  const archive = useCallback(
-    (id: string) => {
-      const fallback = id === active ? afterRemoving(visible, id) : null;
-
-      threadCollection.update(id, (draft) => {
-        draft.archivedAt = new Date().toISOString();
-      });
-
-      if (id !== active) {
-        return;
-      }
-
-      if (fallback) {
-        nav({
-          to: '/threads/$threadId',
-          params: {
-            threadId: fallback.id,
-          },
-          replace: true,
-        }).catch((err: unknown) => {
-          console.error('Thread archive navigation failed.', err);
-        });
-
-        return;
-      }
-
-      nav({
-        to: '/threads',
-        replace: true,
-      }).catch((err: unknown) => {
-        console.error('Thread archive navigation failed.', err);
-      });
-    },
-    [active, nav, threadCollection, visible],
-  );
+  function row(thread: Thread, where: Shelf) {
+    return (
+      <ThreadRow
+        active={thread.id === active}
+        id={thread.id}
+        shelf={where}
+        state={marks.get(thread.id)}
+        title={thread.title}
+        updated={thread.updatedAt}
+        wake={thread.snoozedUntil}
+        onSettle={onSettle}
+        onSnooze={onSnooze}
+      />
+    );
+  }
 
   function show() {
     setOpen(true);
@@ -251,50 +298,92 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
         viewportClassName="px-1 pr-2 pb-8"
       >
         <nav aria-label="Conversations">
-          {!rosterQuery.isReady ? (
+          {!ready ? (
             <Pending />
-          ) : visible.length ? (
-            <div className="grid gap-3">
-              {groups.map((entry) => (
-                <section key={entry.id} aria-labelledby={`threads-${entry.id}`}>
-                  {/* On the rows' own left edge, so the folder mark sits in the
-                      same column as the nav icons above. */}
-                  <div className="flex h-7 items-center gap-1.5 px-2">
-                    <FolderSimpleIcon
-                      aria-hidden
-                      className="size-3.5 shrink-0 text-muted-foreground/70"
-                      weight="regular"
-                    />
-                    <h3
-                      className="min-w-0 truncate text-[12.5px] text-muted-foreground"
-                      id={`threads-${entry.id}`}
-                    >
-                      {entry.label}
-                    </h3>
-                    <Morph className="text-[12.5px] tabular-nums text-muted-foreground/60">
-                      {entry.threads.length}
-                    </Morph>
-                  </div>
+          ) : threads.length ? (
+            <div className="grid">
+              <Rows gap="gap-3">
+                {groups.map((entry) => (
+                  <Leaf id={entry.id} key={entry.id}>
+                    <section aria-labelledby={`threads-${entry.id}`}>
+                      {/* On the rows' own left edge, so the folder mark sits in
+                          the same column as the nav icons above. */}
+                      <div className="flex h-7 items-center gap-1.5 px-2">
+                        <FolderSimpleIcon
+                          aria-hidden
+                          className="size-3.5 shrink-0 text-muted-foreground/70"
+                          weight="regular"
+                        />
+                        <h3
+                          className="min-w-0 truncate text-[12.5px] text-muted-foreground"
+                          id={`threads-${entry.id}`}
+                        >
+                          {entry.label}
+                        </h3>
+                        <Morph className="text-[12.5px] tabular-nums text-muted-foreground/60">
+                          {entry.threads.length}
+                        </Morph>
+                      </div>
 
-                  <div className="grid gap-px">
-                    {entry.threads.map((thread, index) => (
-                      <ThreadRow
-                        active={thread.id === active}
-                        id={thread.id}
-                        index={index}
-                        key={thread.id}
-                        state={marks.get(thread.id)}
-                        title={thread.title}
-                        updated={thread.updatedAt}
-                        onArchive={archive}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+                      <Rows>
+                        {entry.threads.map((thread, index) => (
+                          <Leaf id={thread.id} index={index} key={thread.id}>
+                            {row(thread, 'open')}
+                          </Leaf>
+                        ))}
+                      </Rows>
+                    </section>
+                  </Leaf>
+                ))}
+              </Rows>
+
+              {!visible.length ? <Clear filtering={search.on} query={query} /> : null}
+
+              {/* Folded away under the working list: out of the way, but one
+                  press from coming back. A search opens them, since a match
+                  hidden in a closed section is a match not found. */}
+              <Rows>
+                {shelves.snoozed.length ? (
+                  <Leaf id="snoozed" key="snoozed">
+                    <Fold
+                      count={shelves.snoozed.length}
+                      icon={MoonIcon}
+                      id="snoozed"
+                      label="Snoozed"
+                      open={folds.snoozed || search.on}
+                      onToggle={() => setFolds((fold) => ({ ...fold, snoozed: !fold.snoozed }))}
+                    >
+                      {shelves.snoozed.map((thread, index) => (
+                        <Leaf id={thread.id} index={index} key={thread.id}>
+                          {row(thread, 'snoozed')}
+                        </Leaf>
+                      ))}
+                    </Fold>
+                  </Leaf>
+                ) : null}
+
+                {shelves.settled.length ? (
+                  <Leaf id="settled" key="settled">
+                    <Fold
+                      count={shelves.settled.length}
+                      icon={SealCheckIcon}
+                      id="settled"
+                      label="Settled"
+                      open={folds.settled || search.on}
+                      onToggle={() => setFolds((fold) => ({ ...fold, settled: !fold.settled }))}
+                    >
+                      {shelves.settled.map((thread, index) => (
+                        <Leaf id={thread.id} index={index} key={thread.id}>
+                          {row(thread, 'settled')}
+                        </Leaf>
+                      ))}
+                    </Fold>
+                  </Leaf>
+                ) : null}
+              </Rows>
             </div>
           ) : (
-            <Blank filtering={search.on} query={query} onClear={() => setQuery('')} />
+            <Blank />
           )}
         </nav>
       </ScrollArea>
@@ -312,27 +401,146 @@ function Pending() {
   );
 }
 
-function Blank(props: { filtering: boolean; query: string; onClear: () => void }) {
-  if (props.filtering) {
-    return (
-      <div className="px-2 py-3">
-        <p className="text-xs text-foreground">No matches</p>
-        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-          Nothing here matches “{props.query.trim()}”.
-        </p>
-        <Button
-          className="mt-2 h-6 px-2 text-[11px]"
-          size="sm"
-          type="button"
-          variant="secondary"
-          onClick={props.onClear}
-        >
-          Clear search
-        </Button>
-      </div>
-    );
-  }
+/**
+ * A list that animates what leaves it and what joins it. Rows already there
+ * on first paint are simply there; only later changes move.
+ */
+function Rows({ children, gap = 'gap-px' }: { children: ReactNode; gap?: string }) {
+  const fresh = useRef(true);
 
+  useEffect(() => {
+    fresh.current = false;
+  }, []);
+
+  return (
+    <Fresh.Provider value={fresh}>
+      <div className={cn('grid', gap)}>
+        <AnimatePresence initial={false}>{children}</AnimatePresence>
+      </div>
+    </Fresh.Provider>
+  );
+}
+
+/**
+ * One entry in `Rows`. It folds its height away on the way out, so the rows
+ * under it close up over the space rather than jumping into it, and unfolds
+ * on the way in. The clip is only there while it moves: at rest a row's focus
+ * ring and shadow reach past its box.
+ *
+ * Rows there on first paint arrive in the list's cascade instead, staggered by
+ * `index`. A row that joins later skips it: a stagger is for a list arriving,
+ * and on one row it is just a delay.
+ */
+function Leaf({ children, id, index = 0 }: { children: ReactNode; id: string; index?: number }) {
+  const reduce = useReducedMotion();
+  const fresh = useContext(Fresh);
+  const [early] = useState(() => fresh.current);
+  const gone = { height: 0, opacity: 0, overflow: 'hidden' };
+
+  return (
+    <motion.div
+      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+      data-leaf={id}
+      exit={reduce ? { opacity: 0 } : { ...gone, transition: { duration: 0.18, ease: EASE } }}
+      initial={reduce ? { opacity: 0 } : gone}
+      transition={{ duration: 0.26, ease: EASE }}
+    >
+      {/* The cascade is a CSS animation, which would outrank the inline
+          opacity the exit writes, so it runs one element in. */}
+      <div className={early ? 'reveal' : undefined} style={{ ['--i' as string]: index }}>
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+/**
+ * A folded section at the foot of the list. The header is the whole toggle,
+ * and its caret sits on the column the thread states are drawn in.
+ */
+function Fold(props: {
+  children: ReactNode;
+  count: number;
+  icon: Icon;
+  id: string;
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const Mark = props.icon;
+  const reduce = useReducedMotion();
+  const box = useRef<HTMLElement>(null);
+  const opened = useRef(props.open);
+
+  // A fold opened at the foot of the list unrolls below the edge of the
+  // sidebar, where nothing seems to have happened. Once it has room, the list
+  // scrolls just far enough to bring it in.
+  useEffect(() => {
+    const was = opened.current;
+    opened.current = props.open;
+    if (!props.open || was) return;
+
+    const timer = window.setTimeout(
+      () => box.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }),
+      reduce ? 0 : 200,
+    );
+    return () => window.clearTimeout(timer);
+  }, [props.open, reduce]);
+
+  return (
+    <section ref={box} aria-labelledby={`threads-${props.id}`} className="scroll-mb-8 pt-3">
+      <button
+        aria-controls={`threads-${props.id}-list`}
+        aria-expanded={props.open}
+        className={cn(
+          'group/fold flex h-7 w-full items-center gap-1.5 rounded-(--radius-control) px-2 text-left',
+          'text-muted-foreground hover:bg-hover hover:text-foreground',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+        )}
+        type="button"
+        onClick={props.onToggle}
+      >
+        <Mark aria-hidden className="size-3.5 shrink-0 opacity-70" weight="regular" />
+        <h3 className="min-w-0 truncate text-[12.5px]" id={`threads-${props.id}`}>
+          {props.label}
+        </h3>
+        <Morph className="text-[12.5px] tabular-nums opacity-60">{props.count}</Morph>
+        <CaretDownIcon
+          aria-hidden
+          className={cn(
+            'mr-[3px] ml-auto size-3 shrink-0 opacity-70',
+            'transition-[rotate] duration-(--t-base) ease-out-strong motion-reduce:transition-none',
+            !props.open && '-rotate-90',
+          )}
+          weight="bold"
+        />
+      </button>
+
+      <div className="t-grow" data-open={props.open} id={`threads-${props.id}-list`}>
+        <div inert={!props.open}>
+          <div className="pt-px">
+            <Rows>{props.children}</Rows>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Clear(props: { filtering: boolean; query: string }) {
+  return (
+    <div className="px-2 py-3">
+      <p className="text-xs text-foreground">{props.filtering ? 'No open matches' : 'All clear'}</p>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+        {props.filtering
+          ? `No open thread matches “${props.query.trim()}”.`
+          : 'Every thread is settled or snoozed.'}
+      </p>
+    </div>
+  );
+}
+
+function Blank() {
   return (
     <div className="px-2 py-3">
       <p className="text-xs text-foreground">No threads yet</p>
@@ -368,16 +576,49 @@ function mark(status: string): ThreadState {
   return 'idle';
 }
 
-function live(threads: Thread[]) {
-  return threads
-    .filter((thread) => !thread.archivedAt)
-    .toSorted(
+/**
+ * Sort the threads onto their shelves. Open ones by when they last asked for
+ * attention, snoozed ones by which wakes first, settled ones by which was put
+ * away last.
+ */
+function split(threads: Thread[], now: number) {
+  const on = (where: Shelf) => threads.filter((thread) => shelf(thread, now) === where);
+
+  return {
+    open: on('open').toSorted(
       (a, b) =>
-        b.updatedAt.getTime() - a.updatedAt.getTime() ||
+        moved(b, now) - moved(a, now) ||
         b.createdAt.getTime() - a.createdAt.getTime() ||
         a.title.localeCompare(b.title) ||
         a.id.localeCompare(b.id),
-    );
+    ),
+    snoozed: on('snoozed').toSorted(
+      (a, b) => (a.snoozedUntil?.getTime() ?? 0) - (b.snoozedUntil?.getTime() ?? 0),
+    ),
+    settled: on('settled').toSorted(
+      (a, b) => (b.settledAt?.getTime() ?? 0) - (a.settledAt?.getTime() ?? 0),
+    ),
+  };
+}
+
+/**
+ * The time the list is drawn at. It moves on the minute, so "5m" stays true,
+ * and exactly when the next snoozed thread is due, so it wakes on time rather
+ * than up to a minute late.
+ */
+function useClock(threads: Thread[]) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const due = threads
+      .map((thread) => thread.snoozedUntil?.getTime() ?? 0)
+      .filter((at) => at > now);
+    const next = Math.min(now + 60_000, ...due);
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(next - Date.now(), 0) + 20);
+    return () => window.clearTimeout(timer);
+  }, [now, threads]);
+
+  return now;
 }
 
 function matcher(query: string) {
@@ -400,7 +641,7 @@ function flatten(value: string) {
     .toLowerCase();
 }
 
-function group(threads: Thread[]) {
+function group(threads: Thread[], now: number) {
   const groups: ThreadGroup[] = [
     { id: 'today', label: 'Today', threads: [] },
     { id: 'recent', label: 'Recent', threads: [] },
@@ -408,7 +649,7 @@ function group(threads: Thread[]) {
   ];
 
   for (const thread of threads) {
-    groups[bucket(thread.updatedAt)]?.threads.push(thread);
+    groups[bucket(new Date(moved(thread, now)))]?.threads.push(thread);
   }
 
   return groups.filter((entry) => entry.threads.length > 0);
@@ -450,14 +691,4 @@ function byOffset(threads: Thread[], active: string | null, direction: number) {
   return next;
 }
 
-function afterRemoving(threads: Thread[], removed: string) {
-  const index = threads.findIndex((thread) => thread.id === removed);
-
-  if (index < 0) {
-    return threads[0] ?? null;
-  }
-
-  return threads[index + 1] ?? threads[index - 1] ?? null;
-}
-
-export { Threads };
+export { ThreadList, Threads };

@@ -132,7 +132,7 @@ describe('Run', () => {
     }),
   );
 
-  it.effect('uses the provider cancel path when it archives a thread', () =>
+  it.effect('settles a thread without stopping its run', () =>
     Effect.gen(function* () {
       agent.mode = 'hold';
 
@@ -141,14 +141,38 @@ describe('Run', () => {
         yield* run.send(send());
         yield* Deferred.await(agent.started);
 
-        const result = yield* run.archive(thread());
-        yield* Deferred.await(agent.stopped);
+        const result = yield* run.settle(settle(true));
 
         expect(result.thread).toMatchObject({ id: ids.thread, ownerId: ids.owner });
-        expect(result.thread?.archivedAt).toBeInstanceOf(Date);
-        expect(agent.cancels).toBe(1);
-        expect(database.run.status).toBe('cancelled');
+        expect(result.thread?.settledAt).toBeInstanceOf(Date);
+        expect(result.thread?.snoozedUntil).toBeNull();
+        expect(agent.cancels).toBe(0);
+        expect(database.run.status).toBe('running');
       }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect('snoozes a thread until a given time', () =>
+    Effect.gen(function* () {
+      const until = new Date(Date.now() + 3_600_000);
+      const result = yield* Run.Service.use((run) => run.snooze(snooze(until))).pipe(
+        Effect.provide(layer),
+      );
+
+      expect(result.thread?.snoozedUntil).toEqual(until);
+      expect(result.thread?.settledAt).toBeNull();
+    }),
+  );
+
+  it.effect('picks a filed thread back up when a message is sent', () =>
+    Effect.gen(function* () {
+      database.thread.settledAt = new Date();
+      database.thread.snoozedUntil = new Date(Date.now() + 3_600_000);
+
+      yield* Run.Service.use((run) => run.send(send())).pipe(Effect.provide(layer));
+
+      expect(database.thread.settledAt).toBeNull();
+      expect(database.thread.snoozedUntil).toBeNull();
     }),
   );
 
@@ -224,9 +248,9 @@ describe('Run', () => {
     }),
   );
 
-  it.effect('returns a typed error for an archived thread', () =>
+  it.effect('returns a typed error for a thread it cannot see', () =>
     Effect.gen(function* () {
-      database.thread.archivedAt = new Date();
+      database.missing = true;
 
       const error = yield* Run.Service.use((run) => run.send(send())).pipe(
         Effect.flip,
@@ -252,6 +276,10 @@ function key() {
   return Schema.decodeUnknownSync(Run.Key)({ id: ids.run, owner: ids.owner });
 }
 
-function thread() {
-  return Schema.decodeUnknownSync(Run.ThreadKey)({ id: ids.thread, owner: ids.owner });
+function settle(settled: boolean) {
+  return Schema.decodeUnknownSync(Run.Settle)({ id: ids.thread, owner: ids.owner, settled });
+}
+
+function snooze(until: Date | null) {
+  return Schema.decodeUnknownSync(Run.Snooze)({ id: ids.thread, owner: ids.owner, until });
 }

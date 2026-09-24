@@ -24,12 +24,23 @@ export const threadRouter = {
       );
     }),
 
-  archive: protectedProcedure
-    .input(z.object({ id: z.uuid() }))
+  settle: protectedProcedure
+    .input(z.object({ id: z.uuid(), settled: z.boolean() }))
     .handler(async ({ context, input }) => {
       return await exec(
-        Schema.decodeUnknownEffect(Run.ThreadKey)({ ...input, owner: context.owner }).pipe(
-          Effect.flatMap((input) => Run.Service.use((run) => run.archive(input))),
+        Schema.decodeUnknownEffect(Run.Settle)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.settle(input))),
+        ),
+        context.signal,
+      );
+    }),
+
+  snooze: protectedProcedure
+    .input(z.object({ id: z.uuid(), until: z.coerce.date().nullable() }))
+    .handler(async ({ context, input }) => {
+      return await exec(
+        Schema.decodeUnknownEffect(Run.Snooze)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.snooze(input))),
         ),
         context.signal,
       );

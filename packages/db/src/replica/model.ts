@@ -14,7 +14,7 @@ const Thread = define({
   name: 'threads',
   table: thread,
   schema: factory.createSelectSchema(thread),
-  where: `${thread.ownerId.name} = $1 and ${thread.archivedAt.name} is null`,
+  where: `${thread.ownerId.name} = $1`,
 });
 
 const Message = define({

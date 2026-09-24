@@ -51,12 +51,13 @@ export const thread = snakeCase.table(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    archivedAt: timestamp({ withTimezone: true }),
+    // Settled threads are done with, and sit in their own section at the foot
+    // of the list. A snoozed one is out of the way until `snoozedUntil`, and
+    // comes back on its own once that passes. A new message clears both.
+    settledAt: timestamp({ withTimezone: true }),
+    snoozedUntil: timestamp({ withTimezone: true }),
   },
-  (table) => [
-    index('thread_owner_updated_idx').on(table.ownerId, table.updatedAt),
-    index('thread_owner_archived_idx').on(table.ownerId, table.archivedAt),
-  ],
+  (table) => [index('thread_owner_updated_idx').on(table.ownerId, table.updatedAt)],
 );
 
 export const member = snakeCase.table(
