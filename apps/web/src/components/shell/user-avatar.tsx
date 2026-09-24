@@ -24,21 +24,10 @@ function UserAvatar({ className, size, user, ...props }: UserAvatarProps) {
   const pixels = size === 'lg' ? 40 : size === 'sm' ? 24 : 32;
 
   return (
-    <Avatar
-      className={cn('border border-border bg-popover after:border-border', className)}
-      size={size}
-      {...props}
-    >
+    <Avatar className={cn('bg-popover', className)} size={size} {...props}>
       {user.image ? <AvatarImage alt="" src={user.image} /> : null}
       <AvatarFallback className="overflow-hidden bg-transparent p-0">
-        <Avvvatars
-          borderColor="var(--input)"
-          borderSize={1}
-          radius={pixels}
-          size={pixels}
-          style="shape"
-          value={seed}
-        />
+        <Avvvatars border={false} radius={pixels} size={pixels} style="shape" value={seed} />
       </AvatarFallback>
     </Avatar>
   );

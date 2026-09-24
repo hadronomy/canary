@@ -1,14 +1,10 @@
-import type { ChangeEvent, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-import {
-  ArrowsClockwiseIcon as CycleIcon,
-  FolderSimpleIcon,
-  MagnifyingGlassIcon,
-} from '@phosphor-icons/react';
+import { FolderSimpleIcon, MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
@@ -16,7 +12,6 @@ import type { ThreadState } from '~/components/shell/thread-row';
 
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { Skeleton } from '~/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
@@ -45,12 +40,10 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
   const owner = user.id;
   const active = typeof params.threadId === 'string' ? params.threadId : null;
 
-  const frame = useRef<number | null>(null);
   const field = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [debug, setDebug] = useState(false);
 
   const threadCollection = list(owner);
   const rosterQuery = useLiveQuery(roster(owner));
@@ -110,53 +103,6 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
     preventDefault: true,
   });
 
-  const cycle = useCallback(() => {
-    if (debug || visible.length < 2) {
-      return;
-    }
-
-    const ids = visible.map((thread) => thread.id);
-    const index = active ? ids.indexOf(active) : -1;
-    const start = index >= 0 ? index : 0;
-    const total = ids.length * 3;
-
-    let step = 0;
-
-    setDebug(true);
-
-    function next() {
-      step += 1;
-
-      const id = ids[(start + step) % ids.length];
-
-      if (!id) {
-        frame.current = null;
-        setDebug(false);
-        return;
-      }
-
-      nav({
-        to: '/threads/$threadId',
-        params: {
-          threadId: id,
-        },
-        replace: true,
-      }).catch((err: unknown) => {
-        console.error('Thread debug navigation failed.', err);
-      });
-
-      if (step >= total) {
-        frame.current = null;
-        setDebug(false);
-        return;
-      }
-
-      frame.current = requestAnimationFrame(next);
-    }
-
-    frame.current = requestAnimationFrame(next);
-  }, [active, debug, nav, visible]);
-
   const archive = useCallback(
     (id: string) => {
       const fallback = id === active ? afterRemoving(visible, id) : null;
@@ -193,88 +139,104 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
     [active, nav, threadCollection, visible],
   );
 
-  useEffect(() => {
-    return () => {
-      if (frame.current !== null) {
-        cancelAnimationFrame(frame.current);
-      }
-    };
-  }, []);
+  function show() {
+    setOpen(true);
+    field.current?.focus({ preventScroll: true });
+  }
 
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-
-    if (next) {
-      // After the track starts growing, so focus does not land in a zero-height
-      // field and scroll the sidebar to chase it.
-      requestAnimationFrame(() => field.current?.focus());
-      return;
-    }
-
+  function hide() {
+    setOpen(false);
     setQuery('');
   }
 
   return (
-    <section className={cn('grid min-h-0 grid-rows-[auto_auto_1fr] gap-1', className)}>
-      <header className="flex h-8 items-center justify-between gap-2 px-2.5">
-        <h2 className="truncate text-sm text-muted-foreground">Threads</h2>
+    <section className={cn('grid min-h-0 grid-rows-[auto_1fr] gap-1', className)}>
+      {/* The search lives in the section's own header. The field grows out of
+          the search control, right to left, and the label steps aside as it
+          comes — the list below never moves to make room for it. The reveal
+          is a clip rather than a width, so it runs on the compositor. */}
+      <header className="relative h-8">
+        <h2
+          aria-hidden={open}
+          className={cn(
+            'absolute inset-y-0 left-0 flex items-center px-2 text-[13px] text-muted-foreground',
+            'transition-[opacity,translate] duration-[180ms] ease-out-strong motion-reduce:transition-none',
+            open && 'pointer-events-none -translate-x-1 opacity-0',
+          )}
+        >
+          Threads
+        </h2>
 
-        <div className="flex shrink-0 items-center gap-0.5">
-          <Tip label={open ? 'Hide search' : 'Search threads'}>
-            <Button
-              aria-expanded={open}
-              aria-label={open ? 'Hide search' : 'Search threads'}
-              className="size-6 text-muted-foreground"
-              size="icon-sm"
-              type="button"
-              variant="ghost"
-              onClick={toggle}
-            >
-              <MagnifyingGlassIcon />
-            </Button>
-          </Tip>
+        <Tip label="Search threads">
+          <Button
+            aria-expanded={open}
+            aria-label="Search threads"
+            className={cn(
+              'absolute top-1 right-1 size-6 text-muted-foreground',
+              open && 'pointer-events-none opacity-0',
+            )}
+            size="icon-sm"
+            tabIndex={open ? -1 : undefined}
+            type="button"
+            variant="ghost"
+            onClick={show}
+          >
+            <MagnifyingGlassIcon weight="regular" />
+          </Button>
+        </Tip>
 
-          {threads.length > 1 ? (
-            <Tip label="Cycle threads">
-              <Button
-                aria-busy={debug || undefined}
-                aria-label="Cycle threads"
-                className={cn('size-6 text-muted-foreground', debug && 'animate-pulse')}
-                disabled={debug}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-                onClick={cycle}
-              >
-                <CycleIcon />
-              </Button>
-            </Tip>
-          ) : null}
+        <div
+          className={cn(
+            'absolute inset-0 flex items-center rounded-(--radius-control) bg-surface-3 shadow-surface-1',
+            'transition-[clip-path,opacity] duration-[180ms] ease-out-strong motion-reduce:transition-none',
+            open
+              ? '[clip-path:inset(0_round_var(--radius-control))]'
+              : 'pointer-events-none opacity-0 [clip-path:inset(0_0_0_calc(100%-2rem)_round_var(--radius-control))]',
+          )}
+        >
+          <span
+            aria-hidden
+            className="grid size-5 shrink-0 place-items-center pl-2 text-muted-foreground"
+          >
+            <MagnifyingGlassIcon className="size-4" weight="regular" />
+          </span>
+          <label className="sr-only" htmlFor="thread-search">
+            Search threads
+          </label>
+          <input
+            ref={field}
+            autoComplete="off"
+            className="ml-2 min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            id="thread-search"
+            placeholder="Search threads"
+            spellCheck={false}
+            tabIndex={open ? undefined : -1}
+            type="search"
+            value={query}
+            onBlur={() => {
+              if (!query) setOpen(false);
+            }}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                hide();
+              }
+            }}
+          />
+          <Button
+            aria-label="Close search"
+            className="mr-1 size-6 text-muted-foreground"
+            size="icon-sm"
+            tabIndex={open ? undefined : -1}
+            type="button"
+            variant="ghost"
+            onClick={hide}
+          >
+            <XIcon weight="regular" />
+          </Button>
         </div>
       </header>
-
-      <div className="t-grow px-1" data-open={open}>
-        <div>
-          <div className="pb-1.5">
-            <label className="sr-only" htmlFor="thread-search">
-              Search threads
-            </label>
-            <Input
-              ref={field}
-              id="thread-search"
-              autoComplete="off"
-              className="h-8"
-              placeholder="Search threads"
-              spellCheck={false}
-              tabIndex={open ? undefined : -1}
-              type="search"
-              value={query}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)}
-            />
-          </div>
-        </div>
-      </div>
 
       <ScrollArea
         className="-mx-1 min-h-0 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]"
@@ -288,18 +250,21 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
             <div className="grid gap-3">
               {groups.map((entry) => (
                 <section key={entry.id} aria-labelledby={`threads-${entry.id}`}>
-                  <div className="mb-0.5 flex items-center gap-1.5 px-2.5">
+                  {/* On the rows' own left edge, so the folder mark sits in the
+                      same column as the nav icons above. */}
+                  <div className="flex h-7 items-center gap-1.5 px-2">
                     <FolderSimpleIcon
                       aria-hidden
                       className="size-3.5 shrink-0 text-muted-foreground/70"
+                      weight="regular"
                     />
                     <h3
-                      className="min-w-0 truncate text-xs text-muted-foreground"
+                      className="min-w-0 truncate text-[12.5px] text-muted-foreground"
                       id={`threads-${entry.id}`}
                     >
                       {entry.label}
                     </h3>
-                    <Morph className="text-xs tabular-nums text-muted-foreground/60">
+                    <Morph className="text-[12.5px] tabular-nums text-muted-foreground/60">
                       {entry.threads.length}
                     </Morph>
                   </div>
@@ -334,7 +299,7 @@ function Pending() {
   return (
     <div className="grid gap-px" aria-hidden="true">
       {Array.from({ length: 7 }).map((_, index) => (
-        <Skeleton className="h-[2.75rem] rounded-(--radius-control) bg-surface-3/60" key={index} />
+        <Skeleton className="h-12 rounded-(--radius-control) bg-surface-3/60" key={index} />
       ))}
     </div>
   );

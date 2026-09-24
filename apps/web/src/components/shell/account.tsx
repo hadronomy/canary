@@ -1,4 +1,4 @@
-import { CaretUpIcon, SignOutIcon } from '@phosphor-icons/react';
+import { CaretUpDownIcon, SignOutIcon } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { ShellUser } from '~/components/shell/routes';
@@ -46,8 +46,10 @@ function Account({ className, onSignout, ready, threads, user }: AccountProps) {
           <button
             aria-label="Account, sync and sign out"
             className={cn(
-              'group/account flex h-11 w-full min-w-0 items-center gap-2.5 rounded-(--radius-control) border border-transparent px-2 text-left',
-              'transition-[background-color,border-color,color] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+              'group/account flex h-11 w-full min-w-0 items-center gap-2 rounded-(--radius-control) border border-transparent pr-2 pl-1.5 text-left',
+              // Hover is instant, like every row above it; the press is the
+              // one thing that moves.
+              'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.99] motion-reduce:transition-none',
               surfaceState.hover,
               surfaceState.focus,
               surfaceState.open,
@@ -69,16 +71,13 @@ function Account({ className, onSignout, ready, threads, user }: AccountProps) {
           </span>
         </span>
 
-        {/* The caret answers "what happens if I press this". Rotating it on
-            open is the cheapest way to make it answer "and what is it doing
-            now" as well. */}
-        <CaretUpIcon
+        {/* Up and down together is the mark for "this opens a menu of
+            choices", the one a switcher wears. A single caret reads as
+            "expand this row", which is not what happens. */}
+        <CaretUpDownIcon
           aria-hidden
-          className={cn(
-            'size-3.5 shrink-0 text-muted-foreground',
-            'transition-transform duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-            open && 'rotate-180',
-          )}
+          className="size-4 shrink-0 text-muted-foreground"
+          weight="regular"
         />
       </PopoverTrigger>
 

@@ -10,10 +10,15 @@ import { cn } from '~/lib/utils';
  *
  * Icons alone were costing a tooltip hover to read; at this width the label is
  * free and the row becomes a bigger, more forgiving target for the same cost.
+ *
+ * Rows are 32px with a 16px line icon in a 20px slot, the brand's slot, so
+ * every icon and every label in the sidebar shares one left edge. The icons are
+ * drawn at the regular weight rather than the app's duotone: at this size the
+ * duotone fill turns to a smudge inside the outline.
  */
 function Nav({ className }: { className?: string }) {
   return (
-    <nav aria-label="Primary navigation" className={cn('grid content-start gap-0.5', className)}>
+    <nav aria-label="Primary navigation" className={cn('grid content-start gap-px', className)}>
       {primaryNav.map((item) => (
         <NavLink item={item} key={item.to} />
       ))}
@@ -34,15 +39,19 @@ function NavLink({ item }: { item: ShellNavRoute }) {
         className: 'border-input/50 bg-surface-3 text-foreground shadow-surface-1',
       }}
       className={cn(
-        'group flex h-9 items-center gap-2.5 rounded-(--radius-control) border border-transparent px-2.5',
-        'text-sm text-muted-foreground',
-        'transition-[background-color,border-color,color,box-shadow] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+        'flex h-8 items-center gap-2 rounded-(--radius-control) border border-transparent px-2',
+        'text-[13.5px] text-muted-foreground',
+        // Hover switches on at once: a pointer on its way down the sidebar
+        // crosses every row, and a fade on each one trails behind it.
         'hover:bg-hover hover:text-foreground',
+        'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.98] motion-reduce:transition-none',
         'focus-visible:border-ring/50 focus-visible:bg-hover focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20',
       )}
       to={item.to}
     >
-      <Icon aria-hidden className="size-4 shrink-0" />
+      <span aria-hidden className="grid size-5 shrink-0 place-items-center">
+        <Icon className="size-4" weight="regular" />
+      </span>
       <span className="truncate">{item.label}</span>
     </Link>
   );

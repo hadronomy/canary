@@ -25,6 +25,15 @@ type ThreadRowProps = {
   updated: Date;
 };
 
+/**
+ * One thread: what it is about on the first line, and on the second the short
+ * id and how long ago it moved.
+ *
+ * Two lines, because the second one is what tells two similar titles apart and
+ * what makes the list scannable by recency without opening anything. The state
+ * of the last run sits on the title's line, where the eye already is when it
+ * reads the name.
+ */
 function ThreadRow({
   active,
   id,
@@ -45,8 +54,9 @@ function ThreadRow({
   return (
     <div
       className={cn(
-        'reveal group/item relative grid grid-cols-[minmax(0,1fr)_auto] items-center rounded-(--radius-control) border',
-        'transition-[background-color,border-color,box-shadow] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
+        'reveal group/item relative grid grid-cols-[minmax(0,1fr)_auto] rounded-(--radius-control) border',
+        // Hover switches on at once; the row is crossed on the way down the
+        // list far more often than it is opened.
         active
           ? 'border-input/50 bg-surface-3 shadow-surface-1'
           : 'border-transparent hover:bg-hover focus-within:bg-hover',
@@ -55,21 +65,21 @@ function ThreadRow({
     >
       <Link
         aria-current={active ? 'page' : undefined}
-        className="min-w-0 rounded-(--radius-control) px-2.5 py-2 outline-none"
+        className="min-w-0 rounded-(--radius-control) py-1.5 pl-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         params={{ threadId: id }}
         preload={false}
         to="/threads/$threadId"
       >
         <span
           className={cn(
-            'block truncate text-sm leading-5',
-            active ? 'text-foreground' : 'text-foreground/90',
+            'block truncate text-[13.5px] leading-5',
+            active ? 'text-foreground' : 'text-foreground/85',
           )}
         >
           {title}
         </span>
 
-        <span className="flex min-w-0 items-center gap-1.5 text-xs leading-5 text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-muted-foreground">
           <span className="shrink-0 font-mono tabular-nums">{id.slice(0, 8)}</span>
           <span aria-hidden className="text-muted-foreground/40">
             ·
@@ -80,16 +90,14 @@ function ThreadRow({
         </span>
       </Link>
 
-      {/* The status and the archive control share one slot. Status is what you
-          want at rest; the control is what you want once the pointer is here,
-          and stacking them keeps the title's width from changing on hover. */}
-      <div className="relative grid size-8 shrink-0 place-items-center">
+      {/* The state and the archive control share one slot, level with the
+          title. State is what you want at rest, the control once the pointer
+          is here; stacked in one cell and swapped with no fade, the title's
+          width never changes under the pointer. */}
+      <div className="grid h-8 w-8 place-items-center">
         <span
           aria-hidden
-          className={cn(
-            'col-start-1 row-start-1 transition-opacity duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-            'group-hover/item:opacity-0 group-focus-within/item:opacity-0',
-          )}
+          className="col-start-1 row-start-1 group-hover/item:invisible group-focus-within/item:invisible"
         >
           <State state={state} />
         </span>
@@ -97,23 +105,28 @@ function ThreadRow({
         <Button
           aria-label={`Archive ${title}`}
           className={cn(
-            'col-start-1 row-start-1 size-6 text-muted-foreground opacity-0',
-            'transition-[background-color,color,opacity] duration-(--t-fast) ease-out-strong motion-reduce:transition-none',
-            'group-hover/item:opacity-100 focus-visible:opacity-100',
-            'active:scale-[0.96]',
+            'invisible col-start-1 row-start-1 size-6 text-muted-foreground',
+            'group-hover/item:visible group-focus-within/item:visible',
+            'active:scale-[0.94]',
           )}
           size="icon-sm"
           type="button"
           variant="ghost"
           onClick={archive}
         >
-          <ArchiveIcon className="size-3.5" />
+          <ArchiveIcon className="size-3.5" weight="regular" />
         </Button>
       </div>
     </div>
   );
 }
 
+/**
+ * The last run, as a filled mark. Filled rather than outlined so each state
+ * reads as a colour at a glance down the column; an unstarted thread keeps a
+ * faint ring, so the column has one edge and an empty slot never reads as a
+ * missing icon.
+ */
 function State({ state }: { state: ThreadState }) {
   if (state === 'running') {
     return <CircleHalfIcon className="size-3.5 text-chart-4" weight="fill" />;
@@ -127,14 +140,15 @@ function State({ state }: { state: ThreadState }) {
     return <CheckCircleIcon className="size-3.5 text-success" weight="fill" />;
   }
 
-  // A thread nothing has run on yet still gets a mark, so the column has a
-  // consistent left edge and an empty slot never reads as a missing icon.
-  return <CircleIcon className="size-3.5 text-muted-foreground/35" />;
+  return <CircleIcon className="size-3.5 text-muted-foreground/40" weight="regular" />;
 }
 
+/**
+ * How long ago, in the fewest characters that still read at a glance: minutes,
+ * then hours, then a weekday, then a date.
+ */
 function when(date: Date) {
-  const now = new Date();
-  const diff = Math.max(0, now.getTime() - date.getTime());
+  const diff = Math.max(0, Date.now() - date.getTime());
   const minutes = Math.floor(diff / 60_000);
 
   if (minutes < 1) {
@@ -145,33 +159,17 @@ function when(date: Date) {
     return `${minutes}m`;
   }
 
-  if (sameDay(date, now)) {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h`;
   }
 
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-
-  if (sameDay(date, yesterday)) {
-    return 'yesterday';
-  }
-
-  if (diff < 7 * 86_400_000) {
+  if (hours < 24 * 7) {
     return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date);
   }
 
   return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
-}
-
-function sameDay(left: Date, right: Date) {
-  return (
-    left.getFullYear() === right.getFullYear() &&
-    left.getMonth() === right.getMonth() &&
-    left.getDate() === right.getDate()
-  );
 }
 
 export { ThreadRow };

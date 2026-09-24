@@ -13,7 +13,6 @@ import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
-import { Separator } from '~/components/ui/separator';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
 
@@ -82,18 +81,21 @@ function Preview() {
     <div className="grid h-svh grid-cols-[15.5rem_minmax(0,1fr)] overflow-hidden bg-background p-2 text-foreground">
       <>
         <aside className="h-full min-h-0 pr-2">
-          <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2">
-            <header className="flex h-9 items-center">
-              <Brand />
-            </header>
+          <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-3 py-1">
+            <Brand />
 
             <Nav />
 
             <section className="grid min-h-0 grid-rows-[auto_1fr] gap-1">
-              <header className="flex h-8 items-center justify-between gap-2 px-2.5">
-                <h2 className="truncate text-sm text-muted-foreground">Threads</h2>
-                <Button className="size-6 text-muted-foreground" size="icon-sm" variant="ghost">
-                  <MagnifyingGlassIcon />
+              <header className="relative flex h-8 items-center justify-between">
+                <h2 className="px-2 text-[13px] text-muted-foreground">Threads</h2>
+                <Button
+                  aria-label="Search threads"
+                  className="mr-1 size-6 text-muted-foreground"
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <MagnifyingGlassIcon weight="regular" />
                 </Button>
               </header>
 
@@ -101,15 +103,16 @@ function Preview() {
                 <div className="grid gap-3">
                   {GROUPS.map((entry) => (
                     <section key={entry.label}>
-                      <div className="mb-0.5 flex items-center gap-1.5 px-2.5">
+                      <div className="flex h-7 items-center gap-1.5 px-2">
                         <FolderSimpleIcon
                           aria-hidden
                           className="size-3.5 shrink-0 text-muted-foreground/70"
+                          weight="regular"
                         />
-                        <h3 className="min-w-0 truncate text-xs text-muted-foreground">
+                        <h3 className="min-w-0 truncate text-[12.5px] text-muted-foreground">
                           {entry.label}
                         </h3>
-                        <span className="text-xs tabular-nums text-muted-foreground/60">
+                        <span className="text-[12.5px] tabular-nums text-muted-foreground/60">
                           {entry.rows.length}
                         </span>
                       </div>
@@ -134,8 +137,7 @@ function Preview() {
               </div>
             </section>
 
-            <footer className="grid gap-1.5">
-              <Separator />
+            <footer>
               <Account ready threads={7} user={USER} onSignout={() => undefined} />
             </footer>
           </div>

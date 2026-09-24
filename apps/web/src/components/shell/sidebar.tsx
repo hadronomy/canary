@@ -7,7 +7,6 @@ import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
 import { Threads } from '~/components/shell/threads';
-import { Separator } from '~/components/ui/separator';
 import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
 import { cn } from '~/lib/utils';
@@ -38,17 +37,19 @@ function Sidebar({ className, ready, user }: SidebarProps) {
   }
 
   return (
-    <div className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-2', className)}>
-      <header className="flex h-9 items-center">
-        <Brand />
-      </header>
+    // One rhythm down the column: 12px between the brand, the destinations,
+    // the threads and the account. The account sits on the window like every
+    // other row rather than behind a rule — a line across the sidebar is a
+    // second way of saying "this is a different section", after the space has
+    // already said it.
+    <div className={cn('grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto] gap-3 py-1', className)}>
+      <Brand />
 
       <Nav />
 
       <Threads user={user} />
 
-      <footer className="grid gap-1.5">
-        <Separator />
+      <footer>
         <Account
           ready={ready}
           threads={threads.length}
