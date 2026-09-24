@@ -40,7 +40,9 @@ type Props = {
   bind?: (gpu: Awaited<ReturnType<typeof import('vgpu').init>>) => Promise<Record<string, unknown>>;
   /**
    * Cap for the live loop. Slow drift gains nothing from 120Hz, and every frame
-   * skipped is a GPU wakeup that did not happen.
+   * skipped is a GPU wakeup that did not happen. An `fps` key on `state`
+   * overrides it frame by frame, so whoever drives the field can run it fast
+   * while something moves and let it idle when nothing does.
    */
   fps?: number;
   /**
@@ -118,7 +120,7 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
       // `dirty` is a control key for the prepass and is not part of any shader's
       // uniform struct, so it never gets forwarded.
       function params(texel: readonly number[]) {
-        const { dirty: _dirty, ...rest } = state.current;
+        const { dirty: _dirty, fps: _fps, ...rest } = state.current;
         return { texel, ...rest };
       }
 
@@ -168,20 +170,35 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
       });
 
       const time = clock(gpu);
+      let drawn = 0;
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      // A reduced-motion visitor still gets the artwork, just not the drift: one
-      // frame, composed, and then the loop never starts.
+      // A reduced-motion visitor still gets the artwork, just not the drift: the
+      // clock is frozen, and a frame is drawn only when the layout it depends on
+      // has changed — a composer that moved, a page that became a thread —
+      // checked a few times a second rather than every frame.
       if (still) {
-        fx.set({ params: { time: 7.3, ...params(surf.texelSize) } });
-        fx.draw(surf);
+        let seen = '';
+        const loop = frameLoop(gpu, (frame) => {
+          const now = performance.now();
+          if (document.hidden || now - drawn < 250) return;
+          drawn = now;
+
+          const next = JSON.stringify(params(surf.texelSize));
+          if (next === seen) return;
+          seen = next;
+
+          fx.set({ params: { ...params(surf.texelSize), time: 7.3 } });
+          frame.pass(surf, fx);
+        });
+
         setLive(true);
-        stop = () => gpu.dispose();
+        stop = () => {
+          loop.stop();
+          gpu.dispose();
+        };
         return;
       }
-
-      const gap = 1000 / fps;
-      let drawn = 0;
 
       const loop = frameLoop(gpu, (frame) => {
         // Skipped while the tab is hidden: a backdrop nobody can see is not
@@ -189,7 +206,8 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
         if (document.hidden) return;
 
         const now = performance.now();
-        if (now - drawn < gap) return;
+        const rate = Number(state.current.fps ?? fps);
+        if (now - drawn < 1000 / rate) return;
         drawn = now;
 
         if (state.current.dirty) stale = true;
@@ -230,16 +248,5 @@ function Backdrop({ shader, state, prepass, bind, fps = 30, className }: Props) 
   );
 }
 
-/**
- * The sky's exit on send. It pushes toward the viewer from about where the
- * composer sits and fades, which reads as passing through it into the thread
- * rather than as the lights going off. It waits a beat first so the wave is
- * seen leaving the composer, then goes on the strong ease-out: it is an exit,
- * and an exit should start fast. It ends inside the hold, so the page changes
- * over an empty panel.
- */
-const LEAVE =
-  'origin-[50%_58%] scale-[1.06] opacity-0 transition-[opacity,scale] delay-[120ms] duration-[260ms] ease-out-strong motion-reduce:transition-none';
-
-export { Backdrop, LEAVE };
+export { Backdrop };
 export type { Uniforms };

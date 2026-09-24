@@ -9,6 +9,9 @@ type State = {
   /** 0..1 progress of a sent message travelling out through the field; 0 at
    *  rest. Linear here — the shader shapes it. */
   launch: number;
+  /** Where the current launch left from, fixed at the moment of sending, so
+   *  the wave keeps its centre while the composer that sent it moves on. */
+  spot: [number, number];
   /** Mutated in place each frame — the shader reads this array, so replacing it
    *  would strand the reference the uniform write is holding. */
   focus: [number, number];
@@ -16,13 +19,6 @@ type State = {
 
 /** Seconds a launch takes to cross the field. */
 const LAUNCH = 0.9;
-
-/**
- * How long a page holds after a launch before it changes, in milliseconds.
- * About two fifths of the crossing: long enough for the front to be clearly
- * on its way, short enough that nobody is left waiting on a sky.
- */
-const HOLD = 380;
 
 /**
  * Bridges form interaction to the backdrop shader.
@@ -42,6 +38,7 @@ function useField(seed?: Uniforms) {
     pulse: 0,
     glitch: 0,
     launch: 0,
+    spot: [0.5, 0.5],
     focus: [0.5, 0.5],
     ...seed,
   });
@@ -126,10 +123,11 @@ function useField(seed?: Uniforms) {
   /** Send a wave out from the focus point, or put the field back at rest. */
   const launch = useCallback((on: boolean) => {
     state.current.launch = 0;
+    state.current.spot = [state.current.focus[0], state.current.focus[1]];
     going.current = on;
   }, []);
 
   return { state: state as { current: Uniforms }, focus, beat, fault, put, aim, aimAt, launch };
 }
 
-export { HOLD, useField };
+export { useField };

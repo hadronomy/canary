@@ -41,6 +41,9 @@ struct Params {
   pulse: f32,    // 0..1, decaying kick per keystroke
   glitch: f32,   // 0..1, scatters the links when a send is rejected
   launch: f32,   // 0..1, a sent message travelling out through the corpus
+  berth: vec4f,  // x, y, w, h — the composer itself, measured every frame
+  spot: vec2f,   // where the current launch left from
+  dock: f32,     // 0 on the new-thread screen, 1 in a thread, eased between
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -198,7 +201,7 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   // reads; a constant-speed ring reads as a radar sweep. It fades as it goes,
   // so it thins out at the edges of the page instead of hitting them.
   let l = params.launch;
-  let away = length((at - params.focus) * vec2f(aspect, 1.0));
+  let away = length((at - params.spot) * vec2f(aspect, 1.0));
   let front = (1.0 - pow(1.0 - l, 3.0)) * 1.5;
   let fade = pow(1.0 - l, 1.5) * step(0.0001, l);
   // Squared by hand: `pow` with a negative base is undefined in WGSL, and
@@ -207,10 +210,51 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let wave = exp(-z * z) * fade;
   let wake = (1.0 - smoothstep(front - 0.5, front, away)) * fade * 0.35;
 
+  // DOCK — the same sky once a conversation has started. It does not go away:
+  // it gathers around the composer and withdraws to the margins either side of
+  // the conversation, so the page keeps its atmosphere and the text keeps a
+  // clean column to be read in.
+  //
+  // Everything here follows the composer as it is measured this frame, so while
+  // the composer travels down to its place the sky travels with it — there is
+  // no second animation to keep in step with the first. The handover itself is
+  // one number, eased once more here so both ends settle rather than stop.
+  let e = smoothstep(0.0, 1.0, params.dock);
+  let b = params.berth;
+
+  // Distance from this cell to the composer's box, in page heights. Stars and
+  // their links hold on in a band around it, falling off over about sixty
+  // pixels on a desktop panel: the corpus close at hand, not a halo.
+  let half = b.zw * 0.5;
+  let past = max(abs(at - (b.xy + half)) - half, vec2f(0.0)) * vec2f(aspect, 1.0);
+  let gather = exp(-length(past) / 0.07);
+
+  // How far outside the conversation column this cell sits, as a fraction of
+  // the margin actually available on that side. The column is the composer's
+  // own width, which is the transcript's. Measuring against the margin rather
+  // than in fixed units is what lets the fade use the whole of it: the sky
+  // thins over the full stretch from the panel's edge to the text, eased at
+  // both ends, instead of stopping short on a narrow panel or running flat on
+  // a wide one. It keeps off the header at the top the same way.
+  let west = max(b.x, 1e-3);
+  let east = max(1.0 - (b.x + b.z), 1e-3);
+  let side = max((b.x - at.x) / west, (at.x - (b.x + b.z)) / east);
+  let margin = smoothstep(0.0, 1.0, clamp(side, 0.0, 1.0)) * smoothstep(0.02, 0.22, at.y);
+
+  // Once docked the composer is at the bottom of the page, and light that only
+  // radiates from it leaves the upper margins dark however open they are. So
+  // the margins and the band around the composer become places of attention
+  // in their own right: the nebula lifts there and links resolve there, and
+  // the rest of the field is masked away around them.
+  let lift = e * max(margin * 0.75, gather);
+  let near = max(glow, lift);
+  let hold = max(bound, lift);
+  let keep = mix(1.0, max(margin, gather), e) * mix(1.0, 0.9, e);
+
   // Links are bound to the composer, stars are not. The sky is there the whole
   // way out; what the composer does is draw the lines in.
-  let tone = glow * (0.05 + pow(cloud, 1.7) * 0.2) + lit * (0.5 + glow * 0.5 + wave * 0.9)
-    + link * (bound + wave * 1.4 + wake) * 0.42;
+  let tone = near * (0.05 + pow(cloud, 1.7) * 0.2) + lit * (0.5 + near * 0.5 + wave * 0.9)
+    + link * (hold + wave * 1.4 + wake) * 0.42;
 
   // Ease proportionally to the region rather than by a fixed distance: a fixed
   // falloff wider than the region's half-width never reaches full clearing, so
@@ -222,14 +266,15 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let room = smoothstep(0.0, k.z * 0.42, min(at.x - k.x, k.x + k.z - at.x))
     * smoothstep(0.0, k.w * 1.6, min(at.y - k.y, k.y + k.w - at.y));
 
+
   // Everything continuous happens first, and the quantising happens last.
   //
   // Screening the field and then multiplying by the falloff and the tint — both
   // smooth functions of position — reconstructs a continuous gradient out of
   // the steps and throws the screen away. It has to land on the values actually
   // written to the framebuffer.
-  let value = clamp(tone * (1.0 - room), 0.0, 1.0) * 0.62;
-  var color = vec3f(value) * mix(vec3f(1.0), TINT, 0.5 + glow * 0.3);
+  let value = clamp(tone * keep * (1.0 - room), 0.0, 1.0) * 0.62;
+  var color = vec3f(value) * mix(vec3f(1.0), TINT, 0.5 + near * 0.3);
 
   // Grain on the pixel rather than the cell, and barely there. It is the only
   // thing in the image finer than a cell, which is what keeps the dots from

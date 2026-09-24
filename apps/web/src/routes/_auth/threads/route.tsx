@@ -1,5 +1,6 @@
 import { Outlet, createFileRoute, useRouterState } from '@tanstack/react-router';
 
+import { Stage } from '~/components/backdrop/stage';
 import { AppError, AppNotFound, type AppErrorProps } from '~/components/fallbacks/route';
 import { roster, setup } from '~/utils/chat';
 
@@ -17,8 +18,14 @@ export const Route = createFileRoute('/_auth/threads')({
   component: ThreadsComponent,
 });
 
+// Both screens under here share one stage, so the sky behind a new thread is
+// the same one behind the conversation it becomes.
 function ThreadsComponent() {
-  return <Outlet />;
+  return (
+    <Stage>
+      <Outlet />
+    </Stage>
+  );
 }
 
 function ThreadsError(props: AppErrorProps) {

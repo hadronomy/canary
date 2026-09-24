@@ -68,9 +68,7 @@ function ShellFrame({ children, className, user, ...props }: ShellFrameProps) {
 
       <aside className="hidden h-full min-h-0 pr-2 md:block">{sidebar}</aside>
 
-      {/* Named so a view transition can hand the panel over on its own, without
-          fading the sidebar that stays put around it. */}
-      <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2 [view-transition-name:panel]">
+      <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2">
         {ready ? children : <Sync />}
       </main>
 

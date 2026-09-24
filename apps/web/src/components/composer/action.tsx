@@ -36,64 +36,13 @@ function ComposerAction(props: {
   // A ring that mounts paused never paints, and shows as a bare disc. It runs
   // for a moment first so there is a frame of metal to hold.
   const [warm, setWarm] = useState(true);
-  // The ring's library decides once, as it mounts, whether it is on screen, and
-  // inside a view transition's update the page is not being rendered, so it
-  // decides no and never draws. When the composer arrives by a transition the
-  // ring waits for it to finish, and lights as the composer lands.
-  const [settled, setSettled] = useState(false);
   const stop = props.action.kind === 'cancel-run';
   const ready = stop || props.action.kind === 'send-ready';
 
   useEffect(() => {
-    const moving = (document as { activeViewTransition?: ViewTransition | null })
-      .activeViewTransition;
-
-    if (!moving) {
-      setSettled(true);
-      return;
-    }
-
-    let live = true;
-    moving.finished.finally(() => live && setSettled(true));
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!settled) return;
     const timer = window.setTimeout(() => setWarm(false), 600);
     return () => window.clearTimeout(timer);
-  }, [settled]);
-
-  const disc = (
-    <button
-      aria-label={props.action.label}
-      className={cn(
-        'grid size-8 place-items-center rounded-full bg-transparent text-foreground',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-(--surface-4)',
-        'disabled:cursor-not-allowed',
-      )}
-      disabled={!props.enabled}
-      title={props.action.label}
-      type={props.action.kind === 'send-ready' ? 'submit' : 'button'}
-      onClick={stop ? () => props.onCancelRun?.() : undefined}
-    >
-      {/* The arrow dims until there is something to send, rather than the
-          disc changing colour: the metal stays the one bright thing. */}
-      <span
-        aria-hidden
-        className={cn(
-          't-icon-swap size-4 transition-opacity duration-(--t-base) motion-reduce:transition-none',
-          !ready && 'opacity-45',
-        )}
-        data-state={stop ? 'b' : 'a'}
-      >
-        <ArrowUpIcon className="t-icon size-4" data-icon="a" weight="bold" />
-        <StopIcon className="t-icon size-3 place-self-center" data-icon="b" weight="fill" />
-      </span>
-    </button>
-  );
+  }, []);
 
   return (
     // The press scales this wrapper rather than the ring's own root, which
@@ -105,36 +54,52 @@ function ComposerAction(props: {
         props.action.kind === 'disabled' && 'opacity-50',
       )}
     >
-      {settled ? (
-        <MetalFx
-          // Keeps the focus ring, which the default normalisation strips along
-          // with any border or shadow on the button.
-          normalizeHostStyles={false}
-          // The halo wanders only while a run is out. At rest it would be a glow
-          // behind a button for its own sake.
-          disableGlow={!stop}
-          paused={!warm && (!!reduce || !(stop || awake))}
-          preset="silver"
-          // The ring is drawn under the button with its centre punched out, so
-          // the disc's colour lives on the ring's root and the button stays
-          // clear. Inline because the library's own stylesheet is unlayered and
-          // outranks a utility class.
-          style={{ background: 'var(--metal-core)', color: 'var(--foreground)' }}
-          theme={light ? 'light' : 'dark'}
-          variant="circle"
-          onPointerEnter={() => setAwake(true)}
-          onPointerLeave={() => setAwake(false)}
+      <MetalFx
+        // Keeps the focus ring, which the default normalisation strips along
+        // with any border or shadow on the button.
+        normalizeHostStyles={false}
+        // The halo wanders only while a run is out. At rest it would be a glow
+        // behind a button for its own sake.
+        disableGlow={!stop}
+        paused={!warm && (!!reduce || !(stop || awake))}
+        preset="silver"
+        // The ring is drawn under the button with its centre punched out, so
+        // the disc's colour lives on the ring's root and the button stays
+        // clear. Inline because the library's own stylesheet is unlayered and
+        // outranks a utility class.
+        style={{ background: 'var(--metal-core)', color: 'var(--foreground)' }}
+        theme={light ? 'light' : 'dark'}
+        variant="circle"
+        onPointerEnter={() => setAwake(true)}
+        onPointerLeave={() => setAwake(false)}
+      >
+        <button
+          aria-label={props.action.label}
+          className={cn(
+            'grid size-8 place-items-center rounded-full bg-transparent text-foreground',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-(--surface-4)',
+            'disabled:cursor-not-allowed',
+          )}
+          disabled={!props.enabled}
+          title={props.action.label}
+          type={props.action.kind === 'send-ready' ? 'submit' : 'button'}
+          onClick={stop ? () => props.onCancelRun?.() : undefined}
         >
-          {disc}
-        </MetalFx>
-      ) : (
-        <span
-          className="inline-flex rounded-full"
-          style={{ background: 'var(--metal-core)', color: 'var(--foreground)' }}
-        >
-          {disc}
-        </span>
-      )}
+          {/* The arrow dims until there is something to send, rather than the
+            disc changing colour: the metal stays the one bright thing. */}
+          <span
+            aria-hidden
+            className={cn(
+              't-icon-swap size-4 transition-opacity duration-(--t-base) motion-reduce:transition-none',
+              !ready && 'opacity-45',
+            )}
+            data-state={stop ? 'b' : 'a'}
+          >
+            <ArrowUpIcon className="t-icon size-4" data-icon="a" weight="bold" />
+            <StopIcon className="t-icon size-3 place-self-center" data-icon="b" weight="fill" />
+          </span>
+        </button>
+      </MetalFx>
     </span>
   );
 }

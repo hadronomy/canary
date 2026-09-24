@@ -33,6 +33,7 @@ import {
   partContent,
   textOf,
 } from '~/components/agent/turn';
+import { useStage } from '~/components/backdrop/stage';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
@@ -676,13 +677,14 @@ function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
   return (
     <section
       aria-labelledby="thread-title"
-      className="grid h-full min-h-0 grid-rows-[auto_1fr_auto]"
+      className="relative grid h-full min-h-0 grid-rows-[auto_1fr_auto]"
       data-thread-id={threadId}
       data-thread-screen=""
     >
-      <ThreadHeader threadId={threadId} title={thread?.title ?? 'Thread'} />
+      {/* The composer arrives by travelling; everything else settles in. */}
+      <ThreadHeader className="t-arrive" threadId={threadId} title={thread?.title ?? 'Thread'} />
 
-      <main aria-label="Conversation" className="relative h-full min-h-0">
+      <main aria-label="Conversation" className="t-arrive relative h-full min-h-0">
         <TranscriptRuntime key={threadId} ownerId={ownerId} threadId={threadId} />
       </main>
 
@@ -743,6 +745,8 @@ function ThreadActions({
   threadId,
 }: ThreadActionsProps) {
   const runtime = useTranscriptRuntimeBridge();
+  const anchor = useRef<HTMLDivElement>(null);
+  useStage('thread', anchor);
 
   const currentThreadIdRef = useRef(threadId);
   const draftsByThreadRef = useRef(new Map<string, string>());
@@ -850,9 +854,9 @@ function ThreadActions({
 
   return (
     <AgentPrompt
+      anchor={anchor}
       disabled={disabled}
       error={sendError ?? runError}
-      name="composer"
       pristine={pristine}
       running={running}
       value={draft}

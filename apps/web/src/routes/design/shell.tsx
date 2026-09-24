@@ -1,16 +1,13 @@
 import { FolderSimpleIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
-import { useLayoutEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { AgentPrompt } from '~/components/agent-prompt';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { AssistantPending, UserMessage } from '~/components/agent/turn';
-import { Backdrop, LEAVE } from '~/components/backdrop/backdrop';
-import shader from '~/components/backdrop/prompt.wgsl';
-import { HOLD, useField } from '~/components/backdrop/use-field';
+import { Stage, useStage } from '~/components/backdrop/stage';
 import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
@@ -77,70 +74,7 @@ const TASKS = [
 
 function Preview() {
   const params = Route.useSearch();
-  const field = useField({ quiet: [0, 0, 0, 0] });
-  const [draft, setDraft] = useState('');
   const [sent, setSent] = useState<string | null>(null);
-  const [sky, setSky] = useState<'here' | 'leaving' | 'gone'>('here');
-  const reduce = useReducedMotion();
-
-  // The same sequence the new-thread route runs, against a mock thread, so the
-  // handover can be watched without a signed-in session: the wave goes out,
-  // the page holds, then the composer travels in a typed view transition.
-  function open(text: string) {
-    if (!reduce) field.launch(true);
-    setSky('leaving');
-
-    window.setTimeout(
-      () => {
-        flushSync(() => setSky('gone'));
-        const flip = () => flushSync(() => setSent(text));
-
-        if (!document.startViewTransition) {
-          flip();
-          return;
-        }
-
-        document.startViewTransition({ update: flip, types: ['open-thread'] });
-      },
-      reduce ? 0 : HOLD,
-    );
-  }
-  const box = useRef<HTMLDivElement>(null);
-  const host = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const node = box.current;
-    const stage = host.current;
-    if (!node || !stage) return;
-
-    function clear() {
-      if (!node || !stage) return;
-      // Measured against the canvas, not the window. The shader works in its
-      // own surface's coordinates, and the panel is inset — reading these off
-      // `innerWidth` put the clearing a couple of hundred pixels left of the
-      // composer and left the type sitting on the busiest part of the field.
-      const box_ = node.getBoundingClientRect();
-      const frame = stage.getBoundingClientRect();
-      const x = (value: number) => (value - frame.left) / frame.width;
-      const y = (value: number) => (value - frame.top) / frame.height;
-
-      field.aim(x(box_.left + box_.width / 2), y(box_.top + box_.height / 2));
-
-      field.put('quiet', [
-        x(box_.left - 96),
-        y(box_.top - 56),
-        (box_.width + 192) / frame.width,
-        (box_.height + 112) / frame.height,
-      ]);
-    }
-
-    clear();
-    const ro = new ResizeObserver(clear);
-    ro.observe(node);
-    ro.observe(stage);
-    ro.observe(document.documentElement);
-    return () => ro.disconnect();
-  }, [field]);
 
   let seq = 0;
 
@@ -207,72 +141,77 @@ function Preview() {
           </div>
         </aside>
 
-        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2 [view-transition-name:panel]">
-          {sent !== null ? (
-            <Thread
-              text={sent}
-              onBack={() => {
-                setSent(null);
-                setSky('here');
-                field.launch(false);
-              }}
-            />
-          ) : (
-            <div
-              ref={host}
-              className={cn(
-                'relative h-full min-h-0 overflow-hidden px-4',
-                params.v === 'tasks'
-                  ? 'grid grid-rows-[1fr_auto]'
-                  : 'grid grid-rows-[1fr_auto_0.62fr]',
-              )}
-            >
-              {sky === 'gone' ? null : (
-                <Backdrop
-                  className={cn(sky === 'leaving' && LEAVE)}
-                  shader={shader}
-                  state={field.state}
-                />
-              )}
-
-              {params.v === 'tasks' ? (
-                <div className="relative z-10 min-h-0 overflow-y-auto py-8">
-                  <div className="mx-auto w-full max-w-3xl">
-                    <ToolChips steps={TASKS} />
-                  </div>
-                </div>
-              ) : null}
-
-              <div
-                ref={box}
-                className={cn(
-                  'relative z-10 w-full max-w-3xl pb-3',
-                  params.v !== 'tasks' && 'row-start-2 justify-self-center',
-                )}
-              >
-                {params.v === 'tasks' ? null : (
-                  <h1 className="mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
-                    <Swap value="What are we working on?" />
-                  </h1>
-                )}
-
-                <AgentPrompt
-                  className="p-0"
-                  error={null}
-                  name="composer"
-                  pristine
-                  value={draft}
-                  onSubmit={open}
-                  onValue={(value) => {
-                    setDraft(value);
-                    field.beat();
-                  }}
-                />
-              </div>
-            </div>
-          )}
+        <main className="min-h-0 overflow-hidden rounded-(--radius-shell) bg-surface-2 shadow-surface-2">
+          <Stage>
+            {sent !== null ? (
+              <Thread text={sent} onBack={() => setSent(null)} />
+            ) : (
+              <Open tasks={params.v === 'tasks'} onSend={setSent} />
+            )}
+          </Stage>
         </main>
       </>
+    </div>
+  );
+}
+
+/**
+ * The new-thread screen with fixture data, sending into a mock thread through
+ * the same sequence the real route runs: the wave goes out, the heading and
+ * the question let go, and the composer travels while the sky follows it.
+ */
+function Open({ onSend, tasks }: { onSend: (text: string) => void; tasks: boolean }) {
+  const reduce = useReducedMotion();
+  const anchor = useRef<HTMLDivElement>(null);
+  const field = useStage('open', anchor);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  return (
+    <div
+      className={cn(
+        'relative h-full min-h-0 overflow-hidden px-4',
+        tasks ? 'grid grid-rows-[1fr_auto]' : 'grid grid-rows-[1fr_auto_0.62fr]',
+      )}
+    >
+      {tasks ? (
+        <div className="relative z-10 min-h-0 overflow-y-auto py-8">
+          <div className="mx-auto w-full max-w-3xl">
+            <ToolChips steps={TASKS} />
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          'canary-opening relative z-10 w-full max-w-3xl pb-3',
+          !tasks && 'row-start-2 justify-self-center',
+        )}
+        data-sending={sending || undefined}
+      >
+        {tasks ? null : (
+          <h1 className="t-arrive mx-auto mb-5 max-w-lg text-center text-[26px] leading-[1.2] tracking-[-0.025em] text-balance">
+            <Swap value="What are we working on?" />
+          </h1>
+        )}
+
+        <AgentPrompt
+          anchor={anchor}
+          className="p-0"
+          error={null}
+          pristine
+          value={draft}
+          onSubmit={(text) => {
+            if (!reduce) field?.launch(true);
+            setSending(true);
+            window.setTimeout(() => onSend(text), reduce ? 0 : 160);
+          }}
+          onValue={(value) => {
+            setDraft(value);
+            field?.beat();
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -280,17 +219,19 @@ function Preview() {
 /** A thread as it looks the moment it opens: your message, and the wait. */
 function Thread({ onBack, text }: { onBack: () => void; text: string }) {
   const [draft, setDraft] = useState('');
+  const anchor = useRef<HTMLDivElement>(null);
+  useStage('thread', anchor);
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto]">
-      <header className="flex min-w-0 items-center justify-between gap-2 px-4 py-2.5">
+    <div className="relative grid h-full min-h-0 grid-rows-[auto_1fr_auto]">
+      <header className="t-arrive flex min-w-0 items-center justify-between gap-2 px-4 py-2.5">
         <h1 className="min-w-0 truncate text-[13px] font-medium">{text}</h1>
         <Button size="sm" variant="ghost" onClick={onBack}>
           Back
         </Button>
       </header>
 
-      <div className="min-h-0 overflow-y-auto px-3 pt-6">
+      <div className="t-arrive min-h-0 overflow-y-auto px-3 pt-6">
         <div className="mx-auto w-full max-w-3xl space-y-8">
           <UserMessage content={text} />
           <AssistantPending />
@@ -298,8 +239,8 @@ function Thread({ onBack, text }: { onBack: () => void; text: string }) {
       </div>
 
       <AgentPrompt
+        anchor={anchor}
         error={null}
-        name="composer"
         running
         value={draft}
         onCancel={() => undefined}

@@ -5,6 +5,7 @@ import { useHotkeys } from '@tanstack/react-hotkeys';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   type ComponentPropsWithoutRef,
+  type Ref,
   useCallback,
   useEffect,
   useId,
@@ -36,10 +37,9 @@ import { cn } from '~/lib/utils';
 type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onSubmit'> & {
   disabled?: boolean;
   error: null | string;
-  /** A `view-transition-name` for the composer, so a navigation can carry it
-   *  from one screen to the next. One per page: two with the same name abort
-   *  the transition. */
-  name?: string;
+  /** The composer's box, for whoever needs to know where it is — the stage
+   *  measures it to draw the sky around it and to carry it between screens. */
+  anchor?: Ref<HTMLDivElement>;
   pristine?: boolean;
   running?: boolean;
   value: string;
@@ -53,8 +53,8 @@ function AgentPrompt({
   'aria-describedby': describedBy,
   className,
   disabled: disabledProp,
+  anchor,
   error,
-  name,
   onCancel,
   onNew,
   onSubmit,
@@ -249,8 +249,8 @@ function AgentPrompt({
       {/* The same width as the transcript column, so the composer lines up with
           the conversation above it. It is also what lets the composer travel
           between the new-thread screen and a thread as one object: at equal
-          widths the view transition only has to move it, never stretch it. */}
-      <div className="mx-auto max-w-3xl" style={{ viewTransitionName: name }}>
+          widths the handover only has to move it, never stretch it. */}
+      <div ref={anchor} className="mx-auto max-w-3xl">
         <div ref={composerRef} className="relative overflow-visible">
           {/* Read to screen readers with the field; sighted users get the same
               keys from the slash menu and the placeholder. */}
@@ -325,9 +325,6 @@ function AgentPrompt({
                   disabled={availability === 'disabled'}
                   placeholder={placeholder}
                   slashState={ui.slash}
-                  // The text rides as its own layer, so a transition can swap
-                  // what is written without fading the box that carries it.
-                  style={name ? { viewTransitionName: `${name}-draft` } : undefined}
                   value={value}
                   onCommand={runCommand}
                   onEscape={runState === 'running' ? stopRun : undefined}
