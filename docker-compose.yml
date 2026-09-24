@@ -22,6 +22,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
       DB_PORT: '5432'
       DB_USERNAME: postgres
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:?Set ELECTRIC_SECRET}
       ELECTRIC_URL: http://electric:3000
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       VITE_SERVER_URL: http://localhost:3001
@@ -33,7 +34,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    command: ['postgres', '-c', 'wal_level=logical']
+    command: ['postgres', '-c', 'wal_level=logical', '-c', 'max_slot_wal_keep_size=10GB']
     image: postgres:18
     container_name: canary-postgres
     environment:
@@ -52,11 +53,12 @@ services:
       - canary_postgres_data:/var/lib/postgresql
 
   electric:
-    image: electricsql/electric:latest
+    image: electricsql/electric:1.8.1
     container_name: canary-electric
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:?Set DB_PASSWORD}@postgres:5432/canary
-      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
+      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-false}
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:?Set ELECTRIC_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
