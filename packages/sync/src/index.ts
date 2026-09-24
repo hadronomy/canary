@@ -24,7 +24,7 @@ export type Thread = Replica.Thread;
 export type Tx = { txid: number };
 type Base = { base: string };
 type Scope = Base & { ownerId: string };
-type Schema = z.ZodType<Row<unknown>>;
+type Schema = z.ZodObject;
 type Descriptor<S extends Schema> = {
   readonly cacheVersion: number;
   readonly name: string;
@@ -72,6 +72,7 @@ export function threads(
   opts: Scope & {
     archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    rename: (input: { id: string; title: string }) => Promise<Tx>;
   },
 ) {
   const key = scope(opts);
@@ -91,6 +92,7 @@ function makeThreads(
   opts: Scope & {
     archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    rename: (input: { id: string; title: string }) => Promise<Tx>;
   },
 ) {
   const col = make(Replica.Thread, opts, {
@@ -112,13 +114,21 @@ function makeThreads(
       };
     },
     onUpdate: async ({ transaction }) => {
-      const rows = transaction.mutations.filter((item) => item.changes.archivedAt != null);
+      const writes = transaction.mutations.flatMap((item) => {
+        if (item.changes.archivedAt != null) {
+          return [opts.archive({ id: item.original.id })];
+        }
+        if (typeof item.changes.title === 'string') {
+          return [opts.rename({ id: item.original.id, title: item.changes.title })];
+        }
+        return [];
+      });
 
-      if (!rows.length) {
+      if (!writes.length) {
         return;
       }
 
-      const res = await Promise.all(rows.map((item) => opts.archive({ id: item.original.id })));
+      const res = await Promise.all(writes);
 
       return {
         txid: res.map((item) => item.txid),
@@ -270,7 +280,7 @@ function make<const S extends Schema>(
     shapeOptions: {
       url: url(opts.base, replica.name),
       columnMapper: snakeCamelMapper(),
-      transformer: (row) => Object.assign(row, replica.schema.parse(row)),
+      transformer: (row) => Object.assign(row, replica.schema.partial().parse(row)),
       liveSse: true,
       onError: retry,
     },

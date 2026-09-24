@@ -34,4 +34,15 @@ export const threadRouter = {
         context.signal,
       );
     }),
+
+  rename: protectedProcedure
+    .input(z.object({ id: z.uuid(), title: z.string().trim().min(1).max(120) }))
+    .handler(async ({ context, input }) => {
+      return await exec(
+        Schema.decodeUnknownEffect(Run.Rename)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.rename(input))),
+        ),
+        context.signal,
+      );
+    }),
 };

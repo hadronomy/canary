@@ -46,6 +46,7 @@ export function list(ownerId: string) {
     ownerId,
     archive: client.thread.archive,
     create: client.thread.create,
+    rename: client.thread.rename,
   });
 }
 
