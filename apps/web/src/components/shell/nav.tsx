@@ -2,8 +2,10 @@ import type { ComponentPropsWithoutRef, ReactElement } from 'react';
 
 import { useLiveQuery } from '@tanstack/react-db';
 import { Link, useRouter } from '@tanstack/react-router';
+import { useSyncExternalStore } from 'react';
 
 import type { ShellNavRoute, ShellUser } from '~/components/shell/routes';
+import type { SyncStatusProps } from '~/components/shell/status';
 
 import { AccountPanel } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
@@ -20,7 +22,7 @@ import { authClient } from '~/lib/auth-client';
 import { Elevated } from '~/lib/elevated';
 import { surfaceState } from '~/lib/surface-classes';
 import { cn } from '~/lib/utils';
-import { roster } from '~/utils/chat';
+import { clear, health, roster, watch } from '~/utils/chat';
 
 type DesktopNavProps = Omit<ComponentPropsWithoutRef<'aside'>, 'children'> & {
   onCommand: () => void;
@@ -139,12 +141,25 @@ function MobileLink(props: { item: ShellNavRoute }) {
 
 function Footer(props: { compact?: boolean; ready?: boolean; user: ShellUser }) {
   const router = useRouter();
-  const threads = useLiveQuery(roster(props.user.id)).data;
+  const { status } = useLiveQuery(roster(props.user.id));
+  const fault = useSyncExternalStore(
+    watch,
+    () => health(props.user.id),
+    () => undefined,
+  );
+  const state =
+    fault?.state ?? (status === 'ready' ? 'live' : status === 'error' ? 'stopped' : 'syncing');
+  const sync: Pick<SyncStatusProps, 'state' | 'shape' | 'reason'> = {
+    state,
+    shape: fault?.shape ?? (state === 'stopped' ? 'threads' : undefined),
+    reason: fault?.reason ?? (state === 'stopped' ? 'Collection failed' : undefined),
+  };
 
   async function signout() {
     await authClient.signOut();
     router.options.context.queryClient.setQueryData(userKey, null);
     await router.invalidate();
+    clear();
   }
 
   if (props.compact) {
@@ -153,7 +168,7 @@ function Footer(props: { compact?: boolean; ready?: boolean; user: ShellUser }) 
         <Separator className="w-8 bg-input/70" />
         <RailAccount
           ready={props.ready ?? true}
-          threads={threads.length}
+          sync={sync}
           user={props.user}
           onSignout={signout}
         />
@@ -167,7 +182,7 @@ function Footer(props: { compact?: boolean; ready?: boolean; user: ShellUser }) 
 
   return (
     <footer className="grid min-w-0 gap-2 overflow-hidden">
-      <SyncStatus threads={threads.length} />
+      <SyncStatus {...sync} />
       <AccountPanel user={props.user} onSignout={signout} />
     </footer>
   );
@@ -176,7 +191,7 @@ function Footer(props: { compact?: boolean; ready?: boolean; user: ShellUser }) 
 function RailAccount(props: {
   onSignout: () => void;
   ready: boolean;
-  threads: number;
+  sync: Pick<SyncStatusProps, 'state' | 'shape' | 'reason'>;
   user: ShellUser;
 }) {
   return (
@@ -206,7 +221,7 @@ function RailAccount(props: {
         side="right"
         sideOffset={12}
       >
-        {props.ready ? <SyncStatus threads={props.threads} /> : <SyncPanel />}
+        {props.ready ? <SyncStatus {...props.sync} /> : <SyncPanel />}
         <AccountPanel user={props.user} onSignout={props.onSignout} />
       </PopoverContent>
     </Popover>

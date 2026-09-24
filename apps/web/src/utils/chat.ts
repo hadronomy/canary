@@ -3,12 +3,15 @@ import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 
 import {
+  clear as clearCollections,
   events as eventCollection,
+  health as collectionHealth,
   messages as messageCollection,
   parts as partCollection,
   runs as runCollection,
   setup as setupCollections,
   threads as threadCollection,
+  watch as watchCollections,
 } from '@canary/sync';
 import { client } from '~/utils/orpc';
 
@@ -21,15 +24,7 @@ const lasts = new Map<string, ReturnType<typeof makeLatest>>();
 const docs = new Map<string, ReturnType<typeof makePieces>>();
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    rosters.clear();
-    logs.clear();
-    texts.clear();
-    works.clear();
-    fails.clear();
-    lasts.clear();
-    docs.clear();
-  });
+  import.meta.hot.dispose(clear);
 }
 
 const sync = createIsomorphicFn()
@@ -39,6 +34,32 @@ const sync = createIsomorphicFn()
 export const setup = createIsomorphicFn()
   .server(() => Promise.resolve())
   .client(() => setupCollections());
+
+export const watch = watchCollections;
+
+export function health(ownerId: string) {
+  return collectionHealth({ base: sync(), ownerId });
+}
+
+export function clear() {
+  [
+    ...rosters.values(),
+    ...logs.values(),
+    ...texts.values(),
+    ...works.values(),
+    ...fails.values(),
+    ...lasts.values(),
+    ...docs.values(),
+  ].forEach((col) => void col.cleanup());
+  rosters.clear();
+  logs.clear();
+  texts.clear();
+  works.clear();
+  fails.clear();
+  lasts.clear();
+  docs.clear();
+  clearCollections();
+}
 
 export function list(ownerId: string) {
   return threadCollection({

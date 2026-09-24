@@ -2,16 +2,31 @@ import type { ComponentPropsWithoutRef } from 'react';
 
 import { PulseIcon } from '@phosphor-icons/react';
 
-import { Progress } from '~/components/ui/progress';
 import { Elevated } from '~/lib/elevated';
 import { cn } from '~/lib/utils';
 
 type SyncStatusProps = ComponentPropsWithoutRef<'div'> & {
-  threads: number;
+  state: 'syncing' | 'live' | 'retrying' | 'stopped';
+  shape?: string;
+  reason?: string;
 };
 
-function SyncStatus({ className, threads, ...props }: SyncStatusProps) {
-  const value = Math.min(100, 44 + threads * 4);
+const labels = {
+  syncing: 'Syncing',
+  live: 'Live',
+  retrying: 'Retrying',
+  stopped: 'Stopped',
+};
+
+const details = {
+  syncing: 'Loading local data',
+  live: 'Local data is current',
+  retrying: 'Reconnecting to Electric',
+  stopped: 'Sync needs attention',
+};
+
+function SyncStatus({ className, state, shape, reason, ...props }: SyncStatusProps) {
+  const detail = reason ? `${shape ? `${shape}: ` : ''}${reason}` : details[state];
 
   return (
     <Elevated
@@ -22,20 +37,22 @@ function SyncStatus({ className, threads, ...props }: SyncStatusProps) {
       )}
       {...props}
     >
-      <div className="flex items-center gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-(--radius-press) border border-input/60 bg-background/35 text-primary">
-          <PulseIcon className="size-4" />
-        </div>
+      <div className="flex items-center gap-3" role="status">
+        <PulseIcon
+          aria-hidden
+          className={cn(
+            'size-5 shrink-0',
+            state === 'stopped' ? 'text-destructive' : 'text-primary',
+          )}
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium text-foreground">Realtime sync</p>
-          <p className="truncate text-[10px] text-muted-foreground">Electric local cache</p>
+          <p className="truncate text-[10px] text-muted-foreground" title={detail}>
+            {detail}
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs font-medium text-foreground">{value}</p>
-          <p className="text-[10px] text-muted-foreground">/100</p>
-        </div>
+        <p className="text-xs font-medium text-foreground">{labels[state]}</p>
       </div>
-      <Progress className="mt-3 h-1 bg-input" value={value} />
     </Elevated>
   );
 }

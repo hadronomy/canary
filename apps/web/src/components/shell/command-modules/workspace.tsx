@@ -12,6 +12,7 @@ import { AccountDetail } from '~/components/shell/command-modules/details';
 import { themeIcon, themeName } from '~/components/shell/command-modules/utils';
 import { userKey } from '~/functions/get-user';
 import { authClient } from '~/lib/auth-client';
+import { clear } from '~/utils/chat';
 
 const ids = createCommandIds('workspace');
 
@@ -208,6 +209,7 @@ async function signout(deps: ShellCommandDeps, ctx: { close: () => void }) {
   await authClient.signOut();
   deps.router.options.context.queryClient.setQueryData(userKey, null);
   await deps.router.invalidate();
+  clear();
 }
 
 export { workspaceModule };
