@@ -177,6 +177,7 @@ function ThreadList({
         id={thread.id}
         shelf={where}
         state={marks.get(thread.id)}
+        match={search.on ? query.trim() : undefined}
         title={thread.title}
         updated={thread.updatedAt}
         wake={thread.snoozedUntil}
@@ -260,7 +261,9 @@ function ThreadList({
           <input
             ref={field}
             autoComplete="off"
-            className="ml-2 min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+            // The field has its own clear control; the browser's would sit
+            // beside it as a second, heavier ×.
+            className="ml-2 min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:appearance-none"
             id="thread-search"
             placeholder="Search threads"
             spellCheck={false}
@@ -337,7 +340,13 @@ function ThreadList({
                 ))}
               </Rows>
 
-              {!visible.length ? <Clear filtering={search.on} query={query} /> : null}
+              {!visible.length ? (
+                <Clear
+                  filed={shelves.snoozed.length + shelves.settled.length > 0}
+                  query={search.on ? query.trim() : null}
+                  onClear={() => setQuery('')}
+                />
+              ) : null}
 
               {/* Folded away under the working list: out of the way, but one
                   press from coming back. A search opens them, since a match
@@ -527,15 +536,33 @@ function Fold(props: {
   );
 }
 
-function Clear(props: { filtering: boolean; query: string }) {
+/**
+ * Why the open list is empty: a search that found nothing, a search whose
+ * matches are all filed away below, or nothing left open at all.
+ */
+function Clear(props: { filed: boolean; query: string | null; onClear: () => void }) {
+  const [title, body] =
+    props.query === null
+      ? ['All clear', 'Every thread is settled or snoozed.']
+      : props.filed
+        ? ['No open matches', `Only filed threads match “${props.query}”.`]
+        : ['No matches', `Nothing matches “${props.query}”.`];
+
   return (
     <div className="px-2 py-3">
-      <p className="text-xs text-foreground">{props.filtering ? 'No open matches' : 'All clear'}</p>
-      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-        {props.filtering
-          ? `No open thread matches “${props.query.trim()}”.`
-          : 'Every thread is settled or snoozed.'}
-      </p>
+      <p className="text-[13px] text-foreground">{title}</p>
+      <p className="mt-0.5 text-[12px] leading-4 text-muted-foreground">{body}</p>
+      {props.query !== null && !props.filed ? (
+        <Button
+          className="mt-2.5 -ml-2 h-6 px-2 text-[12px]"
+          size="sm"
+          type="button"
+          variant="secondary"
+          onClick={props.onClear}
+        >
+          Clear search
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -543,8 +570,8 @@ function Clear(props: { filtering: boolean; query: string }) {
 function Blank() {
   return (
     <div className="px-2 py-3">
-      <p className="text-xs text-foreground">No threads yet</p>
-      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+      <p className="text-[13px] text-foreground">No threads yet</p>
+      <p className="mt-0.5 text-[12px] leading-4 text-muted-foreground">
         Start one from New thread and the first message names it.
       </p>
     </div>

@@ -35,6 +35,8 @@ type ThreadState = 'running' | 'failed' | 'done' | 'idle';
 type ThreadRowProps = {
   active: boolean;
   id: string;
+  /** Search text to mark in the title, when the list is filtered. */
+  match?: string;
   onSettle: (id: string, on: boolean) => void;
   onSnooze: (id: string, at: Date | null) => void;
   shelf?: Shelf;
@@ -61,6 +63,7 @@ type ThreadRowProps = {
 function ThreadRow({
   active,
   id,
+  match,
   onSettle,
   onSnooze,
   shelf = 'open',
@@ -112,7 +115,7 @@ function ThreadRow({
           // How far past the title's own column the actions reach.
           style={{ ['--cover' as string]: shelf === 'settled' ? '3rem' : '4rem' }}
         >
-          {title}
+          <Marked match={match} text={title} />
         </span>
 
         <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-muted-foreground">
@@ -290,6 +293,27 @@ function Tip(props: { children: ReactElement; label: string }) {
       <TooltipTrigger render={props.children} />
       <TooltipContent side="bottom">{props.label}</TooltipContent>
     </Tooltip>
+  );
+}
+
+/**
+ * The title with the search match lit, so a filtered list shows why each row
+ * is in it. A match on the id or a date has nothing to light, and the title
+ * reads as it always does.
+ */
+function Marked(props: { match?: string; text: string }) {
+  const at = props.match ? props.text.toLowerCase().indexOf(props.match.toLowerCase()) : -1;
+  if (!props.match || at < 0) return props.text;
+
+  const end = at + props.match.length;
+  return (
+    <>
+      {props.text.slice(0, at)}
+      <mark className="rounded-[3px] bg-foreground/14 text-foreground">
+        {props.text.slice(at, end)}
+      </mark>
+      {props.text.slice(end)}
+    </>
   );
 }
 
