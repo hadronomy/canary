@@ -30,12 +30,20 @@ export function caddyPlugin(opts: Options = {}): Plugin {
 }
 
 localhost:${cfg.httpsPort} {
-\treverse_proxy ${cfg.host}:${vite}${
+\t@sync path /api/sync/*
+\thandle @sync {
+\t\treverse_proxy ${cfg.host}:${vite} {
+\t\t\tflush_interval -1
+\t\t}
+\t}
+\thandle {
+\t\treverse_proxy ${cfg.host}:${vite}${
       cfg.encoding
         ? `
-\tencode gzip`
+\t\tencode gzip`
         : ''
     }
+\t}
 }
 `;
   }
