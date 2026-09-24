@@ -1,6 +1,7 @@
+import type { ComponentPropsWithRef, ComponentPropsWithoutRef, ReactNode } from 'react';
+
 import { CheckIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { Command as CommandPrimitive } from 'cmdk';
-import type { ComponentPropsWithRef, ComponentPropsWithoutRef, ReactNode } from 'react';
 
 import {
   Dialog,
@@ -155,12 +156,7 @@ function CommandSeparator({ className, ...props }: CommandSeparatorProps) {
 
 type CommandItemProps = ComponentPropsWithRef<typeof CommandPrimitive.Item>;
 
-function CommandItem({
-  className,
-  children,
-  ref,
-  ...props
-}: CommandItemProps) {
+function CommandItem({ className, children, ref, ...props }: CommandItemProps) {
   return (
     <CommandPrimitive.Item
       ref={ref}

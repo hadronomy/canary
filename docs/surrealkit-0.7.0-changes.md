@@ -38,7 +38,7 @@ commands below.
   [main.rs at v0.7.0](https://github.com/surrealdb/surrealkit/blob/v0.7.0/crates/surrealkit/src/main.rs))
 - TypeScript output for `typegen`, driven by a new `[typegen]` section in
   `surrealkit.toml`: `typescript = "<dir>"` enables generation of `<dir>/
-  index.ts` (tables become `interface`s with `id: RecordId<'table'>` per the
+index.ts` (tables become `interface`s with `id: RecordId<'table'>` per the
   SurrealDB JS SDK v2 record model); `format = "<cmd>"` runs a
   formatter/linter on the generated file with the path appended as the final
   arg (missing binary or non-zero exit only warns, never fails). `sync` and
@@ -87,7 +87,7 @@ commands below.
   HTTP pool tasks cannot keep the process alive after success.
   ([PR #56](https://github.com/surrealdb/surrealkit/pull/56))
 - **Prune drift self-heals**: the sync pruner now emits `REMOVE ... IF
-  EXISTS` for every entity kind, so a catalog row whose live entity was
+EXISTS` for every entity kind, so a catalog row whose live entity was
   dropped out-of-band (for example by a `run_sql REMOVE ...` rollout step)
   no longer halts the whole prune batch with `<entity> does not exist`.
   ([PR #51](https://github.com/surrealdb/surrealkit/pull/51))

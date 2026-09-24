@@ -4,8 +4,8 @@ use miette::{IntoDiagnostic, Result};
 use serde::Serialize;
 
 /// Output format selected by commands with both human and structured views.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
-#[value(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, usage_rs::ValueEnum)]
+#[usage(rename_all = "snake_case")]
 pub(in crate::cli::commands) enum Format {
     #[default]
     Human,
@@ -30,8 +30,8 @@ impl Format {
 }
 
 /// Structured output format selected by commands that need machine-readable data.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
-#[value(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, usage_rs::ValueEnum)]
+#[usage(rename_all = "snake_case")]
 pub(in crate::cli::commands) enum StructuredFormat {
     #[default]
     Toml,

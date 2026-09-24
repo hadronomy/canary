@@ -12,11 +12,7 @@ import { primaryNav } from '~/components/shell/routes';
 import { SyncStatus } from '~/components/shell/status';
 import { UserAvatar } from '~/components/shell/user-avatar';
 import { Button } from '~/components/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover';
 import { Separator } from '~/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { userKey } from '~/functions/get-user';

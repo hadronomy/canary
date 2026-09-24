@@ -141,50 +141,53 @@ full digests and provenance for diagnostics and future tooling:
 
 ```ts
 type ReplicaManifest = {
-  readonly format: 2
+  readonly format: 2;
   readonly database: {
-    readonly dialect: 'postgres'
-    readonly historyDigest: string
+    readonly dialect: 'postgres';
+    readonly historyDigest: string;
     readonly history: ReadonlyArray<{
-      readonly migration: string
-      readonly timestamp: number
-      readonly sqlDigest: string
-      readonly snapshotDigest: string
-      readonly snapshotId: string
-      readonly prevIds: ReadonlyArray<string>
-    }>
+      readonly migration: string;
+      readonly timestamp: number;
+      readonly sqlDigest: string;
+      readonly snapshotDigest: string;
+      readonly snapshotId: string;
+      readonly prevIds: ReadonlyArray<string>;
+    }>;
     readonly head: {
-      readonly migration: string
-      readonly timestamp: number
-      readonly sqlDigest: string
-      readonly snapshotDigest: string
-      readonly snapshotId: string
-      readonly prevIds: ReadonlyArray<string>
+      readonly migration: string;
+      readonly timestamp: number;
+      readonly sqlDigest: string;
+      readonly snapshotDigest: string;
+      readonly snapshotId: string;
+      readonly prevIds: ReadonlyArray<string>;
+    };
+  };
+  readonly replicas: Record<
+    string,
+    {
+      readonly cacheVersion: number;
+      readonly digest: string;
+      readonly algorithm: 'sha256-canonical-json-v2';
+      readonly contract: {
+        readonly name: string;
+        readonly table: string;
+        readonly schema: string;
+        readonly columns: ReadonlyArray<{
+          readonly name: string;
+          readonly type: string;
+          readonly typeSchema: string | null;
+          readonly notNull: boolean;
+          readonly dimensions: number;
+        }>;
+        readonly rowSchema: unknown;
+        readonly where: string;
+        readonly mapper: 'electric-snake-camel-v1';
+        readonly transformer: 'drizzle-zod-date-v1';
+        readonly persistence: 'tanstack-sqlite-json-v1';
+      };
     }
-  }
-  readonly replicas: Record<string, {
-    readonly cacheVersion: number
-    readonly digest: string
-    readonly algorithm: 'sha256-canonical-json-v2'
-    readonly contract: {
-      readonly name: string
-      readonly table: string
-      readonly schema: string
-      readonly columns: ReadonlyArray<{
-        readonly name: string
-        readonly type: string
-        readonly typeSchema: string | null
-        readonly notNull: boolean
-        readonly dimensions: number
-      }>
-      readonly rowSchema: unknown
-      readonly where: string
-      readonly mapper: 'electric-snake-camel-v1'
-      readonly transformer: 'drizzle-zod-date-v1'
-      readonly persistence: 'tanstack-sqlite-json-v1'
-    }
-  }>
-}
+  >;
+};
 ```
 
 The exact TypeScript shape can stay private to the generated module. Export a
@@ -268,14 +271,14 @@ file drift check.
 
 ## Compatibility behavior
 
-| Change | Cache action | Database migration action |
-| --- | --- | --- |
-| Add or remove a selected column | New `cache` number; reset and re-sync | Use the generated Drizzle migration if the database changes |
-| Change selected column type or nullability | New `cache` number; reset and re-sync | Apply and record the Drizzle migration |
-| Change `where`, shape columns, mapper, or row transform | New `cache` number; reset and re-sync | No database migration unless the database shape changes |
-| Change an unrelated auth table | Keep replica `cache` number | Apply and record the auth migration |
-| Change only migration folder text or snapshot UUID | Keep `cache` number; update provenance | Drizzle matches and records the migration by its own identity |
-| Change SQLite serialization or persistence index contract | New `cache` number; reset and re-sync | No PostgreSQL migration unless the server schema changes |
+| Change                                                    | Cache action                           | Database migration action                                     |
+| --------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------- |
+| Add or remove a selected column                           | New `cache` number; reset and re-sync  | Use the generated Drizzle migration if the database changes   |
+| Change selected column type or nullability                | New `cache` number; reset and re-sync  | Apply and record the Drizzle migration                        |
+| Change `where`, shape columns, mapper, or row transform   | New `cache` number; reset and re-sync  | No database migration unless the database shape changes       |
+| Change an unrelated auth table                            | Keep replica `cache` number            | Apply and record the auth migration                           |
+| Change only migration folder text or snapshot UUID        | Keep `cache` number; update provenance | Drizzle matches and records the migration by its own identity |
+| Change SQLite serialization or persistence index contract | New `cache` number; reset and re-sync  | No PostgreSQL migration unless the server schema changes      |
 
 For a synced collection, the reset is safe because Electric supplies a fresh
 snapshot. For a local-only collection, TanStack's mismatch policy can error

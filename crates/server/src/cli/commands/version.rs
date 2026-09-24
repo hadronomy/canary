@@ -4,10 +4,10 @@ use crate::VERSION;
 use crate::cli::commands::output::{self, StructuredFormat};
 
 /// Arguments for `canary version`.
-#[derive(Debug, Clone, Copy, Default, clap::Args)]
+#[derive(Debug, Clone, Copy, Default, usage_rs::Args)]
 pub(in crate::cli) struct Args {
     /// Output format for the build report.
-    #[arg(long, value_enum, default_value_t)]
+    #[usage(long, value_enum, default = "toml")]
     format: StructuredFormat,
 }
 

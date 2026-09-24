@@ -1,7 +1,7 @@
 use miette::Result;
 
 /// Arguments for `canary dev`.
-#[derive(Debug, Clone, Copy, Default, clap::Args)]
+#[derive(Debug, Clone, Copy, Default, usage_rs::Args)]
 pub(in crate::cli) struct Args;
 
 #[inline(always)]
