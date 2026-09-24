@@ -222,34 +222,42 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let e = smoothstep(0.0, 1.0, params.dock);
   let b = params.berth;
 
-  // Distance from this cell to the composer's box, in page heights. Stars and
-  // their links hold on in a band around it, falling off over about sixty
-  // pixels on a desktop panel: the corpus close at hand, not a halo.
+  // Distance from this cell to the composer's box, in page heights.
   let half = b.zw * 0.5;
   let past = max(abs(at - (b.xy + half)) - half, vec2f(0.0)) * vec2f(aspect, 1.0);
-  let gather = exp(-length(past) / 0.07);
+  let dist = length(past);
 
   // How far outside the conversation column this cell sits, as a fraction of
-  // the margin actually available on that side. The column is the composer's
-  // own width, which is the transcript's. Measuring against the margin rather
-  // than in fixed units is what lets the fade use the whole of it: the sky
-  // thins over the full stretch from the panel's edge to the text, eased at
-  // both ends, instead of stopping short on a narrow panel or running flat on
-  // a wide one. It keeps off the header at the top the same way.
+  // the margin actually available on that side, so the same shape fits any
+  // panel width. The column is the composer's own width, which is the
+  // transcript's.
   let west = max(b.x, 1e-3);
   let east = max(1.0 - (b.x + b.z), 1e-3);
-  let side = max((b.x - at.x) / west, (at.x - (b.x + b.z)) / east);
-  let margin = smoothstep(0.0, 1.0, clamp(side, 0.0, 1.0)) * smoothstep(0.02, 0.22, at.y);
+  let side = smoothstep(0.0, 1.0, clamp(max((b.x - at.x) / west, (at.x - (b.x + b.z)) / east), 0.0, 1.0));
+
+  // One light, and the composer is its source. It falls off with distance from
+  // the composer's box, and only the reach of that falloff changes across the
+  // page: short in the column, where it is a band about sixty pixels deep
+  // hugging the box and the text stays clear, and long out in the margins,
+  // where it climbs the sides and thins toward the top. The reach itself eases
+  // from one to the other across the margin, which is what makes the edge
+  // toward the text soft rather than drawn.
+  //
+  // Because the margins are the same falloff as the band, the bottom corners —
+  // where the two meet — are one continuous shape: the light in the margins
+  // reads as having spilled out of the composer, not as a second source.
+  let spill = mix(0.07, 0.5, side);
+  let light = exp(-dist / spill) * smoothstep(0.02, 0.22, at.y);
 
   // Once docked the composer is at the bottom of the page, and light that only
-  // radiates from it leaves the upper margins dark however open they are. So
-  // the margins and the band around the composer become places of attention
-  // in their own right: the nebula lifts there and links resolve there, and
-  // the rest of the field is masked away around them.
-  let lift = e * max(margin * 0.75, gather);
+  // radiates from the field's focus leaves the margins dark however open they
+  // are. So wherever this light falls becomes a place of attention in its own
+  // right: the nebula lifts there and links resolve there, and the rest of the
+  // field is masked away around it.
+  let lift = e * light * 0.55;
   let near = max(glow, lift);
   let hold = max(bound, lift);
-  let keep = mix(1.0, max(margin, gather), e) * mix(1.0, 0.9, e);
+  let keep = mix(1.0, light, e) * mix(1.0, 0.9, e);
 
   // Links are bound to the composer, stars are not. The sky is there the whole
   // way out; what the composer does is draw the lines in.
