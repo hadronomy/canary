@@ -167,12 +167,17 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
           Threads
         </h2>
 
+        {/* On the column the thread states are drawn in, so every mark down the
+            right side of the sidebar sits on one vertical line. Its glyph moves
+            a pixel right: the lens, which is what the eye lines up with the
+            round state marks, sits left of the icon's centre to make room for
+            the handle. */}
         <Tip label="Search threads">
           <Button
             aria-expanded={open}
             aria-label="Search threads"
             className={cn(
-              'absolute top-1 right-1 size-6 text-muted-foreground',
+              'absolute top-1 right-[9px] size-6 text-muted-foreground [&_svg]:translate-x-px',
               open && 'pointer-events-none opacity-0',
             )}
             size="icon-sm"
@@ -187,7 +192,9 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
 
         <div
           className={cn(
-            'absolute inset-0 flex items-center rounded-(--radius-control) bg-surface-3 shadow-surface-1',
+            // Right edge on the rows' right edge, which the list's scroll
+            // gutter keeps 4px inside the section.
+            'absolute inset-y-0 right-1 left-0 flex items-center rounded-(--radius-control) bg-surface-3 shadow-surface-1',
             'transition-[clip-path,opacity] duration-[180ms] ease-out-strong motion-reduce:transition-none',
             open
               ? '[clip-path:inset(0_round_var(--radius-control))]'
@@ -226,7 +233,7 @@ function Threads({ className, user }: { className?: string; user: ShellUser }) {
           />
           <Button
             aria-label="Close search"
-            className="mr-1 size-6 text-muted-foreground"
+            className="mr-[5px] size-6 text-muted-foreground"
             size="icon-sm"
             tabIndex={open ? undefined : -1}
             type="button"

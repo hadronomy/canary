@@ -91,7 +91,7 @@ function Preview() {
                 <h2 className="px-2 text-[13px] text-muted-foreground">Threads</h2>
                 <Button
                   aria-label="Search threads"
-                  className="mr-1 size-6 text-muted-foreground"
+                  className="mr-[9px] size-6 text-muted-foreground [&_svg]:translate-x-px"
                   size="icon-sm"
                   variant="ghost"
                 >
