@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 import { Menu } from '@base-ui/react/menu';
 import { CaretRightIcon, CaretUpDownIcon, CheckIcon } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -186,55 +184,69 @@ function Tick() {
  * The trigger's mark and name. A new pick blurs across rather than cutting,
  * the incoming name rising a few pixels as the old one sinks; the width eases
  * from one name to the next, so the pill never snaps its length.
+ *
+ * Old and new share one grid cell, so a name on its way out never holds space
+ * the incoming one needs, however many picks overlap. The pill's width follows
+ * the incoming name alone.
+ *
+ * Whether a change animates is handed to the exiting name through `custom`:
+ * an element on its way out keeps the props it last rendered with, and those
+ * can predate the pick that is removing it.
  */
 function Label({ live, model }: { live: boolean; model: Model }) {
   const reduce = useReducedMotion();
-  const inner = useRef<HTMLSpanElement>(null);
+  const cell = useRef<HTMLSpanElement>(null);
   const [width, setWidth] = useState<number | 'auto'>('auto');
+  const still = Boolean(reduce) || !live;
 
   useLayoutEffect(() => {
-    const node = inner.current;
+    const node = cell.current?.querySelector<HTMLElement>(`[data-model="${model.id}"]`);
     if (!node) return;
     const observer = new ResizeObserver(() => setWidth(node.offsetWidth));
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
-
-  const still = reduce || !live;
+  }, [model.id]);
 
   return (
     <motion.span
       animate={{ width }}
-      className="relative flex min-w-0 overflow-hidden"
+      className="flex min-w-0 overflow-hidden"
       initial={false}
       transition={still ? { duration: 0 } : { duration: 0.32, ease }}
     >
-      <span ref={inner} className="flex min-w-0 shrink-0 items-center gap-1.5">
-        <AnimatePresence initial={false} mode="popLayout">
-          <Swap key={model.id} still={still}>
+      <span ref={cell} className="grid w-max">
+        <AnimatePresence custom={still} initial={false}>
+          <motion.span
+            key={model.id}
+            animate="shown"
+            className="col-start-1 row-start-1 flex items-center gap-1.5 justify-self-start whitespace-nowrap"
+            custom={still}
+            data-model={model.id}
+            exit="gone"
+            initial="coming"
+            variants={SWAP}
+          >
             <Mark className="size-3.5" lab={model.lab} />
-            <span className="truncate whitespace-nowrap">{model.name}</span>
-          </Swap>
+            {model.name}
+          </motion.span>
         </AnimatePresence>
       </span>
     </motion.span>
   );
 }
 
-function Swap({ children, still }: { children: ReactNode; still: boolean }) {
-  const gone = { opacity: 0, filter: 'blur(4px)' };
-
-  return (
-    <motion.span
-      animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
-      className="flex min-w-0 items-center gap-1.5"
-      exit={still ? { opacity: 0 } : { ...gone, y: -6 }}
-      initial={still ? false : { ...gone, y: 6 }}
-      transition={{ duration: still ? 0 : 0.24, ease }}
-    >
-      {children}
-    </motion.span>
-  );
-}
+const SWAP = {
+  coming: (still: boolean) => (still ? { opacity: 1 } : { opacity: 0, filter: 'blur(4px)', y: 6 }),
+  shown: (still: boolean) => ({
+    opacity: 1,
+    filter: 'blur(0px)',
+    y: 0,
+    transition: { duration: still ? 0 : 0.24, ease },
+  }),
+  gone: (still: boolean) =>
+    still
+      ? { opacity: 0, transition: { duration: 0 } }
+      : { opacity: 0, filter: 'blur(4px)', y: -6, transition: { duration: 0.2, ease } },
+};
 
 export { ModelPicker };
