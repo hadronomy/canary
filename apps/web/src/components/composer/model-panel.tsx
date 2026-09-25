@@ -255,13 +255,12 @@ function Row(props: {
       value={model.id}
       onSelect={() => props.onPick(model.id)}
     >
-      <Mark
-        className={cn(
-          'row-span-2 size-4 self-start mt-0.5 text-muted-foreground',
-          'group-data-[selected=true]/row:text-foreground group-data-current/row:text-foreground',
-        )}
-        lab={model.lab}
-      />
+      <Current on={props.current}>
+        <Mark
+          className="size-4 text-muted-foreground group-data-[selected=true]/row:text-foreground group-data-current/row:text-foreground"
+          lab={model.lab}
+        />
+      </Current>
 
       <span className="flex min-w-0 items-center gap-2">
         <span
@@ -279,16 +278,7 @@ function Row(props: {
         <Favorite model={model} on={props.favorite} />
       </span>
 
-      <span className="flex items-center gap-1.5 justify-self-end">
-        {props.current ? (
-          <CheckIcon
-            aria-label="Current model"
-            className="size-3.5 text-foreground"
-            weight="bold"
-          />
-        ) : null}
-        <Caps model={model} />
-      </span>
+      <Caps model={model} />
 
       <span className="col-start-2 col-end-4 truncate text-[12.5px] text-muted-foreground">
         {model.blurb}
@@ -365,23 +355,69 @@ function Favorite({ model, on }: { model: Model; on: boolean }) {
   );
 }
 
-/** What the model takes in besides text, as bare marks that light with the row. */
+/**
+ * The current model's mark, badged. The check sits on the mark's corner the
+ * way a status sits on an avatar, so the row keeps its columns: nothing is
+ * inserted beside the name or among the capabilities to say which one is
+ * picked. The mark is notched under the badge rather than ringed, so the cut
+ * reads on whatever fill the row has, cursor or not.
+ *
+ * The badge springs in when its row becomes the pick, which is the last
+ * thing seen before the panel closes.
+ */
+function Current({ children, on }: { children: React.ReactNode; on: boolean }) {
+  return (
+    <span
+      className={cn(
+        'relative row-span-2 mt-0.5 grid self-start',
+        on && '[&>svg]:[mask-image:radial-gradient(circle_at_14px_14px,transparent_5.5px,black_6px)]',
+      )}
+    >
+      {children}
+      {on ? (
+        <motion.span
+          animate={{ scale: 1, opacity: 1 }}
+          className="absolute -right-[2.5px] -bottom-[2.5px] grid size-[9px] place-items-center rounded-full bg-foreground text-background"
+          initial={{ scale: 0.4, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 600, damping: 22 }}
+        >
+          <CheckIcon aria-hidden className="size-[7px]" weight="bold" />
+          <span className="sr-only">Current model</span>
+        </motion.span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * What the model takes in besides text, as bare marks that light with the
+ * row. Each capability has its own slot, empty when the model lacks it, so a
+ * given mark sits in the same column on every row and the list can be read
+ * down a column as well as along a row.
+ */
 function Caps({ model }: { model: Model }) {
-  const caps = NEEDS.filter((entry) => entry.need !== 'open' && model[entry.need]);
+  const caps = NEEDS.filter((entry) => entry.need !== 'open');
 
   return (
     <span
-      aria-label={caps.map((entry) => entry.label).join(', ')}
-      className="flex items-center gap-1.5"
+      aria-label={caps
+        .filter((entry) => model[entry.need])
+        .map((entry) => entry.label)
+        .join(', ')}
+      className="grid grid-cols-3 gap-1.5 justify-self-end"
     >
-      {caps.map((entry) => (
-        <entry.icon
-          key={entry.need}
-          aria-hidden
-          className="size-3.5 text-muted-foreground/60 group-data-[selected=true]/row:text-muted-foreground"
-          weight="regular"
-        />
-      ))}
+      {caps.map((entry) =>
+        model[entry.need] ? (
+          <entry.icon
+            key={entry.need}
+            aria-hidden
+            className="size-3.5 text-muted-foreground/60 group-data-[selected=true]/row:text-muted-foreground"
+            weight="regular"
+          />
+        ) : (
+          <span key={entry.need} aria-hidden className="size-3.5" />
+        ),
+      )}
     </span>
   );
 }
