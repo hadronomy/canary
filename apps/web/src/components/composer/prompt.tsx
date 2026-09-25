@@ -22,6 +22,7 @@ import { commands } from '~/components/composer/commands';
 import { ComposerEditor } from '~/components/composer/editor';
 import { history } from '~/components/composer/history';
 import { ComposerMenu } from '~/components/composer/menu';
+import { ModelPicker } from '~/components/composer/model-picker';
 import { ease, surfaceVariants } from '~/components/composer/motion';
 import {
   action as actionFrom,
@@ -335,9 +336,10 @@ function AgentPrompt({
                   onValue={onValue}
                 />
 
-                {/* Kept clear for the controls that belong here: model and mode
-                    pickers sit left of the send button as they arrive. */}
-                <div className="flex min-h-8 min-w-0 items-center justify-end gap-3">
+                {/* The controls row: pickers on the left, from the box's corner
+                    inward, and the send button alone on the right. */}
+                <div className="flex min-h-8 min-w-0 items-center justify-between gap-3">
+                  <ModelPicker disabled={availability === 'disabled'} />
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}

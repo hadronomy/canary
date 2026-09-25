@@ -16,6 +16,7 @@ import {
 
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
+import { ids as models } from '@canary/api/models';
 import { own } from '@canary/api/scope';
 import { schema } from '@canary/db/effect';
 import { and, asc, desc, eq, inArray, lt, max, sql } from '@canary/db/query';
@@ -58,6 +59,8 @@ export const RunEvent = Schema.TaggedUnion({
 export const Send = Schema.Struct({
   content: MessageInsert.fields.content.pipe(Schema.check(Schema.isMinLength(1))),
   id: Schema.optionalKey(MessageId),
+  // Left out, the run goes to the server's own default.
+  model: Schema.optionalKey(Schema.Literals(models)),
   owner: OwnerId,
   threadId: ThreadId,
 });
@@ -95,7 +98,12 @@ export type Filed = { thread: typeof thread.$inferSelect | null; txid: number };
 export type Created = { thread: typeof thread.$inferSelect; txid: number };
 export type RunEvent = typeof RunEvent.Type;
 
-const Ref = Schema.Struct({ ownerId: OwnerId, runId: RunId, threadId: ThreadId });
+const Ref = Schema.Struct({
+  model: Schema.String,
+  ownerId: OwnerId,
+  runId: RunId,
+  threadId: ThreadId,
+});
 type Ref = typeof Ref.Type;
 type Row = typeof run.$inferSelect;
 type Client = Parameters<Parameters<(typeof import('@canary/db'))['db']['transaction']>[0]>[0];
@@ -251,8 +259,9 @@ export const layer = Layer.effect(
     return Service.of({
       create: Effect.fn('Run.create')((input) => creating(database, input)),
       send: Effect.fn('Run.send')(function* (input) {
-        const sent = yield* sending(database, cfg.model, input);
+        const sent = yield* sending(database, input.model ?? cfg.model, input);
         yield* start({
+          model: sent.run.model,
           ownerId: input.owner,
           runId: RunId.make(sent.run.id),
           threadId: input.threadId,
@@ -906,13 +915,13 @@ function fail(database: Database.Interface, ref: Ref, cause: unknown) {
 function scan(database: Database.Interface, before: Date) {
   return database.query('recover runs', async (db) => {
     const queued = await db
-      .select({ runId: run.id, threadId: run.threadId, ownerId: run.ownerId })
+      .select({ model: run.model, runId: run.id, threadId: run.threadId, ownerId: run.ownerId })
       .from(run)
       .where(eq(run.status, 'queued'))
       .orderBy(asc(run.createdAt))
       .limit(10);
     const stale = await db
-      .select({ runId: run.id, threadId: run.threadId, ownerId: run.ownerId })
+      .select({ model: run.model, runId: run.id, threadId: run.threadId, ownerId: run.ownerId })
       .from(run)
       .where(and(eq(run.status, 'running'), lt(run.updatedAt, before)))
       .limit(10);
@@ -926,6 +935,7 @@ function scan(database: Database.Interface, before: Date) {
 
 function reference(row: Row): Ref {
   return Schema.decodeUnknownSync(Ref)({
+    model: row.model,
     ownerId: row.ownerId,
     runId: row.id,
     threadId: row.threadId,

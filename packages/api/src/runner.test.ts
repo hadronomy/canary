@@ -176,6 +176,38 @@ describe('Run', () => {
     }),
   );
 
+  it.effect('answers with the model the message was sent to', () =>
+    Effect.gen(function* () {
+      const run = yield* Run.Service;
+      const sent = yield* run.send(
+        Schema.decodeUnknownSync(Run.Send)({
+          content: 'hello',
+          id: ids.message,
+          model: 'google/gemini-3.8-flash',
+          owner: ids.owner,
+          threadId: ids.thread,
+        }),
+      );
+      yield* Deferred.await(agent.started);
+
+      expect(sent.run.model).toBe('google/gemini-3.8-flash');
+      expect(agent.input?.model).toBe('google/gemini-3.8-flash');
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect('refuses a model outside the catalog', () =>
+    Effect.sync(() => {
+      expect(() =>
+        Schema.decodeUnknownSync(Run.Send)({
+          content: 'hello',
+          model: 'someone/unlisted',
+          owner: ids.owner,
+          threadId: ids.thread,
+        }),
+      ).toThrow();
+    }),
+  );
+
   it.effect('persists a provider failure once', () =>
     Effect.gen(function* () {
       agent.mode = 'fail';
@@ -213,7 +245,9 @@ describe('Run', () => {
 
   it.effect('recovers a queued run once', () =>
     Effect.gen(function* () {
-      database.queued = [{ runId: ids.run, ownerId: ids.owner, threadId: ids.thread }];
+      database.queued = [
+        { model: 'test-model', runId: ids.run, ownerId: ids.owner, threadId: ids.thread },
+      ];
 
       yield* Effect.gen(function* () {
         yield* Run.Service;
@@ -230,7 +264,9 @@ describe('Run', () => {
   it.effect('fails a stale run once', () =>
     Effect.gen(function* () {
       resetDatabase('running');
-      database.stale = [{ runId: ids.run, ownerId: ids.owner, threadId: ids.thread }];
+      database.stale = [
+        { model: 'test-model', runId: ids.run, ownerId: ids.owner, threadId: ids.thread },
+      ];
 
       yield* Effect.gen(function* () {
         yield* Run.Service;

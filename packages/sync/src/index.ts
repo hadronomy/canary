@@ -150,7 +150,7 @@ function makeThreads(
 export function messages(opts: {
   base: string;
   ownerId: string;
-  send: (input: { content: string; id: string; threadId: string }) => Promise<Tx>;
+  send: (input: { content: string; id: string; model?: string; threadId: string }) => Promise<Tx>;
 }) {
   const key = scope(opts);
   const hit = texts.get(key);
@@ -168,7 +168,7 @@ export function messages(opts: {
 function makeMessages(opts: {
   base: string;
   ownerId: string;
-  send: (input: { content: string; id: string; threadId: string }) => Promise<Tx>;
+  send: (input: { content: string; id: string; model?: string; threadId: string }) => Promise<Tx>;
 }) {
   const col = make(Replica.Message, opts, {
     onInsert: async ({ transaction }) => {
@@ -188,6 +188,8 @@ function makeMessages(opts: {
             id: item.id,
             threadId: item.threadId,
             content: item.content,
+            // The composer's pick rides on the message it was sent with.
+            model: typeof item.metadata?.model === 'string' ? item.metadata.model : undefined,
           }),
         ),
       );

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AgentPrompt } from '~/components/agent-prompt';
 import { useStage } from '~/components/backdrop/stage';
+import { useModel } from '~/components/composer/model';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { list, messages } from '~/utils/chat';
@@ -41,6 +42,7 @@ function NewThread() {
   const [sending, setSending] = useState(false);
 
   const owner = ctx.user.id;
+  const model = useModel();
 
   useEffect(() => {
     if (!busy) {
@@ -99,7 +101,7 @@ function NewThread() {
         runId: null,
         role: 'user',
         content,
-        metadata: null,
+        metadata: { model },
         createdAt: now,
         updatedAt: now,
       });
@@ -111,7 +113,7 @@ function NewThread() {
 
       await nav({ to: '/threads/$threadId', params: { threadId: id } });
     },
-    [busy, field, nav, owner, reduce],
+    [busy, field, model, nav, owner, reduce],
   );
 
   return (

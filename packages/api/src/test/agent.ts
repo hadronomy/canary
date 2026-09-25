@@ -6,6 +6,7 @@ type Piece =
   | { type: 'text-end'; id: string };
 
 export type Input = {
+  model: string;
   runId: string;
   piece: (piece: Piece) => Promise<void> | void;
   finish: (text: string, data: Record<string, unknown>) => Promise<void> | void;

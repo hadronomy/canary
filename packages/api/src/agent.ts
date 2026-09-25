@@ -51,6 +51,8 @@ export type Event = typeof Event.Type;
 
 export type Input = {
   messages: readonly Chat[];
+  /** OpenRouter slug of the model this run answers with. */
+  model: string;
   ownerId: string;
   runId: string;
   threadId: string;

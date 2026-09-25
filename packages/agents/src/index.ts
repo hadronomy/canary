@@ -3,6 +3,7 @@ import type { ChunkType } from '@mastra/core/stream';
 
 import { Agent } from '@mastra/core/agent';
 import { EventedAgent } from '@mastra/core/agent/durable';
+import { RequestContext } from '@mastra/core/request-context';
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 
@@ -17,6 +18,8 @@ export type Chat = {
 
 export type Input = {
   messages: readonly Chat[];
+  /** OpenRouter slug of the model this run answers with. */
+  model: string;
   ownerId: string;
   runId: string;
   threadId: string;
@@ -68,16 +71,19 @@ When a task needs a tool:
 5. Do not narrate tool use unless it helps the user understand what is happening.
 
 Keep answers direct.`,
-  model: {
+  // Each run names its own model, picked in the composer and carried here on
+  // the request context. A run resumed in another process arrives without one
+  // and answers with the default.
+  model: ({ requestContext }) => ({
     providerId: 'openrouter',
-    modelId: ENV.AGENT_MODEL,
+    modelId: String(requestContext.get('model') ?? ENV.AGENT_MODEL),
     url: 'https://openrouter.ai/api/v1',
     apiKey: ENV.OPENROUTER_API_KEY,
     headers: {
       'HTTP-Referer': ENV.BETTER_AUTH_URL,
       'X-Title': 'Canary',
     },
-  },
+  }),
   memory,
 });
 
@@ -143,8 +149,12 @@ export async function open(input: Input) {
     return { runId: input.runId, cleanup() {} };
   }
 
+  const context = new RequestContext();
+  context.set('model', input.model);
+
   const res = await durable.stream(last, {
     runId: input.runId,
+    requestContext: context,
     memory: {
       thread: input.threadId,
       resource: input.ownerId,
@@ -188,7 +198,7 @@ export async function cancel(id: string) {
 }
 
 async function fallback(input: Input, last: string) {
-  const text = `I received your message and queued the durable agent path. Configure OPENROUTER_API_KEY to let Mastra call ${ENV.AGENT_MODEL} through OpenRouter. Last input: ${last}`;
+  const text = `I received your message and queued the durable agent path. Configure OPENROUTER_API_KEY to let Mastra call ${input.model} through OpenRouter. Last input: ${last}`;
 
   await input.piece({ type: 'text-start', id: 'fallback' });
   await text

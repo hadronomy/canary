@@ -34,6 +34,7 @@ import {
   textOf,
 } from '~/components/agent/turn';
 import { useStage } from '~/components/backdrop/stage';
+import { useModel } from '~/components/composer/model';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
@@ -746,6 +747,7 @@ function ThreadActions({
 }: ThreadActionsProps) {
   const runtime = useTranscriptRuntimeBridge();
   const anchor = useRef<HTMLDivElement>(null);
+  const model = useModel();
   useStage('thread', anchor);
 
   const currentThreadIdRef = useRef(threadId);
@@ -818,7 +820,7 @@ function ThreadActions({
         runId: null,
         role: 'user',
         content,
-        metadata: null,
+        metadata: { model },
         createdAt: now,
         updatedAt: now,
       });
@@ -841,7 +843,7 @@ function ThreadActions({
         throw cause;
       });
     },
-    [disabled, ownerId, runtime, threadId, writeDraft, writeSendError],
+    [disabled, model, ownerId, runtime, threadId, writeDraft, writeSendError],
   );
 
   const cancelActiveRun = useCallback(async () => {

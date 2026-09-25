@@ -2,6 +2,7 @@ import { and, createLiveQueryCollection, eq, or } from '@tanstack/react-db';
 import { createIsomorphicFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 
+import { find } from '@canary/api/models';
 import {
   events as eventCollection,
   messages as messageCollection,
@@ -56,7 +57,9 @@ export function messages(ownerId: string) {
   return messageCollection({
     base: sync(),
     ownerId,
-    send: client.message.send,
+    // A model id from local storage is only trusted once it is in the
+    // catalog; anything else goes without one and gets the server's default.
+    send: (input) => client.message.send({ ...input, model: find(input.model ?? '')?.id }),
   });
 }
 
