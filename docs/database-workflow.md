@@ -3,7 +3,7 @@
 This project keeps **runtime database code** and **schema workflow code** in
 separate lanes.
 
-- The [`database`](/Users/hadronomy/repos/canary/crates/database/src/lib.rs)
+- The [`database`](../crates/database/src/lib.rs)
   crate owns connection setup, authentication, health checks, and the runtime
   handle used by the application.
 - **Surrealkit** owns schema sync, rollout planning, seed data, snapshots, and
@@ -15,7 +15,7 @@ _how to query_; schema lifecycle work should stay in Surrealkit.
 ## Layout
 
 All Surrealkit state lives under
-[`crates/database`](/Users/hadronomy/repos/canary/crates/database):
+[`crates/database`](../crates/database):
 
 ```text
 crates/database/

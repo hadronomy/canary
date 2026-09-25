@@ -1,200 +1,34 @@
-## Package executables
+# Canary agent guide
 
-Use `bunx` for package executables. Use `bunx --no-install` for executables pinned in this repository. If an installed skill shows `npx`, run the same command with `bunx`.
+Canary is a Rust and TypeScript monorepo for legal document retrieval. Use the code and package scripts in the affected area as the source of truth.
 
-<!-- effect-solutions:start -->
+## Before editing
 
-## Style Guide
+- State the observable result for a multi-step task. Resolve material uncertainty before choosing a design.
+- Read nearby code and tests before choosing a pattern. Read the affected package's manifest before choosing a command or dependency.
+- Keep edits tied to the task. Remove unused code created by your edits, and leave unrelated code alone.
+- Run `just --list` for repository workflows. Use a focused test or check for the changed area before a full workspace check.
+- Read `docs/namespace-imports-and-exports.md` before changing TypeScript import or export conventions. Canary uses namespace imports in places where OpenCode uses self-exports.
 
-### General Principles
+## Project boundaries
 
-- Keep things in one function unless composable or reusable
-- Avoid `try`/`catch` where possible
-- Avoid using the `any` type
-- Prefer single word variable names where possible
-- Use Bun APIs when possible, like `Bun.file()`
-- Rely on type inference when possible; avoid explicit type annotations or interfaces unless necessary for exports or clarity
-- Prefer functional array methods (flatMap, filter, map) over for loops; use type guards on filter to maintain type inference downstream
+- `crates/` contains the Rust parser, server, workers, and supporting crates. Use the root `justfile` for Rust checks.
+- `crates/database/src/` owns the SurrealDB runtime connection. Keep Surrealkit schema, rollouts, seeds, and database tests in `crates/database/database/`. Read `docs/database-workflow.md` before changing that schema.
+- `packages/db/` owns the separate Postgres and Drizzle schema for the TypeScript app. Use its `db:*` and `replica:*` scripts for that schema and its generated replica files.
+- For environment changes, edit the owning `.env.schema` and use the applicable Varlock codegen script. Generated `src/env.ts` files are ignored.
+- `apps/web/` contains the web app; `apps/tui/` contains the OpenTUI app. Check each app's dependencies before sharing code or guidance between them.
 
-### Naming
+## TypeScript and Effect
 
-Prefer single word names for variables and functions. Only use multiple words if necessary.
+- Use `bun` for workspace dependencies and scripts. Add dependencies with `bun add` from the owning workspace; commit the resulting `bun.lock`. Use `bunx --no-install` for pinned package executables.
+- Use the `~/*` alias for imports within an app or package when its `tsconfig.json` defines that alias. Use workspace package names across package boundaries.
+- Keep names short when they stay clear. Prefer inference and `const`; avoid `any` and single-use helpers that hide simple code.
+- Validate unknown data once at the boundary that owns it. Pass typed values inward without repeating the same checks.
+- For Effect code, inspect the installed version, its types, and nearby usage before editing. Most TypeScript packages use Effect 4; `apps/tui/` uses Effect 3. Do not apply a v4 API to the TUI.
+- For Effect 4 concepts, consult the upstream [Effect v4 guide](https://github.com/Effect-TS/effect/blob/main/LLMS.md), then confirm APIs against this repo's installed version. Use `@effect/vitest` and `it.effect` for Effect tests where that package uses them.
 
-### Naming Enforcement (Read This)
+## Verification
 
-THIS RULE IS MANDATORY FOR AGENT WRITTEN CODE.
-
-- Use single word names by default for new locals, params, and helper functions.
-- Multi-word names are allowed only when a single word would be unclear or ambiguous.
-- Do not introduce new camelCase compounds when a short single-word alternative is clear.
-- Before finishing edits, review touched lines and shorten newly introduced identifiers where possible.
-- Good short names to prefer: `pid`, `cfg`, `err`, `opts`, `dir`, `root`, `child`, `state`, `timeout`.
-- Examples to avoid unless truly required: `inputPID`, `existingClient`, `connectTimeout`, `workerPath`.
-
-```ts
-// Good
-const foo = 1;
-function journal(dir: string) {}
-
-// Bad
-const fooBar = 1;
-function prepareJournal(dir: string) {}
-```
-
-Reduce total variable count by inlining when a value is only used once.
-
-```ts
-// Good
-const journal = await Bun.file(path.join(dir, 'journal.json')).json();
-
-// Bad
-const journalPath = path.join(dir, 'journal.json');
-const journal = await Bun.file(journalPath).json();
-```
-
-### Destructuring
-
-Avoid unnecessary destructuring. Use dot notation to preserve context.
-
-```ts
-// Good
-obj.a;
-obj.b;
-
-// Bad
-const { a, b } = obj;
-```
-
-### Variables
-
-Prefer `const` over `let`. Use ternaries or early returns instead of reassignment.
-
-```ts
-// Good
-const foo = condition ? 1 : 2;
-
-// Bad
-let foo;
-if (condition) foo = 1;
-else foo = 2;
-```
-
-### Control Flow
-
-Avoid `else` statements. Prefer early returns.
-
-```ts
-// Good
-function foo() {
-  if (condition) return 1;
-  return 2;
-}
-
-// Bad
-function foo() {
-  if (condition) return 1;
-  else return 2;
-}
-```
-
-## Effect Best Practices
-
-**IMPORTANT:** Always consult effect-solutions before writing Effect code.
-
-1. Run `effect-solutions list` to see available guides
-2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
-3. Use the local Effect source clone for real implementations
-
-Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
-
-Never guess at Effect patterns - check the guide first.
-
-## Local Effect Source
-
-The Effect repository is cloned to `~/code/opensource/effect` for reference.
-Use this to explore APIs, find usage examples, and understand implementation
-details when the documentation isn't enough.
-
-<!-- effect-solutions:end -->
-
-## Opentui best practices
-
-The opentui repository is cloned to `~/code/opensource/opentui` for reference.
-Use this to explore APIs, find usage examples, and understand implementation
-details when the documentation isn't enough.
-
-## Effect-Atom best practices and state management
-
-The effect-atom repository is cloned to `~/code/opensource/effect-atom` for reference.
-Use this to explore APIs, find usage examples, and understand implementation
-details when the documentation isn't enough.
-
-## Opencode reference and Opentui best practices
-
-The opencode repository is cloned to `~/code/opensource/opencode/src/cli/cmd/tui` for reference.
-Use this as an important reference implementation with opentui best practices.
-
-## Code style
-
-- Always use the path alias for relative paths `~/*` -> `./src/*`
-- Prefer `function` declarations for named reusable functions.
-- Exception: when defining Effect-based service/runtime operations, prefer `const x = Effect.fn("...")` for traceable spans and ergonomic composition.
-- In test directories, extract repeated fixture/parser helpers into a local shared module (for example `test/collectors/<domain>/common.ts`) and import from there.
-
-## Writing style
-
-For documentation, rustdoc, comments, and user-facing prose, write like a
-thoughtful human maintainer: clear, direct, and unmistakable, but never stiff,
-canned, or legalistic. Prefer natural sentences over boilerplate.
-
-## Database Best Practices (SurrealDB + Surrealkit)
-
-**IMPORTANT:** Keep schema lifecycle work in `crates/database/database/` and
-runtime connection logic in the Rust `database` crate.
-
-1. Edit schema files under `crates/database/database/schema/`
-2. Use Surrealkit for schema sync, rollouts, seeds, and DB-focused tests
-3. Keep rollout history in `crates/database/database/rollouts/`
-4. Use the repo Justfile for local DB workflows such as `just db-sync`,
-   `just db-test`, and `just db-status`
-
-**Anti-patterns to avoid:**
-
-- ❌ Turning the application runtime into a migration runner
-- ❌ Mixing runtime connection code with schema lifecycle files
-- ❌ Hiding schema changes in ad hoc startup scripts
-
-**When to use raw SQL / SurrealQL directly:**
-
-- SurrealQL queries that are part of the runtime data model
-- Storage- or engine-specific performance tuning that belongs in schema files
-- Data backfills or one-off repair scripts that are clearly operational, not
-  part of request handling
-
-## Dependency Management
-
-**Always use `bun add` to install dependencies.** Never manually edit `package.json`.
-
-**Adding production dependencies:**
-
-```bash
-bun add <package-name>
-```
-
-**Adding development dependencies:**
-
-```bash
-bun add -d <package-name>
-```
-
-**Anti-patterns to avoid:**
-
-- ❌ Manually editing `package.json` to add dependencies
-- ❌ Manually editing `package.json` to add version numbers
-- ❌ Using `npm install` or `pnpm add` (inconsistent lockfiles)
-
-**Why this matters:**
-
-- `bun add` updates both `package.json` AND `bun.lockb` consistently
-- Manual edits can lead to lockfile desynchronization
-- Version resolution and peer dependency handling is done correctly
+- Run tests that cover changed behavior. Follow the affected package's test script or the nearest existing test; test runners differ across packages.
+- Run the affected type check and lint or format checks. Use `just check` for changes that cross Rust and TypeScript boundaries.
+- Report each check you ran and any check that remains blocked. Keep generated files in sync through their owning scripts.
