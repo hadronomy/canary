@@ -1,5 +1,5 @@
-import { Menu } from '@base-ui/react/menu';
-import { CaretRightIcon, CaretUpDownIcon, CheckIcon } from '@phosphor-icons/react';
+import { Popover } from '@base-ui/react/popover';
+import { CaretUpDownIcon } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useLayoutEffect, useRef, useState } from 'react';
 
@@ -8,22 +8,24 @@ import type { Model, ModelId } from '@canary/api/models';
 import { find, models } from '@canary/api/models';
 import { Mark } from '~/components/composer/mark';
 import { pick, useModel } from '~/components/composer/model';
-import { ease } from '~/components/composer/motion';
+import { ModelPanel } from '~/components/composer/model-panel';
 import { cn } from '~/lib/utils';
 
-const frontier = models.filter((model) => model.group === 'frontier');
-const open = models.filter((model) => model.group === 'open');
+// How long a picked row keeps the panel up: long enough for the row to take
+// the current model's fill, so the choice is seen landing before it goes.
+const LAND = 160;
 
-// How long a picked row keeps the menu up: enough for the check to land where
-// it was clicked, so the choice is seen being made before the menu goes.
-const LAND = 140;
+// The trigger's name change. Quint-out rather than the app's strong ease-out:
+// that curve spends almost all of its travel in the first two frames, which is
+// right for a press and wrong for a blur that is meant to be seen clearing.
+const SETTLE = [0.22, 1, 0.36, 1] as const;
 
 /**
  * Which model the next message goes to, in the composer's control row.
  *
- * The frontier models sit at the top level. The open-weight ones are one level
- * down, which keeps the first menu short without hiding them. Picking one
- * closes the menu once the check has landed, and the trigger carries the rest:
+ * The trigger is a pill naming the model; the panel it opens is a searchable
+ * catalog, sorted onto shelves by lab with favourites first. Picking closes
+ * the panel once the row has taken the pick, and the trigger carries the rest:
  * the name blurs across to the new one while the pill eases to its width.
  */
 function ModelPicker({ disabled }: { disabled?: boolean }) {
@@ -41,22 +43,19 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
     timer.current = window.setTimeout(() => setShown(false), LAND);
   }
 
-  const chosen = find(current) ?? models[0];
-  const inside = chosen.group === 'open';
-
   return (
-    <Menu.Root
+    <Popover.Root
       open={shown}
       onOpenChange={(next) => {
         window.clearTimeout(timer.current);
         setShown(next);
       }}
     >
-      <Menu.Trigger
+      <Popover.Trigger
         className={cn(
           // A 32px pill: the box's 24px corner less its 8px inset is 16px, so
           // the pill's ends share the corner's centre, as the send disc does.
-          'flex h-8 max-w-56 items-center gap-1.5 rounded-full pr-2 pl-2.5 text-[13px] text-muted-foreground outline-none select-none',
+          'flex h-8 max-w-60 items-center gap-1.5 rounded-full pr-2 pl-2.5 text-[13px] text-muted-foreground outline-none select-none',
           // Hover switches on at once; the press is the one thing that moves.
           'hover:bg-hover hover:text-foreground data-popup-open:bg-hover data-popup-open:text-foreground',
           'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.97] motion-reduce:transition-none',
@@ -65,118 +64,40 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
         )}
         disabled={disabled}
       >
-        <Label live={live} model={chosen} />
+        <Label live={live} model={find(current) ?? models[0]} />
         <CaretUpDownIcon aria-hidden className="size-3 shrink-0 opacity-70" weight="bold" />
-      </Menu.Trigger>
+      </Popover.Trigger>
 
-      <Menu.Portal>
-        <Menu.Positioner align="start" className="z-50 outline-none" side="top" sideOffset={8}>
-          <Menu.Popup className={POPUP}>
-            <Menu.RadioGroup value={current} onValueChange={(id: ModelId) => choose(id)}>
-              {frontier.map((model) => (
-                <Row key={model.id} model={model} />
-              ))}
-            </Menu.RadioGroup>
-
-            <Menu.SubmenuRoot>
-              <Menu.SubmenuTrigger
-                className={cn(ROW, 'mt-1 data-popup-open:bg-hover data-popup-open:text-foreground')}
-                delay={60}
-                openOnHover
-              >
-                <span className="min-w-0 flex-1 truncate">Open weights</span>
-                {/* Says where the choice is when it is one level down, so the
-                    top menu never looks like nothing is picked. */}
-                {inside ? (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-                    <Mark className="size-3" lab={chosen.lab} />
-                    <span className="truncate">{chosen.name}</span>
-                  </span>
-                ) : null}
-                <CaretRightIcon aria-hidden className="size-3 shrink-0 opacity-60" weight="bold" />
-              </Menu.SubmenuTrigger>
-
-              <Menu.Portal>
-                <Menu.Positioner
-                  alignOffset={-4}
-                  className="z-50 outline-none"
-                  side="right"
-                  sideOffset={6}
-                >
-                  <Menu.Popup className={cn(POPUP, SUB)}>
-                    <Menu.RadioGroup value={current} onValueChange={(id: ModelId) => choose(id)}>
-                      {open.map((model) => (
-                        <Row key={model.id} model={model} />
-                      ))}
-                    </Menu.RadioGroup>
-                  </Menu.Popup>
-                </Menu.Positioner>
-              </Menu.Portal>
-            </Menu.SubmenuRoot>
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
-  );
-}
-
-// 12px outside, 4px in, 8px rows: the rows' corners sit concentric with the
-// panel's. The entrance grows out of the trigger (Base UI hands the origin
-// over), quick in and quicker out, the way a menu that is opened all day
-// should move.
-const POPUP = cn(
-  'w-64 origin-(--transform-origin) rounded-[12px] bg-popover p-1 text-popover-foreground shadow-surface-5 ring-1 ring-foreground/10 outline-none',
-  'transition-[opacity,scale] duration-150 ease-out-strong data-ending-style:duration-100',
-  'data-starting-style:scale-[0.96] data-starting-style:opacity-0 data-ending-style:scale-[0.96] data-ending-style:opacity-0',
-  'motion-reduce:transition-opacity motion-reduce:data-starting-style:scale-100 motion-reduce:data-ending-style:scale-100',
-);
-
-// The submenu arrives out of a short blur and a few pixels to its left, so it
-// reads as sliding out of the row that opened it instead of popping beside it.
-const SUB = cn(
-  'transition-[opacity,scale,translate,filter]',
-  'data-starting-style:-translate-x-1 data-starting-style:blur-[3px]',
-  'data-ending-style:-translate-x-1 data-ending-style:blur-[3px]',
-  'motion-reduce:data-starting-style:translate-x-0 motion-reduce:data-starting-style:blur-none',
-);
-
-const ROW = cn(
-  'flex h-8 w-full cursor-default items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-foreground/85 outline-none select-none',
-  // Instant: the highlight follows the pointer down the list.
-  'data-highlighted:bg-hover data-highlighted:text-foreground',
-);
-
-function Row({ model }: { model: Model }) {
-  return (
-    <Menu.RadioItem className={cn(ROW, 'group/row')} closeOnClick={false} value={model.id}>
-      <Tick />
-      <Mark className="size-3.5 opacity-80 group-data-checked/row:opacity-100" lab={model.lab} />
-      <span className="min-w-0 flex-1 truncate">{model.name}</span>
-      <span className="shrink-0 text-[12px] text-muted-foreground">{model.note}</span>
-    </Menu.RadioItem>
-  );
-}
-
-/**
- * The choice mark: a faint ring that fills when its row is picked. The fill
- * and the check land with a small overshoot so the pick has weight; the ring
- * stays put underneath, so nothing around it shifts.
- */
-function Tick() {
-  return (
-    <span className="relative grid size-3.5 shrink-0 place-items-center rounded-full border border-foreground/20">
-      <Menu.RadioItemIndicator
-        keepMounted
-        className={cn(
-          'absolute -inset-px grid place-items-center rounded-full bg-foreground text-background',
-          'transition-[opacity,scale] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
-          'data-unchecked:scale-50 data-unchecked:opacity-0 data-unchecked:duration-100 data-unchecked:ease-out',
-          'motion-reduce:transition-opacity motion-reduce:data-unchecked:scale-100',
-        )}
-      >
-        <CheckIcon className="size-2.5" weight="bold" />
-      </Menu.RadioItemIndicator>
-    </span>
+      <Popover.Portal>
+        <Popover.Positioner
+          align="start"
+          alignOffset={-6}
+          className="z-50 outline-none"
+          // Above the composer or, if there is no room, below it — never
+          // beside it, where it would cover the text being written.
+          collisionAvoidance={{ side: 'flip', align: 'shift', fallbackAxisSide: 'none' }}
+          collisionPadding={12}
+          side="top"
+          sideOffset={10}
+        >
+          {/* 16px outside, 6px in, 10px rows: the rows' corners sit
+              concentric with the panel's. It grows out of the trigger — Base
+              UI hands over the origin — and lifts a few pixels as it comes. */}
+          <Popover.Popup
+            aria-label="Choose a model"
+            className={cn(
+              'w-[min(34rem,calc(100vw-2rem))] origin-(--transform-origin) overflow-hidden rounded-[16px] bg-popover pt-0.5 text-popover-foreground shadow-surface-5 ring-1 ring-foreground/10 outline-none',
+              'transition-[opacity,scale,translate] duration-200 ease-out-strong data-ending-style:duration-120',
+              'data-starting-style:translate-y-1 data-starting-style:scale-[0.97] data-starting-style:opacity-0',
+              'data-ending-style:translate-y-0.5 data-ending-style:scale-[0.98] data-ending-style:opacity-0',
+              'motion-reduce:transition-opacity motion-reduce:data-starting-style:translate-y-0 motion-reduce:data-starting-style:scale-100',
+            )}
+          >
+            <ModelPanel current={current} onPick={choose} />
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -212,7 +133,7 @@ function Label({ live, model }: { live: boolean; model: Model }) {
       animate={{ width }}
       className="flex min-w-0 overflow-hidden"
       initial={false}
-      transition={still ? { duration: 0 } : { duration: 0.32, ease }}
+      transition={still ? { duration: 0 } : { duration: 0.46, ease: SETTLE }}
     >
       <span ref={cell} className="grid w-max">
         <AnimatePresence custom={still} initial={false}>
@@ -236,17 +157,17 @@ function Label({ live, model }: { live: boolean; model: Model }) {
 }
 
 const SWAP = {
-  coming: (still: boolean) => (still ? { opacity: 1 } : { opacity: 0, filter: 'blur(4px)', y: 6 }),
+  coming: (still: boolean) => (still ? { opacity: 1 } : { opacity: 0, filter: 'blur(6px)', y: 7 }),
   shown: (still: boolean) => ({
     opacity: 1,
     filter: 'blur(0px)',
     y: 0,
-    transition: { duration: still ? 0 : 0.24, ease },
+    transition: { duration: still ? 0 : 0.46, ease: SETTLE },
   }),
   gone: (still: boolean) =>
     still
       ? { opacity: 0, transition: { duration: 0 } }
-      : { opacity: 0, filter: 'blur(4px)', y: -6, transition: { duration: 0.2, ease } },
+      : { opacity: 0, filter: 'blur(6px)', y: -7, transition: { duration: 0.34, ease: SETTLE } },
 };
 
 export { ModelPicker };
