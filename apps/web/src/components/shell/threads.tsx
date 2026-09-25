@@ -1,21 +1,32 @@
+import { PencilSimpleIcon } from '@phosphor-icons/react';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import {
   type ComponentPropsWithoutRef,
+  type FormEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import { toast } from 'sonner';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
 
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 import { ThreadActions } from '~/components/shell/thread-actions';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 import {
   Empty,
   EmptyContent,
@@ -23,6 +34,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '~/components/ui/empty';
+import { Input } from '~/components/ui/input';
 import { ScrollArea } from '~/components/ui/scroll-area';
 import { Skeleton } from '~/components/ui/skeleton';
 import { cn } from '~/lib/utils';
@@ -56,6 +68,9 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   const [title, setTitle] = useState('');
   const [query, setQuery] = useState('');
   const [debug, setDebug] = useState(false);
+  const [selected, setSelected] = useState<ThreadRecord | null>(null);
+  const [name, setName] = useState('');
+  const [pending, setPending] = useState(false);
 
   const threadCollection = list(ownerId);
   const rosterCollection = roster(ownerId);
@@ -221,6 +236,25 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
     [activeThreadId, nav, threadCollection, visibleThreads],
   );
 
+  function rename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = name.trim();
+    if (!selected || pending || !value || value.length > THREAD_TITLE_LIMIT) return;
+
+    const id = selected.id;
+    const tx = threadCollection.update(id, (draft) => {
+      draft.title = value;
+      draft.updatedAt = new Date().toISOString();
+    });
+    setPending(true);
+    tx.isPersisted.promise
+      .then(() => setSelected((row) => (row?.id === id ? null : row)))
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'Thread rename failed.');
+      })
+      .finally(() => setPending(false));
+  }
+
   useEffect(() => {
     return () => {
       if (frame.current !== null) {
@@ -289,14 +323,28 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
 
                   <div className="grid gap-1.5">
                     {group.threads.map((thread) => (
-                      <ThreadRow
-                        active={thread.id === activeThreadId}
-                        id={thread.id}
-                        key={thread.id}
-                        title={thread.title}
-                        updated={thread.updatedAt}
-                        onArchive={archive}
-                      />
+                      <div className="group/entry relative" key={thread.id}>
+                        <ThreadRow
+                          active={thread.id === activeThreadId}
+                          id={thread.id}
+                          title={thread.title}
+                          updated={thread.updatedAt}
+                          onArchive={archive}
+                        />
+                        <Button
+                          aria-label={`Rename ${thread.title}`}
+                          className="absolute right-10 top-3 z-10 size-7 rounded-(--radius-press) opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100"
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setSelected(thread);
+                            setName(thread.title);
+                          }}
+                        >
+                          <PencilSimpleIcon className="size-4" aria-hidden="true" />
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 </section>
@@ -307,6 +355,28 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
           )}
         </nav>
       </ScrollArea>
+
+      <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename thread</DialogTitle>
+          </DialogHeader>
+          <form className="grid gap-4" onSubmit={rename}>
+            <Input
+              aria-label="Thread title"
+              autoFocus
+              maxLength={THREAD_TITLE_LIMIT}
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+            <DialogFooter>
+              <Button disabled={pending || !name.trim()} type="submit">
+                {pending ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

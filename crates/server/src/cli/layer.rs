@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::time::Duration;
 
-use clap::Args as ClapArgs;
+use usage_rs::Args as UsageArgs;
 
 use crate::config::{
     ConfigInput, ConfigOverrides, ConfigPath, ConfigPathSource, LogFormat, ServerOverrides,
@@ -52,22 +51,22 @@ impl Layer {
 }
 
 /// Server config flags shared by commands that resolve a server configuration.
-#[derive(Debug, Clone, Copy, Default, ClapArgs)]
+#[derive(Debug, Clone, Copy, Default, UsageArgs)]
 pub(in crate::cli) struct Server {
     /// Socket address the HTTP and MCP server should bind.
-    #[arg(long, value_name = "ADDR")]
+    #[usage(long, value_name = "ADDR")]
     bind: Option<SocketAddr>,
 
     /// Request timeout, for example 30s or 2m.
-    #[arg(long, value_name = "DURATION", value_parser = duration)]
-    request_timeout: Option<Duration>,
+    #[usage(long, value_name = "DURATION")]
+    request_timeout: Option<humantime::Duration>,
 
     /// Grace period used during shutdown.
-    #[arg(long, value_name = "DURATION", value_parser = duration)]
-    shutdown_grace_period: Option<Duration>,
+    #[usage(long, value_name = "DURATION")]
+    shutdown_grace_period: Option<humantime::Duration>,
 
     /// Maximum accepted HTTP request body size.
-    #[arg(long, value_name = "BYTES")]
+    #[usage(long, value_name = "BYTES")]
     max_body_size_bytes: Option<usize>,
 }
 
@@ -75,14 +74,9 @@ impl ConfigArgs for Server {
     fn apply(&self, layer: &mut Layer) {
         layer.overrides.server = ServerOverrides {
             bind: self.bind,
-            request_timeout: self.request_timeout,
-            shutdown_grace_period: self.shutdown_grace_period,
+            request_timeout: self.request_timeout.map(Into::into),
+            shutdown_grace_period: self.shutdown_grace_period.map(Into::into),
             max_body_size_bytes: self.max_body_size_bytes,
         };
     }
-}
-
-#[inline(always)]
-fn duration(value: &str) -> std::result::Result<Duration, humantime::DurationError> {
-    humantime::parse_duration(value)
 }

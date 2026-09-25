@@ -27,7 +27,7 @@ unicode-normalization.workspace = true
 
 htmd = "0.5"
 
-parser-macros.workspace         = true
+parser-macros.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

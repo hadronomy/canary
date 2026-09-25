@@ -10,6 +10,7 @@ import { caddyPlugin } from './src/vite-plugin-caddy';
 
 export default defineConfig({
   resolve: {
+    dedupe: ['@tanstack/db'],
     tsconfigPaths: true,
   },
   plugins: [

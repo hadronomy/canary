@@ -1,13 +1,12 @@
 //! Command-line entrypoint for the Canary server.
 //!
-//! Clap parses command intent, the config module resolves settings, and the
+//! Usage parses command intent, the config module resolves settings, and the
 //! runner hands the loaded process to the server runtime.
 
 mod args;
 mod commands;
 mod layer;
 
-use clap::Parser;
 use miette::{IntoDiagnostic, MietteHandlerOpts, Result, WrapErr};
 
 use self::args::Cli;

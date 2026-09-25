@@ -17,12 +17,16 @@ import {
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
 import { own } from '@canary/api/scope';
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 import { schema } from '@canary/db/effect';
 import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from '@canary/db/query';
 import { event, member, message, part, run, thread } from '@canary/db/schema/app';
 
 const ThreadRow = schema.thread.select;
 const ThreadInsert = schema.thread.insert;
+const ThreadTitle = ThreadInsert.fields.title.pipe(
+  Schema.check(Schema.isMinLength(1), Schema.isMaxLength(THREAD_TITLE_LIMIT)),
+);
 const MessageRow = schema.message.select;
 const MessageInsert = schema.message.insert;
 const RunRow = schema.run.select;
@@ -66,7 +70,12 @@ export const ThreadKey = Schema.Struct({ id: ThreadId, owner: OwnerId });
 export const Create = Schema.Struct({
   id: Schema.optionalKey(ThreadId),
   owner: OwnerId,
-  title: Schema.optionalKey(ThreadInsert.fields.title),
+  title: Schema.optionalKey(ThreadTitle),
+});
+export const Rename = Schema.Struct({
+  id: ThreadId,
+  owner: OwnerId,
+  title: ThreadTitle,
 });
 
 export type RunId = typeof RunId.Type;
@@ -75,6 +84,7 @@ export type Send = typeof Send.Type;
 export type Key = typeof Key.Type;
 export type ThreadKey = typeof ThreadKey.Type;
 export type Create = typeof Create.Type;
+export type Rename = typeof Rename.Type;
 export type Sent = {
   message: typeof message.$inferSelect;
   run: typeof run.$inferSelect;
@@ -83,6 +93,7 @@ export type Sent = {
 export type Cancelled = { run: typeof run.$inferSelect | null; txid: number };
 export type Archived = { thread: typeof thread.$inferSelect | null; txid: number };
 export type Created = { thread: typeof thread.$inferSelect; txid: number };
+export type Renamed = { thread: typeof thread.$inferSelect | null; txid: number };
 export type RunEvent = typeof RunEvent.Type;
 
 const Ref = Schema.Struct({ ownerId: OwnerId, runId: RunId, threadId: ThreadId });
@@ -127,6 +138,7 @@ export interface Interface {
   readonly send: (input: Send) => Effect.Effect<Sent, ThreadNotFound | Database.Failure>;
   readonly cancel: (input: Key) => Effect.Effect<Cancelled, Database.Failure>;
   readonly archive: (input: ThreadKey) => Effect.Effect<Archived, Database.Failure>;
+  readonly rename: (input: Rename) => Effect.Effect<Renamed, Database.Failure>;
 }
 
 export class Service extends Context.Service<Service, Interface>()('@canary/api/Run') {}
@@ -262,6 +274,7 @@ export const layer = Layer.effect(
           return state.result;
         }).pipe(Effect.uninterruptible),
       ),
+      rename: Effect.fn('Run.rename')((input) => renaming(database, input)),
     });
   }),
 );
@@ -276,15 +289,33 @@ function creating(database: Database.Interface, input: Create) {
           ownerId: input.owner,
           title: input.title ?? 'New thread',
         })
+        .onConflictDoNothing({ target: thread.id })
         .returning();
-      const row = rows[0];
+      const found =
+        !rows[0] && input.id
+          ? await client
+              .select()
+              .from(thread)
+              .where(own(thread, input.owner, eq(thread.id, input.id)))
+              .limit(1)
+          : [];
+      const row = rows[0] ?? found[0];
       if (!row) throw new Error('Thread insert failed.');
 
-      await client.insert(member).values({
-        threadId: row.id,
-        userId: input.owner,
-        role: 'owner',
-      });
+      const members = rows[0]
+        ? []
+        : await client
+            .select({ id: member.id })
+            .from(member)
+            .where(and(eq(member.threadId, row.id), eq(member.userId, input.owner)))
+            .limit(1);
+      if (!members[0]) {
+        await client.insert(member).values({
+          threadId: row.id,
+          userId: input.owner,
+          role: 'owner',
+        });
+      }
       return row;
     })
     .pipe(Effect.map((result) => ({ thread: result.rows, txid: result.txid })));
@@ -431,6 +462,19 @@ function archiving(database: Database.Interface, input: ThreadKey) {
         result: { thread: result.rows.thread, txid: result.txid },
       })),
     );
+}
+
+function renaming(database: Database.Interface, input: Rename) {
+  return database
+    .transact('rename thread', async (client) => {
+      const rows = await client
+        .update(thread)
+        .set({ title: input.title, updatedAt: new Date() })
+        .where(own(thread, input.owner, eq(thread.id, input.id), isNull(thread.archivedAt)))
+        .returning();
+      return rows[0] ?? null;
+    })
+    .pipe(Effect.map((result) => ({ thread: result.rows, txid: result.txid })));
 }
 
 async function cancelled(client: Client, rows: readonly Row[]) {

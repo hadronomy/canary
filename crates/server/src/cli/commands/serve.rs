@@ -1,14 +1,14 @@
-use clap::Args as ClapArgs;
 use miette::{IntoDiagnostic, Result, WrapErr};
+use usage_rs::Args as UsageArgs;
 
 use crate::cli::args::GlobalArgs;
 use crate::cli::layer::{self, ConfigArgs};
 use crate::{LoadedConfig, ServerBuilder, build_runtime, init_observability};
 
 /// Arguments for `canary serve`.
-#[derive(Debug, Clone, Default, ClapArgs)]
+#[derive(Debug, Clone, Default, UsageArgs)]
 pub(in crate::cli) struct Args {
-    #[command(flatten)]
+    #[usage(flatten)]
     server: layer::Server,
 }
 

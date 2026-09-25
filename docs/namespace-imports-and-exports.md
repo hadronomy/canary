@@ -16,10 +16,10 @@ snapshots from Effect v4 and the OpenCode v2 beta branch.
 
 ```ts
 // A caller creates a local namespace binding.
-import * as Run from "./runner.js";
+import * as Run from './runner.js';
 
 // A producer publishes another module as one named export.
-export * as Run from "./runner.js";
+export * as Run from './runner.js';
 ```
 
 Effect uses both forms in their direct roles. Its implementation modules use
@@ -31,10 +31,10 @@ callers use a named import:
 
 ```ts
 // runner.ts
-export * as Run from "./runner.js";
+export * as Run from './runner.js';
 
 // caller.ts
-import { Run } from "./runner.js";
+import { Run } from './runner.js';
 ```
 
 OpenCode pairs this pattern with a project rule against all namespace imports.
@@ -44,7 +44,7 @@ a star import at the call site.
 For Canary, keep the current Effect-style direct imports:
 
 ```ts
-import * as Run from "@canary/api/runner";
+import * as Run from '@canary/api/runner';
 ```
 
 Do not restore `export * as Run` inside `runner.ts` unless Canary also adopts
@@ -75,11 +75,11 @@ export itself:
 
 ```ts
 // runner.ts
-export * as Run from "./runner.js";
+export * as Run from './runner.js';
 export const start = () => {};
 
 // caller.ts
-import { Run } from "./runner.js";
+import { Run } from './runner.js';
 
 Run.start();
 Run.Run === Run; // true
@@ -105,7 +105,7 @@ The package map exposes that root file, direct module paths such as
 This supports the public form used throughout Effect's documentation:
 
 ```ts
-import { Effect, Queue } from "effect";
+import { Effect, Queue } from 'effect';
 ```
 
 Grouped entry points keep the same structure. For example, `effect/testing`
@@ -172,7 +172,7 @@ The AST check followed in July in
 `project.ts` starts with a self-export:
 
 ```ts
-export * as Project from "./project.js";
+export * as Project from './project.js';
 ```
 
 Callers then use `import { Project } from "../project.js"`. See
@@ -196,7 +196,7 @@ and
 OpenCode also consumes Effect through Effect's public barrel:
 
 ```ts
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema } from 'effect';
 ```
 
 This is consistent with OpenCode's own rule, even though Effect's internal lint

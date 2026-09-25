@@ -12,6 +12,7 @@ import {
 } from '@tanstack/browser-db-sqlite-persistence';
 import { BasicIndex, createCollection } from '@tanstack/db';
 import { electricCollectionOptions } from '@tanstack/electric-db-collection';
+import { ZodError } from 'zod';
 
 import { Replica } from '@canary/db/replica';
 
@@ -22,9 +23,14 @@ export type Run = Replica.Run;
 export type Thread = Replica.Thread;
 
 export type Tx = { txid: number };
+export type Fault = {
+  readonly state: 'retrying' | 'stopped';
+  readonly shape: string;
+  readonly reason: string;
+};
 type Base = { base: string };
 type Scope = Base & { ownerId: string };
-type Schema = z.ZodType<Row<unknown>>;
+type Schema = z.ZodObject;
 type Descriptor<S extends Schema> = {
   readonly cacheVersion: number;
   readonly name: string;
@@ -45,9 +51,12 @@ const texts = new Map<string, ReturnType<typeof makeMessages>>();
 const rns = new Map<string, ReturnType<typeof makeRuns>>();
 const evs = new Map<string, ReturnType<typeof makeEvents>>();
 const pts = new Map<string, ReturnType<typeof makeParts>>();
+const faults = new Map<string, Fault>();
+const listeners = new Set<() => void>();
 const ns = 'canary-sync';
 let disk: PersistedCollectionPersistence | null | undefined;
 let boot: Promise<void> | undefined;
+let epoch = 0;
 
 export function setup() {
   if (disk || boot) {
@@ -68,10 +77,37 @@ export function setup() {
   return boot;
 }
 
+export function health(opts: Scope): Fault | undefined {
+  const prefix = `${scope(opts)}:`;
+  const issues = [...faults].filter(([key]) => key.startsWith(prefix)).map(([, fault]) => fault);
+
+  return issues.find((item) => item.state === 'stopped') ?? issues[0];
+}
+
+export function watch(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function clear() {
+  epoch++;
+  [...lists.values(), ...texts.values(), ...rns.values(), ...evs.values(), ...pts.values()].forEach(
+    (col) => void col.cleanup(),
+  );
+  lists.clear();
+  texts.clear();
+  rns.clear();
+  evs.clear();
+  pts.clear();
+  faults.clear();
+  listeners.forEach((listener) => listener());
+}
+
 export function threads(
   opts: Scope & {
     archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    rename: (input: { id: string; title: string }) => Promise<Tx>;
   },
 ) {
   const key = scope(opts);
@@ -91,6 +127,7 @@ function makeThreads(
   opts: Scope & {
     archive: (input: { id: string }) => Promise<Tx>;
     create: (input: { id: string; title: string }) => Promise<Tx>;
+    rename: (input: { id: string; title: string }) => Promise<Tx>;
   },
 ) {
   const col = make(Replica.Thread, opts, {
@@ -112,13 +149,21 @@ function makeThreads(
       };
     },
     onUpdate: async ({ transaction }) => {
-      const rows = transaction.mutations.filter((item) => item.changes.archivedAt != null);
+      const writes = transaction.mutations.flatMap((item) => {
+        if (item.changes.archivedAt != null) {
+          return [opts.archive({ id: item.original.id })];
+        }
+        if (typeof item.changes.title === 'string') {
+          return [opts.rename({ id: item.original.id, title: item.changes.title })];
+        }
+        return [];
+      });
 
-      if (!rows.length) {
+      if (!writes.length) {
         return;
       }
 
-      const res = await Promise.all(rows.map((item) => opts.archive({ id: item.original.id })));
+      const res = await Promise.all(writes);
 
       return {
         txid: res.map((item) => item.txid),
@@ -263,16 +308,46 @@ function make<const S extends Schema>(
   opts: Scope,
   handlers: Handlers<S> = {},
 ) {
+  const key = `${scope(opts)}:${replica.name}`;
+  const current = epoch;
   const cfg = electricCollectionOptions({
-    id: `${ns}:${scope(opts)}:${replica.name}`,
+    id: `${ns}:${key}`,
     schema: replica.schema,
     getKey: (row) => String(row.id),
     shapeOptions: {
       url: url(opts.base, replica.name),
       columnMapper: snakeCamelMapper(),
-      transformer: (row) => Object.assign(row, replica.schema.parse(row)),
+      transformer: (row) => Object.assign(row, replica.schema.partial().parse(row)),
       liveSse: true,
-      onError: retry,
+      fetchClient: Object.assign(
+        async (...args: Parameters<typeof fetch>) => {
+          try {
+            const res = await fetch(...args);
+            if (current !== epoch) {
+              return res;
+            }
+            if (res.ok || res.status === 304) {
+              recover(key);
+            } else if (res.status === 429 || res.status >= 500) {
+              const reason = `HTTP ${res.status}`;
+              if (report(key, { state: 'retrying', shape: replica.name, reason })) {
+                console.warn(`Electric shape ${replica.name} retrying: ${reason}`);
+              }
+            }
+            return res;
+          } catch (err) {
+            if (current === epoch && !args[1]?.signal?.aborted) {
+              const reason = cause(err);
+              if (report(key, { state: 'retrying', shape: replica.name, reason })) {
+                console.warn(`Electric shape ${replica.name} retrying: ${reason}`, err);
+              }
+            }
+            throw err;
+          }
+        },
+        { preconnect: fetch.preconnect },
+      ),
+      onError: (err) => (current === epoch ? retry(key, replica.name, err) : undefined),
     },
     syncMode: 'eager',
     ...handlers,
@@ -319,17 +394,60 @@ function url(base: string, path: string) {
   return new URL(path, base.endsWith('/') ? base : `${base}/`).toString();
 }
 
-function retry(err: Error) {
-  if (err instanceof FetchError && err.status >= 400 && err.status < 500) {
-    console.error('Electric sync stopped.', err);
+function report(key: string, fault: Fault) {
+  const prev = faults.get(key);
+  if (prev?.state === fault.state && prev.reason === fault.reason) {
+    return false;
+  }
+  faults.set(key, fault);
+  listeners.forEach((listener) => listener());
+  return true;
+}
+
+function recover(key: string) {
+  if (faults.get(key)?.state !== 'retrying') {
+    return;
+  }
+  faults.delete(key);
+  listeners.forEach((listener) => listener());
+}
+
+function cause(err: unknown) {
+  if (err instanceof FetchError) {
+    return `HTTP ${err.status}`;
+  }
+  if (err instanceof ZodError) {
+    return 'Row schema mismatch';
+  }
+  if (err instanceof Error && missing(err)) {
+    return 'Electric response is missing required headers';
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+function missing(err: Error) {
+  return err.message.includes("didn't include the following required headers");
+}
+
+function retry(key: string, shape: string, err: Error) {
+  const stopped =
+    (err instanceof FetchError && err.status >= 400 && err.status < 500) ||
+    err instanceof ZodError ||
+    err.name.includes('Parser') ||
+    err.name.includes('Schema') ||
+    missing(err);
+  const fault: Fault = {
+    state: stopped ? 'stopped' : 'retrying',
+    shape,
+    reason: cause(err),
+  };
+
+  report(key, fault);
+  if (stopped) {
+    console.error(`Electric shape ${shape} stopped: ${fault.reason}`, err);
     return;
   }
 
-  if (err.name.includes('Parser') || err.name.includes('Schema')) {
-    console.error('Electric sync stopped.', err);
-    return;
-  }
-
-  console.warn('Electric sync retrying.', err);
+  console.warn(`Electric shape ${shape} retrying: ${fault.reason}`, err);
   return {};
 }

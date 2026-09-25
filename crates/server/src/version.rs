@@ -39,7 +39,7 @@ impl Version {
         self.package
     }
 
-    /// Returns the label used by Clap's concise `--version` output.
+    /// Returns the label used by the concise `--version` output.
     #[inline(always)]
     #[must_use]
     pub const fn cli_label(&self) -> &'static str {

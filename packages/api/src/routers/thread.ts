@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { protectedProcedure } from '@canary/api';
 import * as Run from '@canary/api/runner';
 import { exec } from '@canary/api/runtime';
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 
 export const threadRouter = {
   create: protectedProcedure
@@ -11,7 +12,7 @@ export const threadRouter = {
       z
         .object({
           id: z.uuid().optional(),
-          title: z.string().trim().min(1).max(120).optional(),
+          title: z.string().trim().min(1).max(THREAD_TITLE_LIMIT).optional(),
         })
         .optional(),
     )
@@ -30,6 +31,17 @@ export const threadRouter = {
       return await exec(
         Schema.decodeUnknownEffect(Run.ThreadKey)({ ...input, owner: context.owner }).pipe(
           Effect.flatMap((input) => Run.Service.use((run) => run.archive(input))),
+        ),
+        context.signal,
+      );
+    }),
+
+  rename: protectedProcedure
+    .input(z.object({ id: z.uuid(), title: z.string().trim().min(1).max(THREAD_TITLE_LIMIT) }))
+    .handler(async ({ context, input }) => {
+      return await exec(
+        Schema.decodeUnknownEffect(Run.Rename)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.rename(input))),
         ),
         context.signal,
       );

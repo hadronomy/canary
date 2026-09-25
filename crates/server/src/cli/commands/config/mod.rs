@@ -1,8 +1,8 @@
 mod human;
 mod report;
 
-use clap::{Args as ClapArgs, Subcommand};
 use miette::{Result, WrapErr};
+use usage_rs::{Args as UsageArgs, Subcommands};
 
 use crate::LoadedConfig;
 use crate::cli::args::GlobalArgs;
@@ -10,14 +10,14 @@ use crate::cli::commands::output::{self, Format};
 use crate::cli::layer::{self, ConfigArgs};
 
 /// Arguments for `canary config`.
-#[derive(Debug, Clone, ClapArgs)]
+#[derive(Debug, Clone, UsageArgs)]
 pub(in crate::cli) struct Args {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     pub(in crate::cli) command: Command,
 }
 
 /// Configuration inspection commands.
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Clone, Subcommands)]
 pub(in crate::cli) enum Command {
     /// Validate the effective configuration.
     Check(CheckArgs),
@@ -28,12 +28,12 @@ pub(in crate::cli) enum Command {
 }
 
 /// Arguments for `canary config check`.
-#[derive(Debug, Clone, Default, ClapArgs)]
+#[derive(Debug, Clone, Default, UsageArgs)]
 pub(in crate::cli) struct CheckArgs {
-    #[command(flatten)]
+    #[usage(flatten)]
     server: layer::Server,
     /// Output format for the validation result.
-    #[arg(long, value_enum, default_value_t)]
+    #[usage(long, value_enum, default = "human")]
     format: Format,
 }
 
@@ -45,12 +45,12 @@ impl ConfigArgs for CheckArgs {
 }
 
 /// Arguments for `canary config show`.
-#[derive(Debug, Clone, Default, ClapArgs)]
+#[derive(Debug, Clone, Default, UsageArgs)]
 pub(in crate::cli) struct ShowArgs {
-    #[command(flatten)]
+    #[usage(flatten)]
     server: layer::Server,
     /// Output format for the redacted config report.
-    #[arg(long, value_enum, default_value_t)]
+    #[usage(long, value_enum, default = "human")]
     format: Format,
 }
 
@@ -62,12 +62,12 @@ impl ConfigArgs for ShowArgs {
 }
 
 /// Arguments for `canary config sources`.
-#[derive(Debug, Clone, Default, ClapArgs)]
+#[derive(Debug, Clone, Default, UsageArgs)]
 pub(in crate::cli) struct SourcesArgs {
-    #[command(flatten)]
+    #[usage(flatten)]
     server: layer::Server,
     /// Output format for the configuration source report.
-    #[arg(long, value_enum, default_value_t)]
+    #[usage(long, value_enum, default = "human")]
     format: Format,
 }
 

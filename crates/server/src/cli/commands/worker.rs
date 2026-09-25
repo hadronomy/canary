@@ -1,6 +1,6 @@
-use clap::{Args as ClapArgs, Subcommand, ValueEnum};
 use futures_util::pin_mut;
 use miette::{IntoDiagnostic, Result, WrapErr};
+use usage_rs::{Args as UsageArgs, Subcommands, ValueEnum};
 
 use crate::cli::args::GlobalArgs;
 use crate::cli::layer::{self, ConfigArgs};
@@ -8,14 +8,14 @@ use crate::shutdown::{ShutdownCoordinator, wait_for_shutdown_signal};
 use crate::{LoadedWorkerConfig, build_runtime, init_observability};
 
 /// Arguments for `canary worker`.
-#[derive(Debug, Clone, ClapArgs)]
+#[derive(Debug, Clone, UsageArgs)]
 pub(in crate::cli) struct Args {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     pub(in crate::cli) command: Command,
 }
 
 /// Worker command surface.
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Clone, Subcommands)]
 pub(in crate::cli) enum Command {
     /// Run one Temporal worker process.
     Run(RunArgs),
@@ -24,22 +24,27 @@ pub(in crate::cli) enum Command {
 }
 
 /// Arguments accepted by worker process execution.
-#[derive(Debug, Clone, Default, ClapArgs)]
+#[derive(Debug, Clone, Default, UsageArgs)]
 pub(in crate::cli) struct RunArgs {
     /// Temporal task queue to poll.
-    #[arg(long, value_name = "NAME")]
+    #[usage(long, value_name = "NAME")]
     task_queue: Option<String>,
     /// Worker kind to launch.
-    #[arg(long, value_enum, value_name = "KIND")]
+    #[usage(long, value_enum, value_name = "KIND")]
     kind: Option<Kind>,
     /// Worker concurrency limit.
-    #[arg(long, value_name = "N")]
+    #[usage(
+        long,
+        value_name = "N",
+        validate = "int(value) > 0",
+        validate_error = "must be greater than zero"
+    )]
     concurrency: Option<usize>,
 }
 
 /// Worker kinds accepted by `canary worker run`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab_case")]
+#[usage(rename_all = "kebab_case")]
 enum Kind {
     #[default]
     All,

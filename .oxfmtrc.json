@@ -2,7 +2,13 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "singleQuote": true,
   "jsxSingleQuote": false,
-  "ignorePatterns": ["*.toml"],
+  "ignorePatterns": [
+    "*.toml",
+    ".agents/skills/**",
+    "apps/web/src/routeTree.gen.ts",
+    "packages/db/drizzle/**/snapshot.json",
+    "packages/db/src/replica/manifest.generated.ts"
+  ],
   "sortImports": {
     "internalPattern": ["@canary/", "~/"],
     "ignorePatterns": ["routeTree.gen.ts"],

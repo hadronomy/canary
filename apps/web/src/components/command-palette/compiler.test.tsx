@@ -14,7 +14,7 @@ const ids = createCommandIds('test');
 describe('command palette compiler', () => {
   test('compiles declared command pages', () => {
     const registry = compileCommandPalette(
-      <Command.Page id={ids.page('root')} placeholder="Search..." title="Root">
+      <Command.Page id={ids.page('root')} maxLength={120} placeholder="Search..." title="Root">
         <Command.Section id={ids.section('root')} title="Root">
           <Command.Item icon={MagnifyingGlassIcon} id={ids.item('search')} title="Search">
             <Command.Action id="open" run={() => undefined}>
@@ -27,6 +27,7 @@ describe('command palette compiler', () => {
     );
 
     expect(registry.pages.has(ids.page('root'))).toBe(true);
+    expect(registry.pages.get(ids.page('root'))?.maxLength).toBe(120);
     expect(registry.items.has(ids.item('search'))).toBe(true);
     expect(registry.actions.has(ids.action(ids.item('search'), 'open'))).toBe(true);
   });

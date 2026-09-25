@@ -24,9 +24,6 @@ axum.workspace = true
 base64.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-clap.workspace = true
-clap_complete.workspace = true
-clap_mangen.workspace = true
 config.workspace = true
 headers.workspace = true
 http.workspace = true
@@ -83,6 +80,8 @@ canary-workers.workspace     = true
 database.workspace           = true
 document-hierarchy.workspace = true
 public-id.workspace          = true
+usage_lib                    = { package = "usage-lib", version = "=6.11.0", default-features = false, features = ["manpage"] }
+usage_rs                     = { package = "usage-rs", version = "=6.11.0", features = ["completions", "validation"] }
 
 [features]
 default = ["surreal-embedded-mem", "surreal-remote-ws"]
