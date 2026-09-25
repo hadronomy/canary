@@ -79,6 +79,7 @@ type CommandSection = {
 
 type CommandPage = {
   id: PageId;
+  maxLength?: number;
   placeholder: string;
   sections: readonly CommandSection[];
   submit?: CommandAction;

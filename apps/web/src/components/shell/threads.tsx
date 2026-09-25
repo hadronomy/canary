@@ -11,10 +11,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import { toast } from 'sonner';
 
 import type { Thread } from '@canary/sync';
 import type { ShellUser } from '~/components/shell/routes';
 
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 import { ThreadActions } from '~/components/shell/thread-actions';
 import { ThreadRow } from '~/components/shell/thread-row';
 import { Button } from '~/components/ui/button';
@@ -68,6 +70,7 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   const [debug, setDebug] = useState(false);
   const [selected, setSelected] = useState<ThreadRecord | null>(null);
   const [name, setName] = useState('');
+  const [pending, setPending] = useState(false);
 
   const threadCollection = list(ownerId);
   const rosterCollection = roster(ownerId);
@@ -236,16 +239,20 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
   function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = name.trim();
-    if (!selected || !value || value.length > 120) return;
+    if (!selected || pending || !value || value.length > THREAD_TITLE_LIMIT) return;
 
-    const tx = threadCollection.update(selected.id, (draft) => {
+    const id = selected.id;
+    const tx = threadCollection.update(id, (draft) => {
       draft.title = value;
       draft.updatedAt = new Date().toISOString();
     });
-    setSelected(null);
-    tx.isPersisted.promise.catch((err: unknown) => {
-      console.error('Thread rename failed.', err);
-    });
+    setPending(true);
+    tx.isPersisted.promise
+      .then(() => setSelected((row) => (row?.id === id ? null : row)))
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'Thread rename failed.');
+      })
+      .finally(() => setPending(false));
   }
 
   useEffect(() => {
@@ -358,13 +365,13 @@ function ThreadSidebar({ className, user, ...props }: ThreadSidebarProps) {
             <Input
               aria-label="Thread title"
               autoFocus
-              maxLength={120}
+              maxLength={THREAD_TITLE_LIMIT}
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
             />
             <DialogFooter>
-              <Button disabled={!name.trim()} type="submit">
-                Save
+              <Button disabled={pending || !name.trim()} type="submit">
+                {pending ? 'Saving…' : 'Save'}
               </Button>
             </DialogFooter>
           </form>

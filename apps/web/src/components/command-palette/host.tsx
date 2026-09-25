@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 
 import { useReducer, useRef } from 'react';
+import { toast } from 'sonner';
 
 import type { CommandPaletteProps, CommandValue } from '~/components/command-palette/context';
 import type {
@@ -98,7 +99,7 @@ function CommandPalette({
   function run(item: CommandItem) {
     const query = ref.query;
 
-    Promise.resolve(item.primary.run(ctx)).then(() => {
+    execute(item.primary, () => {
       dispatch({ type: 'commit' });
       onUse(item.id, query);
     });
@@ -108,7 +109,7 @@ function CommandPalette({
     const query = ref.query;
 
     if (!action.stay) dispatch({ type: 'close-actions' });
-    Promise.resolve(action.run(ctx)).then(() => {
+    execute(action, () => {
       dispatch({ type: 'commit', keepPanel: action.stay });
       if (action.learn !== false) onUse(item.id, query);
     });
@@ -120,12 +121,21 @@ function CommandPalette({
 
     if (!action) return;
 
-    Promise.resolve(action.run(ctx)).then(() => {
+    execute(action, () => {
       const owner = registry.actions.get(action.id)?.item.id;
 
       dispatch({ type: 'commit' });
       if (owner) onUse(owner, query);
     });
+  }
+
+  function execute(action: CommandAction, done: () => void) {
+    Promise.resolve()
+      .then(() => action.run(ctx))
+      .then(done)
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : 'Command failed.');
+      });
   }
 
   const view: CommandValue = {
@@ -247,6 +257,7 @@ function CommandPalette({
                 <div>
                   <CommandInput
                     autoFocus
+                    maxLength={page.maxLength}
                     ref={input}
                     showIcon={false}
                     wrapperClassName={ref.id !== registry.root ? 'border-b-0' : undefined}

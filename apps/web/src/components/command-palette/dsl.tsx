@@ -22,6 +22,7 @@ type Marked<TProps, TKind extends NodeKind> = ((props: TProps) => null) & {
 type PageProps = {
   children?: ReactNode;
   id: PageId;
+  maxLength?: number;
   placeholder: string;
   title: string;
 };

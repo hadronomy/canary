@@ -14,11 +14,27 @@ import * as Database from '@canary/api/database';
 import * as Run from '@canary/api/runner';
 import { reset as resetAgent, state as agent } from '@canary/api/test/agent';
 import { ids, reset as resetDatabase, state as database } from '@canary/api/test/database';
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 
 const deps = Layer.merge(Agent.layer, Database.layer);
 const layer = Run.layer.pipe(Layer.provide(deps));
 
 describe('Run', () => {
+  it('limits thread titles at the service boundary', () => {
+    const input = { id: ids.thread, owner: ids.owner };
+
+    expect(() =>
+      Schema.decodeUnknownSync(Run.Rename)({ ...input, title: 'a'.repeat(THREAD_TITLE_LIMIT) }),
+    ).not.toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(Run.Rename)({ ...input, title: 'a'.repeat(THREAD_TITLE_LIMIT + 1) }),
+    ).toThrow();
+    expect(() => Schema.decodeUnknownSync(Run.Create)({ ...input, title: '' })).toThrow();
+    expect(() =>
+      Schema.decodeUnknownSync(Run.Create)({ ...input, title: 'a'.repeat(THREAD_TITLE_LIMIT + 1) }),
+    ).toThrow();
+  });
+
   beforeEach(() => {
     resetAgent();
     resetDatabase();

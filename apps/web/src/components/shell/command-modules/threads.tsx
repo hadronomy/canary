@@ -9,6 +9,7 @@ import {
 
 import type { ShellCommandDeps, ThreadRecord } from '~/components/shell/command-modules/types';
 
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 import {
   Command,
   CommandCard,
@@ -34,6 +35,7 @@ const threadsModule = defineCommandModule({
 
         <Command.Page
           id={ids.page('create')}
+          maxLength={THREAD_TITLE_LIMIT}
           placeholder="Name the new thread..."
           title="Create Thread"
         >
@@ -186,6 +188,7 @@ function renamePage(deps: ShellCommandDeps, row: ThreadRecord) {
     <Command.Page
       id={ids.page('rename', row.id)}
       key={row.id}
+      maxLength={THREAD_TITLE_LIMIT}
       placeholder="Rename thread..."
       title="Rename Thread"
     >
@@ -230,10 +233,15 @@ function open(deps: ShellCommandDeps, id: string) {
     });
 }
 
-function createThread(deps: ShellCommandDeps, value: string) {
+async function createThread(deps: ShellCommandDeps, value: string) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const title = value.trim() || 'New thread';
+
+  if (title.length > THREAD_TITLE_LIMIT) {
+    throw new Error(`Thread titles must be ${THREAD_TITLE_LIMIT} characters or fewer.`);
+  }
+
   const tx = deps.col.insert({
     id,
     ownerId: deps.user.id,
@@ -243,30 +251,28 @@ function createThread(deps: ShellCommandDeps, value: string) {
     archivedAt: null,
   });
 
+  await tx.isPersisted.promise;
   deps.onOpenChange(false);
 
-  return deps
-    .nav({
-      to: '/threads/$threadId',
-      params: { threadId: id },
-    })
-    .then(() => tx.isPersisted.promise)
-    .then(() => undefined)
-    .catch((err: unknown) => {
-      console.error('Command palette thread create failed.', err);
-    });
+  await deps.nav({
+    to: '/threads/$threadId',
+    params: { threadId: id },
+  });
 }
 
-function rename(deps: ShellCommandDeps, id: string, value: string) {
+async function rename(deps: ShellCommandDeps, id: string, value: string) {
   const title = value.trim();
 
-  if (!title) return;
+  if (!title || title.length > THREAD_TITLE_LIMIT) {
+    throw new Error(`Thread titles must have 1 to ${THREAD_TITLE_LIMIT} characters.`);
+  }
 
-  deps.col.update(id, (draft) => {
+  const tx = deps.col.update(id, (draft) => {
     draft.title = title;
     draft.updatedAt = new Date().toISOString();
   });
 
+  await tx.isPersisted.promise;
   deps.onOpenChange(false);
 }
 
@@ -303,4 +309,4 @@ function archive(deps: ShellCommandDeps, id: string) {
     });
 }
 
-export { threadsModule };
+export { createThread, rename, threadsModule };

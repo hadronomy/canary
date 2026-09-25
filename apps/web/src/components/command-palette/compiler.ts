@@ -156,6 +156,7 @@ function compilePage(build: Build, node: PageNode) {
 
   const page: CommandPage = {
     id: node.props.id,
+    maxLength: node.props.maxLength,
     placeholder: node.props.placeholder,
     sections: collect(node.props.children).map((item) => {
       expect(item, 'section');

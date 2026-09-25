@@ -17,12 +17,16 @@ import {
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
 import { own } from '@canary/api/scope';
+import { THREAD_TITLE_LIMIT } from '@canary/api/thread-title';
 import { schema } from '@canary/db/effect';
 import { and, asc, desc, eq, inArray, isNull, lt, max, sql } from '@canary/db/query';
 import { event, member, message, part, run, thread } from '@canary/db/schema/app';
 
 const ThreadRow = schema.thread.select;
 const ThreadInsert = schema.thread.insert;
+const ThreadTitle = ThreadInsert.fields.title.pipe(
+  Schema.check(Schema.isMinLength(1), Schema.isMaxLength(THREAD_TITLE_LIMIT)),
+);
 const MessageRow = schema.message.select;
 const MessageInsert = schema.message.insert;
 const RunRow = schema.run.select;
@@ -66,12 +70,12 @@ export const ThreadKey = Schema.Struct({ id: ThreadId, owner: OwnerId });
 export const Create = Schema.Struct({
   id: Schema.optionalKey(ThreadId),
   owner: OwnerId,
-  title: Schema.optionalKey(ThreadInsert.fields.title),
+  title: Schema.optionalKey(ThreadTitle),
 });
 export const Rename = Schema.Struct({
   id: ThreadId,
   owner: OwnerId,
-  title: ThreadInsert.fields.title.pipe(Schema.check(Schema.isMinLength(1))),
+  title: ThreadTitle,
 });
 
 export type RunId = typeof RunId.Type;
