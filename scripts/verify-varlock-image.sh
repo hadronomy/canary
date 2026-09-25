@@ -13,7 +13,8 @@ cd "$root"
 
 auth="$(openssl rand -hex 32)"
 db="$(openssl rand -hex 32)"
-BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" docker compose config >/dev/null
+electric="$(openssl rand -hex 32)"
+BETTER_AUTH_SECRET="$auth" DB_PASSWORD="$db" ELECTRIC_SECRET="$electric" docker compose config >/dev/null
 
 docker build --file apps/web/Dockerfile --tag "$tag" .
 
