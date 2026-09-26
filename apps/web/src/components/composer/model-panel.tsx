@@ -3,6 +3,8 @@ import type { Icon } from '@phosphor-icons/react';
 import { Menu } from '@base-ui/react/menu';
 import {
   BrainIcon,
+  CaretDownIcon,
+  CaretUpIcon,
   CheckIcon,
   EyeIcon,
   FadersHorizontalIcon,
@@ -14,7 +16,7 @@ import {
 import { Command } from 'cmdk';
 import { matchSorter, rankings } from 'match-sorter';
 import { motion, useReducedMotion } from 'motion/react';
-import { useId, useMemo, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { Lab, Model, ModelId } from '@canary/api/models';
 
@@ -23,6 +25,7 @@ import { Mark } from '~/components/composer/mark';
 import { star, useFavorites } from '~/components/composer/model';
 import { ease } from '~/components/composer/motion';
 import { Morph } from '~/lib/motion';
+import { useScrollEdges } from '~/lib/scroll-fade';
 import { cn } from '~/lib/utils';
 
 /** A capability the list can be narrowed to. */
@@ -123,11 +126,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
           shelves than fit, and it scrolls inside this height instead of
           stretching the panel past the room it has. */}
       <div className="grid h-[min(21rem,calc(var(--available-height)-6.5rem))] min-h-0 grid-cols-[auto_minmax(0,1fr)] gap-1 px-1.5">
-        <div
-          aria-label="Model shelves"
-          className="flex h-full min-h-0 flex-col items-center gap-1 overflow-y-auto rounded-[12px] bg-foreground/[0.035] p-1 [scrollbar-width:none]"
-          role="toolbar"
-        >
+        <Rail>
           <Shelf
             active={!query.trim() && shelf === 'favorites'}
             group={rail}
@@ -153,7 +152,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
               <Mark className="size-4" lab={lab} />
             </Shelf>
           ))}
-        </div>
+        </Rail>
 
         <Command.List className="h-full overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin] [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]">
           {/* Keyed rather than cross-faded: an outgoing copy of the list would
@@ -189,6 +188,63 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
 
       <Details model={lit} />
     </Command>
+  );
+}
+
+/**
+ * The column of shelves. There are more labs than fit, so the rail scrolls,
+ * and it says so quietly: the marks fade out toward whichever edge has more
+ * behind it, with a small caret in the fade. Neither is drawn at an edge that
+ * has nothing past it, so a rail scrolled to its end looks finished.
+ *
+ * The fade is a mask on the marks rather than a gradient painted over them,
+ * so it matches the rail's tinted fill exactly; the fill itself sits on the
+ * shell outside the mask and keeps its corners.
+ */
+function Rail({ children }: { children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges(box);
+
+  // The pressed shelf starts in view, however far down its lab sits.
+  useLayoutEffect(() => {
+    box.current
+      ?.querySelector<HTMLElement>('[aria-pressed=true]')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, []);
+
+  return (
+    <div className="relative min-h-0 rounded-[12px] bg-foreground/[0.035]">
+      <div
+        ref={box}
+        aria-label="Model shelves"
+        className="canary-edge-fade flex h-full min-h-0 flex-col items-center gap-1 overflow-y-auto overscroll-contain p-1 [scrollbar-width:none]"
+        data-bottom={edges.bottom || undefined}
+        data-top={edges.top || undefined}
+        role="toolbar"
+      >
+        {children}
+      </div>
+      <Caret edge="top" on={edges.top} />
+      <Caret edge="bottom" on={edges.bottom} />
+    </div>
+  );
+}
+
+function Caret({ edge, on }: { edge: 'top' | 'bottom'; on: boolean }) {
+  const Glyph = edge === 'top' ? CaretUpIcon : CaretDownIcon;
+
+  return (
+    <Glyph
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute left-1/2 size-2.5 -translate-x-1/2 text-muted-foreground',
+        edge === 'top' ? 'top-1' : 'bottom-1',
+        // In a little faster than it goes, as the app's other scroll cues do.
+        'transition-opacity duration-160 ease-out motion-reduce:transition-none',
+        on ? 'opacity-70' : 'opacity-0 duration-120',
+      )}
+      weight="bold"
+    />
   );
 }
 
@@ -370,7 +426,8 @@ function Current({ children, on }: { children: React.ReactNode; on: boolean }) {
     <span
       className={cn(
         'relative row-span-2 mt-0.5 grid self-start',
-        on && '[&>svg]:[mask-image:radial-gradient(circle_at_14px_14px,transparent_5.5px,black_6px)]',
+        on &&
+          '[&>svg]:[mask-image:radial-gradient(circle_at_14px_14px,transparent_5.5px,black_6px)]',
       )}
     >
       {children}

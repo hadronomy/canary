@@ -702,6 +702,53 @@
    Opening runs slower than closing. Revealing is the deliberate move and wants
    to be watched; putting it away is not, and a slow retreat just holds the page
    up. */
+/* Content that fades out toward an edge it can scroll past, and only that
+   edge. A mask rather than a painted gradient, so it matches whatever the
+   scroller sits on. The fade lengths are registered properties so they can
+   ease in and out; set `data-top` / `data-bottom` when there is more that way.
+
+   The outer part of each fade is fully clear rather than ramping from the
+   very edge. A cue drawn at the edge sits in that strip, and a half-faded
+   item scrolled under it would otherwise show through and merge with it. */
+@property --fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+.canary-edge-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent calc(var(--fade-top) * 0.55),
+    black var(--fade-top),
+    black calc(100% - var(--fade-bottom)),
+    transparent calc(100% - var(--fade-bottom) * 0.55)
+  );
+  transition:
+    --fade-top 200ms var(--ease-out-strong),
+    --fade-bottom 200ms var(--ease-out-strong);
+}
+
+.canary-edge-fade[data-top] {
+  --fade-top: 2.25rem;
+}
+
+.canary-edge-fade[data-bottom] {
+  --fade-bottom: 2.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canary-edge-fade {
+    transition: none;
+  }
+}
+
 .t-grow {
   display: grid;
   grid-template-rows: 0fr;
