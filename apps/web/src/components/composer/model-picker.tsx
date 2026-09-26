@@ -36,6 +36,7 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
   // after hydration, and playing that would animate a change nobody made.
   const [live, setLive] = useState(false);
   const timer = useRef(0);
+  const anchor = useRef<HTMLSpanElement>(null);
 
   // Stable, because every row of the panel is memoised on it: a new function
   // per render of the composer would re-render the whole catalog on every
@@ -55,27 +56,34 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
         setShown(next);
       }}
     >
-      <Popover.Trigger
-        className={cn(
-          // A 32px pill: the box's 24px corner less its 8px inset is 16px, so
-          // the pill's ends share the corner's centre, as the send disc does.
-          'flex h-8 max-w-60 items-center gap-1.5 rounded-full pr-2 pl-2.5 text-[13px] text-muted-foreground outline-none select-none',
-          // Hover switches on at once; the press is the one thing that moves.
-          'hover:bg-hover hover:text-foreground data-popup-open:bg-hover data-popup-open:text-foreground',
-          'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.97] motion-reduce:transition-none',
-          'focus-visible:ring-2 focus-visible:ring-ring/30',
-          'disabled:pointer-events-none disabled:opacity-50',
-        )}
-        disabled={disabled}
-      >
-        <Label live={live} model={find(current) ?? models[0]} />
-        <CaretUpDownIcon aria-hidden className="size-3 shrink-0 opacity-70" weight="bold" />
-      </Popover.Trigger>
+      {/* The panel hangs from this box, not from the pill. The pill shrinks a
+          little while pressed, and a panel positioned from the pill's own box
+          would follow it, nudging across the screen for as long as the press
+          is held. */}
+      <span ref={anchor} className="flex min-w-0">
+        <Popover.Trigger
+          className={cn(
+            // A 32px pill: the box's 24px corner less its 8px inset is 16px, so
+            // the pill's ends share the corner's centre, as the send disc does.
+            'flex h-8 max-w-60 items-center gap-1.5 rounded-full pr-2 pl-2.5 text-[13px] text-muted-foreground outline-none select-none',
+            // Hover switches on at once; the press is the one thing that moves.
+            'hover:bg-hover hover:text-foreground data-popup-open:bg-hover data-popup-open:text-foreground',
+            'transition-[scale] duration-(--t-press) ease-out-strong active:scale-[0.97] motion-reduce:transition-none',
+            'focus-visible:ring-2 focus-visible:ring-ring/30',
+            'disabled:pointer-events-none disabled:opacity-50',
+          )}
+          disabled={disabled}
+        >
+          <Label live={live} model={find(current) ?? models[0]} />
+          <CaretUpDownIcon aria-hidden className="size-3 shrink-0 opacity-70" weight="bold" />
+        </Popover.Trigger>
+      </span>
 
       <Popover.Portal>
         <Popover.Positioner
           align="start"
           alignOffset={-6}
+          anchor={anchor}
           className="z-50 outline-none"
           // Above the composer or, if there is no room, below it — never
           // beside it, where it would cover the text being written.
