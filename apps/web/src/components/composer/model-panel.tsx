@@ -15,7 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import { Command } from 'cmdk';
 import { matchSorter, rankings } from 'match-sorter';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { Lab, Model, ModelId } from '@canary/api/models';
@@ -88,7 +88,9 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
   const lit = shown.find((model) => model.id === cursor) ?? shown[0];
   // A new shelf, search or filter arrives as one piece; typing within a
   // search does not replay it on every letter.
-  const scene = query.trim() ? 'search' : `${shelf}:${needs.join()}`;
+  // A filter narrows the list in place instead, row by row, so the models
+  // that still match are never redrawn.
+  const scene = query.trim() ? 'search' : shelf;
 
   return (
     <Command
@@ -161,27 +163,48 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
           <motion.div
             key={scene}
             animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
-            className="grid gap-0.5 pb-6"
+            className="grid pb-6"
             initial={reduce ? { opacity: 0 } : { opacity: 0, filter: 'blur(4px)', y: 4 }}
             transition={{ duration: 0.26, ease }}
           >
-            <Command.Empty className="px-3 py-8 text-center text-[13px] text-muted-foreground">
-              {query.trim()
-                ? `No model matches “${query.trim()}”.`
-                : shelf === 'favorites'
-                  ? 'Star a model to keep it here.'
-                  : 'Nothing here has everything the filter asks for.'}
+            <Command.Empty>
+              <motion.p
+                animate={{ opacity: 1, filter: 'blur(0px)' }}
+                className="px-3 py-8 text-center text-[13px] text-muted-foreground"
+                initial={reduce ? { opacity: 0 } : { opacity: 0, filter: 'blur(3px)' }}
+                transition={{ duration: 0.24, ease }}
+              >
+                {query.trim() ? (
+                  `No model matches “${query.trim()}”.`
+                ) : needs.length ? (
+                  <>
+                    Nothing here has everything the filter asks for.
+                    <button
+                      className="mx-auto mt-2 flex h-7 items-center rounded-full px-3 text-foreground/85 outline-none hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+                      type="button"
+                      onClick={() => setNeeds([])}
+                    >
+                      Clear filters
+                    </button>
+                  </>
+                ) : (
+                  'Star a model to keep it here.'
+                )}
+              </motion.p>
             </Command.Empty>
 
-            {shown.map((model) => (
-              <Row
-                key={model.id}
-                current={model.id === current}
-                favorite={favorites.includes(model.id)}
-                model={model}
-                onPick={onPick}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {shown.map((model) => (
+                <Fold key={model.id}>
+                  <Row
+                    current={model.id === current}
+                    favorite={favorites.includes(model.id)}
+                    model={model}
+                    onPick={onPick}
+                  />
+                </Fold>
+              ))}
+            </AnimatePresence>
           </motion.div>
         </Command.List>
       </div>
@@ -286,6 +309,35 @@ function Shelf(props: {
 }
 
 /**
+ * One row's place in the list. A row leaving folds its height away and fades,
+ * so the rows under it close up over the gap instead of jumping into it; a row
+ * arriving unfolds into place the same way. The spacing between rows lives
+ * inside the fold, so it collapses with the row and nothing snaps at the end.
+ *
+ * The clip is on only while the height moves.
+ */
+function Fold({ children }: { children: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  const shut = { height: 0, opacity: 0, overflow: 'hidden' };
+
+  return (
+    <motion.div
+      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+      className="pb-0.5"
+      exit={
+        reduce
+          ? { opacity: 0, transition: { duration: 0.12 } }
+          : { ...shut, transition: { duration: 0.22, ease } }
+      }
+      initial={reduce ? { opacity: 0 } : shut}
+      transition={{ duration: 0.28, ease }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
  * A model, in two lines: name, price and whether it is new or starred on the
  * first, what it is for on the second, and what it can take in on the right.
  * The current model keeps a filled surface; the cursor gets its own, lighter
@@ -298,9 +350,13 @@ function Row(props: {
   onPick: (id: ModelId) => void;
 }) {
   const model = props.model;
+  // A row on its way out is still mounted for its exit, and still an item as
+  // far as cmdk knows. Disabled, the cursor and the arrow keys pass over it.
+  const present = useIsPresent();
 
   return (
     <Command.Item
+      disabled={!present}
       className={cn(
         'group/row grid cursor-default grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 rounded-[10px] px-3 py-2 outline-none select-none',
         'data-[selected=true]:bg-hover',
