@@ -2,6 +2,7 @@ import { Effect, Schema } from 'effect';
 import { z } from 'zod';
 
 import { protectedProcedure } from '@canary/api';
+import { ids as models } from '@canary/api/models';
 import * as Run from '@canary/api/runner';
 import { exec } from '@canary/api/runtime';
 
@@ -11,6 +12,7 @@ export const threadRouter = {
       z
         .object({
           id: z.uuid().optional(),
+          model: z.enum(models).optional(),
           title: z.string().trim().min(1).max(120).optional(),
         })
         .optional(),
@@ -41,6 +43,17 @@ export const threadRouter = {
       return await exec(
         Schema.decodeUnknownEffect(Run.Snooze)({ ...input, owner: context.owner }).pipe(
           Effect.flatMap((input) => Run.Service.use((run) => run.snooze(input))),
+        ),
+        context.signal,
+      );
+    }),
+
+  pick: protectedProcedure
+    .input(z.object({ id: z.uuid(), model: z.enum(models) }))
+    .handler(async ({ context, input }) => {
+      return await exec(
+        Schema.decodeUnknownEffect(Run.Choice)({ ...input, owner: context.owner }).pipe(
+          Effect.flatMap((input) => Run.Service.use((run) => run.pick(input))),
         ),
         context.signal,
       );

@@ -3,10 +3,13 @@ import { useReducedMotion } from 'motion/react';
 import { useRef, useState } from 'react';
 import { z } from 'zod';
 
+import type { ModelId } from '@canary/api/models';
+
 import { AgentPrompt } from '~/components/agent-prompt';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { AssistantPending, UserMessage } from '~/components/agent/turn';
 import { Stage, useStage } from '~/components/backdrop/stage';
+import { last, remember, useRecent } from '~/components/composer/model';
 import { Account } from '~/components/shell/account';
 import { Brand } from '~/components/shell/brand';
 import { Nav } from '~/components/shell/nav';
@@ -55,6 +58,7 @@ const THREADS = FIXTURES.map(([title, minutes, , filed], index) => ({
   updatedAt: ago(minutes),
   settledAt: filed === 'settled' ? ago(minutes - 30) : null,
   snoozedUntil: filed === 'snoozed' ? hours(20) : null,
+  model: null,
 }));
 
 const MARKS = new Map(THREADS.map((thread, index) => [thread.id, FIXTURES[index]![2]]));
@@ -142,6 +146,7 @@ function Open({ onSend, tasks }: { onSend: (text: string) => void; tasks: boolea
   const reduce = useReducedMotion();
   const anchor = useRef<HTMLDivElement>(null);
   const field = useStage('open', anchor);
+  const model = useRecent();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -177,8 +182,10 @@ function Open({ onSend, tasks }: { onSend: (text: string) => void; tasks: boolea
           anchor={anchor}
           className="p-0"
           error={null}
+          model={model}
           pristine
           value={draft}
+          onModel={remember}
           onSubmit={(text) => {
             if (!reduce) field?.launch(true);
             setSending(true);
@@ -197,6 +204,8 @@ function Open({ onSend, tasks }: { onSend: (text: string) => void; tasks: boolea
 /** A thread as it looks the moment it opens: your message, and the wait. */
 function Thread({ onBack, text }: { onBack: () => void; text: string }) {
   const [draft, setDraft] = useState('');
+  // The preview thread's own model, starting where a real one would.
+  const [model, setModel] = useState<ModelId>(last);
   const anchor = useRef<HTMLDivElement>(null);
   useStage('thread', anchor);
 
@@ -219,8 +228,10 @@ function Thread({ onBack, text }: { onBack: () => void; text: string }) {
       <AgentPrompt
         anchor={anchor}
         error={null}
+        model={model}
         running
         value={draft}
+        onModel={setModel}
         onCancel={() => undefined}
         onSubmit={() => setDraft('')}
         onValue={setDraft}

@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
+import type { ModelId } from '@canary/api/models';
 import type { Part } from '@canary/sync';
 
+import { fallback } from '@canary/api/models';
 import { TaskRows } from '~/components/agent/task-rows';
 import { ToolChips } from '~/components/agent/tool-chips';
 import { AssistantMessage, AssistantPending, UserMessage } from '~/components/agent/turn';
@@ -313,13 +315,16 @@ const COMPOSERS = [
 /** A composer with its own draft, so each state can be typed into. */
 function Composer(props: { error: string | null; running: boolean }) {
   const [value, setValue] = useState('');
+  const [model, setModel] = useState<ModelId>(fallback);
 
   return (
     <AgentPrompt
       className="p-0"
       error={props.error}
+      model={model}
       running={props.running}
       value={value}
+      onModel={setModel}
       onCancel={() => {}}
       onSubmit={() => setValue('')}
       onValue={setValue}

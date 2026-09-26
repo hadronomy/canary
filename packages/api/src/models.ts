@@ -25,6 +25,15 @@ function isModel(id: string): id is ModelId {
   return models.some((model) => model.id === id);
 }
 
+/**
+ * The model a stored id stands for: the id itself while the catalog lists it,
+ * the catalog's default when it is empty or has since left the catalog. How a
+ * thread's model is read, on the server and in the composer alike.
+ */
+function resolve(id: string | null | undefined): ModelId {
+  return id && isModel(id) ? id : fallback;
+}
+
 function find(id: string): Model | undefined {
   return models.find((model) => model.id === id);
 }
@@ -46,5 +55,5 @@ function fresh(model: Model, now: number) {
   return model.released !== null && now - Date.parse(model.released) < 42 * 86_400_000;
 }
 
-export { fallback, find, fresh, ids, isModel, labs, models, tier };
+export { fallback, find, fresh, ids, isModel, labs, models, resolve, tier };
 export type { Lab, Model, ModelId };

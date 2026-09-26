@@ -23,8 +23,10 @@ import {
 import { VList, type VListHandle } from 'virtua';
 import { assign, setup, type ActorRefFrom, type SnapshotFrom } from 'xstate';
 
+import type { ModelId } from '@canary/api/models';
 import type { Part, Message as SyncMessage } from '@canary/sync';
 
+import { resolve } from '@canary/api/models';
 import { AgentPrompt } from '~/components/agent-prompt';
 import {
   AssistantMessage,
@@ -34,11 +36,11 @@ import {
   textOf,
 } from '~/components/agent/turn';
 import { useStage } from '~/components/backdrop/stage';
-import { useModel } from '~/components/composer/model';
+import { remember } from '~/components/composer/model';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { cn } from '~/lib/utils';
-import { active, failed, latest, messages, pieces, roster, transcript } from '~/utils/chat';
+import { active, failed, latest, list, messages, pieces, roster, transcript } from '~/utils/chat';
 import { client } from '~/utils/orpc';
 
 const TRANSCRIPT_BUFFER_SIZE = 768;
@@ -692,6 +694,7 @@ function ThreadWorkspace({ ownerId, threadId }: ThreadWorkspaceProps) {
       <ThreadActions
         activeRunId={activeRunId}
         disabled={!thread}
+        model={resolve(thread?.model)}
         ownerId={ownerId}
         pristine={pristine}
         runError={runError}
@@ -729,6 +732,8 @@ function ThreadHeader({ className, threadId, title, ...props }: ThreadHeaderProp
 type ThreadActionsProps = {
   activeRunId: string | null;
   disabled: boolean;
+  /** The thread's model: what its next message goes to. */
+  model: ModelId;
   ownerId: string;
   pristine: boolean;
   runError: string | null;
@@ -739,6 +744,7 @@ type ThreadActionsProps = {
 function ThreadActions({
   activeRunId,
   disabled,
+  model,
   ownerId,
   pristine,
   runError,
@@ -747,7 +753,6 @@ function ThreadActions({
 }: ThreadActionsProps) {
   const runtime = useTranscriptRuntimeBridge();
   const anchor = useRef<HTMLDivElement>(null);
-  const model = useModel();
   useStage('thread', anchor);
 
   const currentThreadIdRef = useRef(threadId);
@@ -820,7 +825,8 @@ function ThreadActions({
         runId: null,
         role: 'user',
         content,
-        metadata: { model },
+        model,
+        metadata: null,
         createdAt: now,
         updatedAt: now,
       });
@@ -859,9 +865,18 @@ function ThreadActions({
       anchor={anchor}
       disabled={disabled}
       error={sendError ?? runError}
+      model={model}
       pristine={pristine}
       running={running}
       value={draft}
+      onModel={(id) => {
+        // The thread's model, for every message sent in it from now on, and
+        // where the next new thread starts.
+        list(ownerId).update(threadId, (draft) => {
+          draft.model = id;
+        });
+        remember(id);
+      }}
       onCancel={() => {
         cancelActiveRun().catch((cause: unknown) => {
           console.error('Run cancellation failed.', cause);

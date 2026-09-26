@@ -6,6 +6,7 @@ import { EventedAgent } from '@mastra/core/agent/durable';
 import { RequestContext } from '@mastra/core/request-context';
 import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
+import { z } from 'zod';
 
 import { ENV } from '@canary/agents/env';
 
@@ -56,6 +57,18 @@ export const memory = new Memory({
   },
 });
 
+/**
+ * What each run hands the agent: the OpenRouter model it answers with.
+ *
+ * Parsed where it is read rather than declared as the agent's
+ * `requestContextSchema`: Mastra's durable wrapper takes an agent whose
+ * context is untyped, so a typed one does not fit it. Parsing gives the same
+ * guarantee — a missing or empty model fails before anything is sent to
+ * OpenRouter.
+ */
+const Context = z.object({ model: z.string().min(1) });
+type Context = z.infer<typeof Context>;
+
 export const agent = new Agent({
   id: 'canary-agent',
   name: 'Canary Agent',
@@ -71,19 +84,25 @@ When a task needs a tool:
 5. Do not narrate tool use unless it helps the user understand what is happening.
 
 Keep answers direct.`,
-  // Each run names its own model, picked in the composer and carried here on
-  // the request context. A run resumed in another process arrives without one
-  // and answers with the default.
-  model: ({ requestContext }) => ({
-    providerId: 'openrouter',
-    modelId: String(requestContext.get('model') ?? ENV.AGENT_MODEL),
-    url: 'https://openrouter.ai/api/v1',
-    apiKey: ENV.OPENROUTER_API_KEY,
-    headers: {
-      'HTTP-Referer': ENV.BETTER_AUTH_URL,
-      'X-Title': 'Canary',
-    },
-  }),
+  // Each run names its own model, the thread's, carried here on the request
+  // context. There is no default to fall back to on purpose: when Mastra
+  // resumes a run in another process it asks with an empty context, and a
+  // default here would quietly answer with a different model. Failing instead
+  // lets Mastra fall back to the model it saved with the run.
+  model: ({ requestContext }) => {
+    const { model } = Context.parse({ model: requestContext.get('model') });
+
+    return {
+      providerId: 'openrouter',
+      modelId: model,
+      url: 'https://openrouter.ai/api/v1',
+      apiKey: ENV.OPENROUTER_API_KEY,
+      headers: {
+        'HTTP-Referer': ENV.BETTER_AUTH_URL,
+        'X-Title': 'Canary',
+      },
+    };
+  },
   memory,
 });
 
@@ -149,7 +168,7 @@ export async function open(input: Input) {
     return { runId: input.runId, cleanup() {} };
   }
 
-  const context = new RequestContext();
+  const context = new RequestContext<Context>();
   context.set('model', input.model);
 
   const res = await durable.stream(last, {

@@ -1,10 +1,11 @@
 /**
  * Writes `src/catalog.generated.ts` from models.dev.
  *
- *   bun run models:generate
+ *   bun run models:generate   write the catalog
+ *   bun run models:check      fail if the committed catalog is out of date
  *
- * Takes every model models.dev lists under OpenRouter that answers in text and
- * has a price, and emits them as literal-typed data with their capabilities,
+ * Takes every model models.dev lists under OpenRouter that answers in text,
+ * can call tools and has a price, and emits them as literal-typed data with their capabilities,
  * limits and prices, grouped by lab and newest first within each lab. What
  * models.dev cannot know — default favourites, copy overrides, which labs have
  * a real mark — comes from `src/curation.ts`. It also emits `Slug` and
@@ -12,7 +13,9 @@
  *
  * Left out, because none of them is a separate model to choose: `:free`
  * variants, which are a paid model behind a rate limit; `~` aliases, which
- * point at a model already in the list; and anything without a price.
+ * point at a model already in the list; and anything without a price. Models
+ * that cannot call tools are left out too: the agent keeps working memory,
+ * which Mastra runs as a tool call, so a run on one of them cannot start.
  *
  * Anything it cannot vouch for stops the run — a curated model or lab that is
  * no longer listed, a mark that is missing or is not a plain filled path in
@@ -41,8 +44,10 @@ type Entry = {
 
 type Registry = Record<string, { models?: Record<string, Entry> }>;
 
+const task = process.argv.includes('--check') ? 'models:check' : 'models:generate';
+
 function fail(message: string): never {
-  console.error(`models:generate: ${message}`);
+  console.error(`${task}: ${message}`);
   process.exit(1);
 }
 
@@ -58,6 +63,7 @@ const kept = Object.values(served).filter(
     !entry.id.includes(':') &&
     !entry.id.startsWith('~') &&
     (entry.modalities?.output ?? ['text']).includes('text') &&
+    entry.tool_call === true &&
     entry.cost?.input !== undefined &&
     entry.cost.output !== undefined,
 );
@@ -185,6 +191,23 @@ export const labs = ${JSON.stringify(labs, null, 2)} as const;
 /** Every model, grouped by lab in rail order and newest first within each. */
 export const catalog = ${JSON.stringify(models, null, 2)} as const;
 `;
+
+// The committed file is formatted, so the check formats what it would write the
+// same way before comparing: a difference is then a change in the catalog,
+// never in whitespace.
+if (task === 'models:check') {
+  const draft = new URL('../src/catalog.check.ts', import.meta.url);
+  await Bun.write(draft, source);
+  const format = Bun.spawnSync(['bunx', '--no-install', 'oxfmt', '--write', draft.pathname]);
+  const fresh = await Bun.file(draft).text();
+  await Bun.file(draft).delete();
+  if (format.exitCode !== 0) fail('could not format the catalog to compare it');
+  if (fresh !== (await Bun.file(OUT).text())) {
+    fail('the catalog is out of date with models.dev. Run `bun run models:generate`.');
+  }
+  console.log(`models:check: the catalog matches models.dev (${models.length} models).`);
+  process.exit(0);
+}
 
 await Bun.write(OUT, source);
 console.log(

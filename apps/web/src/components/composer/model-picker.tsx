@@ -7,7 +7,6 @@ import type { Model, ModelId } from '@canary/api/models';
 
 import { find, models } from '@canary/api/models';
 import { Mark } from '~/components/composer/mark';
-import { pick, useModel } from '~/components/composer/model';
 import { ModelPanel } from '~/components/composer/model-panel';
 import { cn } from '~/lib/utils';
 
@@ -22,15 +21,28 @@ const LAND = 240;
 const SETTLE = [0.22, 1, 0.36, 1] as const;
 
 /**
- * Which model the next message goes to, in the composer's control row.
+ * Which model the next message goes to, in the composer's control row. The
+ * composer's owner decides whose model that is — the thread's, or the default
+ * a new thread starts with.
  *
  * The trigger is a pill naming the model; the panel it opens is a searchable
  * catalog, sorted onto shelves by lab with favourites first. Picking closes
  * the panel once the row has taken the pick, and the trigger carries the rest:
  * the name blurs across to the new one while the pill eases to its width.
  */
-function ModelPicker({ disabled }: { disabled?: boolean }) {
-  const current = useModel();
+function ModelPicker({
+  disabled,
+  model: current,
+  onModel,
+}: {
+  disabled?: boolean;
+  model: ModelId;
+  onModel: (id: ModelId) => void;
+}) {
+  // Read through a ref so `choose` stays one function for the panel's life:
+  // every row is memoised on it.
+  const handler = useRef(onModel);
+  handler.current = onModel;
   const [shown, setShown] = useState(false);
   // The trigger animates only picks made here. The stored choice lands just
   // after hydration, and playing that would animate a change nobody made.
@@ -43,7 +55,7 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
   // letter typed into the search.
   const choose = useCallback((id: ModelId) => {
     setLive(true);
-    pick(id);
+    handler.current(id);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setShown(false), LAND);
   }, []);

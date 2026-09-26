@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AgentPrompt } from '~/components/agent-prompt';
 import { useStage } from '~/components/backdrop/stage';
-import { useModel } from '~/components/composer/model';
+import { remember, useRecent } from '~/components/composer/model';
 import { shellRoutes } from '~/components/shell/routes';
 import { Swap } from '~/lib/motion';
 import { list, messages } from '~/utils/chat';
@@ -42,7 +42,8 @@ function NewThread() {
   const [sending, setSending] = useState(false);
 
   const owner = ctx.user.id;
-  const model = useModel();
+  // A new thread starts on the last model chosen anywhere.
+  const model = useRecent();
 
   useEffect(() => {
     if (!busy) {
@@ -92,6 +93,7 @@ function NewThread() {
         updatedAt: now,
         settledAt: null,
         snoozedUntil: null,
+        model,
       }).isPersisted.promise;
 
       messages(owner).insert({
@@ -101,7 +103,8 @@ function NewThread() {
         runId: null,
         role: 'user',
         content,
-        metadata: { model },
+        model,
+        metadata: null,
         createdAt: now,
         updatedAt: now,
       });
@@ -134,8 +137,10 @@ function NewThread() {
           anchor={anchor}
           className="p-0"
           error={err}
+          model={model}
           pristine
           value={draft}
+          onModel={remember}
           onSubmit={(body) => {
             start(body).catch((cause: unknown) => {
               setBusy(false);

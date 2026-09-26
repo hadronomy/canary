@@ -56,6 +56,10 @@ export const thread = snakeCase.table(
     // comes back on its own once that passes. A new message clears both.
     settledAt: timestamp({ withTimezone: true }),
     snoozedUntil: timestamp({ withTimezone: true }),
+    // The OpenRouter model the thread answers with. Null until one is chosen,
+    // which reads as the catalog's default: the default lives with the
+    // catalog, not in the schema.
+    model: text(),
   },
   (table) => [index('thread_owner_updated_idx').on(table.ownerId, table.updatedAt)],
 );
@@ -92,6 +96,9 @@ export const message = snakeCase.table(
     runId: uuid(),
     role: role().notNull(),
     content: text().notNull(),
+    // For a user message, the model it was sent to; for an answer, the model
+    // that wrote it.
+    model: text(),
     metadata: jsonb().$type<Record<string, unknown>>(),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true })

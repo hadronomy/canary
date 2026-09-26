@@ -14,6 +14,7 @@ describe('shared database schema', () => {
       runId: null,
       role: 'user',
       content: 'hello',
+      model: 'anthropic/claude-sonnet-5',
       metadata: { source: 'test' },
       createdAt: '2026-09-17 10:00:00+00',
       updatedAt: '2026-09-17 10:00:00+00',

@@ -14,6 +14,7 @@ import {
   useRef,
 } from 'react';
 
+import type { ModelId } from '@canary/api/models';
 import type { Cmd, RunState } from '~/components/composer/commands';
 import type { AvailabilityState, DraftState } from '~/components/composer/state';
 
@@ -41,6 +42,9 @@ type AgentPromptProps = Omit<ComponentPropsWithoutRef<'form'>, 'children' | 'onS
   /** The composer's box, for whoever needs to know where it is — the stage
    *  measures it to draw the sky around it and to carry it between screens. */
   anchor?: Ref<HTMLDivElement>;
+  /** The model the next message goes to, and what to do when it changes. */
+  model: ModelId;
+  onModel: (id: ModelId) => void;
   pristine?: boolean;
   running?: boolean;
   value: string;
@@ -56,7 +60,9 @@ function AgentPrompt({
   disabled: disabledProp,
   anchor,
   error,
+  model,
   onCancel,
+  onModel,
   onNew,
   onSubmit,
   onValue,
@@ -339,7 +345,11 @@ function AgentPrompt({
                 {/* The controls row: pickers on the left, from the box's corner
                     inward, and the send button alone on the right. */}
                 <div className="flex min-h-8 min-w-0 items-center justify-between gap-3">
-                  <ModelPicker disabled={availability === 'disabled'} />
+                  <ModelPicker
+                    disabled={availability === 'disabled'}
+                    model={model}
+                    onModel={onModel}
+                  />
                   <ComposerAction
                     action={action}
                     enabled={canUsePrimaryAction}

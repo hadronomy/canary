@@ -59,11 +59,11 @@ function json(raw: string | null): unknown {
 }
 
 /**
- * The model the next message goes to. One choice for the whole app rather
- * than one per thread: it is a preference about how to work, and it follows
- * the person from the new-thread screen into the thread and back.
+ * The model a new thread starts with: the last one chosen anywhere. Each
+ * thread keeps its own model from then on; this is only where the next one
+ * begins, so starting a thread picks up where the person left off.
  */
-const model = stored<ModelId>(
+const recent = stored<ModelId>(
   'canary-model',
   (raw) => {
     const value = json(raw);
@@ -85,12 +85,17 @@ const favorites = stored<readonly ModelId[]>(
   seeded,
 );
 
-function useModel() {
-  return model.use();
+function useRecent() {
+  return recent.use();
 }
 
-function pick(id: ModelId) {
-  model.write(id);
+/** The model a new thread starts with, read outside React. */
+function last() {
+  return recent.read();
+}
+
+function remember(id: ModelId) {
+  recent.write(id);
 }
 
 function useFavorites() {
@@ -102,4 +107,4 @@ function star(id: ModelId) {
   favorites.write(now.includes(id) ? now.filter((entry) => entry !== id) : [...now, id]);
 }
 
-export { pick, star, useFavorites, useModel };
+export { last, remember, star, useFavorites, useRecent };

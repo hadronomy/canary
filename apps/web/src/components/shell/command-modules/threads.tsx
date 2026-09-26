@@ -16,6 +16,7 @@ import {
   createCommandIds,
   defineCommandModule,
 } from '~/components/command-palette';
+import { last } from '~/components/composer/model';
 import { ThreadDetail } from '~/components/shell/command-modules/details';
 import { stamp } from '~/components/shell/command-modules/utils';
 import { settle } from '~/utils/filing';
@@ -250,6 +251,7 @@ function createThread(deps: ShellCommandDeps, value: string) {
     updatedAt: now,
     settledAt: null,
     snoozedUntil: null,
+    model: last(),
   });
 
   deps.onOpenChange(false);

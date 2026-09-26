@@ -15,7 +15,6 @@ services:
       APP_ENV: production
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: http://localhost:3001
-      AGENT_MODEL: ${AGENT_MODEL:-~moonshotai/kimi-latest}
       CANARY_MCP_URL: ${CANARY_MCP_URL:-http://host.docker.internal:3000}
       CORS_ORIGIN: http://localhost:3001
       DB_HOST: postgres

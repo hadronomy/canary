@@ -16,7 +16,7 @@ import {
 
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
-import { ids as models } from '@canary/api/models';
+import { ids as models, resolve } from '@canary/api/models';
 import { own } from '@canary/api/scope';
 import { schema } from '@canary/db/effect';
 import { and, asc, desc, eq, inArray, lt, max, sql } from '@canary/db/query';
@@ -56,11 +56,23 @@ export const RunEvent = Schema.TaggedUnion({
   Cancelled: {},
 });
 
+/** A model a message can be sent to: one the catalog lists today. */
+export const ModelId = Schema.Literals(models);
+/**
+ * A model as a run recorded it. Wider than `ModelId` on purpose: the catalog is
+ * regenerated, and a run made with a model that has since left it must still
+ * decode, to be finished or failed.
+ */
+export const ModelSlug = RunRow.fields.model.pipe(
+  Schema.check(Schema.isMinLength(1)),
+  Schema.brand('ModelSlug'),
+);
+
 export const Send = Schema.Struct({
   content: MessageInsert.fields.content.pipe(Schema.check(Schema.isMinLength(1))),
   id: Schema.optionalKey(MessageId),
-  // Left out, the run goes to the server's own default.
-  model: Schema.optionalKey(Schema.Literals(models)),
+  // Left out, the message goes to the thread's own model.
+  model: Schema.optionalKey(ModelId),
   owner: OwnerId,
   threadId: ThreadId,
 });
@@ -77,9 +89,11 @@ export const Snooze = Schema.Struct({
 });
 export const Create = Schema.Struct({
   id: Schema.optionalKey(ThreadId),
+  model: Schema.optionalKey(ModelId),
   owner: OwnerId,
   title: Schema.optionalKey(ThreadInsert.fields.title),
 });
+export const Choice = Schema.Struct({ id: ThreadId, model: ModelId, owner: OwnerId });
 
 export type RunId = typeof RunId.Type;
 export type ThreadId = typeof ThreadId.Type;
@@ -88,6 +102,9 @@ export type Key = typeof Key.Type;
 export type Settle = typeof Settle.Type;
 export type Snooze = typeof Snooze.Type;
 export type Create = typeof Create.Type;
+export type Choice = typeof Choice.Type;
+export type ModelId = typeof ModelId.Type;
+export type ModelSlug = typeof ModelSlug.Type;
 export type Sent = {
   message: typeof message.$inferSelect;
   run: typeof run.$inferSelect;
@@ -99,7 +116,7 @@ export type Created = { thread: typeof thread.$inferSelect; txid: number };
 export type RunEvent = typeof RunEvent.Type;
 
 const Ref = Schema.Struct({
-  model: Schema.String,
+  model: ModelSlug,
   ownerId: OwnerId,
   runId: RunId,
   threadId: ThreadId,
@@ -146,6 +163,7 @@ export interface Interface {
   readonly cancel: (input: Key) => Effect.Effect<Cancelled, Database.Failure>;
   readonly settle: (input: Settle) => Effect.Effect<Filed, Database.Failure>;
   readonly snooze: (input: Snooze) => Effect.Effect<Filed, Database.Failure>;
+  readonly pick: (input: Choice) => Effect.Effect<Filed, Database.Failure>;
 }
 
 export class Service extends Context.Service<Service, Interface>()('@canary/api/Run') {}
@@ -157,7 +175,6 @@ function millis(name: string, value: number) {
 const settings = Config.all({
   batch: Config.Number('RUN_FLUSH_BATCH').pipe(Config.withDefault(32)),
   flush: millis('RUN_FLUSH_INTERVAL', 60),
-  model: Config.String('AGENT_MODEL').pipe(Config.withDefault('~moonshotai/kimi-latest')),
   recover: millis('RUN_RECOVERY_INTERVAL', 30_000),
   stale: millis('RUN_STALE_TTL', 600_000),
 });
@@ -259,9 +276,9 @@ export const layer = Layer.effect(
     return Service.of({
       create: Effect.fn('Run.create')((input) => creating(database, input)),
       send: Effect.fn('Run.send')(function* (input) {
-        const sent = yield* sending(database, input.model ?? cfg.model, input);
+        const sent = yield* sending(database, input);
         yield* start({
-          model: sent.run.model,
+          model: ModelSlug.make(sent.run.model),
           ownerId: input.owner,
           runId: RunId.make(sent.run.id),
           threadId: input.threadId,
@@ -287,6 +304,11 @@ export const layer = Layer.effect(
       snooze: Effect.fn('Run.snooze')((input) =>
         filing(database, input.owner, input.id, { snoozedUntil: input.until }),
       ),
+      // The thread's model, for the messages sent in it from now on. The
+      // answers already written keep the model that wrote them.
+      pick: Effect.fn('Run.pick')((input) =>
+        filing(database, input.owner, input.id, { model: input.model }),
+      ),
     });
   }),
 );
@@ -298,6 +320,7 @@ function creating(database: Database.Interface, input: Create) {
         .insert(thread)
         .values({
           ...(input.id ? { id: input.id } : {}),
+          model: input.model ?? null,
           ownerId: input.owner,
           title: input.title ?? 'New thread',
         })
@@ -315,15 +338,21 @@ function creating(database: Database.Interface, input: Create) {
     .pipe(Effect.map((result) => ({ thread: result.rows, txid: result.txid })));
 }
 
-function sending(database: Database.Interface, model: string, input: Send) {
+function sending(database: Database.Interface, input: Send) {
   return database
     .transact('send message', async (client) => {
       const rows = await client
-        .select({ id: thread.id })
+        .select({ id: thread.id, model: thread.model })
         .from(thread)
         .where(own(thread, input.owner, eq(thread.id, input.threadId)))
         .limit(1);
-      if (!rows[0]) return null;
+      const target = rows[0];
+      if (!target) return null;
+
+      // The message names its model, or it goes to the thread's. A thread
+      // that has none, or whose model has since left the catalog, answers
+      // with the catalog's default rather than failing the send.
+      const model: ModelId = input.model ?? resolve(target.model);
 
       const sent = await client
         .insert(message)
@@ -333,6 +362,7 @@ function sending(database: Database.Interface, model: string, input: Send) {
           ownerId: input.owner,
           role: 'user',
           content: input.content,
+          model,
         })
         .onConflictDoNothing({ target: message.id })
         .returning();
@@ -382,10 +412,11 @@ function sending(database: Database.Interface, model: string, input: Send) {
           ...entry({ _tag: 'Queued', model }),
         })
         .onConflictDoNothing({ target: [event.runId, event.seq] });
-      // Writing in a thread picks it back up, wherever it was filed.
+      // Writing in a thread picks it back up, wherever it was filed, and makes
+      // the model it was written to the thread's model.
       await client
         .update(thread)
-        .set({ updatedAt: new Date(), settledAt: null, snoozedUntil: null })
+        .set({ updatedAt: new Date(), settledAt: null, snoozedUntil: null, model })
         .where(own(thread, input.owner, eq(thread.id, input.threadId)));
 
       return { message: row, run: item };
@@ -431,7 +462,7 @@ function filing(
   database: Database.Interface,
   owner: typeof OwnerId.Type,
   id: ThreadId,
-  set: Partial<Pick<typeof thread.$inferInsert, 'settledAt' | 'snoozedUntil'>>,
+  set: Partial<Pick<typeof thread.$inferInsert, 'settledAt' | 'snoozedUntil' | 'model'>>,
 ) {
   return database
     .transact('file thread', async (client) => {
@@ -850,6 +881,7 @@ function finish(database: Database.Interface, ref: Ref, state: State) {
         runId: ref.runId,
         role: 'assistant',
         content: body,
+        model: ref.model,
         metadata: outcome.data,
       })
       .returning();

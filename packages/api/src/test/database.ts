@@ -36,6 +36,7 @@ export const state = {
     ownerId: ids.owner,
     settledAt: null as Date | null,
     snoozedUntil: null as Date | null,
+    model: null as string | null,
     title: 'Test thread',
     updatedAt: new Date(),
   },
@@ -68,6 +69,7 @@ export function reset(status: Status = 'queued') {
     ownerId: ids.owner,
     settledAt: null,
     snoozedUntil: null,
+    model: null,
     title: 'Test thread',
     updatedAt: new Date(),
   };

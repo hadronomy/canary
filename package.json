@@ -29,6 +29,7 @@
     "db:generate": "turbo run db:generate --filter=@canary/db",
     "replica:generate": "bun run --cwd packages/db replica:generate",
     "replica:check": "bun run --cwd packages/db replica:check",
+    "models:check": "bun run --cwd packages/api models:check",
     "db:migrate": "turbo run db:migrate --filter=@canary/db",
     "db:push": "turbo run db:push --filter=@canary/db",
     "db:studio": "turbo run db:studio --filter=@canary/db",

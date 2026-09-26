@@ -70,7 +70,8 @@ export function setup() {
 
 export function threads(
   opts: Scope & {
-    create: (input: { id: string; title: string }) => Promise<Tx>;
+    create: (input: { id: string; model: string | null; title: string }) => Promise<Tx>;
+    pick: (input: { id: string; model: string }) => Promise<Tx>;
     settle: (input: { id: string; settled: boolean }) => Promise<Tx>;
     snooze: (input: { id: string; until: Date | null }) => Promise<Tx>;
   },
@@ -90,7 +91,8 @@ export function threads(
 
 function makeThreads(
   opts: Scope & {
-    create: (input: { id: string; title: string }) => Promise<Tx>;
+    create: (input: { id: string; model: string | null; title: string }) => Promise<Tx>;
+    pick: (input: { id: string; model: string }) => Promise<Tx>;
     settle: (input: { id: string; settled: boolean }) => Promise<Tx>;
     snooze: (input: { id: string; until: Date | null }) => Promise<Tx>;
   },
@@ -106,15 +108,16 @@ function makeThreads(
       }
 
       const res = await Promise.all(
-        rows.map((item) => opts.create({ id: item.id, title: item.title })),
+        rows.map((item) => opts.create({ id: item.id, model: item.model, title: item.title })),
       );
 
       return {
         txid: res.map((item) => item.txid),
       };
     },
-    // The list only ever edits how a thread is filed. Settling is one call
-    // that also clears a snooze, so a change to both goes out as a settle.
+    // The list only ever edits how a thread is filed, or which model it
+    // answers with. Settling is one call that also clears a snooze, so a
+    // change to both goes out as a settle.
     onUpdate: async ({ transaction }) => {
       const res = await Promise.all(
         transaction.mutations.flatMap((item) => {
@@ -126,6 +129,10 @@ function makeThreads(
 
           if ('snoozedUntil' in item.changes) {
             return [opts.snooze({ id, until: item.changes.snoozedUntil ?? null })];
+          }
+
+          if (item.changes.model) {
+            return [opts.pick({ id, model: item.changes.model })];
           }
 
           return [];
@@ -188,8 +195,7 @@ function makeMessages(opts: {
             id: item.id,
             threadId: item.threadId,
             content: item.content,
-            // The composer's pick rides on the message it was sent with.
-            model: typeof item.metadata?.model === 'string' ? item.metadata.model : undefined,
+            model: item.model ?? undefined,
           }),
         ),
       );

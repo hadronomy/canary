@@ -2,7 +2,6 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env.schema"],
   "globalEnv": [
-    "AGENT_MODEL",
     "APP_ENV",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",

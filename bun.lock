@@ -170,6 +170,7 @@
         "@mastra/memory": "^1.21.0",
         "@mastra/pg": "^1.14.0",
         "varlock": "1.19.0",
+        "zod": "catalog:",
       },
       "devDependencies": {
         "@canary/config": "workspace:*",

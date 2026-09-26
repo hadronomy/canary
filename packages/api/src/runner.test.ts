@@ -11,6 +11,7 @@ vi.mock('@canary/db', async () => {
 
 import * as Agent from '@canary/api/agent';
 import * as Database from '@canary/api/database';
+import { fallback } from '@canary/api/models';
 import * as Run from '@canary/api/runner';
 import { reset as resetAgent, state as agent } from '@canary/api/test/agent';
 import { ids, reset as resetDatabase, state as database } from '@canary/api/test/database';
@@ -192,6 +193,60 @@ describe('Run', () => {
 
       expect(sent.run.model).toBe('google/gemini-3.8-flash');
       expect(agent.input?.model).toBe('google/gemini-3.8-flash');
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("sends to the thread's model when the message names none", () =>
+    Effect.gen(function* () {
+      database.thread.model = 'google/gemini-3.8-flash';
+      const sent = yield* Run.Service.use((run) => run.send(send()));
+      yield* Deferred.await(agent.started);
+
+      expect(sent.run.model).toBe('google/gemini-3.8-flash');
+      expect(sent.message.model).toBe('google/gemini-3.8-flash');
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("answers with the default when the thread's model has left the catalog", () =>
+    Effect.gen(function* () {
+      database.thread.model = 'someone/retired-model';
+      const sent = yield* Run.Service.use((run) => run.send(send()));
+
+      expect(sent.run.model).toBe(fallback);
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect('makes the model a message was sent to the thread model', () =>
+    Effect.gen(function* () {
+      yield* Run.Service.use((run) =>
+        run.send(
+          Schema.decodeUnknownSync(Run.Send)({
+            content: 'hello',
+            id: ids.message,
+            model: 'moonshotai/kimi-k3',
+            owner: ids.owner,
+            threadId: ids.thread,
+          }),
+        ),
+      );
+
+      expect(database.thread.model).toBe('moonshotai/kimi-k3');
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("picks a thread's model without touching its recency", () =>
+    Effect.gen(function* () {
+      const result = yield* Run.Service.use((run) =>
+        run.pick(
+          Schema.decodeUnknownSync(Run.Choice)({
+            id: ids.thread,
+            model: 'openai/gpt-5.6-sol',
+            owner: ids.owner,
+          }),
+        ),
+      );
+
+      expect(result.thread?.model).toBe('openai/gpt-5.6-sol');
     }).pipe(Effect.provide(layer)),
   );
 

@@ -47,7 +47,14 @@ export function list(ownerId: string) {
   return threadCollection({
     base: sync(),
     ownerId,
-    create: client.thread.create,
+    // Ids from the collection are only trusted once they are in the catalog;
+    // anything else goes without one and the server resolves the thread's.
+    create: (input) => client.thread.create({ ...input, model: find(input.model ?? '')?.id }),
+    pick: (input) => {
+      const model = find(input.model)?.id;
+      if (!model) throw new Error(`${input.model} is not a model the catalog lists.`);
+      return client.thread.pick({ id: input.id, model });
+    },
     settle: client.thread.settle,
     snooze: client.thread.snooze,
   });
