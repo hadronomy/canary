@@ -17,7 +17,17 @@ import {
 import { Command } from 'cmdk';
 import { matchSorter, rankings } from 'match-sorter';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { memo, useDeferredValue, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { flushSync } from 'react-dom';
 
 import type { Lab, Model, ModelId } from '@canary/api/models';
 
@@ -61,6 +71,10 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
   const rail = useId();
 
   const [query, setQuery] = useState('');
+  // What the list is showing for: the field's text, settled. The field always
+  // echoes every letter; the list follows it on the leading edge and then once
+  // per burst of typing.
+  const [term, settle] = useSettled(query);
   const [needs, setNeeds] = useState<readonly Need[]>([]);
   // Opens on whichever shelf holds the current model, so it is on screen and
   // highlighted without a search.
@@ -71,43 +85,17 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
   );
   const [cursor, setCursor] = useState<string>(current);
 
-  // Every list keeps catalog order, and a search or a filter only decides
-  // which rows are in it. Typing more then only removes rows and deleting only
-  // restores them, so rows fold out and in around each other and never have to
-  // cross to reach a new rank.
-  //
-  // A search sorts in two tiers, each still in catalog order: models whose name
-  // or lab matches, then models that only match by what they are for. The first
-  // row is then the best match, which is where cmdk puts its cursor and so what
-  // Enter picks — "deep" leads with DeepSeek, not with a model described as
-  // doing deep reasoning.
-  const shown = useMemo(() => {
-    const term = query.trim();
-    const fits = (model: Model) => needs.every((need) => model[need]);
+  const shown = useMemo(
+    () => select(term, shelf, favorites, needs),
+    [favorites, needs, shelf, term],
+  );
 
-    if (!term) {
-      const keep = new Set<string>(
-        shelf === 'favorites'
-          ? favorites
-          : models.filter((model) => model.lab === shelf).map((model) => model.id),
-      );
-      return models.filter((model) => keep.has(model.id) && fits(model));
-    }
-
-    // Substrings, not letters in order: "deep" should find DeepSeek and "deep
-    // reasoning", not every name with a d, an e and a p in it.
-    const find = (keys: KeyOption<Model>[]) =>
-      new Set<string>(
-        matchSorter(models, term, { keys, threshold: rankings.CONTAINS }).map((model) => model.id),
-      );
-    const named = find(['name', (model) => labs[model.lab].name]);
-    const any = find(['name', (model) => labs[model.lab].name, 'family', 'blurb']);
-
-    return [
-      ...models.filter((model) => named.has(model.id)),
-      ...models.filter((model) => any.has(model.id) && !named.has(model.id)),
-    ].filter(fits);
-  }, [favorites, needs, query, shelf]);
+  // A new search starts the cursor on its first row, which is its best match.
+  // Without this it would stay wherever cmdk put it for the text before the
+  // search settled — possibly on a row that is now folding out.
+  useLayoutEffect(() => {
+    setCursor('');
+  }, [term]);
 
   const lit = shown.find((model) => model.id === cursor) ?? shown[0];
   // A new shelf arrives as one piece. A search or a filter reshapes the list
@@ -137,6 +125,21 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
           className="h-9 min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
           placeholder="Search models"
           value={query}
+          onKeyDown={(event) => {
+            // Anything that acts on the list acts on what is typed, never on
+            // the list as it was a few letters ago. Enter with a search still
+            // pending picks the first match for the text itself — the list
+            // has not caught up, and its cursor may sit on a row on its way
+            // out. The arrows land the pending search and then move.
+            if (query === term) return;
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              const first = select(query, shelf, favorites, needs)[0];
+              if (first) onPick(first.id);
+              return;
+            }
+            if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) settle(query);
+          }}
           onValueChange={setQuery}
         />
         <Needs needs={needs} onNeeds={setNeeds} />
@@ -153,6 +156,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
             label="Favorites"
             onClick={() => {
               setQuery('');
+              settle('');
               setShelf('favorites');
             }}
           >
@@ -166,6 +170,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
               label={labs[lab].name}
               onClick={() => {
                 setQuery('');
+                settle('');
                 setShelf(lab);
               }}
             >
@@ -189,8 +194,8 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
                 one to leave before it says the list is empty. */}
             <Command.Empty>
               <Empty>
-                {query.trim() ? (
-                  `No model matches “${query.trim()}”.`
+                {term.trim() ? (
+                  `No model matches “${term.trim()}”.`
                 ) : needs.length ? (
                   <>
                     Nothing here has everything the filter asks for.
@@ -242,6 +247,108 @@ function Empty({ children }: { children: React.ReactNode }) {
       {children}
     </motion.p>
   );
+}
+
+/**
+ * The models to list, for a search or a shelf, narrowed by the capability
+ * filter.
+ *
+ * Every list keeps catalog order, and a search or a filter only decides which
+ * rows are in it. Typing more then only removes rows and deleting only
+ * restores them, so rows fold out and in around each other and never have to
+ * cross to reach a new rank.
+ *
+ * A search sorts in two tiers, each still in catalog order: models whose name
+ * or lab matches, then models that only match by what they are for. The first
+ * row is then the best match, which is where the cursor starts and so what
+ * Enter picks — "deep" leads with DeepSeek, not with a model described as
+ * doing deep reasoning.
+ */
+function select(
+  search: string,
+  shelf: Shelf,
+  favorites: readonly ModelId[],
+  needs: readonly Need[],
+): Model[] {
+  const text = search.trim();
+  const fits = (model: Model) => needs.every((need) => model[need]);
+
+  if (!text) {
+    const keep = new Set<string>(
+      shelf === 'favorites'
+        ? favorites
+        : models.filter((model) => model.lab === shelf).map((model) => model.id),
+    );
+    return models.filter((model) => keep.has(model.id) && fits(model));
+  }
+
+  // Substrings, not letters in order: "deep" should find DeepSeek and "deep
+  // reasoning", not every name with a d, an e and a p in it.
+  const find = (keys: KeyOption<Model>[]) =>
+    new Set<string>(
+      matchSorter(models, text, { keys, threshold: rankings.CONTAINS }).map((model) => model.id),
+    );
+  const named = find(['name', (model) => labs[model.lab].name]);
+  const any = find(['name', (model) => labs[model.lab].name, 'family', 'blurb']);
+
+  return [
+    ...models.filter((model) => named.has(model.id)),
+    ...models.filter((model) => any.has(model.id) && !named.has(model.id)),
+  ].filter(fits);
+}
+
+// How long a pause in typing must be before the list follows, and the most a
+// long burst of typing will wait. Short enough to read as immediate, long
+// enough that a word typed at speed lands as one change rather than one per
+// letter — one fold of the list instead of several stacked on each other.
+const PAUSE = 120;
+const BURST = 300;
+
+/**
+ * `value`, settled. A change after a pause comes through at once — the
+ * leading edge, so the first letter answers immediately. Changes that follow
+ * within `PAUSE` are held and land together when typing stops, or every
+ * `BURST` while it does not, so a steady stream still shows progress.
+ *
+ * Settled in a layout effect: the leading edge reaches the screen in the same
+ * frame as the keystroke rather than the one after. `settle` lands a value at
+ * once, pending or not.
+ */
+function useSettled(value: string) {
+  const [settled, setSettled] = useState(value);
+  const latest = useRef(value);
+  const last = useRef(Number.NEGATIVE_INFINITY);
+  const start = useRef(0);
+  const timer = useRef(0);
+  latest.current = value;
+
+  useLayoutEffect(() => {
+    if (value === settled) return;
+
+    const now = performance.now();
+    const idle = now - last.current > PAUSE;
+    last.current = now;
+
+    if (idle) {
+      start.current = now;
+      setSettled(value);
+      return;
+    }
+
+    const wait = Math.max(0, Math.min(PAUSE, start.current + BURST - now));
+    timer.current = window.setTimeout(() => {
+      start.current = performance.now();
+      setSettled(latest.current);
+    }, wait);
+    return () => window.clearTimeout(timer.current);
+  }, [settled, value]);
+
+  const settle = useCallback((next: string) => {
+    window.clearTimeout(timer.current);
+    flushSync(() => setSettled(next));
+  }, []);
+
+  return [settled, settle] as const;
 }
 
 /**
