@@ -1,4 +1,5 @@
 import type { Icon } from '@phosphor-icons/react';
+import type { KeyOption } from 'match-sorter';
 
 import { Menu } from '@base-ui/react/menu';
 import {
@@ -16,7 +17,7 @@ import {
 import { Command } from 'cmdk';
 import { matchSorter, rankings } from 'match-sorter';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useDeferredValue, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { Lab, Model, ModelId } from '@canary/api/models';
 
@@ -70,34 +71,49 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
   );
   const [cursor, setCursor] = useState<string>(current);
 
+  // Every list keeps catalog order, and a search or a filter only decides
+  // which rows are in it. Typing more then only removes rows and deleting only
+  // restores them, so rows fold out and in around each other and never have to
+  // cross to reach a new rank.
+  //
+  // A search sorts in two tiers, each still in catalog order: models whose name
+  // or lab matches, then models that only match by what they are for. The first
+  // row is then the best match, which is where cmdk puts its cursor and so what
+  // Enter picks — "deep" leads with DeepSeek, not with a model described as
+  // doing deep reasoning.
   const shown = useMemo(() => {
-    const pool = query.trim()
-      ? matchSorter(models, query.trim(), {
-          keys: ['name', (model) => labs[model.lab].name, 'family', 'blurb'],
-          // Substrings, not letters in order: "deep" should find DeepSeek and
-          // "deep reasoning", not every name with a d, an e and a p in it.
-          threshold: rankings.CONTAINS,
-        })
-      : shelf === 'favorites'
-        ? favorites.flatMap((id) => models.filter((model) => model.id === id))
-        : models.filter((model) => model.lab === shelf);
+    const term = query.trim();
+    const fits = (model: Model) => needs.every((need) => model[need]);
 
-    return pool.filter((model) => needs.every((need) => model[need]));
+    if (!term) {
+      const keep = new Set<string>(
+        shelf === 'favorites'
+          ? favorites
+          : models.filter((model) => model.lab === shelf).map((model) => model.id),
+      );
+      return models.filter((model) => keep.has(model.id) && fits(model));
+    }
+
+    // Substrings, not letters in order: "deep" should find DeepSeek and "deep
+    // reasoning", not every name with a d, an e and a p in it.
+    const find = (keys: KeyOption<Model>[]) =>
+      new Set<string>(
+        matchSorter(models, term, { keys, threshold: rankings.CONTAINS }).map((model) => model.id),
+      );
+    const named = find(['name', (model) => labs[model.lab].name]);
+    const any = find(['name', (model) => labs[model.lab].name, 'family', 'blurb']);
+
+    return [
+      ...models.filter((model) => named.has(model.id)),
+      ...models.filter((model) => any.has(model.id) && !named.has(model.id)),
+    ].filter(fits);
   }, [favorites, needs, query, shelf]);
 
-  const matched = useMemo(() => new Set(shown.map((model) => model.id)), [shown]);
-  const ranked = useMemo(
-    () => [...shown, ...models.filter((model) => !matched.has(model.id))],
-    [matched, shown],
-  );
-
   const lit = shown.find((model) => model.id === cursor) ?? shown[0];
-  // A new shelf, search or filter arrives as one piece; typing within a
-  // search does not replay it on every letter.
-  // A filter narrows the list in place instead, row by row, so the models
-  // that still match are never redrawn.
-  const searching = query.trim() !== '';
-  const scene = searching ? 'search' : shelf;
+  // A new shelf arrives as one piece. A search or a filter reshapes the list
+  // in place instead, row by row, so the models that still match are never
+  // redrawn — they only move to where they now belong.
+  const scene = shelf;
 
   return (
     <Command
@@ -121,12 +137,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
           className="h-9 min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground"
           placeholder="Search models"
           value={query}
-          onValueChange={(next) => {
-            // The cursor follows the best match while typing, not whatever it
-            // sat on before the search began.
-            setQuery(next);
-            setCursor('');
-          }}
+          onValueChange={setQuery}
         />
         <Needs needs={needs} onNeeds={setNeeds} />
       </div>
@@ -174,63 +185,40 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
             initial={reduce ? { opacity: 0 } : { opacity: 0, filter: 'blur(4px)', y: 4 }}
             transition={{ duration: 0.26, ease }}
           >
-            {searching ? (
-              <>
-                {shown.length ? null : <Empty>{`No model matches “${query.trim()}”.`}</Empty>}
-                {/* Every model stays mounted while searching, matches first in
-                    ranked order and the rest hidden. A letter typed moves and
-                    shows rows that already exist instead of mounting new ones,
-                    so the list keeps up with the keyboard. */}
-                {ranked.map((model) => (
-                  <Entry
-                    key={model.id}
-                    current={model.id === current}
-                    favorite={favorites.includes(model.id)}
-                    hidden={!matched.has(model.id)}
-                    model={model}
-                    quick
-                    onPick={onPick}
-                  />
-                ))}
-              </>
-            ) : (
-              <>
-                {/* cmdk counts rows still folding out, so this waits for the
-                    last one to leave before it says the list is empty. */}
-                <Command.Empty>
-                  <Empty>
-                    {needs.length ? (
-                      <>
-                        Nothing here has everything the filter asks for.
-                        <button
-                          className="mx-auto mt-2 flex h-7 items-center rounded-full px-3 text-foreground/85 outline-none hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
-                          type="button"
-                          onClick={() => setNeeds([])}
-                        >
-                          Clear filters
-                        </button>
-                      </>
-                    ) : (
-                      'Star a model to keep it here.'
-                    )}
-                  </Empty>
-                </Command.Empty>
+            {/* cmdk counts rows still folding out, so this waits for the last
+                one to leave before it says the list is empty. */}
+            <Command.Empty>
+              <Empty>
+                {query.trim() ? (
+                  `No model matches “${query.trim()}”.`
+                ) : needs.length ? (
+                  <>
+                    Nothing here has everything the filter asks for.
+                    <button
+                      className="mx-auto mt-2 flex h-7 items-center rounded-full px-3 text-foreground/85 outline-none hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+                      type="button"
+                      onClick={() => setNeeds([])}
+                    >
+                      Clear filters
+                    </button>
+                  </>
+                ) : (
+                  'Star a model to keep it here.'
+                )}
+              </Empty>
+            </Command.Empty>
 
-                <AnimatePresence initial={false}>
-                  {shown.map((model) => (
-                    <Entry
-                      key={model.id}
-                      current={model.id === current}
-                      favorite={favorites.includes(model.id)}
-                      hidden={false}
-                      model={model}
-                      quick={false}
-                      onPick={onPick}
-                    />
-                  ))}
-                </AnimatePresence>
-              </>
-            )}
+            <AnimatePresence initial={false}>
+              {shown.map((model) => (
+                <Entry
+                  key={model.id}
+                  current={model.id === current}
+                  favorite={favorites.includes(model.id)}
+                  model={model}
+                  onPick={onPick}
+                />
+              ))}
+            </AnimatePresence>
           </motion.div>
         </Command.List>
       </div>
@@ -357,17 +345,14 @@ function Shelf(props: {
 const Entry = memo(function Entry(props: {
   current: boolean;
   favorite: boolean;
-  hidden: boolean;
   model: Model;
-  quick: boolean;
   onPick: (id: ModelId) => void;
 }) {
   return (
-    <Fold hidden={props.hidden} quick={props.quick}>
+    <Fold>
       <Row
         current={props.current}
         favorite={props.favorite}
-        hidden={props.hidden}
         model={props.model}
         onPick={props.onPick}
       />
@@ -376,39 +361,22 @@ const Entry = memo(function Entry(props: {
 });
 
 /**
- * How a row joins and leaves the list.
+ * How a row joins and leaves the list, the same for a search and a filter.
  *
- * Under a filter it folds: a row leaving takes its height with it and fades,
- * so the rows under it close up over the gap, and a row arriving unfolds the
- * same way. A filter is toggled now and then, on purpose, and the movement
- * shows what it took out.
- *
- * Under a search it does not. Typing is the most frequent thing done here, and
- * a fold per letter stacks animations on rows still moving from the letter
- * before. Matches are placed at once; a row that newly matches only fades in,
- * which moves nothing, and a row that stops matching simply goes.
+ * A row leaving takes its height with it and fades, so the rows under it close
+ * up over the gap instead of jumping into it; a row arriving unfolds the same
+ * way. Rows are only ever added or removed around each other, never reordered,
+ * so no row has to pass another to get where it is going. Motion picks each
+ * fold up from wherever the last one left it, so typing faster than they finish
+ * carries the list along instead of restarting it.
  *
  * The spacing between rows is inside the fold, on the row's wrapper, so it
  * collapses with the height instead of lingering as a gap once the row is
  * gone. The clip is on only while the height moves.
  */
-function Fold({
-  children,
-  hidden,
-  quick,
-}: {
-  children: React.ReactNode;
-  hidden: boolean;
-  quick: boolean;
-}) {
+function Fold({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
   const shut = { height: 0, opacity: 0, overflow: 'hidden' };
-
-  // Plain elements while searching: a row that only fades in needs no
-  // animation component.
-  if (quick) {
-    return <Quick hidden={hidden}>{children}</Quick>;
-  }
 
   return (
     <motion.div
@@ -427,32 +395,6 @@ function Fold({
 }
 
 /**
- * A search row. It fades in when a letter makes it match again, and only
- * then. Not with a CSS animation: reordering results moves rows in the DOM,
- * a moved element restarts its CSS animations, and every row that merely
- * changed place would flash. A script animation started on the change from
- * hidden to shown plays for the rows that actually came back.
- */
-function Quick({ children, hidden }: { children: React.ReactNode; hidden: boolean }) {
-  const box = useRef<HTMLDivElement>(null);
-  const was = useRef(hidden);
-  const reduce = useReducedMotion();
-
-  useLayoutEffect(() => {
-    if (was.current && !hidden && !reduce) {
-      box.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-out' });
-    }
-    was.current = hidden;
-  }, [hidden, reduce]);
-
-  return (
-    <div ref={box} className="pb-0.5" hidden={hidden}>
-      {children}
-    </div>
-  );
-}
-
-/**
  * A model, in two lines: name, price and whether it is new or starred on the
  * first, what it is for on the second, and what it can take in on the right.
  * The current model keeps a filled surface; the cursor gets its own, lighter
@@ -461,19 +403,17 @@ function Quick({ children, hidden }: { children: React.ReactNode; hidden: boolea
 function Row(props: {
   current: boolean;
   favorite: boolean;
-  hidden: boolean;
   model: Model;
   onPick: (id: ModelId) => void;
 }) {
   const model = props.model;
-  // A row on its way out is still mounted for its exit, and a row hidden by a
-  // search is mounted for good; either way it is still an item as far as cmdk
-  // knows. Disabled, the cursor and the arrow keys pass over it.
+  // A row on its way out is still mounted for its exit, and still an item as
+  // far as cmdk knows. Disabled, the cursor and the arrow keys pass over it.
   const present = useIsPresent();
 
   return (
     <Command.Item
-      disabled={props.hidden || !present}
+      disabled={!present}
       className={cn(
         'group/row grid cursor-default grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 rounded-[10px] px-3 py-2 outline-none select-none',
         'data-[selected=true]:bg-hover',
@@ -731,13 +671,17 @@ const money = new Intl.NumberFormat(undefined, {
 const month = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' });
 
 /**
- * The highlighted model's numbers. They change at once: the cursor follows
- * the pointer down the list and jumps to the best match on every letter
- * typed, and a morph per change would animate the footer continuously —
- * re-measuring every character each time — to say nothing. Tabular figures
- * keep the line from shuffling sideways as the values swap.
+ * The highlighted model's numbers, morphing in place as the cursor moves —
+ * digits roll, shared characters slide — in tabular figures so the line does
+ * not shuffle sideways while it changes.
+ *
+ * It reads a deferred copy of the model. The morph measures every character
+ * it animates, and the cursor moves on every letter typed and every row the
+ * pointer crosses; deferred, React commits the keystroke first and the footer
+ * catches up in a render of its own, so the morph never holds up the list.
  */
-function Details({ model }: { model: Model | undefined }) {
+function Details({ model: next }: { model: Model | undefined }) {
+  const model = useDeferredValue(next);
   if (!model) return <div className="h-10" />;
 
   const facts = [
@@ -756,7 +700,7 @@ function Details({ model }: { model: Model | undefined }) {
               ·
             </span>
           ) : null}
-          <span>{fact}</span>
+          <Morph>{fact}</Morph>
         </span>
       ))}
       <span className="ml-auto shrink-0 text-muted-foreground/70">per 1M tokens</span>
