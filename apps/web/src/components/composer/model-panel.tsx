@@ -647,7 +647,8 @@ function Favorite({ model, on }: { model: Model; on: boolean }) {
  * reads on whatever fill the row has, cursor or not.
  *
  * The badge springs in when its row becomes the pick, which is the last
- * thing seen before the panel closes.
+ * thing seen before the panel closes, and on the current model as the panel
+ * opens, so the eye finds the pick first.
  */
 function Current({ children, on }: { children: React.ReactNode; on: boolean }) {
   return (
@@ -660,15 +661,14 @@ function Current({ children, on }: { children: React.ReactNode; on: boolean }) {
     >
       {children}
       {on ? (
-        <motion.span
-          animate={{ scale: 1, opacity: 1 }}
-          className="absolute -right-[2.5px] -bottom-[2.5px] grid size-[9px] place-items-center rounded-full bg-foreground text-background"
-          initial={{ scale: 0.4, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 600, damping: 22 }}
-        >
+        // A CSS keyframe, not a motion component: rows sit inside an
+        // AnimatePresence that skips entrances for what is there on first
+        // render, and a motion element mounting inside one of them later
+        // inherits that and would appear without its spring.
+        <span className="absolute -right-[2.5px] -bottom-[2.5px] grid size-[9px] animate-[badge-in_340ms_cubic-bezier(0.22,1,0.36,1)] place-items-center rounded-full bg-foreground text-background motion-reduce:animate-none">
           <CheckIcon aria-hidden className="size-[7px]" weight="bold" />
           <span className="sr-only">Current model</span>
-        </motion.span>
+        </span>
       ) : null}
     </span>
   );

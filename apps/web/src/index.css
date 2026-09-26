@@ -456,6 +456,25 @@
   }
 }
 
+/* The current model's badge landing: it grows out of nothing past its size
+   and settles, a spring's overshoot without a spring. */
+@keyframes badge-in {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+
+  45% {
+    opacity: 1;
+    scale: 1.18;
+  }
+
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
 /* A star being set: it swells past its size and settles, the overshoot doing
    what a spring would without a spring per row. Unset, it only regrows from a
    little smaller, since taking something away should not celebrate. */

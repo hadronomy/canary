@@ -11,9 +11,10 @@ import { pick, useModel } from '~/components/composer/model';
 import { ModelPanel } from '~/components/composer/model-panel';
 import { cn } from '~/lib/utils';
 
-// How long a picked row keeps the panel up: long enough for the row to take
-// the current model's fill, so the choice is seen landing before it goes.
-const LAND = 160;
+// How long a picked row keeps the panel up: long enough for the current-model
+// badge to spring onto it and settle, so the choice is seen landing before the
+// panel goes. Picking is occasional, so the wait costs nothing felt.
+const LAND = 240;
 
 // The trigger's name change. Quint-out rather than the app's strong ease-out:
 // that curve spends almost all of its travel in the first two frames, which is
