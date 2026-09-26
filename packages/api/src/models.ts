@@ -5,9 +5,10 @@ import { catalog, labs } from '@canary/api/catalog.generated';
  *
  * Plain data with no runtime dependencies, because both sides read it: the
  * API refuses a model that is not listed, and the composer draws its picker
- * from it. The list is chosen in `picks.ts` and filled in from models.dev by
- * `bun run models:generate`; everything here is typed from that output, so a
- * model's id, lab and capabilities are literal types, not strings.
+ * from it. It is every model OpenRouter serves, as models.dev lists it, written
+ * by `bun run models:generate` with the additions in `curation.ts`; everything
+ * here is typed from that output, so a model's id, lab and capabilities are
+ * literal types, not strings.
  */
 const models = catalog;
 
@@ -42,7 +43,7 @@ function tier(model: Model): 1 | 2 | 3 | 4 {
 
 /** Released in the last six weeks. */
 function fresh(model: Model, now: number) {
-  return now - Date.parse(model.released) < 42 * 86_400_000;
+  return model.released !== null && now - Date.parse(model.released) < 42 * 86_400_000;
 }
 
 export { fallback, find, fresh, ids, isModel, labs, models, tier };

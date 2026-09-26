@@ -7,6 +7,7 @@ import {
   CaretDownIcon,
   CaretUpIcon,
   CheckIcon,
+  DotsThreeOutlineIcon,
   EyeIcon,
   FadersHorizontalIcon,
   FileTextIcon,
@@ -42,7 +43,7 @@ import { cn } from '~/lib/utils';
 /** A capability the list can be narrowed to. */
 type Need = Extract<keyof Model, 'reasoning' | 'vision' | 'documents' | 'open'>;
 
-type Shelf = 'favorites' | Lab;
+type Shelf = 'favorites' | 'more' | Lab;
 
 const NEEDS: readonly { need: Need; label: string; icon: Icon }[] = [
   { need: 'reasoning', label: 'Reasoning', icon: BrainIcon },
@@ -51,9 +52,21 @@ const NEEDS: readonly { need: Need; label: string; icon: Icon }[] = [
   { need: 'open', label: 'Open weights', icon: LockOpenIcon },
 ];
 
-// Labs in the order their first model appears in the catalog, which is the
-// order they were picked in.
-const LABS = [...new Set(models.map((model) => model.lab))];
+// The rail: a shelf for every lab with a real mark, in the catalog's curated
+// order. The labs without one share the last shelf, so a column of initials
+// never outnumbers the marks people look for; their models are all still one
+// search away.
+const LABS = (Object.keys(labs) as Lab[]).filter((lab) => labs[lab].mark !== null);
+const REST = new Set<Lab>((Object.keys(labs) as Lab[]).filter((lab) => labs[lab].mark === null));
+
+// Rows a search draws at most. About six fit on screen; past a few dozen a
+// search is better narrowed than scrolled, and each row drawn is a row paid for
+// on every letter typed.
+const LIMIT = 40;
+
+function home(lab: Lab): Shelf {
+  return REST.has(lab) ? 'more' : lab;
+}
 
 /**
  * The picker's body: a search field over the whole catalog, a rail of labs
@@ -81,7 +94,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
   const [shelf, setShelf] = useState<Shelf>(() =>
     favorites.includes(current)
       ? 'favorites'
-      : (models.find((model) => model.id === current)?.lab ?? 'favorites'),
+      : home(models.find((model) => model.id === current)?.lab ?? 'anthropic'),
   );
   const [cursor, setCursor] = useState<string>(current);
 
@@ -177,6 +190,21 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
               <Mark className="size-4" lab={lab} />
             </Shelf>
           ))}
+          <Shelf
+            active={!query.trim() && shelf === 'more'}
+            group={rail}
+            label="More labs"
+            onClick={() => {
+              setQuery('');
+              settle('');
+              setShelf('more');
+            }}
+          >
+            <DotsThreeOutlineIcon
+              className="size-4"
+              weight={shelf === 'more' ? 'fill' : 'regular'}
+            />
+          </Shelf>
         </Rail>
 
         <Command.List className="h-full overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin] [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]">
@@ -214,7 +242,7 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
             </Command.Empty>
 
             <AnimatePresence initial={false}>
-              {shown.map((model) => (
+              {(term.trim() ? shown.slice(0, LIMIT) : shown).map((model) => (
                 <Entry
                   key={model.id}
                   current={model.id === current}
@@ -224,6 +252,12 @@ function ModelPanel({ current, onPick }: { current: ModelId; onPick: (id: ModelI
                 />
               ))}
             </AnimatePresence>
+
+            {term.trim() && shown.length > LIMIT ? (
+              <p className="px-3 pt-2 pb-1 text-center text-[12px] text-muted-foreground">
+                {shown.length - LIMIT} more match. Keep typing to narrow.
+              </p>
+            ) : null}
           </motion.div>
         </Command.List>
       </div>
@@ -277,7 +311,7 @@ function select(
     const keep = new Set<string>(
       shelf === 'favorites'
         ? favorites
-        : models.filter((model) => model.lab === shelf).map((model) => model.id),
+        : models.filter((model) => home(model.lab) === shelf).map((model) => model.id),
     );
     return models.filter((model) => keep.has(model.id) && fits(model));
   }
@@ -289,7 +323,11 @@ function select(
       matchSorter(models, text, { keys, threshold: rankings.CONTAINS }).map((model) => model.id),
     );
   const named = find(['name', (model) => labs[model.lab].name]);
-  const any = find(['name', (model) => labs[model.lab].name, 'family', 'blurb']);
+  // Descriptions join in from the third letter. Before that nearly every
+  // description contains the letters typed, and a list of all of them is not
+  // an answer to anything.
+  const any =
+    text.length < 3 ? named : find(['name', (model) => labs[model.lab].name, 'family', 'blurb']);
 
   return [
     ...models.filter((model) => named.has(model.id)),
@@ -557,6 +595,16 @@ function Row(props: {
       <Caps model={model} />
 
       <span className="col-start-2 col-end-4 truncate text-[12.5px] text-muted-foreground">
+        {/* A lab without a mark shows as an initial, which does not say
+            whose model this is; its name leads the description instead. */}
+        {labs[model.lab].mark ? null : (
+          <span className="text-foreground/70">
+            {labs[model.lab].name}
+            <span aria-hidden className="px-1.5 text-muted-foreground/40">
+              ·
+            </span>
+          </span>
+        )}
         {model.blurb}
       </span>
     </Command.Item>

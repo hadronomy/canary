@@ -3,17 +3,22 @@
  *
  *   bun run models:generate
  *
- * Reads the hand-picked models in `src/picks.ts`, looks each one up under
- * models.dev's OpenRouter provider, and emits them as literal-typed data with
- * their capabilities, limits and prices, plus every lab's logo as SVG paths.
- * It also emits `Slug` and `Provider`, the unions `picks.ts` is typed against,
- * so the next pick is checked against what models.dev lists today.
+ * Takes every model models.dev lists under OpenRouter that answers in text and
+ * has a price, and emits them as literal-typed data with their capabilities,
+ * limits and prices, grouped by lab and newest first within each lab. What
+ * models.dev cannot know — default favourites, copy overrides, which labs have
+ * a real mark — comes from `src/curation.ts`. It also emits `Slug` and
+ * `Provider`, the unions `curation.ts` is typed against.
  *
- * Anything it cannot vouch for stops the run: a pick models.dev does not
- * list, a logo that is missing or is not a plain filled path in
- * `currentColor`. The last good catalog stays in place until it succeeds.
+ * Left out, because none of them is a separate model to choose: `:free`
+ * variants, which are a paid model behind a rate limit; `~` aliases, which
+ * point at a model already in the list; and anything without a price.
+ *
+ * Anything it cannot vouch for stops the run — a curated model or lab that is
+ * no longer listed, a mark that is missing or is not a plain filled path in
+ * `currentColor` — and the last good catalog stays in place until it succeeds.
  */
-import { labs, picks } from '../src/picks';
+import { favorites, marks, names, overrides } from '../src/curation';
 
 const API = 'https://models.dev/api.json';
 const LOGO = (id: string) => `https://models.dev/logos/${id}.svg`;
@@ -29,7 +34,7 @@ type Entry = {
   open_weights?: boolean;
   release_date?: string;
   knowledge?: string;
-  modalities?: { input?: string[] };
+  modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; output?: number };
   cost?: { input?: number; output?: number };
 };
@@ -48,43 +53,79 @@ const registry = (await fetch(API).then((res) => {
 
 const served = registry.openrouter?.models ?? fail('models.dev has no openrouter provider');
 
-const ids = picks.map((pick) => pick.id);
-const twice = ids.find((id, index) => ids.indexOf(id) !== index);
-if (twice) fail(`${twice} is picked twice`);
+const kept = Object.values(served).filter(
+  (entry) =>
+    !entry.id.includes(':') &&
+    !entry.id.startsWith('~') &&
+    (entry.modalities?.output ?? ['text']).includes('text') &&
+    entry.cost?.input !== undefined &&
+    entry.cost.output !== undefined,
+);
 
-const models = picks.map((pick) => {
-  const entry = served[pick.id] ?? fail(`${pick.id} is not served by OpenRouter on models.dev`);
-  const inputs = entry.modalities?.input ?? ['text'];
-  const blurb =
-    ('blurb' in pick ? pick.blurb : entry.description) ?? fail(`${pick.id} needs a blurb`);
+const listed = new Set(kept.map((entry) => entry.id));
+for (const id of [...favorites, ...Object.keys(overrides)]) {
+  if (!listed.has(id)) fail(`${id} is curated but not in the catalog`);
+}
 
-  return {
-    id: pick.id,
-    name: 'name' in pick ? pick.name : entry.name,
-    lab: pick.id.split('/')[0],
-    blurb,
-    favorite: 'favorite' in pick,
-    family: entry.family ?? null,
-    released: entry.release_date ?? fail(`${pick.id} has no release date`),
-    knowledge: entry.knowledge ?? null,
-    reasoning: entry.reasoning ?? false,
-    tools: entry.tool_call ?? false,
-    vision: inputs.includes('image'),
-    documents: inputs.includes('pdf'),
-    open: entry.open_weights ?? false,
-    context: entry.limit?.context ?? fail(`${pick.id} has no context limit`),
-    output: entry.limit?.output ?? null,
-    cost: {
-      input: entry.cost?.input ?? fail(`${pick.id} has no input price`),
-      output: entry.cost?.output ?? fail(`${pick.id} has no output price`),
-    },
-  };
-});
+const prefix = (id: string) => id.slice(0, id.indexOf('/'));
+const present = new Set(kept.map((entry) => prefix(entry.id)));
+for (const lab of Object.keys(marks)) {
+  if (!present.has(lab)) fail(`${lab} has a mark but no models`);
+}
+
+// Labs with a mark first, in their curated order; then the rest by name.
+const title = (slug: string) =>
+  slug.replace(
+    /(^|[-_])(\w)/g,
+    (_, gap: string, letter: string) => `${gap ? ' ' : ''}${letter.toUpperCase()}`,
+  );
+const called = (lab: string) =>
+  (marks as Record<string, { name: string }>)[lab]?.name ??
+  (names as Record<string, string>)[lab] ??
+  title(lab);
+const order = [
+  ...Object.keys(marks),
+  ...[...present]
+    .filter((lab) => !(lab in marks))
+    .toSorted((a, b) => called(a).localeCompare(called(b))),
+];
+const rank = new Map(order.map((lab, index) => [lab, index]));
+
+const models = kept
+  .toSorted(
+    (a, b) =>
+      rank.get(prefix(a.id))! - rank.get(prefix(b.id))! ||
+      (b.release_date ?? '').localeCompare(a.release_date ?? '') ||
+      a.name.localeCompare(b.name),
+  )
+  .map((entry) => {
+    const own = (overrides as Record<string, { name?: string; blurb?: string }>)[entry.id];
+    const inputs = entry.modalities?.input ?? ['text'];
+
+    return {
+      id: entry.id,
+      name: own?.name ?? entry.name,
+      lab: prefix(entry.id),
+      blurb: own?.blurb ?? entry.description ?? '',
+      favorite: (favorites as readonly string[]).includes(entry.id),
+      family: entry.family ?? null,
+      released: entry.release_date ?? null,
+      knowledge: entry.knowledge ?? null,
+      reasoning: entry.reasoning ?? false,
+      tools: entry.tool_call ?? false,
+      vision: inputs.includes('image'),
+      documents: inputs.includes('pdf'),
+      open: entry.open_weights ?? false,
+      context: entry.limit?.context ?? null,
+      output: entry.limit?.output ?? null,
+      cost: { input: entry.cost!.input!, output: entry.cost!.output! },
+    };
+  });
 
 /**
- * A logo as data: its viewBox and the `d` of each path. The picker draws
- * them in `currentColor`, so anything that is not a plain filled path — a
- * stroke, a gradient, a fixed colour — would draw wrong and is refused.
+ * A mark as data: its viewBox and the `d` of each path. The picker draws marks
+ * in `currentColor`, so anything that is not a plain filled path — a stroke, a
+ * gradient, a fixed colour — would draw wrong and is refused.
  */
 async function logo(id: string) {
   const res = await fetch(LOGO(id));
@@ -92,11 +133,13 @@ async function logo(id: string) {
   const svg = await res.text();
 
   const box = svg.match(/viewBox="([^"]+)"/)?.[1] ?? fail(`${id}.svg has no viewBox`);
-  const tags = [...svg.matchAll(/<([a-zA-Z]+)/g)].map((match) => match[1]);
-  const odd = tags.find((tag) => tag !== 'svg' && tag !== 'path');
+  const odd = [...svg.matchAll(/<([a-zA-Z]+)/g)]
+    .map((match) => match[1])
+    .find((tag) => tag !== 'svg' && tag !== 'path');
   if (odd) fail(`${id}.svg draws a <${odd}>, not only paths`);
-  if (/stroke=|fill="(?!currentColor|none)/.test(svg))
+  if (/stroke=|fill="(?!currentColor|none)/.test(svg)) {
     fail(`${id}.svg is not a filled currentColor mark`);
+  }
 
   const paths = [...svg.matchAll(/<path\b[^>]*?\sd="([^"]+)"[^>]*>/g)].map((match) => ({
     d: match[1],
@@ -107,12 +150,12 @@ async function logo(id: string) {
   return { box, paths };
 }
 
-const marks = Object.fromEntries(
+const labs = Object.fromEntries(
   await Promise.all(
-    Object.entries(labs).map(async ([lab, spec]) => [
-      lab,
-      { name: spec.name, ...(await logo(spec.logo)) },
-    ]),
+    order.map(async (lab) => {
+      const spec = (marks as Record<string, { logo: string }>)[lab];
+      return [lab, { name: called(lab), mark: spec ? await logo(spec.logo) : null }] as const;
+    }),
   ),
 );
 
@@ -123,7 +166,7 @@ const union = (values: Iterable<string>) =>
     .join('\n');
 
 const source = `// Generated by scripts/models.ts from ${API}. Do not edit by hand:
-// change src/picks.ts and run \`bun run models:generate\`.
+// change src/curation.ts and run \`bun run models:generate\`.
 
 /** Every model slug OpenRouter serves, as models.dev lists it. */
 export type Slug =
@@ -133,12 +176,17 @@ ${union(Object.keys(served))};
 export type Provider =
 ${union(Object.keys(registry))};
 
-/** Each lab's name and mark, as filled paths in \`currentColor\`. */
-export const labs = ${JSON.stringify(marks, null, 2)} as const;
+/**
+ * Every lab in the catalog, in rail order: labs with a mark first. \`mark\` is
+ * null for a lab models.dev has no real logo for.
+ */
+export const labs = ${JSON.stringify(labs, null, 2)} as const;
 
-/** The picked models, in the order the picker lists them. */
+/** Every model, grouped by lab in rail order and newest first within each. */
 export const catalog = ${JSON.stringify(models, null, 2)} as const;
 `;
 
 await Bun.write(OUT, source);
-console.log(`models:generate: ${models.length} models from ${Object.keys(labs).length} labs.`);
+console.log(
+  `models:generate: ${models.length} models from ${order.length} labs, ${Object.keys(marks).length} with a mark.`,
+);
