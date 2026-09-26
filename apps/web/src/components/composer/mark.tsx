@@ -43,6 +43,7 @@ function Mark({ className, lab }: { className?: string; lab: Lab }) {
           clipRule={path.even ? 'evenodd' : undefined}
           d={path.d}
           fillRule={path.even ? 'evenodd' : undefined}
+          transform={path.transform ?? undefined}
         />
       ))}
     </svg>

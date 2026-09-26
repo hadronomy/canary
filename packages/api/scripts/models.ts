@@ -147,10 +147,25 @@ async function logo(id: string) {
     fail(`${id}.svg is not a filled currentColor mark`);
   }
 
-  const paths = [...svg.matchAll(/<path\b[^>]*?\sd="([^"]+)"[^>]*>/g)].map((match) => ({
-    d: match[1],
-    even: /fill-rule="evenodd"/.test(match[0]),
-  }));
+  // Every attribute on a path either shapes the mark or is refused. Dropping
+  // one silently is how a mark ends up drawn off its canvas: OpenRouter's
+  // path is authored at 1024 units and scaled into the 24-unit box by a
+  // `transform`, and without it the mark rendered as nothing at all.
+  const paths = [...svg.matchAll(/<path\b([^>]*)>/g)].map((match) => {
+    const attrs = Object.fromEntries(
+      [...match[1].matchAll(/([a-zA-Z-]+)="([^"]*)"/g)].map((pair) => [pair[1], pair[2]]),
+    );
+    const extra = Object.keys(attrs).find(
+      (name) => !['d', 'fill', 'fill-rule', 'clip-rule', 'transform'].includes(name),
+    );
+    if (extra) fail(`${id}.svg has a path attribute the mark would drop: ${extra}`);
+
+    return {
+      d: attrs.d ?? fail(`${id}.svg has a path with no d`),
+      even: attrs['fill-rule'] === 'evenodd',
+      transform: attrs.transform ?? null,
+    };
+  });
   if (!paths.length) fail(`${id}.svg has no paths`);
 
   return { box, paths };
