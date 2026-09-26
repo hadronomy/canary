@@ -456,6 +456,33 @@
   }
 }
 
+/* A star being set: it swells past its size and settles, the overshoot doing
+   what a spring would without a spring per row. Unset, it only regrows from a
+   little smaller, since taking something away should not celebrate. */
+@keyframes star-on {
+  0% {
+    scale: 1.45;
+  }
+
+  55% {
+    scale: 0.92;
+  }
+
+  100% {
+    scale: 1;
+  }
+}
+
+@keyframes star-off {
+  from {
+    scale: 0.7;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
 /* A status badge landing. Used where a step resolves: the mark arrives rather
    than being swapped in, which is what makes a completion register at all when
    it happens halfway down a log you are not looking at. */

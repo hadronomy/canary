@@ -1,7 +1,7 @@
 import { Popover } from '@base-ui/react/popover';
 import { CaretUpDownIcon } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { Model, ModelId } from '@canary/api/models';
 
@@ -36,12 +36,15 @@ function ModelPicker({ disabled }: { disabled?: boolean }) {
   const [live, setLive] = useState(false);
   const timer = useRef(0);
 
-  function choose(id: ModelId) {
+  // Stable, because every row of the panel is memoised on it: a new function
+  // per render of the composer would re-render the whole catalog on every
+  // letter typed into the search.
+  const choose = useCallback((id: ModelId) => {
     setLive(true);
     pick(id);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setShown(false), LAND);
-  }
+  }, []);
 
   return (
     <Popover.Root
